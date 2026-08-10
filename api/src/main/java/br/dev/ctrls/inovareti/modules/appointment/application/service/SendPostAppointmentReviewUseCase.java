@@ -85,6 +85,19 @@ public class SendPostAppointmentReviewUseCase {
                 continue;
             }
 
+            // Trava Estrita 1: StatusID deve ser 3 (Atendido)
+            String statusId = appt.statusId() != null ? appt.statusId().trim() : "";
+            if (!"3".equals(statusId)) {
+                log.debug("[GOOGLE-REVIEW] Agendamento ID={} ignorado pois o status não é Atendido (statusId={})", appt.id(), statusId);
+                continue;
+            }
+
+            // Trava Estrita 2: Data da consulta deve ser exatamente HOJE
+            if (appt.startAt() != null && !today.equals(appt.startAt().toLocalDate())) {
+                log.debug("[GOOGLE-REVIEW] Agendamento ID={} ignorado pois a data {} não é a data de hoje ({})", appt.id(), appt.startAt().toLocalDate(), today);
+                continue;
+            }
+
             String doctorIdStr = (appt.doctorId() != null && !appt.doctorId().isBlank()) ? appt.doctorId().trim() : null;
             Long doctorId = null;
             if (doctorIdStr != null) {
