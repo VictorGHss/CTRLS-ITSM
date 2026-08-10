@@ -169,14 +169,36 @@ public class IntentAnalyzerService {
             DoctorMatchDto bestMatch = allMatchDtos.get(0);
             boolean isInternal = Boolean.TRUE.equals(bestMatch.getIsInternal());
             if (isInternal) {
-                routeType = "INTERNAL";
-                acaoSeguinte = "REDIRECIONAR_DESK";
-                selectedQueue = bestMatch.getQueue() != null ? bestMatch.getQueue() : "Atendimento Geral";
+                String queue = bestMatch.getQueue();
+                if (queue != null && !queue.isBlank() && !"Atendimento Geral".equalsIgnoreCase(queue.trim())) {
+                    routeType = "INTERNAL";
+                    acaoSeguinte = "REDIRECIONAR_DESK";
+                    selectedQueue = queue.trim();
+                } else {
+                    routeType = "MENU_POS_CPF";
+                    acaoSeguinte = "EXIBIR_MENU_POS_CPF";
+                    selectedQueue = null;
+                }
             } else {
                 routeType = "EXTERNAL";
                 acaoSeguinte = "EXIBIR_LINK_EXTERNO";
                 selectedQueue = null;
             }
+        }
+
+        // SALVAGUARDA ESTRITA: Reservar routeType: "INTERNAL" com selectedQueue: "Atendimento Geral"
+        // APENAS se a intenção for explicitamente solicitação de atendente/suporte humano.
+        if (!isExplicitHuman && "INTERNAL".equalsIgnoreCase(routeType) && ("Atendimento Geral".equalsIgnoreCase(selectedQueue) || selectedQueue == null)) {
+            routeType = "MENU_POS_CPF";
+            acaoSeguinte = "EXIBIR_MENU_POS_CPF";
+            selectedQueue = null;
+        }
+
+        // Se a intenção for NAO_RECONHECIDO ou se routeType for MENU_POS_CPF, garante retorno sanitizado
+        if ("NAO_RECONHECIDO".equalsIgnoreCase(intent) || "MENU_POS_CPF".equalsIgnoreCase(routeType)) {
+            routeType = "MENU_POS_CPF";
+            acaoSeguinte = "EXIBIR_MENU_POS_CPF";
+            selectedQueue = null;
         }
 
         // Lógica de Paginação (Limite de 10 itens do WhatsApp Interactive List)
