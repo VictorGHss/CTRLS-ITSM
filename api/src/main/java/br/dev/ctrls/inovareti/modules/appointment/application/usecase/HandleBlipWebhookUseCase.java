@@ -275,6 +275,126 @@ public class HandleBlipWebhookUseCase {
             log.info("[LEMBRETE-RESPOSTA] Paciente ID {} (De: {}) informou status: {}. Mapeando para ação de confirmação de agendamento.",
                     dbPhone.isEmpty() ? fromPhone : dbPhone, fromPhone, statusInfo);
 
+            String searchPhone = (dbPhone != null && !dbPhone.isEmpty()) ? dbPhone : fromPhone;
+            String purifiedPhone = purifyPhoneNumberForSearch(searchPhone);
+            if (purifiedPhone.isEmpty()) {
+                purifiedPhone = purifyPhoneNumberForSearch(fromPhone);
+            }
+
+            AppointmentSession activeSession = null;
+            List<AppointmentSession> activeSessions = appointmentSessionRepository.findActiveByPhoneNumber(purifiedPhone);
+            if ((activeSessions == null || activeSessions.isEmpty()) && !purifiedPhone.startsWith("55")) {
+                activeSessions = appointmentSessionRepository.findActiveByPhoneNumber("55" + purifiedPhone);
+            }
+            if (activeSessions != null && !activeSessions.isEmpty()) {
+                activeSession = activeSessions.get(0);
+            }
+
+            String doctorId = activeSession != null ? activeSession.getDoctorProfissionalId() : null;
+            String patientId = activeSession != null ? activeSession.getPatientId() : null;
+            String feegowAppointmentId = activeSession != null ? activeSession.getFeegowAppointmentId() : "";
+
+            String blipQueueId = null;
+            String doctorName = null;
+
+            if (doctorId != null && !doctorId.isBlank()) {
+                Optional<AppointmentDoctorMapping> doctorMappingOpt = appointmentDoctorMappingRepository.findByProfissionalId(doctorId);
+                if (doctorMappingOpt.isPresent()) {
+                    AppointmentDoctorMapping mapping = doctorMappingOpt.get();
+                    blipQueueId = mapping.getBlipQueueId();
+                    doctorName = mapping.getProfissionalNome();
+                }
+                if (doctorName == null || doctorName.isBlank()) {
+                    try {
+                        doctorName = professionalExternalPort.getProfessionalName(doctorId);
+                    } catch (Exception ignored) {}
+                }
+            }
+
+            if (doctorName == null || doctorName.isBlank()) {
+                doctorName = "Clínica Inovare";
+            }
+
+            String queueName = "Recepção Central / Suporte";
+            if (blipQueueId != null && !blipQueueId.isBlank()) {
+                String resolved = blipContextService.resolveQueueName(blipQueueId);
+                if (resolved != null && !resolved.isBlank() && !"Recepção Central / Suporte".equalsIgnoreCase(resolved)) {
+                    queueName = resolved;
+                } else {
+                    queueName = blipQueueId;
+                }
+            }
+
+            String patientName = "Paciente";
+            String patientCpf = "";
+
+            if (patientId != null && !patientId.isBlank()) {
+                try {
+                    br.dev.ctrls.inovareti.modules.appointment.domain.port.output.FeegowPatient patient = patientExternalPort.patientInfo(patientId);
+                    if (patient != null) {
+                        if (patient.name() != null && !patient.name().isBlank() && !br.dev.ctrls.inovareti.modules.access.infrastructure.adapter.output.BlipContactClientAdapter.isInvalidName(patient.name())) {
+                            patientName = patient.name().trim();
+                        }
+                        if (patient.cpf() != null) {
+                            patientCpf = patient.cpf().replaceAll("\\D", "");
+                        }
+                    }
+                } catch (Exception ex) {
+                    log.warn("[LEMBRETE-RESPOSTA] Falha ao buscar dados do paciente Feegow para ID {}: {}", patientId, ex.getMessage());
+                }
+            }
+
+            log.info("[LEMBRETE-RESPOSTA] Enriquecendo contexto de lembrete: Paciente='{}' (CPF={}) | Medico='{}' | Fila='{}' (blipQueueId={})",
+                    patientName, patientCpf, doctorName, queueName, blipQueueId);
+
+            // 1. Sincronização obrigatória do contato no CRM do Blip (escopo duplo: WhatsApp + Túneis)
+            try {
+                blipContactClientPort.syncContact(searchPhone, patientName, patientCpf, queueName, doctorId);
+                if (fromPhone != null && !fromPhone.equalsIgnoreCase(searchPhone)) {
+                    blipContactClientPort.syncContact(fromPhone, patientName, patientCpf, queueName, doctorId);
+                }
+            } catch (Exception ex) {
+                log.warn("[LEMBRETE-RESPOSTA] Falha ao sincronizar contato: {}", ex.getMessage());
+            }
+
+            // 2. Injeção de variáveis no contexto do Blip em ESCOPO DUPLO (Master + Túneis)
+            try {
+                String queueToRedirect = (blipQueueId != null && !blipQueueId.isBlank()) ? blipQueueId.trim() : queueName;
+                List<String> targets = new java.util.ArrayList<>(List.of(fromPhone, searchPhone));
+
+                String subbotId = blipProperties.getSubbotId();
+                if (subbotId != null && !subbotId.isBlank()) {
+                    String subbotLocalPart = subbotId.trim();
+                    if (subbotLocalPart.contains("@")) {
+                        subbotLocalPart = subbotLocalPart.substring(0, subbotLocalPart.indexOf('@'));
+                    }
+                    String phoneDigits = fromPhone.contains("@") ? fromPhone.substring(0, fromPhone.indexOf('@')).replaceAll("\\D", "") : fromPhone.replaceAll("\\D", "");
+                    if (!phoneDigits.startsWith("55") && !phoneDigits.isEmpty()) {
+                        phoneDigits = "55" + phoneDigits;
+                    }
+                    String deterministicTunnel = phoneDigits + "." + subbotLocalPart + "@tunnel.msging.net";
+                    if (!targets.contains(deterministicTunnel)) {
+                        targets.add(deterministicTunnel);
+                    }
+                }
+
+                for (String target : targets) {
+                    if (target == null || target.isBlank()) continue;
+                    blipContextService.setUserContext(target, "attendanceQueueToRedirect", queueToRedirect);
+                    blipContextService.setUserContext(target, "attendanceQueueNameToRedirect", queueName);
+                    blipContextService.setUserContext(target, "fila", queueName);
+                    blipContextService.setUserContext(target, "deskFila", queueName);
+                    blipContextService.setUserContext(target, "Medico", doctorName);
+                    blipContextService.setUserContext(target, "idAgendamentoFeegow", feegowAppointmentId);
+                    blipContextService.setUserContext(target, "name", patientName);
+                    blipContextService.setUserContext(target, "paciente", patientName);
+                    blipContextService.setUserContext(target, "Nome", patientName);
+                    blipContextService.setUserContext(target, "lembrete_resposta", statusInfo);
+                }
+            } catch (Exception ex) {
+                log.warn("[LEMBRETE-RESPOSTA] Falha ao injetar contexto dual de lembrete: {}", ex.getMessage());
+            }
+
             String groupContextId = resolveGroupContextId(payload);
             if (groupContextId != null && !groupContextId.isBlank()) {
                 action = "confirm_group_" + groupContextId;
