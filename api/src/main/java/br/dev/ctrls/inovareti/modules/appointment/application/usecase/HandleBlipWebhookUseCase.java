@@ -564,6 +564,39 @@ public class HandleBlipWebhookUseCase {
                 String searchPhone = !dbPhone.isEmpty() ? dbPhone : fromPhone;
                 List<AppointmentSession> activeSessions = appointmentSessionRepository.findActiveByPhoneNumber(searchPhone);
                 if (activeSessions != null && !activeSessions.isEmpty()) {
+                    AppointmentSession mainSession = activeSessions.get(0);
+
+                    // BLOQUEIO DE ROTEAMENTO SILENCIOSO PARA AVALIAÇÕES / AGRADECIMENTOS
+                    boolean isReviewSent = mainSession.getReviewRequestedAt() != null;
+                    String textLower = rawContentText != null ? rawContentText.toLowerCase().trim() : "";
+
+                    boolean isExplicitHumanRequest = textLower.contains("falar")
+                            || textLower.contains("humano")
+                            || textLower.contains("atendente")
+                            || textLower.contains("atendimento")
+                            || textLower.contains("duvida")
+                            || textLower.contains("dúvida")
+                            || textLower.contains("ajuda")
+                            || textLower.contains("problema")
+                            || textLower.contains("recepcao")
+                            || textLower.contains("recepção")
+                            || textLower.contains("remarcar")
+                            || textLower.contains("cancelar");
+
+                    if (isReviewSent && !isExplicitHumanRequest) {
+                        log.info("[GOOGLE-REVIEW-ROUTING] Resposta de avaliação/cortesia recebida de {} (reviewRequestedAt={}). Ignorando roteamento para o Desk.",
+                                searchPhone, mainSession.getReviewRequestedAt());
+                        return new WebhookResult("", "", "", "", "review_response_ignored", "");
+                    }
+
+                    if (!isExplicitHumanRequest) {
+                        boolean isCourtesyText = textLower.matches("(?i)^(obrigado|obrigada|valeu|ok|otimo|ótimo|bom|boa|excelente|nota \\d+|\\d+|tudo certo|agradeço|agradeco|obg|blz|tmj)$");
+                        if (isCourtesyText) {
+                            log.info("[FREE-TEXT-ROUTING] Texto de cortesia/agradecimento '{}' recebido de {}. Ignorando roteamento silencioso para Desk.", textLower, searchPhone);
+                            return new WebhookResult("", "", "", "", "courtesy_text_ignored", "");
+                        }
+                    }
+
                     log.info("[FREE-TEXT-ROUTING] Paciente {} possui {} agendamento(s) ativo(s). Aplicando roteamento silencioso para Desk.", searchPhone, activeSessions.size());
                     applySilentDeskRouting(fromPhone, dbPhone, null);
                     return new WebhookResult("", "", "", "", "free_text_desk_routed", "");
