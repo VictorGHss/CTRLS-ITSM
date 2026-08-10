@@ -68,6 +68,32 @@ class IntentAnalyzerServiceTest {
     }
 
     @Test
+    @DisplayName("Deve retornar MENU_POS_CPF quando a intenção for NAO_RECONHECIDO e descaracterizar INTERNAL e Atendimento Geral")
+    void testAnalyzeIntentNaoReconhecidoRouting() {
+        IntentAnalysisResultDto result = intentAnalyzerService.analyzeIntent("qualquer texto sem sentido xyz99");
+
+        assertNotNull(result);
+        assertEquals("NAO_RECONHECIDO", result.getIntent());
+        assertEquals("MENU_POS_CPF", result.getRouteType());
+        assertEquals("EXIBIR_MENU_POS_CPF", result.getAcaoSeguinte());
+        assertNull(result.getSelectedQueue());
+        assertNotEquals("INTERNAL", result.getRouteType());
+        assertNotEquals("Atendimento Geral", result.getSelectedQueue());
+    }
+
+    @Test
+    @DisplayName("Deve retornar INTERNAL com fila Atendimento Geral apenas para solicitação explícita de atendente humano")
+    void testAnalyzeIntentExplicitHumanRouting() {
+        IntentAnalysisResultDto result = intentAnalyzerService.analyzeIntent("Quero falar com atendente por favor");
+
+        assertNotNull(result);
+        assertEquals("ATENDIMENTO_HUMANO", result.getIntent());
+        assertEquals("INTERNAL", result.getRouteType());
+        assertEquals("REDIRECIONAR_DESK", result.getAcaoSeguinte());
+        assertEquals("Atendimento Geral", result.getSelectedQueue());
+    }
+
+    @Test
     @DisplayName("Deve converter datas em múltiplos formatos para o padrão ISO (YYYY-MM-DD)")
     void testDateParserUtils() {
         assertEquals("1990-08-15", DateParserUtils.parseToIsoDate("15/08/1990"));

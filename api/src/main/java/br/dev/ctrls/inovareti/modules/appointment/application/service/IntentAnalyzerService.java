@@ -14,8 +14,8 @@ import java.util.stream.Collectors;
 
 /**
  * Serviço de NLP leve responsável pela análise de mensagens de pacientes,
- * filtragem de stop-words/gírias, normalização de especialidades, desambiguação e paginação
- * para o limite de 10 opções da Lista Interativa do WhatsApp.
+ * filtragem de stop-words/gírias, normalização de especialidades, desambiguação, paginação
+ * e decisões de roteamento pós-busca de paciente (routeType, acaoSeguinte, selectedQueue).
  */
 @Slf4j
 @Service
@@ -30,7 +30,7 @@ public class IntentAnalyzerService {
             "agendar", "agendamento", "consulta", "marcar", "com", "quero",
             "por", "favor", "gostaria", "de", "para", "o", "a", "os", "as",
             "um", "uma", "dr", "dra", "doutor", "doutora", "medico", "medica",
-            "preciso", "ver", "passar", "atendimento", "clinica"
+            "preciso", "ver", "passar", "clinica"
     );
 
     private static final Map<String, String> NICKNAME_SPECIALTY_MAP = Map.ofEntries(
@@ -93,11 +93,11 @@ public class IntentAnalyzerService {
     }
 
     /**
-     * Analisa o texto bruto do paciente com suporte a paginação de resultados.
+     * Analisa o texto bruto do paciente com suporte a paginação de resultados e decisão de roteamento.
      *
      * @param rawInput Mensagem digitada pelo paciente no WhatsApp
      * @param page Número da página solicitada (1-based)
-     * @return IntentAnalysisResultDto contendo intenção, especialidade, médicos e metadados de paginação
+     * @return IntentAnalysisResultDto contendo intenção, especialidade, médicos, decisão de roteamento e metadados de paginação
      */
     public IntentAnalysisResultDto analyzeIntent(String rawInput, int page) {
         if (rawInput == null || rawInput.isBlank()) {
@@ -105,6 +105,9 @@ public class IntentAnalyzerService {
                     .rawInput(rawInput)
                     .cleanedInput("")
                     .intent("NAO_RECONHECIDO")
+                    .routeType("MENU_POS_CPF")
+                    .acaoSeguinte("EXIBIR_MENU_POS_CPF")
+                    .selectedQueue(null)
                     .hasAmbiguity(false)
                     .page(1)
                     .pageSize(PAGE_SIZE)
@@ -116,6 +119,10 @@ public class IntentAnalyzerService {
         }
 
         String normalized = stripAccents(rawInput.toLowerCase().trim());
+
+        // 1. Verificação de solicitação explícita de Atendimento Humano ou Trigger ITSM
+        boolean isExplicitHuman = isExplicitHumanSupportRequest(normalized);
+
         List<String> tokens = Arrays.stream(normalized.split("[^a-zA-Z0-9]+"))
                 .filter(t -> !t.isBlank())
                 .filter(t -> !STOP_WORDS.contains(t))
@@ -136,13 +143,40 @@ public class IntentAnalyzerService {
 
         int totalMatches = allMatchDtos.size();
         boolean hasAmbiguity = totalMatches > 1;
+
         String intent;
-        if (totalMatches == 0) {
+        String routeType;
+        String acaoSeguinte;
+        String selectedQueue;
+
+        if (isExplicitHuman) {
+            intent = "ATENDIMENTO_HUMANO";
+            routeType = "INTERNAL";
+            acaoSeguinte = "REDIRECIONAR_DESK";
+            selectedQueue = "Atendimento Geral";
+        } else if (totalMatches == 0) {
             intent = "NAO_RECONHECIDO";
+            routeType = "MENU_POS_CPF";
+            acaoSeguinte = "EXIBIR_MENU_POS_CPF";
+            selectedQueue = null;
         } else if (hasAmbiguity) {
             intent = "DESAMBIGUACAO";
+            routeType = "DESAMBIGUACAO";
+            acaoSeguinte = "EXIBIR_LISTA_DESAMBIGUACAO";
+            selectedQueue = null;
         } else {
             intent = "AGENDAMENTO";
+            DoctorMatchDto bestMatch = allMatchDtos.get(0);
+            boolean isInternal = Boolean.TRUE.equals(bestMatch.getIsInternal());
+            if (isInternal) {
+                routeType = "INTERNAL";
+                acaoSeguinte = "REDIRECIONAR_DESK";
+                selectedQueue = bestMatch.getQueue() != null ? bestMatch.getQueue() : "Atendimento Geral";
+            } else {
+                routeType = "EXTERNAL";
+                acaoSeguinte = "EXIBIR_LINK_EXTERNO";
+                selectedQueue = null;
+            }
         }
 
         // Lógica de Paginação (Limite de 10 itens do WhatsApp Interactive List)
@@ -181,6 +215,9 @@ public class IntentAnalyzerService {
                 .intent(intent)
                 .extractedSpecialty(mappedSpecialty)
                 .hasAmbiguity(hasAmbiguity)
+                .routeType(routeType)
+                .acaoSeguinte(acaoSeguinte)
+                .selectedQueue(selectedQueue)
                 .page(currentPage)
                 .pageSize(PAGE_SIZE)
                 .totalMatches(totalMatches)
@@ -188,6 +225,25 @@ public class IntentAnalyzerService {
                 .hasNextPage(hasNextPage)
                 .matches(paginatedMatches)
                 .build();
+    }
+
+    private boolean isExplicitHumanSupportRequest(String normalizedInput) {
+        if (normalizedInput == null || normalizedInput.isBlank()) {
+            return false;
+        }
+        String input = normalizedInput.toLowerCase();
+        return input.contains("atendente")
+                || input.contains("atendimento humano")
+                || input.contains("falar com atendente")
+                || input.contains("falar com a secretaria")
+                || input.contains("secretaria")
+                || input.contains("falar com recepcao")
+                || input.contains("recepcao")
+                || input.contains("humano")
+                || input.contains("transbordo")
+                || input.startsWith("confirm_")
+                || input.startsWith("alter_")
+                || input.startsWith("ver_agenda_");
     }
 
     private String resolveSpecialtyNickname(List<String> tokens) {

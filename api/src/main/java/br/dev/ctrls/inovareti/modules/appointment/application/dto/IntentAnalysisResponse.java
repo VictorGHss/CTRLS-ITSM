@@ -10,7 +10,8 @@ import java.util.List;
 
 /**
  * DTO de resposta contendo o resultado do processamento da intenção do usuário.
- * Suporta respostas de tipo "RESULTADO_UNICO", "MULTIPLOS_RESULTADOS", "TRIGGER_ITSM" e "NENHUM_RESULTADO".
+ * Suporta respostas de tipo "RESULTADO_UNICO", "MULTIPLOS_RESULTADOS", "TRIGGER_ITSM", "NENHUM_RESULTADO"
+ * e propriedades de decisão de roteamento (routeType, acaoSeguinte, selectedQueue).
  * Comentários mantidos em PT-BR pelas Regras de Ouro.
  */
 @Data
@@ -43,6 +44,16 @@ public class IntentAnalysisResponse {
 
     @JsonProperty("acao")
     private String acao;
+
+    @JsonProperty("routeType")
+    private String routeType;
+
+    @JsonProperty("acaoSeguinte")
+    private String acaoSeguinte;
+
+    @JsonProperty("selectedQueue")
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    private String selectedQueue;
 
     @JsonProperty("opcoes")
     private List<DoctorOption> opcoes;

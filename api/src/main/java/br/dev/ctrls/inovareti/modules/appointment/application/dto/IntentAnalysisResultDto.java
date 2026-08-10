@@ -11,7 +11,8 @@ import java.util.List;
 
 /**
  * DTO com o resultado refinado do Motor de Intenções para o Take Blip.
- * Inclui dados de paginação para proteger limites de listas interativas do WhatsApp (máx 10 itens).
+ * Inclui dados de paginação para proteger limites de listas interativas do WhatsApp (máx 10 itens)
+ * e atributos de roteamento pós-busca de paciente (routeType, acaoSeguinte, selectedQueue).
  */
 @Data
 @Builder
@@ -25,6 +26,12 @@ public class IntentAnalysisResultDto {
     private String intent;
     private String extractedSpecialty;
     private boolean hasAmbiguity;
+
+    // Campos de Roteamento
+    private String routeType;
+    private String acaoSeguinte;
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    private String selectedQueue;
 
     // Campos de Paginação
     @Builder.Default
