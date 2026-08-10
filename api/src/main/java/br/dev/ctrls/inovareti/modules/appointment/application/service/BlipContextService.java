@@ -578,8 +578,8 @@ public class BlipContextService {
         String masterIdentity = resolveMasterIdentity(userIdentity);
         String tunnelIdentity = resolveTunnelIdentity(userIdentity);
 
-        // Sempre utiliza o nome amigável/descritivo para o redirecionamento do Blip Desk (evita fila com nome de UUID)
-        String queueValueForRedirect = safeQueueName;
+        // Utiliza o UUID da fila (se presente) para attendanceQueueToRedirect e o nome legível para attendanceQueueNameToRedirect
+        String queueValueForRedirect = rawQueueId != null ? rawQueueId : safeQueueName;
 
         if (masterIdentity != null && !masterIdentity.isBlank()) {
             setUserContext(masterIdentity, "attendanceQueueToRedirect", queueValueForRedirect);
