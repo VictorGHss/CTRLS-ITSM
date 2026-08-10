@@ -88,11 +88,27 @@ public class IntentAnalysisService {
             return IntentAnalysisResponse.builder()
                 .tipo("NENHUM_RESULTADO")
                 .termoBuscado("")
+                .routeType("MENU_POS_CPF")
+                .acaoSeguinte("EXIBIR_MENU_POS_CPF")
+                .selectedQueue(null)
                 .build();
         }
 
         String rawInput = request.getMensagem().trim();
         String rawLower = rawInput.toLowerCase();
+
+        // 0. Verificação de solicitação explícita de Atendimento Humano
+        if (isExplicitHumanRequest(rawLower)) {
+            log.info("[IntentAnalysis] Solicitação explícita de atendimento humano: {}", rawInput);
+            return IntentAnalysisResponse.builder()
+                .tipo("ATENDIMENTO_HUMANO")
+                .termoBuscado(rawInput)
+                .routeType("INTERNAL")
+                .acaoSeguinte("REDIRECIONAR_DESK")
+                .selectedQueue("Atendimento Geral")
+                .fila("Atendimento Geral")
+                .build();
+        }
 
         // 1. Identificação de Triggers ITSM (confirm_, alter_, ver_agenda_)
         if (rawLower.startsWith("confirm_") || rawLower.startsWith("alter_") || rawLower.startsWith("ver_agenda_")) {
@@ -100,6 +116,9 @@ public class IntentAnalysisService {
             return IntentAnalysisResponse.builder()
                 .tipo("TRIGGER_ITSM")
                 .acao(rawInput)
+                .routeType("INTERNAL")
+                .acaoSeguinte("REDIRECIONAR_DESK")
+                .selectedQueue("Atendimento Geral")
                 .build();
         }
 
@@ -114,6 +133,7 @@ public class IntentAnalysisService {
                 List<DoctorCatalog> topMatches = findTopMatchesForTerm(contextTerm);
                 if (numericIndex >= 1 && numericIndex <= topMatches.size()) {
                     DoctorCatalog selected = topMatches.get(numericIndex - 1);
+                    boolean isInternal = "DESK".equalsIgnoreCase(selected.getRoute());
                     log.info("[IntentAnalysis] Seleção por índice numérico {} para contexto '{}': {} ({})",
                             numericIndex, contextTerm, selected.getDoctorName(), selected.getSpecialty());
 
@@ -125,6 +145,9 @@ public class IntentAnalysisService {
                         .fila(selected.getQueue())
                         .rota(selected.getRoute())
                         .linkWa(buildWaLink(selected))
+                        .routeType(isInternal ? "INTERNAL" : "EXTERNAL")
+                        .acaoSeguinte(isInternal ? "REDIRECIONAR_DESK" : "EXIBIR_LINK_EXTERNO")
+                        .selectedQueue(isInternal ? selected.getQueue() : null)
                         .build();
                 }
             }
@@ -139,11 +162,15 @@ public class IntentAnalysisService {
             return IntentAnalysisResponse.builder()
                 .tipo("NENHUM_RESULTADO")
                 .termoBuscado(termoBuscado)
+                .routeType("MENU_POS_CPF")
+                .acaoSeguinte("EXIBIR_MENU_POS_CPF")
+                .selectedQueue(null)
                 .build();
         }
 
         if (topMatches.size() == 1) {
             DoctorCatalog bestMatch = topMatches.get(0);
+            boolean isInternal = "DESK".equalsIgnoreCase(bestMatch.getRoute());
             log.info("[IntentAnalysis] RESULTADO_UNICO: {} ({}) para termo '{}'",
                     bestMatch.getDoctorName(), bestMatch.getSpecialty(), termoBuscado);
 
@@ -155,6 +182,9 @@ public class IntentAnalysisService {
                 .fila(bestMatch.getQueue())
                 .rota(bestMatch.getRoute())
                 .linkWa(buildWaLink(bestMatch))
+                .routeType(isInternal ? "INTERNAL" : "EXTERNAL")
+                .acaoSeguinte(isInternal ? "REDIRECIONAR_DESK" : "EXIBIR_LINK_EXTERNO")
+                .selectedQueue(isInternal ? bestMatch.getQueue() : null)
                 .build();
         } else {
             log.info("[IntentAnalysis] MULTIPLOS_RESULTADOS ({}) para termo '{}'", topMatches.size(), termoBuscado);
@@ -185,8 +215,25 @@ public class IntentAnalysisService {
                 .termoBuscado(termoBuscado)
                 .opcoes(options)
                 .opcoesFormatadas(sb.toString().trim())
+                .routeType("DESAMBIGUACAO")
+                .acaoSeguinte("EXIBIR_LISTA_DESAMBIGUACAO")
+                .selectedQueue(null)
                 .build();
         }
+    }
+
+    private boolean isExplicitHumanRequest(String input) {
+        if (input == null || input.isBlank()) return false;
+        String lower = input.toLowerCase();
+        return lower.contains("atendente")
+                || lower.contains("atendimento humano")
+                || lower.contains("falar com atendente")
+                || lower.contains("falar com a secretaria")
+                || lower.contains("secretaria")
+                || lower.contains("falar com recepcao")
+                || lower.contains("recepcao")
+                || lower.contains("humano")
+                || lower.contains("transbordo");
     }
 
     private List<DoctorCatalog> findTopMatchesForTerm(String termInput) {
