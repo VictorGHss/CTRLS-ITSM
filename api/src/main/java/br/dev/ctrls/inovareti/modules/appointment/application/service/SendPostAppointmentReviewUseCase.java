@@ -37,6 +37,26 @@ public class SendPostAppointmentReviewUseCase {
     private final PatientExternalPort patientExternalPort;
     private final BlipNotificationService blipNotificationService;
 
+    @org.springframework.beans.factory.annotation.Value("${app.appointment.motor.active-doctor-ids:}")
+    private String activeDoctorIds;
+
+    @org.springframework.beans.factory.annotation.Value("${app.appointment.motor.test-doctor-ids:}")
+    private String testDoctorIds;
+
+    private java.util.Set<Long> getAllowedDoctorIds() {
+        java.util.Set<Long> set = new java.util.HashSet<>();
+        String combined = (activeDoctorIds != null ? activeDoctorIds : "") + "," + (testDoctorIds != null ? testDoctorIds : "");
+        for (String s : combined.split(",")) {
+            String trimmed = s.trim();
+            if (!trimmed.isEmpty()) {
+                try {
+                    set.add(Long.parseLong(trimmed));
+                } catch (NumberFormatException ignored) {}
+            }
+        }
+        return set;
+    }
+
     @Transactional
     public int execute() {
         LocalDate today = LocalDate.now();
@@ -58,9 +78,24 @@ public class SendPostAppointmentReviewUseCase {
         log.info("[GOOGLE-REVIEW] Encontrados {} agendamentos com status 'Atendido' (StatusID=3) para a data {}.", attendedAppointments.size(), today);
 
         int countSent = 0;
+        java.util.Set<Long> allowedDoctorIds = getAllowedDoctorIds();
 
         for (FeegowAppointment appt : attendedAppointments) {
             if (appt == null || appt.id() == null || appt.id().isBlank()) {
+                continue;
+            }
+
+            String doctorIdStr = (appt.doctorId() != null && !appt.doctorId().isBlank()) ? appt.doctorId().trim() : null;
+            Long doctorId = null;
+            if (doctorIdStr != null) {
+                try {
+                    doctorId = Long.parseLong(doctorIdStr);
+                } catch (NumberFormatException ignored) {}
+            }
+
+            if (!allowedDoctorIds.isEmpty() && (doctorId == null || !allowedDoctorIds.contains(doctorId))) {
+                log.info("[GOOGLE-REVIEW] Médico ID={} não está habilitado na lista de médicos ativos (.env). Disparo ignorado.",
+                        doctorIdStr != null ? doctorIdStr : "desconhecido");
                 continue;
             }
 

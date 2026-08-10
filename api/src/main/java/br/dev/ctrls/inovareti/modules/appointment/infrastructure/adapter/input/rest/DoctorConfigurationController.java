@@ -28,6 +28,26 @@ public class DoctorConfigurationController {
     private final DoctorConfigurationRepository doctorConfigurationRepository;
     private final br.dev.ctrls.inovareti.modules.appointment.application.service.BlipNotificationService blipNotificationService;
 
+    @org.springframework.beans.factory.annotation.Value("${app.appointment.motor.active-doctor-ids:}")
+    private String activeDoctorIds;
+
+    @org.springframework.beans.factory.annotation.Value("${app.appointment.motor.test-doctor-ids:}")
+    private String testDoctorIds;
+
+    private java.util.Set<Long> getAllowedDoctorIds() {
+        java.util.Set<Long> set = new java.util.HashSet<>();
+        String combined = (activeDoctorIds != null ? activeDoctorIds : "") + "," + (testDoctorIds != null ? testDoctorIds : "");
+        for (String s : combined.split(",")) {
+            String trimmed = s.trim();
+            if (!trimmed.isEmpty()) {
+                try {
+                    set.add(Long.parseLong(trimmed));
+                } catch (NumberFormatException ignored) {}
+            }
+        }
+        return set;
+    }
+
     /**
      * Endpoint de teste para disparo manual da avaliação Google Review.
      */
@@ -42,6 +62,23 @@ public class DoctorConfigurationController {
         String reviewParam = (doctorId != null && !doctorId.isBlank())
                 ? doctorId.trim()
                 : ((googleReviewHash != null && !googleReviewHash.isBlank()) ? googleReviewHash.trim().replaceAll("\\s+", "") : "default");
+
+        java.util.Set<Long> allowedDoctorIds = getAllowedDoctorIds();
+        Long parsedDoctorId = null;
+        if (doctorId != null && !doctorId.isBlank()) {
+            try {
+                parsedDoctorId = Long.parseLong(doctorId.trim());
+            } catch (NumberFormatException ignored) {}
+        }
+
+        if (!allowedDoctorIds.isEmpty() && (parsedDoctorId == null || !allowedDoctorIds.contains(parsedDoctorId))) {
+            log.warn("[GOOGLE-REVIEW] Teste de avaliação bloqueado. Médico ID={} não está habilitado nas listas de médicos ativos (.env).", doctorId);
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(java.util.Map.of(
+                "status", "blocked",
+                "message", "Médico ID=" + doctorId + " não está habilitado na lista de médicos ativos (.env). Disparo ignorado.",
+                "doctorId", doctorId != null ? doctorId : "null"
+            ));
+        }
 
         log.info("[REST] Teste manual de disparo de avaliação Google para o telefone={}, paciente={}, medico={}, reviewParam={}",
                 phone, patientName, doctorName, reviewParam);
