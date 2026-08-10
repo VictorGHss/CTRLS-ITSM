@@ -28,7 +28,7 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class SendPostAppointmentReviewUseCase {
 
-    private static final String TEMPLATE_REVIEW_GOOGLE = "pesquisa_avaliacao_google_itsm_v4";
+    private static final String TEMPLATE_REVIEW_GOOGLE = "pesquisa_avaliacao_google_itsm_v5";
     private static final int FEEGOW_STATUS_ATENDIDO = 3;
 
     private final AppointmentExternalPort appointmentExternalPort;
@@ -176,7 +176,7 @@ public class SendPostAppointmentReviewUseCase {
                 log.info("[GOOGLE-REVIEW] Enviando template '{}' para agendamento ID {} (Paciente: {}, Médico: {}, Telefone: {}, DoctorID Param: {})",
                         TEMPLATE_REVIEW_GOOGLE, feegowAppointmentId, patientName, doctorName, phone, doctorIdParam);
 
-                blipNotificationService.sendReviewTemplateMessage(phone, TEMPLATE_REVIEW_GOOGLE, doctorIdParam);
+                blipNotificationService.sendReviewTemplateMessage(phone, TEMPLATE_REVIEW_GOOGLE, patientName, doctorName, doctorIdParam);
 
                 session.setReviewRequestedAt(LocalDateTime.now());
                 if (session.getPhoneNumber() == null || session.getPhoneNumber().isBlank()) {
