@@ -311,8 +311,10 @@ public class BlipContactClientAdapter implements BlipContactClientPort {
 
         Map<String, Object> contactResource = new java.util.LinkedHashMap<>();
         contactResource.put("identity", identity);
-        if (!isInvalidName(name) && !isGenericName(name)) {
+        if (!isInvalidName(name)) {
             contactResource.put("name", name);
+        } else {
+            contactResource.put("name", "Paciente");
         }
         if (!digitsOnly.isBlank()) {
             contactResource.put("phoneNumber", formattedPhone);

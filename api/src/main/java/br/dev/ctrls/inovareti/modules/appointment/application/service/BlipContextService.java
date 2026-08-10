@@ -523,7 +523,7 @@ public class BlipContextService {
     }
 
     public String resolveQueueName(String queueNameOrId) {
-        if (queueNameOrId == null) return "";
+        if (queueNameOrId == null) return "Recepção Geral";
         String resolvedQueueName = queueNameOrId;
 
         // Se o valor de entrada parecer com a estrutura de um UUID de fila, realiza a tradução dinâmica
@@ -541,21 +541,24 @@ public class BlipContextService {
                         }
                     }
                 }
-                if (foundName != null && !foundName.isBlank()) {
+                if (foundName != null && !foundName.isBlank() && !foundName.trim().matches("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")) {
                     log.info("[QUEUE-RESOLVER] Traduzido UUID {} para o nome de pauta '{}'", uuid, foundName);
                     resolvedQueueName = foundName;
                 } else {
-                    log.warn("[QUEUE-RESOLVER] UUID {} não foi localizado na listagem de filas oficiais do Blip. Aplicando fallback de segurança.", uuid);
-                    resolvedQueueName = "Recepção Central / Suporte";
+                    log.warn("[QUEUE-RESOLVER] UUID {} não foi localizado na listagem de filas oficiais do Blip. Aplicando fallback de segurança 'Recepção Geral'.", uuid);
+                    resolvedQueueName = "Recepção Geral";
                 }
             } catch (Exception ex) {
-                log.error("[QUEUE-RESOLVER] Falha na comunicação com a API do Blip ao resolver o UUID {}. Aplicando fallback de segurança.", uuid, ex);
-                resolvedQueueName = "Recepção Central / Suporte";
+                log.error("[QUEUE-RESOLVER] Falha na comunicação com a API do Blip ao resolver o UUID {}. Aplicando fallback de segurança 'Recepção Geral'.", uuid, ex);
+                resolvedQueueName = "Recepção Geral";
             }
         }
 
         String safeQueueName = cleanQueueName(resolvedQueueName);
-        return safeQueueName.isBlank() ? "Recepção Central / Suporte" : safeQueueName;
+        if (safeQueueName.isBlank() || safeQueueName.trim().matches("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")) {
+            safeQueueName = "Recepção Geral";
+        }
+        return safeQueueName;
     }
 
     public boolean setQueueRedirect(String userIdentity, String queueNameOrId) {
@@ -565,6 +568,7 @@ public class BlipContextService {
                 ? queueNameOrId.trim() : null;
 
         if (!safeQueueName.isBlank()
+                && !"Recepção Geral".equalsIgnoreCase(safeQueueName)
                 && !"Recepção Central / Suporte".equalsIgnoreCase(safeQueueName)
                 && !"Recepção".equalsIgnoreCase(safeQueueName)
                 && !safeQueueName.contains(" - ")) {
