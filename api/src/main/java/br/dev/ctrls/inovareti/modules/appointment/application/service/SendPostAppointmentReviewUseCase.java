@@ -111,8 +111,8 @@ public class SendPostAppointmentReviewUseCase {
                 if (sessionOpt.isPresent()) {
                     session = sessionOpt.get();
                     if (session.getReviewRequestedAt() != null) {
-                        log.debug("[GOOGLE-REVIEW] Pesquisa de avaliação já solicitada em {} para o agendamento ID {}. Pulando.",
-                                session.getReviewRequestedAt(), feegowAppointmentId);
+                        log.info("[GOOGLE-REVIEW] Agendamento ID={} já recebeu pesquisa de avaliação anteriormente em {}. Ignorado.",
+                                feegowAppointmentId, session.getReviewRequestedAt());
                         continue;
                     }
                 } else {
