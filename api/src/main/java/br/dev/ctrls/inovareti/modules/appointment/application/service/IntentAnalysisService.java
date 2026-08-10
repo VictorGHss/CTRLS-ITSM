@@ -171,6 +171,9 @@ public class IntentAnalysisService {
         if (topMatches.size() == 1) {
             DoctorCatalog bestMatch = topMatches.get(0);
             boolean isInternal = "DESK".equalsIgnoreCase(bestMatch.getRoute());
+            String queue = bestMatch.getQueue();
+            boolean hasSpecificQueue = isInternal && queue != null && !queue.isBlank() && !"Atendimento Geral".equalsIgnoreCase(queue.trim());
+
             log.info("[IntentAnalysis] RESULTADO_UNICO: {} ({}) para termo '{}'",
                     bestMatch.getDoctorName(), bestMatch.getSpecialty(), termoBuscado);
 
@@ -182,9 +185,9 @@ public class IntentAnalysisService {
                 .fila(bestMatch.getQueue())
                 .rota(bestMatch.getRoute())
                 .linkWa(buildWaLink(bestMatch))
-                .routeType(isInternal ? "INTERNAL" : "EXTERNAL")
-                .acaoSeguinte(isInternal ? "REDIRECIONAR_DESK" : "EXIBIR_LINK_EXTERNO")
-                .selectedQueue(isInternal ? bestMatch.getQueue() : null)
+                .routeType(hasSpecificQueue ? "INTERNAL" : (isInternal ? "MENU_POS_CPF" : "EXTERNAL"))
+                .acaoSeguinte(hasSpecificQueue ? "REDIRECIONAR_DESK" : (isInternal ? "EXIBIR_MENU_POS_CPF" : "EXIBIR_LINK_EXTERNO"))
+                .selectedQueue((hasSpecificQueue && queue != null) ? queue.trim() : null)
                 .build();
         } else {
             log.info("[IntentAnalysis] MULTIPLOS_RESULTADOS ({}) para termo '{}'", topMatches.size(), termoBuscado);

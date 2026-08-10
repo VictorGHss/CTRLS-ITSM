@@ -36,7 +36,7 @@ public class IntentAnalyzerController {
      * @param queryPage parâmetro de query string opcional (ex: ?page=2)
      * @return IntentAnalysisResultDto em JSON limpo e padronizado
      */
-    @PostMapping("/analyze")
+    @PostMapping({"/analyze", "/routerdecision", "/router-decision", "/decision"})
     public ResponseEntity<IntentAnalysisResultDto> analyzeText(
             @RequestBody(required = false) AnalyzeRequest request,
             @RequestParam(name = "page", required = false) Integer queryPage) {
@@ -58,7 +58,7 @@ public class IntentAnalyzerController {
     /**
      * Endpoint GET alternativo para consultas simplificadas via HTTP Action no Take Blip.
      */
-    @GetMapping("/analyze")
+    @GetMapping({"/analyze", "/routerdecision", "/router-decision", "/decision"})
     public ResponseEntity<IntentAnalysisResultDto> analyzeTextGet(
             @RequestParam(name = "text", required = false, defaultValue = "") String text,
             @RequestParam(name = "page", required = false, defaultValue = "1") int page) {
