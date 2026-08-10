@@ -699,12 +699,12 @@ public class BlipNotificationService {
 
     /**
      * Envia o template de pesquisa de avaliação do Google Review (pesquisa_avaliacao_google_itsm_v4)
-     * via Active Campaign para o destino fornecido com exatamente 1 parâmetro (ID do Médico no Botão /api/review/{doctorId}).
+     * via mensagem LIME nativa com componentes WABA (WhatsApp Meta API) diretamente para o canal.
      */
     public void sendReviewTemplateMessage(String destination, String templateName, String doctorIdOrParam) {
-        String recipientE164 = BlipPayloadBuilder.formatE164Recipient(destination);
-        if (recipientE164 == null || recipientE164.length() < 14) {
-            log.warn("[TELEFONE-INVÁLIDO] Abortando envio do template de avaliação '{}'. O destino '{}' é inválido ou possui menos de 11 dígitos com DDD.",
+        String wabaDestination = ensureWabaIdentity(destination);
+        if (wabaDestination == null || !wabaDestination.contains("@")) {
+            log.warn("[TELEFONE-INVÁLIDO] Abortando envio do template de avaliação '{}'. Destino '{}' inválido.",
                     templateName, destination);
             return;
         }
@@ -713,32 +713,48 @@ public class BlipNotificationService {
                 ? doctorIdOrParam.trim().replaceAll("\\s+", "")
                 : "default";
 
-        Map<String, String> messageParamValues = new java.util.LinkedHashMap<>();
-        messageParamValues.put("1", safeDoctorIdParam);
-        List<String> messageParamKeys = java.util.Collections.emptyList();
+        String effectiveTemplateName = (templateName != null && !templateName.isBlank())
+                ? templateName.trim()
+                : "pesquisa_avaliacao_google_itsm_v4";
 
-        String uniqueSuffix = UUID.randomUUID().toString().substring(0, 8);
-        String campaignName = "Avaliacao Google - " + uniqueSuffix;
+        Map<String, Object> buttonParam = Map.of(
+            "type", "text",
+            "text", safeDoctorIdParam
+        );
 
-        Map<String, Object> commandPayload = blipPayloadBuilder.buildActiveCampaignCommandPayload(
-            campaignName,
-            recipientE164,
-            templateName,
-            messageParamValues,
-            messageParamKeys,
-            null,
-            null,
-            null
+        Map<String, Object> buttonComponent = Map.of(
+            "type", "button",
+            "sub_type", "url",
+            "index", "0",
+            "parameters", List.of(buttonParam)
+        );
+
+        Map<String, Object> templateObj = Map.of(
+            "name", effectiveTemplateName,
+            "language", Map.of("code", "pt_BR"),
+            "components", List.of(buttonComponent)
+        );
+
+        Map<String, Object> contentObj = Map.of(
+            "type", "template",
+            "template", templateObj
+        );
+
+        Map<String, Object> messagePayload = Map.of(
+            "id", UUID.randomUUID().toString(),
+            "to", wabaDestination,
+            "type", "application/json",
+            "content", contentObj
         );
 
         try {
-            var response = limeClient.executeCommand(commandPayload, BlipLIMEClient.AuthorizationScope.ROUTER);
-            validateBlipResponse(response, templateName, recipientE164);
-            log.info("[GOOGLE-REVIEW] Template de avaliação '{}' enviado via Active Campaign. destination={}, doctorId={}, status={}",
-                    templateName, recipientE164, safeDoctorIdParam, response != null ? response.get("status") : "success");
+            var response = limeClient.executeMessage(messagePayload, BlipLIMEClient.AuthorizationScope.ROUTER);
+            Object status = response != null ? response.getOrDefault("status", "success") : "success";
+            log.info("[GOOGLE-REVIEW] Template nativo WABA '{}' enviado via LIME message. destination={}, doctorId={}, status={}",
+                    effectiveTemplateName, wabaDestination, safeDoctorIdParam, status);
         } catch (Exception e) {
-            log.error("[GOOGLE-REVIEW] Falha ao enviar template de avaliação '{}' para {}: {}", templateName, recipientE164, e.getMessage(), e);
-            throw new RuntimeException("Falha ao enviar avaliação no Blip para " + recipientE164 + ": " + e.getMessage(), e);
+            log.error("[GOOGLE-REVIEW] Falha ao enviar template nativo WABA '{}' para {}: {}", effectiveTemplateName, wabaDestination, e.getMessage(), e);
+            throw new RuntimeException("Falha ao enviar avaliação nativa WABA no Blip para " + wabaDestination + ": " + e.getMessage(), e);
         }
     }
 
