@@ -698,7 +698,7 @@ public class BlipNotificationService {
     }
 
     /**
-     * Envia o template de pesquisa de avaliação do Google Review (pesquisa_avaliacao_google_itsm_v5)
+     * Envia o template de pesquisa de avaliação do Google Review (pesquisa_avaliacao_google_itsm_v6)
      * via mensagem LIME nativa com componentes WABA (WhatsApp Meta API) diretamente para o canal.
      * Inclui os parâmetros de corpo (body: paciente e médico) e de botão (button: ID do médico).
      */
@@ -724,7 +724,7 @@ public class BlipNotificationService {
 
         String effectiveTemplateName = (templateName != null && !templateName.isBlank())
                 ? templateName.trim()
-                : "pesquisa_avaliacao_google_itsm_v5";
+                : "pesquisa_avaliacao_google_itsm_v6";
 
         Map<String, Object> bodyParam1 = Map.of("type", "text", "text", safePatientName);
         Map<String, Object> bodyParam2 = Map.of("type", "text", "text", safeDoctorName);
