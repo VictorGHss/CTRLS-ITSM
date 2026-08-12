@@ -81,7 +81,7 @@ public class DiscordNotificationService {
         }
 
         try {
-            jda.retrieveUserById(discordUserId.trim()).queue(
+            jda.retrieveUserById(java.util.Objects.requireNonNull(discordUserId.trim())).queue(
                 user -> user.openPrivateChannel().queue(
                     channel -> channel.sendMessageEmbeds(embedBuilder.build()).queue(
                         success -> log.info("[DISCORD-NOTIFICATION] Embed de solução enviado para chamado #{} (user={})", shortId, discordUserId),

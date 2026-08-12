@@ -291,7 +291,6 @@ public class HandleBlipWebhookUseCase {
             }
 
             String doctorId = activeSession != null ? activeSession.getDoctorProfissionalId() : null;
-            String patientId = activeSession != null ? activeSession.getPatientId() : null;
             String feegowAppointmentId = activeSession != null ? activeSession.getFeegowAppointmentId() : "";
 
             String blipQueueId = null;
