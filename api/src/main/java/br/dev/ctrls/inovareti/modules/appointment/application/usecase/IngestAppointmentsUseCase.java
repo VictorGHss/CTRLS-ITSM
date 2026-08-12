@@ -791,19 +791,19 @@ public class IngestAppointmentsUseCase {
             return 0;
         }
 
-        // Prevenção de disparo duplicado de templates de grupo nas últimas 6 horas
+        // Prevenção de disparo duplicado de templates de grupo no dia atual (LocalDate.now())
         boolean recentGroupSent = false;
         try {
             Optional<NotificationGroup> latestOpt = notificationGroupRepository.findLatestByPhone(normalizedPhone);
             if (latestOpt.isPresent() && latestOpt.get().getCreatedAt() != null) {
                 LocalDateTime lastCreatedAt = latestOpt.get().getCreatedAt();
-                if (lastCreatedAt.isAfter(LocalDateTime.now().minusHours(6))) {
+                if (lastCreatedAt.toLocalDate().equals(LocalDate.now())) {
                     recentGroupSent = true;
-                    log.info("[ANTI-DUPLICADO-GRUPO] Telefone {} possui notificação de grupo enviada recentemente nas últimas 6 horas em {}.", normalizedPhone, lastCreatedAt);
+                    log.info("[LEMBRETE-GRUPO] Telefone {} já recebeu aviso de agendamento de grupo hoje. Disparo duplicado ignorado.", normalizedPhone);
                 }
             }
         } catch (Exception ex) {
-            log.warn("[ANTI-DUPLICADO-GRUPO] Falha ao verificar grupo anterior para {}: {}", normalizedPhone, ex.getMessage());
+            log.warn("[LEMBRETE-GRUPO] Falha ao verificar grupo anterior para {}: {}", normalizedPhone, ex.getMessage());
         }
 
         // Gera o groupId antes da transação para já associar nas sessões durante o primeiro save
@@ -972,7 +972,7 @@ public class IngestAppointmentsUseCase {
                 log.error("[ERRO-CRITICO-GRUPO] Falha ao enviar template para {}. groupId={}", phoneNumber, groupId, e);
             }
         } else {
-            log.info("[ANTI-DUPLICADO-GRUPO] Disparo do template de grupo '{}' ignorado para {} por ter sido enviado há menos de 6 horas.", groupTemplateName, phoneNumber);
+            log.info("[LEMBRETE-GRUPO] Telefone {} já recebeu aviso de agendamento de grupo hoje. Disparo duplicado ignorado.", phoneNumber);
         }
 
         return result.savedSessions().size();
