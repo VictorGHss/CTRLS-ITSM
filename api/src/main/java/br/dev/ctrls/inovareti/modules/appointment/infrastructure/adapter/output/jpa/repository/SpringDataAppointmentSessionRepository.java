@@ -86,4 +86,10 @@ public interface SpringDataAppointmentSessionRepository extends JpaRepository<Ap
         @Param("startWindow") LocalDateTime startWindow,
         @Param("endWindow") LocalDateTime endWindow
     );
+
+    @Query("SELECT a FROM AppointmentSessionEntity a WHERE a.appointmentAt BETWEEN :startWindow AND :endWindow")
+    List<AppointmentSessionEntity> findByAppointmentAtBetween(
+        @Param("startWindow") LocalDateTime startWindow,
+        @Param("endWindow") LocalDateTime endWindow
+    );
 }

@@ -191,6 +191,43 @@ public class IngestAppointmentsUseCase {
             log.warn("[MOTOR-INGESTÃO] Falha ao verificar antecedência personalizada de médicos: {}", ex.getMessage());
         }
 
+        // --- INVALIDAÇÃO DE AGENDAMENTOS REMARCADOS/CANCELADOS NA FEEGOW ---
+        // Coleta todos os IDs de agendamentos ativos retornados pelo Feegow para as datas-alvo
+        java.util.Set<String> validFeegowAppointmentIds = appointments.stream()
+                .map(a -> normalizeFeegowAppointmentId(a.id()))
+                .filter(id -> !id.isBlank())
+                .collect(Collectors.toSet());
+
+        for (LocalDate targetDate : targetDates) {
+            try {
+                LocalDateTime startOfDay = targetDate.atStartOfDay();
+                LocalDateTime endOfDay = targetDate.atTime(23, 59, 59);
+                List<AppointmentSession> localSessionsForDate = appointmentSessionRepository.findByAppointmentAtBetween(startOfDay, endOfDay);
+
+                for (AppointmentSession localSession : localSessionsForDate) {
+                    String feegowId = localSession.getFeegowAppointmentId();
+                    if (feegowId == null || feegowId.isBlank()) continue;
+
+                    AppointmentSessionStatus status = localSession.getStatus();
+                    if (status != AppointmentSessionStatus.CANCELED && status != AppointmentSessionStatus.CANCELED_NO_RESPONSE) {
+                        if (!validFeegowAppointmentIds.contains(feegowId.trim())) {
+                            log.info("[INGESTÃO-INVALIDAÇÃO] Agendamento local ID={} (Feegow ID={}) não consta mais na lista ativa da Feegow para a data {}. Atualizando status local para CANCELED (Remarcado ou Cancelado na Feegow).",
+                                    localSession.getId(), feegowId, targetDate);
+
+                            transactionTemplate.execute(txStatus -> {
+                                localSession.setStatus(AppointmentSessionStatus.CANCELED);
+                                localSession.setClosedAt(LocalDateTime.now());
+                                localSession.setStatusDetails("CANCELLED_OR_RESCHEDULED_ON_FEEGOW");
+                                return appointmentSessionRepository.save(localSession);
+                            });
+                        }
+                    }
+                }
+            } catch (Exception ex) {
+                log.warn("[INGESTÃO-INVALIDAÇÃO] Falha ao verificar invalidação de agendamentos locais para a data {}: {}", targetDate, ex.getMessage());
+            }
+        }
+
         int total = appointments.size();
 
         // Filtro de Encaixe: ignora agendamentos que possuem a flag encaixe ativa
