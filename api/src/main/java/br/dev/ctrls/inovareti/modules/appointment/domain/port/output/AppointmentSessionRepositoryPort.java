@@ -47,4 +47,6 @@ public interface AppointmentSessionRepositoryPort {
     List<AppointmentSession> findByPatientId(String patientId);
 
     List<AppointmentSession> findConfirmedSessionsInWindow(LocalDateTime startWindow, LocalDateTime endWindow);
+
+    List<AppointmentSession> findByAppointmentAtBetween(LocalDateTime startWindow, LocalDateTime endWindow);
 }

@@ -204,4 +204,15 @@ public class AppointmentSessionRepositoryAdapter implements AppointmentSessionRe
                 .map(entity -> entity.toDomain())
                 .toList();
     }
+
+    @Override
+    public List<AppointmentSession> findByAppointmentAtBetween(LocalDateTime startWindow, LocalDateTime endWindow) {
+        if (startWindow == null || endWindow == null) {
+            return List.of();
+        }
+        return springDataRepository.findByAppointmentAtBetween(startWindow, endWindow).stream()
+                .filter(entity -> entity != null)
+                .map(entity -> entity.toDomain())
+                .toList();
+    }
 }

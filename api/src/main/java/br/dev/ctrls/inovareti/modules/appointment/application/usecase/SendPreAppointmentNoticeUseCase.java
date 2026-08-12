@@ -35,6 +35,7 @@ public class SendPreAppointmentNoticeUseCase {
     private final br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentDoctorMappingRepositoryPort appointmentDoctorMappingRepository;
     private final br.dev.ctrls.inovareti.modules.appointment.application.service.BlipContextService blipContextService;
     private final br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentExternalPort appointmentExternalPort;
+    private final br.dev.ctrls.inovareti.modules.appointment.application.service.SendAppointmentReminderUseCase sendAppointmentReminderUseCase;
 
     public void execute() {
         if (!appointmentMotorProperties.isEnabled()) {
@@ -63,6 +64,11 @@ public class SendPreAppointmentNoticeUseCase {
         for (AppointmentSession session : candidateSessions) {
             try {
                 if (session.getPhoneNumber() == null || session.getPhoneNumber().isBlank()) {
+                    continue;
+                }
+
+                // RE-VALIDAÇÃO OBRIGATÓRIA PRÉ-DISPARO DE LEMBRETE NA FEEGOW
+                if (!sendAppointmentReminderUseCase.validateAndRecheckAppointmentOnFeegow(session)) {
                     continue;
                 }
 
