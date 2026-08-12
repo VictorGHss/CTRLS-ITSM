@@ -2,6 +2,8 @@ import { ArrowLeft } from 'lucide-react';
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 import PageHero from '@/components/ui/PageHero';
 import { useAuth } from '@/contexts/AuthContext';
@@ -180,11 +182,19 @@ export default function TicketDetails() {
                   </div>
                 </div>
               ) : (
-                <p className={`mt-2 text-sm whitespace-pre-wrap leading-relaxed ${
-                  ticket.solutionText ? 'text-emerald-700' : 'text-amber-700 italic font-medium'
+                <div className={`mt-2 text-sm leading-relaxed ${
+                  ticket.solutionText ? 'text-slate-800' : 'text-amber-700 italic font-medium'
                 }`}>
-                  {ticket.solutionText || 'Nenhuma descrição de solução foi informada para este chamado solucionado.'}
-                </p>
+                  {ticket.solutionText ? (
+                    <div className="prose prose-sm max-w-none prose-img:rounded-2xl prose-img:max-h-96 prose-img:border prose-img:border-slate-200">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {ticket.solutionText}
+                      </ReactMarkdown>
+                    </div>
+                  ) : (
+                    'Nenhuma descrição de solução foi informada para este chamado solucionado.'
+                  )}
+                </div>
               )}
             </div>
           )}

@@ -108,6 +108,18 @@ export async function uploadTicketAttachment(ticketId: string, file: File): Prom
   return data;
 }
 
+// Upload de mídias para inclusão em Markdown
+export async function uploadMarkdownAttachment(file: File): Promise<{ url: string }> {
+  const formData = new FormData();
+  formData.append('file', file);
+  const { data } = await api.post<{ url: string }>('/tickets/attachments/upload', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  });
+  return data;
+}
+
 // Lista todos os anexos de um chamado específico
 export async function getTicketAttachments(ticketId: string): Promise<TicketAttachment[]> {
   const { data } = await api.get<TicketAttachment[]>(`/tickets/${ticketId}/attachments`);
