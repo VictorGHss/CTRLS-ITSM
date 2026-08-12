@@ -82,6 +82,8 @@ public class SecurityConfig {
                 .requestMatchers("/v1/access/**", "/api/v1/access/**").permitAll()
                 .requestMatchers("/review/**", "/api/review/**", "/v1/doctors/configurations/review/**", "/api/v1/doctors/configurations/review/**").permitAll()
                 .requestMatchers(HttpMethod.POST, "/v1/doctors/configurations/test-review", "/api/v1/doctors/configurations/test-review").permitAll()
+                .requestMatchers("/uploads/**", "/api/uploads/**").permitAll()
+                .requestMatchers("/v1/tickets/attachments/**", "/api/v1/tickets/attachments/**").permitAll()
 
                 // Demais rotas administrativas/autenticação
                 .requestMatchers(APPOINTMENT_ADMIN_PATH).hasRole("ADMIN")

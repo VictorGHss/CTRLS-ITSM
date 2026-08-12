@@ -21,4 +21,10 @@ public class WebConfig implements WebMvcConfigurer {
                 .exposedHeaders(corsProperties.getExposedHeaders().toArray(String[]::new))
                 .allowCredentials(corsProperties.isAllowCredentials());
     }
+
+    @Override
+    public void addResourceHandlers(org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry registry) {
+        registry.addResourceHandler("/uploads/**")
+                .addResourceLocations("file:/mnt/data/uploads/", "file:uploads/", "file:./uploads/");
+    }
 }

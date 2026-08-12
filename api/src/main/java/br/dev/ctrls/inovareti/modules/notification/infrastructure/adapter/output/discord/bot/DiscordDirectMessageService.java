@@ -92,11 +92,20 @@ public class DiscordDirectMessageService {
         String ticketUrl = buildTicketUrl(ticketId);
         String content = description + "\n\n[View Ticket](" + ticketUrl + ")";
 
-        var embed = new EmbedBuilder()
+        var embedBuilder = new EmbedBuilder()
                 .setColor(CLINIC_BRAND_COLOR)
                 .setTitle(title)
-                .setDescription(content)
-                .build();
+                .setDescription(content);
+
+        // Regex para extrair a primeira URL de imagem ou GIF do Markdown
+        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("!\\[.*?\\]\\((https?://.*?)\\)").matcher(description != null ? description : "");
+        if (matcher.find()) {
+            String imageUrl = matcher.group(1).trim();
+            embedBuilder.setImage(imageUrl);
+            log.info("[DISCORD-DM] Imagem/GIF extraído do Markdown para embed do chamado {}: {}", ticketId, imageUrl);
+        }
+
+        var embed = embedBuilder.build();
 
         jda.retrieveUserById(discordUserId).queue(
                 user -> user.openPrivateChannel().queue(

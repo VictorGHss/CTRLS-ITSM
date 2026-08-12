@@ -1,9 +1,11 @@
-// Modal para resolver chamado com opção de entregar equipamento/material
-import { X, Laptop, Box, AlertCircle } from 'lucide-react';
+import { useState, useRef } from 'react';
+import { X, Laptop, Box, AlertCircle, Image, Loader2 } from 'lucide-react';
+import MDEditor from '@uiw/react-md-editor';
 
 import { useResolveTicket } from './hooks/useResolveTicket';
 import type { ResolveTicketRequest, Ticket, User } from '@/types/models';
 import SearchableDropdown from '@/components/common/SearchableDropdown';
+import { uploadMarkdownAttachment } from '@/services/ticketService';
 
 interface ResolveTicketModalProps {
   isOpen: boolean;
@@ -28,6 +30,9 @@ export default function ResolveTicketModal({
   users = [],
   initialNotes,
 }: ResolveTicketModalProps) {
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const {
     resolutionNotes,
     setResolutionNotes,
@@ -92,6 +97,40 @@ export default function ResolveTicketModal({
     initialNotes,
   });
 
+  const handleFileUpload = async (file: File) => {
+    if (!file || !file.type.startsWith('image/')) return;
+    setIsUploadingImage(true);
+    try {
+      const { url } = await uploadMarkdownAttachment(file);
+      const imageMarkdown = `![${file.name}](${url})`;
+      setResolutionNotes((prev) => (prev ? `${prev}\n\n${imageMarkdown}` : imageMarkdown));
+    } catch (err) {
+      console.error('Erro ao fazer upload da imagem:', err);
+    } finally {
+      setIsUploadingImage(false);
+    }
+  };
+
+  const handlePaste = (e: React.ClipboardEvent) => {
+    if (e.clipboardData.files && e.clipboardData.files.length > 0) {
+      const file = e.clipboardData.files[0];
+      if (file.type.startsWith('image/')) {
+        e.preventDefault();
+        void handleFileUpload(file);
+      }
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const file = e.dataTransfer.files[0];
+      if (file.type.startsWith('image/')) {
+        e.preventDefault();
+        void handleFileUpload(file);
+      }
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -118,15 +157,58 @@ export default function ResolveTicketModal({
         <form onSubmit={handleSubmit} className="flex flex-col gap-6 p-6">
           {/* Nota de resolução */}
           <div className="flex flex-col gap-2">
-            <label className="text-sm font-medium text-slate-700">Nota de Resolução *</label>
-            <textarea
-              value={resolutionNotes}
-              onChange={(event) => setResolutionNotes(event.target.value)}
-              placeholder="Descreva como o problema foi resolvido..."
-              className="w-full resize-none rounded-2xl border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-brand-primary/50"
-              rows={4}
-              disabled={isSubmitting}
-            />
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-medium text-slate-700">Nota de Resolução (Markdown) *</label>
+              <div className="flex items-center gap-2">
+                {isUploadingImage && (
+                  <span className="flex items-center gap-1 text-xs text-amber-600 font-medium animate-pulse">
+                    <Loader2 size={13} className="animate-spin" /> Enviando mídia...
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isSubmitting || isUploadingImage}
+                  className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-100 disabled:opacity-50"
+                  title="Anexar Imagem ou GIF"
+                >
+                  <Image size={14} className="text-amber-600" />
+                  Anexar Imagem/GIF
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) void handleFileUpload(file);
+                    e.target.value = '';
+                  }}
+                />
+              </div>
+            </div>
+
+            <div
+              data-color-mode="light"
+              onPaste={handlePaste}
+              onDrop={handleDrop}
+              className="w-full overflow-hidden rounded-2xl border border-slate-300 focus-within:ring-2 focus-within:ring-brand-primary/50"
+            >
+              <MDEditor
+                value={resolutionNotes}
+                onChange={(val) => setResolutionNotes(val || '')}
+                height={200}
+                preview="edit"
+                textareaProps={{
+                  placeholder: 'Descreva como o problema foi resolvido... Cole (Ctrl+V) ou arraste imagens e GIFs aqui.',
+                  disabled: isSubmitting,
+                }}
+              />
+            </div>
+            <p className="text-xs text-slate-400">
+              💡 Suporta formatação **Markdown**. Cole (Ctrl+V) ou arraste imagens/GIFs para anexar automaticamente.
+            </p>
           </div>
 
           {hasAutoInventoryDeduction ? (
