@@ -769,6 +769,10 @@ public class BlipNotificationService {
             Object status = response != null ? response.getOrDefault("status", "success") : "success";
             log.info("[GOOGLE-REVIEW] Template nativo WABA '{}' enviado via LIME message. destination={}, patient={}, doctor={}, doctorId={}, status={}",
                     effectiveTemplateName, wabaDestination, safePatientName, safeDoctorName, safeDoctorIdParam, status);
+
+            if (blipContextService != null) {
+                blipContextService.updateUserMasterState(wabaDestination, BlipContextService.STATE_REVIEW_FINISHED);
+            }
         } catch (Exception e) {
             log.error("[GOOGLE-REVIEW] Falha ao enviar template nativo WABA '{}' para {}: {}", effectiveTemplateName, wabaDestination, e.getMessage(), e);
             throw new RuntimeException("Falha ao enviar avaliação nativa WABA no Blip para " + wabaDestination + ": " + e.getMessage(), e);
