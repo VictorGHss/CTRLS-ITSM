@@ -25,7 +25,12 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 @RestController
-@RequestMapping({"/api/v1/tickets/attachments", "/v1/tickets/attachments"})
+@RequestMapping({
+    "/tickets/attachments",
+    "/v1/tickets/attachments",
+    "/api/tickets/attachments",
+    "/api/v1/tickets/attachments"
+})
 @Observed
 public class TicketAttachmentController {
 
