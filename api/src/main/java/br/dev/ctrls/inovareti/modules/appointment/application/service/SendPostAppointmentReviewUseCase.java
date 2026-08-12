@@ -30,12 +30,14 @@ public class SendPostAppointmentReviewUseCase {
 
     private static final String TEMPLATE_REVIEW_GOOGLE = "pesquisa_avaliacao_google_itsm_v6";
     private static final int FEEGOW_STATUS_ATENDIDO = 3;
+    public static final String STATE_REVIEW_FINISHED = BlipContextService.STATE_REVIEW_FINISHED;
 
     private final AppointmentExternalPort appointmentExternalPort;
     private final AppointmentSessionRepositoryPort appointmentSessionRepository;
     private final DoctorConfigurationRepository doctorConfigurationRepository;
     private final PatientExternalPort patientExternalPort;
     private final BlipNotificationService blipNotificationService;
+    private final BlipContextService blipContextService;
 
     @org.springframework.beans.factory.annotation.Value("${app.appointment.motor.active-doctor-ids:}")
     private String activeDoctorIds;
@@ -199,6 +201,9 @@ public class SendPostAppointmentReviewUseCase {
                         TEMPLATE_REVIEW_GOOGLE, feegowAppointmentId, patientName, doctorName, phone, doctorIdParam);
 
                 blipNotificationService.sendReviewTemplateMessage(phone, TEMPLATE_REVIEW_GOOGLE, patientName, doctorName, doctorIdParam);
+                if (blipContextService != null) {
+                    blipContextService.updateUserMasterState(phone, STATE_REVIEW_FINISHED);
+                }
 
                 session.setReviewRequestedAt(LocalDateTime.now());
                 if (session.getPhoneNumber() == null || session.getPhoneNumber().isBlank()) {

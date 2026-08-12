@@ -368,7 +368,8 @@ public class HandleBlipWebhookUseCase {
                     if (subbotLocalPart.contains("@")) {
                         subbotLocalPart = subbotLocalPart.substring(0, subbotLocalPart.indexOf('@'));
                     }
-                    String phoneDigits = fromPhone.contains("@") ? fromPhone.substring(0, fromPhone.indexOf('@')).replaceAll("\\D", "") : fromPhone.replaceAll("\\D", "");
+                    String safePhone = fromPhone != null ? fromPhone : "";
+                    String phoneDigits = safePhone.contains("@") ? safePhone.substring(0, safePhone.indexOf('@')).replaceAll("\\D", "") : safePhone.replaceAll("\\D", "");
                     if (!phoneDigits.startsWith("55") && !phoneDigits.isEmpty()) {
                         phoneDigits = "55" + phoneDigits;
                     }
@@ -417,7 +418,8 @@ public class HandleBlipWebhookUseCase {
                         if (subbotLocalPart.contains("@")) {
                             subbotLocalPart = subbotLocalPart.substring(0, subbotLocalPart.indexOf('@'));
                         }
-                        String phoneDigits = fromPhone.contains("@") ? fromPhone.substring(0, fromPhone.indexOf('@')).replaceAll("\\D", "") : fromPhone.replaceAll("\\D", "");
+                        String safePhone = fromPhone != null ? fromPhone : "";
+                        String phoneDigits = safePhone.contains("@") ? safePhone.substring(0, safePhone.indexOf('@')).replaceAll("\\D", "") : safePhone.replaceAll("\\D", "");
                         if (!phoneDigits.startsWith("55") && !phoneDigits.isEmpty()) {
                             phoneDigits = "55" + phoneDigits;
                         }

@@ -146,6 +146,22 @@ public class BlipContextService {
         }
     }
 
+    public static final String STATE_REVIEW_FINISHED = "932c1f15-4e83-4b55-b343-1d3564cf57ff";
+
+    /**
+     * Atualiza o estado do usuário no Blip (master-state) em escopo dual (Router + Túnel)
+     * para transicionar a conversa para um bloco específico (ex: bloco silencioso terminal).
+     *
+     * @param userIdentity número/identidade do paciente no Blip
+     * @param stateId ID do bloco no Blip Builder (ex: STATE_REVIEW_FINISHED)
+     */
+    public void updateUserMasterState(String userIdentity, String stateId) {
+        if (userIdentity == null || userIdentity.isBlank() || stateId == null || stateId.isBlank()) return;
+
+        setUserContext(userIdentity, "master-state", stateId);
+        log.info("[LIME] Master-State atualizado para o bloco silencioso 'Fim - Avaliação Enviada' (stateId={}) para user={}", stateId, userIdentity);
+    }
+
     private final Map<String, Long> deduplicationCache = new java.util.concurrent.ConcurrentHashMap<>();
 
     private boolean isRedundantContextCall(String deduplicationKey) {
