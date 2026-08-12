@@ -328,20 +328,30 @@ public class HandleBlipWebhookUseCase {
             String patientName = "Paciente";
             String patientCpf = "";
 
-            if (patientId != null && !patientId.isBlank()) {
-                try {
-                    br.dev.ctrls.inovareti.modules.appointment.domain.port.output.FeegowPatient patient = patientExternalPort.patientInfo(patientId);
-                    if (patient != null) {
-                        if (patient.name() != null && !patient.name().isBlank() && !br.dev.ctrls.inovareti.modules.access.infrastructure.adapter.output.BlipContactClientAdapter.isInvalidName(patient.name())) {
-                            patientName = patient.name().trim();
-                        }
-                        if (patient.cpf() != null) {
-                            patientCpf = patient.cpf().replaceAll("\\D", "");
+            List<String> patientNames = new java.util.ArrayList<>();
+            if (activeSessions != null && !activeSessions.isEmpty()) {
+                for (AppointmentSession s : activeSessions) {
+                    if (s.getPatientId() != null && !s.getPatientId().isBlank()) {
+                        try {
+                            br.dev.ctrls.inovareti.modules.appointment.domain.port.output.FeegowPatient p = patientExternalPort.patientInfo(s.getPatientId());
+                            if (p != null && p.name() != null && !p.name().isBlank() && !br.dev.ctrls.inovareti.modules.access.infrastructure.adapter.output.BlipContactClientAdapter.isInvalidName(p.name())) {
+                                String cleanPName = p.name().trim();
+                                if (!patientNames.contains(cleanPName)) {
+                                    patientNames.add(cleanPName);
+                                }
+                            }
+                            if (patientCpf.isEmpty() && p != null && p.cpf() != null) {
+                                patientCpf = p.cpf().replaceAll("\\D", "");
+                            }
+                        } catch (Exception ex) {
+                            log.warn("[LEMBRETE-RESPOSTA] Falha ao buscar dados do paciente Feegow para ID {}: {}", s.getPatientId(), ex.getMessage());
                         }
                     }
-                } catch (Exception ex) {
-                    log.warn("[LEMBRETE-RESPOSTA] Falha ao buscar dados do paciente Feegow para ID {}: {}", patientId, ex.getMessage());
                 }
+            }
+
+            if (!patientNames.isEmpty()) {
+                patientName = String.join(" / ", patientNames);
             }
 
             log.info("[LEMBRETE-RESPOSTA] Enriquecendo contexto de lembrete: Paciente='{}' (CPF={}) | Medico='{}' | Fila='{}' (blipQueueId={})",
@@ -439,13 +449,13 @@ public class HandleBlipWebhookUseCase {
             boolean isLegitimateType = "text/plain".equalsIgnoreCase(msgType)
                     || "application/vnd.lime.reply+json".equalsIgnoreCase(msgType);
             if (isLegitimateType) {
-                WebhookResult result = handleUuidAction(action, dbPhone);
-                if (result != null) {
-                    return result;
-                }
                 WebhookResult groupResult = blipGroupActionHandler.handleGroupAction(action, fromPhone, payload.bsuid(), payload.metadata());
                 if (groupResult != null) {
                     return groupResult;
+                }
+                WebhookResult result = handleUuidAction(action, dbPhone);
+                if (result != null) {
+                    return result;
                 }
             } else {
                 log.debug("[WEBHOOK] Ignorando UUID de ação '{}' pois o tipo de mensagem '{}' não é legítimo para cliques.", action, msgType);
@@ -453,6 +463,12 @@ public class HandleBlipWebhookUseCase {
         }
 
         String normalizedAction = action.trim().toLowerCase();
+
+        // Intercepta ações de grupo em texto/botões ("CONFIRMAR TUDO", "1", etc.) para impedir queda no Desk como não suportado
+        WebhookResult groupTextResult = blipGroupActionHandler.handleGroupAction(normalizedAction, fromPhone, payload.bsuid(), payload.metadata());
+        if (groupTextResult != null) {
+            return groupTextResult;
+        }
 
         if (blipNudgeResponseHandler.handleNudgeResponse(normalizedAction, action, fromPhone, payload.bsuid())) {
             return new WebhookResult("", "", "", "", "nudge_response_processed", "");

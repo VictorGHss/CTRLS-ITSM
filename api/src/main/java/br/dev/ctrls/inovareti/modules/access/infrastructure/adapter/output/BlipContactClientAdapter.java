@@ -281,19 +281,27 @@ public class BlipContactClientAdapter implements BlipContactClientPort {
                 String searchPhone = digitsOnly.startsWith("55") ? digitsOnly : "55" + digitsOnly;
                 var activeSessions = appointmentSessionRepository.findActiveByPhoneNumber(searchPhone);
                 if (activeSessions != null && !activeSessions.isEmpty()) {
+                    java.util.List<String> patientNames = new java.util.ArrayList<>();
                     for (var session : activeSessions) {
                         if (session.getPatientId() != null && !session.getPatientId().isBlank()) {
                             var patient = patientExternalPort.patientInfo(session.getPatientId());
                             if (patient != null && patient.name() != null && !isInvalidName(patient.name())) {
-                                log.info("[BlipContact-Adapter] Nome do paciente ('{}') recuperado com sucesso via Feegow/Session para {}", patient.name(), normalizedIdentity);
-                                return patient.name().trim();
+                                String cleanPName = patient.name().trim();
+                                if (!patientNames.contains(cleanPName)) {
+                                    patientNames.add(cleanPName);
+                                }
                             }
                         }
+                    }
+                    if (!patientNames.isEmpty()) {
+                        String concatenatedNames = String.join(" / ", patientNames);
+                        log.info("[BlipContact-Adapter] Nome(s) do(s) paciente(s) ('{}') recuperado(s) com sucesso via Feegow/Session para {}", concatenatedNames, normalizedIdentity);
+                        return concatenatedNames;
                     }
                 }
             }
         } catch (Exception ex) {
-            log.debug("[BlipContact-Adapter] Erro defensivo ao tentar buscar nome do paciente no Feegow: {}", ex.getMessage());
+            log.debug("[BlipContact-Adapter] Erro defensivo ao tentar buscar nome(s) do(s) paciente(s) no Feegow: {}", ex.getMessage());
         }
 
         if (name != null && !name.isBlank()) {
