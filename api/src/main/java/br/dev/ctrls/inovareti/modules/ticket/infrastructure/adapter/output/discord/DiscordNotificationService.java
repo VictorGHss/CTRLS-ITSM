@@ -38,14 +38,19 @@ public class DiscordNotificationService {
         }
         Matcher matcher = MARKDOWN_IMAGE_PATTERN.matcher(markdown);
         if (matcher.find()) {
-            return matcher.group(1).trim();
+            String url = matcher.group(1).trim();
+            if (url.contains("/uploads/tickets/") && !url.contains("/api/uploads/tickets/")) {
+                url = url.replace("/uploads/tickets/", "/api/uploads/tickets/");
+            }
+            return url;
         }
         return null;
     }
 
     /**
      * Sanitiza o texto em Markdown para exibição em Embeds do Discord,
-     * convertendo a sintaxe de imagem ![alt](url) em links clicáveis válidos [alt](url).
+     * convertendo a sintaxe de imagem ![alt](url) em links clicáveis válidos [alt](url)
+     * e garantindo que o prefixo /api/ esteja presente na URL.
      *
      * @param markdown texto formatado
      * @return texto sanitizado para o Discord
@@ -54,7 +59,11 @@ public class DiscordNotificationService {
         if (markdown == null || markdown.isBlank()) {
             return markdown;
         }
-        return markdown.replaceAll("!\\[(.*?)\\]\\((https?://.*?)\\)", "[$1]($2)");
+        String sanitized = markdown.replaceAll("!\\[(.*?)\\]\\((https?://.*?)\\)", "[$1]($2)");
+        if (sanitized.contains("/uploads/tickets/") && !sanitized.contains("/api/uploads/tickets/")) {
+            sanitized = sanitized.replace("/uploads/tickets/", "/api/uploads/tickets/");
+        }
+        return sanitized;
     }
 
     /**
