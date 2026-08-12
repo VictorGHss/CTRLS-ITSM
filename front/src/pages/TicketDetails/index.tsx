@@ -186,8 +186,43 @@ export default function TicketDetails() {
                   ticket.solutionText ? 'text-slate-800' : 'text-amber-700 italic font-medium'
                 }`}>
                   {ticket.solutionText ? (
-                    <div className="prose prose-sm max-w-none prose-img:rounded-2xl prose-img:max-h-96 prose-img:border prose-img:border-slate-200">
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    <div className="prose prose-sm max-w-none">
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        components={{
+                          img: ({ node, src, alt, ...props }) => {
+                            const realSrc = src && src.includes('/uploads/tickets/') && !src.includes('/api/uploads/tickets/')
+                              ? src.replace('/uploads/tickets/', '/api/uploads/tickets/')
+                              : src;
+                            return (
+                              <a href={realSrc} target="_blank" rel="noopener noreferrer" className="inline-block my-2" title="Clique para abrir imagem em tamanho real">
+                                <img
+                                  src={realSrc}
+                                  alt={alt || 'Mídia do chamado'}
+                                  className="rounded-2xl max-h-96 border border-slate-200 shadow-sm hover:opacity-90 transition-opacity"
+                                  {...props}
+                                />
+                              </a>
+                            );
+                          },
+                          a: ({ node, href, children, ...props }) => {
+                            const realHref = href && href.includes('/uploads/tickets/') && !href.includes('/api/uploads/tickets/')
+                              ? href.replace('/uploads/tickets/', '/api/uploads/tickets/')
+                              : href;
+                            return (
+                              <a
+                                href={realHref}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-brand-primary font-semibold underline hover:text-brand-primary-dark"
+                                {...props}
+                              >
+                                {children}
+                              </a>
+                            );
+                          },
+                        }}
+                      >
                         {ticket.solutionText}
                       </ReactMarkdown>
                     </div>
