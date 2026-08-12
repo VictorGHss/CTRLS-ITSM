@@ -44,6 +44,20 @@ public class DiscordNotificationService {
     }
 
     /**
+     * Sanitiza o texto em Markdown para exibição em Embeds do Discord,
+     * convertendo a sintaxe de imagem ![alt](url) em links clicáveis válidos [alt](url).
+     *
+     * @param markdown texto formatado
+     * @return texto sanitizado para o Discord
+     */
+    public String sanitizeMarkdownForDiscord(String markdown) {
+        if (markdown == null || markdown.isBlank()) {
+            return markdown;
+        }
+        return markdown.replaceAll("!\\[(.*?)\\]\\((https?://.*?)\\)", "[$1]($2)");
+    }
+
+    /**
      * Monta e envia o Embed de Solução do Chamado via JDA para o usuário no Discord.
      * Caso o texto da solução contenha imagem/GIF em Markdown, a mídia é extraída e aplicada via `.setImage()`.
      *
@@ -67,7 +81,7 @@ public class DiscordNotificationService {
         String imageUrl = extractFirstImageUrl(solutionMarkdown);
 
         String textContent = (solutionMarkdown != null && !solutionMarkdown.isBlank())
-                ? solutionMarkdown
+                ? sanitizeMarkdownForDiscord(solutionMarkdown)
                 : "Solução registrada com sucesso.";
 
         EmbedBuilder embedBuilder = new EmbedBuilder()

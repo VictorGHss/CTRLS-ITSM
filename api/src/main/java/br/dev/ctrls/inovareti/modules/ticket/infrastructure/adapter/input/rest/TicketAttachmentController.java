@@ -102,7 +102,7 @@ public class TicketAttachmentController {
             host = DEFAULT_SERVER_HOST;
         }
 
-        String fileUrl = scheme + "://" + host + "/uploads/tickets/" + savedFilename;
+        String fileUrl = scheme + "://" + host + "/api/uploads/tickets/" + savedFilename;
         log.info("[TICKET-ATTACHMENT] URL de mídia gerada: {}", fileUrl);
 
         return ResponseEntity.ok(Map.of("url", fileUrl));

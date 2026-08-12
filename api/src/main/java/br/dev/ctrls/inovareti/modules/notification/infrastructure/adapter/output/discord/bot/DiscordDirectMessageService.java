@@ -90,7 +90,8 @@ public class DiscordDirectMessageService {
         }
 
         String ticketUrl = buildTicketUrl(ticketId);
-        String content = description + "\n\n[View Ticket](" + ticketUrl + ")";
+        String sanitizedDescription = description != null ? description.replaceAll("!\\[(.*?)\\]\\((https?://.*?)\\)", "[$1]($2)") : "";
+        String content = sanitizedDescription + "\n\n[View Ticket](" + ticketUrl + ")";
 
         var embedBuilder = new EmbedBuilder()
                 .setColor(CLINIC_BRAND_COLOR)
