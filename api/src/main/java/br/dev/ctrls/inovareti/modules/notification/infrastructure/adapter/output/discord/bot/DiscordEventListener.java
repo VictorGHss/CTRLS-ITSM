@@ -164,12 +164,14 @@ public class DiscordEventListener extends ListenerAdapter {
                             "Usuário do Discord a ser vinculado como afetado", true)
                         .setDefaultPermissions(DefaultMemberPermissions.enabledFor(Permission.MESSAGE_MANAGE)),
 
-                    Commands.slash("solicitar", "Solicita um item ou insumo ao setor de TI")
-                        .addOption(OptionType.STRING, "item",
-                            "Nome do item (use o autocomplete para buscar no inventário)",
-                            true, true)
-                        .addOption(OptionType.INTEGER, "quantidade",
-                            "Quantidade desejada (padrão: 1)", false)
+                    Commands.slash("solicitar", "Solicita insumos ao setor de TI (até 3 itens por chamado)")
+                        .addOption(OptionType.STRING, "item1", "Primeiro item a ser solicitado (autocomplete disponível)", true, true)
+                        .addOption(OptionType.INTEGER, "qtd1", "Quantidade do primeiro item", true)
+                        .addOption(OptionType.STRING, "item2", "Segundo item (opcional, autocomplete disponível)", false, true)
+                        .addOption(OptionType.INTEGER, "qtd2", "Quantidade do segundo item (opcional)", false)
+                        .addOption(OptionType.STRING, "item3", "Terceiro item (opcional, autocomplete disponível)", false, true)
+                        .addOption(OptionType.INTEGER, "qtd3", "Quantidade do terceiro item (opcional)", false)
+                        .addOption(OptionType.STRING, "observacao", "Observações gerais do pedido (opcional)", false)
                 )
                 .queue(
                     success -> log.info("✅ Slash commands sincronizados imediatamente na guilda: {}", finalGuild.getName()),
