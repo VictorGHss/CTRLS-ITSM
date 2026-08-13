@@ -369,6 +369,11 @@ public class HandleBlipWebhookUseCase {
             // 2. Injeção de variáveis no contexto do Blip em ESCOPO DUPLO (Master + Túneis)
             try {
                 String queueToRedirect = (blipQueueId != null && !blipQueueId.isBlank()) ? blipQueueId.trim() : queueName;
+                blipContextService.setQueueRedirect(fromPhone, queueToRedirect);
+                if (searchPhone != null && !searchPhone.equalsIgnoreCase(fromPhone)) {
+                    blipContextService.setQueueRedirect(searchPhone, queueToRedirect);
+                }
+
                 List<String> targets = new java.util.ArrayList<>(List.of(fromPhone, searchPhone));
 
                 String subbotId = blipProperties.getSubbotId();
@@ -847,7 +852,7 @@ public class HandleBlipWebhookUseCase {
             }
         }
 
-        String targetQueueToRedirect = queueName;
+        String targetQueueToRedirect = (blipQueueId != null && !blipQueueId.isBlank()) ? blipQueueId.trim() : queueName;
 
         log.info("[SILENT-ROUTING] Paciente: '{}' (CPF: {}) | Medico: '{}' | Fila: '{}' (ToRedirect: '{}') | Feegow ID: '{}'",
                 patientName, patientCpf, doctorName, queueName, targetQueueToRedirect, feegowAppointmentId);
@@ -864,6 +869,11 @@ public class HandleBlipWebhookUseCase {
 
         // 2. Injeção de variáveis no contexto do Blip em ESCOPO DUPLO (Master + Túneis)
         try {
+            blipContextService.setQueueRedirect(searchPhone, targetQueueToRedirect);
+            if (fromPhone != null && !fromPhone.equalsIgnoreCase(searchPhone)) {
+                blipContextService.setQueueRedirect(fromPhone, targetQueueToRedirect);
+            }
+
             List<String> targets = List.of(fromPhone, searchPhone);
             for (String target : targets) {
                 if (target == null || target.isBlank()) continue;
@@ -953,6 +963,11 @@ public class HandleBlipWebhookUseCase {
                                 if (blipQueueId != null && !blipQueueId.isBlank()) {
                                     String resolved = blipContextService.resolveQueueName(blipQueueId);
                                     resolvedQueueName = (resolved != null && !resolved.isBlank()) ? resolved : blipQueueId;
+                                    try {
+                                        blipContextService.setQueueRedirect(normalizedPhone, blipQueueId.trim());
+                                    } catch (Exception qEx) {
+                                        log.warn("[WEBHOOK-BLOCK] Falha ao executar setQueueRedirect em Preparar_Atendimento: {}", qEx.getMessage());
+                                    }
                                 }
                             }
                         }
