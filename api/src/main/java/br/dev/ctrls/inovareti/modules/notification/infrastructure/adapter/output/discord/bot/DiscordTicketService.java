@@ -34,7 +34,7 @@ public class DiscordTicketService {
     private final org.springframework.context.ApplicationEventPublisher eventPublisher;
 
     @Transactional
-    public String createTicketFromDiscord(String discordUserId, String description, String priorityRaw, String patrimonioOption) {
+    public String createTicketFromDiscord(String discordUserId, String titleInput, String descriptionInput, String priorityRaw, String patrimonioOption) {
         User requester = userRepository.findByDiscordUserId(discordUserId).orElse(null);
         if (requester == null) {
             return "⚠️ Seu Discord não está vinculado à sua conta da clínica. Use o comando /vincular [seu-email].";
@@ -44,11 +44,10 @@ public class DiscordTicketService {
                 .findFirst()
             .orElseThrow(() -> new IllegalStateException("Nenhuma categoria de chamado foi encontrada no banco de dados"));
 
-        String normalizedDescription = description.trim();
-        String title = normalizedDescription.length() > 40
-            ? normalizedDescription.substring(0, 37) + "..."
-            : normalizedDescription;
-        String storedDescription = "[DISCORD] " + normalizedDescription;
+        String title = (titleInput != null && !titleInput.isBlank())
+                ? titleInput.trim()
+                : (descriptionInput.length() > 40 ? descriptionInput.substring(0, 37) + "..." : descriptionInput.trim());
+        String storedDescription = "[DISCORD] " + descriptionInput.trim();
 
         // 1. Resolve o ativo (Asset) por ID/código ou por varredura de Regex no texto
         br.dev.ctrls.inovareti.modules.asset.domain.model.Asset asset = null;
@@ -56,7 +55,7 @@ public class DiscordTicketService {
             asset = assetRepository.findByPatrimonyCode(patrimonioOption.trim().toUpperCase()).orElse(null);
         } else {
             java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("INV-\\d{4}-\\d+");
-            java.util.regex.Matcher matcher = pattern.matcher(description);
+            java.util.regex.Matcher matcher = pattern.matcher(descriptionInput);
             if (matcher.find()) {
                 String code = matcher.group();
                 asset = assetRepository.findByPatrimonyCode(code.trim().toUpperCase()).orElse(null);

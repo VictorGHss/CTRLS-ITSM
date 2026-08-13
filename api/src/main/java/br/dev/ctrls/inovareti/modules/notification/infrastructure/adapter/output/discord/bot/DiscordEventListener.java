@@ -130,9 +130,10 @@ public class DiscordEventListener extends ListenerAdapter {
             finalGuild.updateCommands()
                 .addCommands(
                     Commands.slash("chamado", "Abre um novo chamado na TI")
-                        .addOption(OptionType.STRING, "descricao", "Descrição do problema", true)
+                        .addOption(OptionType.STRING, "titulo", "Título resumo do problema", true)
+                        .addOption(OptionType.STRING, "descricao", "Detalhamento do chamado", true)
                         .addOption(OptionType.STRING, "prioridade",
-                            "Prioridade do chamado (LOW, NORMAL, HIGH, URGENT)", false)
+                            "Prioridade do chamado (LOW/BAIXA, NORMAL, HIGH/ALTA, URGENT/URGENTE)", false)
                         .addOption(OptionType.STRING, "patrimonio", "Código de patrimônio do ativo (ex: INV-2026-00421)", false),
 
                     Commands.slash("vincular", "Vincula sua conta Discord à sua conta da clínica")
@@ -203,13 +204,21 @@ public class DiscordEventListener extends ListenerAdapter {
     private void handleChamadoCommand(SlashCommandInteractionEvent event) {
         log.info("📋 Processando o comando /chamado do usuário {}", event.getUser().getId());
 
+        var tituloOption = event.getOption("titulo");
         var descricaoOption = event.getOption("descricao");
-        if (descricaoOption == null || descricaoOption.getAsString().isBlank()) {
-            event.reply("❌ Informe uma descrição válida.").setEphemeral(true).queue();
+
+        if (tituloOption == null || tituloOption.getAsString().isBlank()) {
+            event.reply("❌ Informe um título válido para o chamado.").setEphemeral(true).queue();
             return;
         }
 
-        String descricao = descricaoOption.getAsString();
+        if (descricaoOption == null || descricaoOption.getAsString().isBlank()) {
+            event.reply("❌ Informe uma descrição detalhada.").setEphemeral(true).queue();
+            return;
+        }
+
+        String titulo = tituloOption.getAsString().trim();
+        String descricao = descricaoOption.getAsString().trim();
         var prioridadeOption = event.getOption("prioridade");
         String prioridadeStr = prioridadeOption != null ? prioridadeOption.getAsString().toUpperCase() : "NORMAL";
         var patrimonioOption = event.getOption("patrimonio");
@@ -220,7 +229,7 @@ public class DiscordEventListener extends ListenerAdapter {
         discordExecutor.execute(() -> {
             try {
                 String discordUserId = event.getUser().getId();
-                String message = discordTicketService.createTicketFromDiscord(discordUserId, descricao, prioridadeStr, patrimonioStr);
+                String message = discordTicketService.createTicketFromDiscord(discordUserId, titulo, descricao, prioridadeStr, patrimonioStr);
                 String safeMessage = message != null ? message : "❌ Erro ao criar seu chamado. Entre em contato com um administrador.";
                 event.getHook().sendMessage(safeMessage).queue();
             } catch (Exception e) {

@@ -5,7 +5,8 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.Executor;
 
-import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import br.dev.ctrls.inovareti.modules.user.domain.model.User;
@@ -15,19 +16,21 @@ import net.dv8tion.jda.api.entities.MessageEmbed;
 import net.dv8tion.jda.api.events.interaction.command.CommandAutoCompleteInteractionEvent;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
 import net.dv8tion.jda.api.events.interaction.component.ButtonInteractionEvent;
+import net.dv8tion.jda.api.events.interaction.ModalInteractionEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
 import net.dv8tion.jda.api.interactions.commands.Command;
 import net.dv8tion.jda.api.interactions.components.ActionRow;
 import net.dv8tion.jda.api.interactions.components.buttons.Button;
+import net.dv8tion.jda.api.interactions.components.text.TextInput;
+import net.dv8tion.jda.api.interactions.components.text.TextInputStyle;
+import net.dv8tion.jda.api.interactions.modals.Modal;
 
 /**
  * Listener JDA responsável pelos eventos interativos do bot Discord:
- *
  * <ul>
  *   <li><b>/ti status</b> — exibe métricas de infraestrutura do servidor</li>
  *   <li><b>/solicitar</b> — cria chamado de solicitação de insumo com autocomplete de itens</li>
- *   <li><b>Botão ticket_accept:{id}</b> — técnico assume o chamado via clique no botão</li>
- *   <li><b>Botão ticket_reject:{id}</b> — técnico recusa o chamado via clique no botão</li>
+ *   <li><b>Botão Assumir / Resolver</b> — técnico assume ou resolve o chamado diretamente no Discord</li>
  * </ul>
  */
 @Slf4j
@@ -44,10 +47,13 @@ public class DiscordInteractionListener extends ListenerAdapter {
     private final DiscordInfraStatusService infraStatusService;
     private final DiscordSolicitarService solicitarService;
     private final DiscordCommandService discordCommandService;
-    
-    @org.springframework.beans.factory.annotation.Value("${discord.bot.admin-ids:}")
+
+    @Value("${discord.bot.admin-ids:}")
     private String adminIdsRaw;
-    
+
+    @Value("${discord.admin-id:${DISCORD_ADMIN_ID:1479124594962206782}}")
+    private String adminDiscordId;
+
     @Qualifier("discordExecutor")
     private final Executor discordExecutor;
 
@@ -69,16 +75,13 @@ public class DiscordInteractionListener extends ListenerAdapter {
         log.info("[DISCORD][/ti status] Solicitado por: {} ({})",
                 event.getUser().getAsTag(), event.getUser().getId());
 
-        // Adia a resposta imediatamente
         event.deferReply().setEphemeral(true).queue();
-
         String discordId = event.getUser().getId();
 
-        // Processamento assíncrono na thread virtual
         discordExecutor.execute(() -> {
             try {
                 if (!isAdministrator(discordId)) {
-                    event.getHook().sendMessage("🔒 Acesso negado. Este comando é restrito a administradores de TI validados por ID fixo.").queue();
+                    event.getHook().sendMessage("🔒 Acesso negado. Este comando é restrito a administradores de TI validados por ID.").queue();
                     return;
                 }
                 User usuario = discordCommandService.resolverTecnico(discordId);
@@ -105,28 +108,36 @@ public class DiscordInteractionListener extends ListenerAdapter {
         log.info("[DISCORD][/solicitar] Acionado por: {} ({})",
                 event.getUser().getAsTag(), event.getUser().getId());
 
-        var opcaoItem = event.getOption("item");
-        var opcaoQtd  = event.getOption("quantidade");
+        var opcaoItens = event.getOption("itens");
+        var opcaoItem  = event.getOption("item");
+        var opcaoQtd   = event.getOption("quantidade");
+        var opcaoObs   = event.getOption("observacao");
 
-        if (opcaoItem == null || opcaoItem.getAsString().isBlank()) {
-            event.reply("❌ Informe o item a ser solicitado.").setEphemeral(true).queue();
+        String textoItens = null;
+        if (opcaoItens != null && !opcaoItens.getAsString().isBlank()) {
+            textoItens = opcaoItens.getAsString().trim();
+        } else if (opcaoItem != null && !opcaoItem.getAsString().isBlank()) {
+            textoItens = opcaoItem.getAsString().trim();
+        }
+
+        if (textoItens == null || textoItens.isBlank()) {
+            event.reply("❌ Informe os itens solicitados.").setEphemeral(true).queue();
             return;
         }
 
         int quantidade = (opcaoQtd != null) ? Math.max(1, opcaoQtd.getAsInt()) : 1;
-        String discordUserId  = event.getUser().getId();
-        String itemSelecionado = sanitizeInput(opcaoItem.getAsString());
+        String observacao = (opcaoObs != null) ? opcaoObs.getAsString().trim() : null;
+        String discordUserId = event.getUser().getId();
+        String itemInput = sanitizeInput(textoItens);
 
-        // Adia a resposta imediatamente
         event.deferReply().queue();
 
-        // Processamento assíncrono na thread virtual
         discordExecutor.execute(() -> {
             try {
                 String resposta = solicitarService.criarTicketDeSolicitacao(
-                        discordUserId, itemSelecionado, quantidade);
+                        discordUserId, itemInput, quantidade, observacao);
                 if (resposta == null) {
-                    resposta = "\u274c Erro inesperado ao registrar sua solicitação.";
+                    resposta = "❌ Erro inesperado ao registrar sua solicitação.";
                 }
                 event.getHook().sendMessage(resposta).queue();
             } catch (Exception ex) {
@@ -145,16 +156,18 @@ public class DiscordInteractionListener extends ListenerAdapter {
     public void onCommandAutoCompleteInteraction(
             @javax.annotation.Nonnull CommandAutoCompleteInteractionEvent event) {
 
-        if (!"solicitar".equals(event.getName()) || !"item".equals(event.getFocusedOption().getName())) {
+        if (!"solicitar".equals(event.getName())) {
             return;
         }
 
-        String textoDigitado = Objects.requireNonNull(event.getFocusedOption().getValue(),
-            "textoDigitado");
-        log.debug("[DISCORD][autocomplete] '/solicitar item' — filtro: '{}'", textoDigitado);
+        var opt = event.getFocusedOption();
+        if (!"item".equals(opt.getName()) && !"itens".equals(opt.getName())) {
+            return;
+        }
 
-        // Autocomplete deve responder muito rápido, então roda síncrono ou assíncrono leve.
-        // Como o JDA tem timeout curto para autocomplete, rodar diretamente é o padrão na API do Discord.
+        String textoDigitado = Objects.requireNonNull(opt.getValue(), "textoDigitado");
+        log.debug("[DISCORD][autocomplete] '/solicitar itens' — filtro: '{}'", textoDigitado);
+
         try {
             List<Command.Choice> opcoes = List.copyOf(
                     solicitarService.buscarOpcoesAutocomplete(textoDigitado));
@@ -170,7 +183,7 @@ public class DiscordInteractionListener extends ListenerAdapter {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // BOTÕES
+    // BOTÕES E MODAIS
     // ─────────────────────────────────────────────────────────────────────────
 
     @Override
@@ -179,17 +192,88 @@ public class DiscordInteractionListener extends ListenerAdapter {
         log.info("[DISCORD][botão] Clique recebido. CustomId='{}', Usuário='{}'",
                 customId, event.getUser().getAsTag());
 
-        // Adia a edição imediatamente
+        if (customId.startsWith("ticket:resolver:")) {
+            String ticketIdStr = customId.substring("ticket:resolver:".length());
+            handleBotaoResolverModal(event, ticketIdStr);
+            return;
+        }
+
         event.deferEdit().queue();
 
-        // Processa lógica pesada assincronamente na thread virtual
         discordExecutor.execute(() -> {
-            if (customId.startsWith(BOTAO_ASSUMIR_PREFIX)) {
+            if (customId.startsWith("ticket:assumir:")) {
+                handleBotaoAssumirDirect(event, customId.substring("ticket:assumir:".length()));
+            } else if (customId.startsWith(BOTAO_ASSUMIR_PREFIX)) {
                 handleBotaoAssumir(event, customId.substring(BOTAO_ASSUMIR_PREFIX.length()));
             } else if (customId.startsWith(BOTAO_RECUSAR_PREFIX)) {
                 handleBotaoRecusar(event, customId.substring(BOTAO_RECUSAR_PREFIX.length()));
             }
         });
+    }
+
+    @Override
+    public void onModalInteraction(@javax.annotation.Nonnull ModalInteractionEvent event) {
+        String modalId = event.getModalId();
+        log.info("[DISCORD][modal] Submissão recebida. ModalId='{}', Usuário='{}'",
+                modalId, event.getUser().getAsTag());
+
+        if (modalId.startsWith("modal:resolver:")) {
+            String ticketIdStr = modalId.substring("modal:resolver:".length());
+            var solutionVal = event.getValue("solution_text");
+            String solutionText = solutionVal != null ? solutionVal.getAsString() : "";
+
+            event.deferReply().queue();
+
+            discordExecutor.execute(() -> {
+                try {
+                    String result = discordCommandService.resolverChamadoComNota(event.getUser().getId(), ticketIdStr, solutionText);
+                    event.getHook().sendMessage(result).queue();
+                } catch (Exception ex) {
+                    log.error("[DISCORD][modal] Erro ao resolver chamado via modal: {}", ex.getMessage(), ex);
+                    event.getHook().sendMessage("❌ Erro ao registrar solução do chamado: " + ex.getMessage()).queue();
+                }
+            });
+        }
+    }
+
+    private void handleBotaoAssumirDirect(ButtonInteractionEvent event, String ticketIdStr) {
+        String discordUserId = event.getUser().getId();
+        if (!isAdministrator(discordUserId)) {
+            event.getHook().sendMessage("🔒 Acesso negado. Apenas técnicos e administradores de TI podem assumir chamados.").setEphemeral(true).queue();
+            return;
+        }
+        String resultMessage = discordCommandService.assumirChamado(discordUserId, ticketIdStr);
+        if (resultMessage.startsWith("🔒") || resultMessage.startsWith("❌") || resultMessage.startsWith("⚠️")) {
+            event.getHook().sendMessage(resultMessage).setEphemeral(true).queue();
+            return;
+        }
+        event.getHook().sendMessage("👤 <@" + discordUserId + "> assumiu este chamado!").queue();
+    }
+
+    private void handleBotaoResolverModal(ButtonInteractionEvent event, String ticketIdStr) {
+        String discordUserId = event.getUser().getId();
+        if (!isAdministrator(discordUserId)) {
+            event.reply("🔒 Acesso negado. Apenas técnicos e administradores de TI podem resolver chamados.").setEphemeral(true).queue();
+            return;
+        }
+
+        String shortId = ticketIdStr.length() >= 8 ? ticketIdStr.substring(0, 8).toUpperCase() : ticketIdStr;
+
+        TextInput solutionInput = TextInput.create(
+                "solution_text", "Nota de Resolução (Markdown)",
+                TextInputStyle.PARAGRAPH
+        )
+        .setPlaceholder("Descreva detalhadamente a solução aplicada ao chamado...")
+        .setMinLength(5)
+        .setMaxLength(2000)
+        .setRequired(true)
+        .build();
+
+        Modal modal = Modal.create("modal:resolver:" + ticketIdStr, "Resolver Chamado #" + shortId)
+                .addActionRow(solutionInput)
+                .build();
+
+        event.replyModal(modal).queue();
     }
 
     private void handleBotaoAssumir(ButtonInteractionEvent event, String ticketIdStr) {
@@ -246,31 +330,30 @@ public class DiscordInteractionListener extends ListenerAdapter {
         return ActionRow.of(botaoAssumir, botaoRecusar);
     }
 
-    /**
-     * Sanitiza o input recebido no comando para evitar injeções de log, tags de marcação e caracteres inválidos.
-     */
     private String sanitizeInput(String input) {
         if (input == null) return "";
-        // Remove tags HTML para prevenir injeções visuais indesejadas
         String clean = input.replaceAll("<[^>]*>", "");
-        // Remove quebras de linha e caracteres de controle
         clean = clean.replaceAll("[\\r\\n\\t]", " ");
-        // Limita o tamanho do texto para 100 caracteres de segurança
         if (clean.length() > 100) {
             clean = clean.substring(0, 100);
         }
         return clean.trim();
     }
 
-    /**
-     * Valida se o ID do Discord pertence a um administrador fixado nas configurações.
-     */
     private boolean isAdministrator(String discordUserId) {
-        if (adminIdsRaw == null || adminIdsRaw.isBlank() || discordUserId == null) {
+        if (discordUserId == null || discordUserId.isBlank()) {
             return false;
         }
-        return java.util.Arrays.stream(adminIdsRaw.split(","))
-                .map(id -> id.trim())
-                .anyMatch(id -> id.equals(discordUserId));
+        if (adminDiscordId != null && adminDiscordId.trim().equals(discordUserId.trim())) {
+            return true;
+        }
+        if (adminIdsRaw != null && !adminIdsRaw.isBlank()) {
+            boolean isMatch = java.util.Arrays.stream(adminIdsRaw.split(","))
+                    .map(id -> id != null ? id.trim() : "")
+                    .anyMatch(id -> id.equals(discordUserId.trim()));
+            if (isMatch) return true;
+        }
+        User usuario = discordCommandService.resolverTecnico(discordUserId);
+        return usuario != null;
     }
 }

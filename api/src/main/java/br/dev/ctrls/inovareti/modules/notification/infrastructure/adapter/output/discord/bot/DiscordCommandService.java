@@ -23,6 +23,10 @@ import org.springframework.beans.factory.annotation.Value;
 import br.dev.ctrls.inovareti.modules.knowledge.domain.model.Article;
 import br.dev.ctrls.inovareti.modules.knowledge.domain.port.output.ArticleRepositoryPort;
 
+import br.dev.ctrls.inovareti.modules.ticket.application.usecase.ResolveTicketUseCase;
+import br.dev.ctrls.inovareti.modules.ticket.application.dto.ResolveTicketDTO;
+import br.dev.ctrls.inovareti.modules.ticket.domain.port.output.DiscordTicketPort;
+
 /**
  * Serviço de comando do Discord responsável pela lógica de negócios e transações
  * de banco de dados para interações e slash commands do bot.
@@ -37,6 +41,8 @@ public class DiscordCommandService {
     private final FaqTiRepositoryPort faqTiRepository;
     private final AddAdditionalUserUseCase addAdditionalUserUseCase;
     private final ArticleRepositoryPort articleRepository;
+    private final ResolveTicketUseCase resolveTicketUseCase;
+    private final DiscordTicketPort discordTicketPort;
 
     @Value("${app.frontend.url:http://localhost:5173}")
     private String frontendUrl;
@@ -127,6 +133,46 @@ public class DiscordCommandService {
                 shortId, ticket.getId(), tecnico.getName(), tecnico.getId(), discordUserId);
 
         return "❌ Chamado #" + shortId + " recusado por **" + tecnico.getName() + "**. Aguardando outro técnico.";
+    }
+
+    /**
+     * Executa a resolução do chamado com nota de resolução informada pelo técnico via Discord/Modal.
+     */
+    @Transactional
+    public String resolverChamadoComNota(String discordUserId, String ticketIdStr, String solutionText) {
+        User tecnico = resolverTecnico(discordUserId);
+        if (tecnico == null) {
+            return "🔒 Apenas técnicos e administradores de TI podem resolver chamados.";
+        }
+
+        Ticket ticket = resolverTicket(ticketIdStr);
+        if (ticket == null) {
+            return "❌ Chamado não encontrado ou ID inválido.";
+        }
+
+        String notes = (solutionText != null && !solutionText.isBlank())
+                ? solutionText.trim()
+                : "Solução registrada via Discord.";
+
+        try {
+            resolveTicketUseCase.execute(
+                    ticket.getId(),
+                    new ResolveTicketDTO(notes, null, null, null, null, null, null),
+                    tecnico.getId()
+            );
+
+            try {
+                discordTicketPort.archiveTicketChannel(ticket);
+            } catch (Exception ex) {
+                log.warn("[DISCORD] Falha ao arquivar canal do chamado no Discord: {}", ex.getMessage());
+            }
+
+            String shortId = ticket.getId().toString().substring(0, 8).toUpperCase();
+            return "✅ Chamado #" + shortId + " resolvido com sucesso por **" + tecnico.getName() + "**!";
+        } catch (Exception ex) {
+            log.error("[DISCORD] Erro ao resolver chamado #{} via Discord", ticket.getId(), ex);
+            return "❌ Erro ao resolver o chamado: " + ex.getMessage();
+        }
     }
 
     /**
