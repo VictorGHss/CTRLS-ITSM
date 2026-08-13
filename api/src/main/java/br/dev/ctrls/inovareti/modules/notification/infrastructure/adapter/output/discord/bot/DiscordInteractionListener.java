@@ -48,6 +48,8 @@ public class DiscordInteractionListener extends ListenerAdapter {
     private final DiscordInfraStatusService infraStatusService;
     private final DiscordSolicitarService solicitarService;
     private final DiscordCommandService discordCommandService;
+    private final br.dev.ctrls.inovareti.modules.ticket.domain.port.output.DiscordTicketPort discordTicketPort;
+    private final br.dev.ctrls.inovareti.modules.ticket.domain.port.output.TicketRepositoryPort ticketRepository;
 
     @Value("${discord.bot.admin-ids:}")
     private String adminIdsRaw;
@@ -239,7 +241,9 @@ public class DiscordInteractionListener extends ListenerAdapter {
         event.deferEdit().queue();
 
         discordExecutor.execute(() -> {
-            if (customId.startsWith("ticket:assumir:")) {
+            if (customId.startsWith("ticket:reabrir:")) {
+                handleBotaoReabrir(event, customId.substring("ticket:reabrir:".length()));
+            } else if (customId.startsWith("ticket:assumir:")) {
                 handleBotaoAssumirDirect(event, customId.substring("ticket:assumir:".length()));
             } else if (customId.startsWith(BOTAO_ASSUMIR_PREFIX)) {
                 handleBotaoAssumir(event, customId.substring(BOTAO_ASSUMIR_PREFIX.length()));
@@ -272,6 +276,24 @@ public class DiscordInteractionListener extends ListenerAdapter {
                     event.getHook().sendMessage("❌ Erro ao registrar solução do chamado: " + ex.getMessage()).queue();
                 }
             });
+        }
+    }
+
+    private void handleBotaoReabrir(ButtonInteractionEvent event, String ticketIdStr) {
+        String discordUserId = event.getUser().getId();
+        try {
+            UUID ticketId = UUID.fromString(ticketIdStr);
+            br.dev.ctrls.inovareti.modules.ticket.domain.model.Ticket ticket = ticketRepository.findById(ticketId).orElse(null);
+            if (ticket != null) {
+                String result = discordCommandService.reabrirChamado(discordUserId, ticketIdStr);
+                discordTicketPort.reopenTicketChannel(ticket);
+                event.getHook().sendMessage(java.util.Objects.requireNonNullElse(result, "🔄 Chamado Reaberto!")).queue();
+            } else {
+                event.getHook().sendMessage("❌ Chamado não encontrado.").setEphemeral(true).queue();
+            }
+        } catch (Exception ex) {
+            log.error("[DISCORD][botão] Erro ao reabrir chamado #{}", ticketIdStr, ex);
+            event.getHook().sendMessage("❌ Erro ao reabrir o chamado: " + ex.getMessage()).setEphemeral(true).queue();
         }
     }
 

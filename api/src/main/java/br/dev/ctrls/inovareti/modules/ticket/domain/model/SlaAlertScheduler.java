@@ -4,7 +4,6 @@ import br.dev.ctrls.inovareti.modules.ticket.domain.port.output.TicketRepository
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Objects;
 
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -95,45 +94,54 @@ public class SlaAlertScheduler {
                 continue;
             }
 
-            if (jda == null) {
-                log.warn("[SLA-SCHEDULER] JDA não disponível — DM de alerta SLA para chamado #{} não enviada.", shortId);
-                continue;
+            if (jda != null) {
+                sendSlaAlertToChannel(jda, ticket, shortId, minutesRemaining);
             }
-
-            sendSlaAlertDM(jda, technicianDiscordId, ticket, shortId, minutesRemaining);
         }
     }
 
-    private void sendSlaAlertDM(JDA jda, String discordUserId, Ticket ticket, String shortId, long minutesRemaining) {
-        String requesterName = ticket.getRequester() != null ? ticket.getRequester().getName() : "Desconhecido";
-        String categoryName = ticket.getCategory() != null ? ticket.getCategory().getName() : "Não categorizado";
+    private void sendSlaAlertToChannel(JDA jda, Ticket ticket, String shortId, long minutesRemaining) {
+        net.dv8tion.jda.api.entities.Guild guild = jda.getGuilds().stream().findFirst().orElse(null);
+        if (guild == null) return;
+
+        String ticketNumStr = ticket.getNumber() != null ? ticket.getNumber().toLowerCase() : shortId.toLowerCase();
+        String prefix = "ticket-" + ticketNumStr;
+
+        List<net.dv8tion.jda.api.entities.channel.concrete.TextChannel> channels = guild.getTextChannels().stream()
+                .filter(tc -> tc.getName().startsWith(prefix))
+                .toList();
+
+        if (channels.isEmpty()) {
+            log.warn("[SLA-SCHEDULER] Canal privado com prefixo '{}' não encontrado no Discord para alerta de SLA.", prefix);
+            return;
+        }
+
+        String formattedSla = ticket.getSlaDeadline() != null
+                ? ticket.getSlaDeadline().format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"))
+                : "-";
+
+        String requesterName = ticket.getRequester() != null ? ticket.getRequester().getName() : "-";
+        String assignedName = ticket.getAssignedTo() != null ? ticket.getAssignedTo().getName() : "Não atribuído";
 
         var embed = new EmbedBuilder()
                 .setColor(EMBED_COLOR_RED)
-                .setTitle("🚨 ALERTA DE SLA CRÍTICO — Chamado #" + shortId)
-                .setDescription(
-                        "**Atenção, " + ticket.getAssignedTo().getName() + "!**\n\n"
-                        + "O chamado sob sua responsabilidade está prestes a estourar o SLA:\n\n"
+                .setTitle("🚨 ALERTA DE SLA CRÍTICO — Chamado #" + (ticket.getNumber() != null ? ticket.getNumber() : shortId))
+                .setDescription("⏰ **ATENÇÃO:** Este chamado está próximo do vencimento do SLA!\n\n"
                         + "📋 **Título:** " + ticket.getTitle() + "\n"
-                        + "🏷️ **Categoria:** " + categoryName + "\n"
                         + "👤 **Solicitante:** " + requesterName + "\n"
-                        + "⏱️ **SLA expira em:** " + minutesRemaining + " minutos\n\n"
-                        + "⚡ Resolva ou escale o chamado imediatamente!")
+                        + "👤 **Técnico:** " + assignedName + "\n"
+                        + "📅 **Prazo SLA:** " + formattedSla + "\n"
+                        + "⏱️ **Tempo Restante:** " + minutesRemaining + " minuto(s)\n\n"
+                        + "⚡ Por favor, resolva ou atualize o status do chamado!")
                 .setFooter("Inovare TI • Sistema de Monitoramento de SLA")
                 .setTimestamp(java.time.Instant.now())
                 .build();
 
-        jda.retrieveUserById(Objects.requireNonNull(discordUserId)).queue(
-                user -> user.openPrivateChannel().queue(
-                        channel -> channel.sendMessageEmbeds(embed).queue(
-                                success -> log.info("[SLA-SCHEDULER] Alerta de SLA enviado via DM para técnico '{}' (chamado #{})",
-                                        ticket.getAssignedTo().getName(), shortId),
-                                error -> log.warn("[SLA-SCHEDULER] Falha ao enviar DM de alerta SLA para '{}': {}",
-                                        discordUserId, error.getMessage())
-                        ),
-                        error -> log.warn("[SLA-SCHEDULER] Falha ao abrir canal DM para '{}': {}", discordUserId, error.getMessage())
-                ),
-                error -> log.warn("[SLA-SCHEDULER] Falha ao recuperar usuário Discord '{}': {}", discordUserId, error.getMessage())
-        );
+        for (var channel : channels) {
+            channel.sendMessageEmbeds(embed).queue(
+                    success -> log.info("[SLA-SCHEDULER] Alerta de SLA enviado no canal privado #{} (chamado #{})", channel.getName(), shortId),
+                    error -> log.warn("[SLA-SCHEDULER] Falha ao enviar alerta no canal #{}: {}", channel.getName(), error.getMessage())
+            );
+        }
     }
 }
