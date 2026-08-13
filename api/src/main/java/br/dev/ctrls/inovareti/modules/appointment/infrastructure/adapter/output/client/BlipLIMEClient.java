@@ -83,11 +83,11 @@ public class BlipLIMEClient implements BlipClientPort {
                             .setDefaultConnectionConfig(connectionConfig)
                             .build()
                     )
-                    // Configura timeout de conexão (5s) e leitura (15s) por request
+                    // Configura timeout de conexão (5s) e leitura (10s) por request
                     .setDefaultRequestConfig(
                         org.apache.hc.client5.http.config.RequestConfig.custom()
                             .setConnectionRequestTimeout(org.apache.hc.core5.util.Timeout.ofMilliseconds(5000))
-                            .setResponseTimeout(org.apache.hc.core5.util.Timeout.ofMilliseconds(15000))
+                            .setResponseTimeout(org.apache.hc.core5.util.Timeout.ofMilliseconds(10000))
                             .build()
                     )
                     // Desativa retries automáticos de HTTP em caso de status 429 ou 4xx para evitar travamentos
@@ -319,6 +319,15 @@ public class BlipLIMEClient implements BlipClientPort {
             }
 
             return body != null ? body : Map.of();
+        } catch (org.springframework.web.client.ResourceAccessException ex) {
+            String msg = ex.getMessage() != null ? ex.getMessage() : "";
+            if (msg.contains("Network unreachable") || msg.contains("SocketException") || ex.getCause() instanceof java.net.SocketException) {
+                log.warn("[BLIP-NETWORK-WARN] Instabilidade de conexão com a Blip (Network unreachable). Acionando retentativa assíncrona...");
+                scheduleAsyncRetry(finalPayload, actualScope, true);
+                return Map.of("status", "network-unreachable", "message", "Instabilidade de conexão com a Blip (Network unreachable)");
+            }
+            log.warn("[BLIP-RESOURCE-ERROR] Erro de acesso a recurso na API Blip em executeCommand: {}", ex.getMessage());
+            return Map.of("status", "resource-error", "message", ex.getMessage());
         } catch (org.springframework.web.client.HttpClientErrorException ex) {
             int code = ex.getStatusCode().value();
             if (code == 429) {
@@ -348,6 +357,12 @@ public class BlipLIMEClient implements BlipClientPort {
      */
     @Recover
     public Map<String, Object> fallbackExecuteCommand(Map<String, Object> payload, AuthorizationScope scope, Throwable t) {
+        String msg = t.getMessage() != null ? t.getMessage() : "";
+        if (msg.contains("Network unreachable") || msg.contains("SocketException") || t.getCause() instanceof java.net.SocketException) {
+            log.warn("[BLIP-NETWORK-WARN] Instabilidade de conexão com a Blip (Network unreachable). Acionando retentativa assíncrona...");
+            scheduleAsyncRetry(payload, scope, true);
+            return Map.of("status", "network-unreachable", "message", "Instabilidade de conexão com a Blip (Network unreachable)");
+        }
         log.warn("[OFFLINE-SYNC-INTENT] [BLIP] Falha ao executar comando no Blip após retentativas (Timeout/Erro). Erro: {}. Gravando payload para sincronização offline posterior: {}", t.getMessage(), payload);
         return Map.of("status", "offline-queued", "message", t.getMessage());
     }
@@ -394,6 +409,15 @@ public class BlipLIMEClient implements BlipClientPort {
                 }
             }
             return (response != null && response.getBody() != null) ? response.getBody() : Map.of();
+        } catch (org.springframework.web.client.ResourceAccessException ex) {
+            String msg = ex.getMessage() != null ? ex.getMessage() : "";
+            if (msg.contains("Network unreachable") || msg.contains("SocketException") || ex.getCause() instanceof java.net.SocketException) {
+                log.warn("[BLIP-NETWORK-WARN] Instabilidade de conexão com a Blip (Network unreachable). Acionando retentativa assíncrona...");
+                scheduleAsyncRetry(payload, scope, false);
+                return Map.of("status", "network-unreachable", "message", "Instabilidade de conexão com a Blip (Network unreachable)");
+            }
+            log.warn("[BLIP-RESOURCE-ERROR] Erro de acesso a recurso na API Blip em executeMessage: {}", ex.getMessage());
+            return Map.of("status", "resource-error", "message", ex.getMessage());
         } catch (org.springframework.web.client.HttpClientErrorException ex) {
             int code = ex.getStatusCode().value();
             if (code == 429) {
@@ -423,6 +447,12 @@ public class BlipLIMEClient implements BlipClientPort {
      */
     @Recover
     public Map<String, Object> fallbackExecuteMessage(Map<String, Object> payload, AuthorizationScope scope, Throwable t) {
+        String msg = t.getMessage() != null ? t.getMessage() : "";
+        if (msg.contains("Network unreachable") || msg.contains("SocketException") || t.getCause() instanceof java.net.SocketException) {
+            log.warn("[BLIP-NETWORK-WARN] Instabilidade de conexão com a Blip (Network unreachable). Acionando retentativa assíncrona...");
+            scheduleAsyncRetry(payload, scope, false);
+            return Map.of("status", "network-unreachable", "message", "Instabilidade de conexão com a Blip (Network unreachable)");
+        }
         log.warn("[OFFLINE-SYNC-INTENT] [BLIP] Falha ao enviar mensagem no Blip após retentativas (Timeout/Erro). Erro: {}. Gravando payload para sincronização offline posterior: {}", t.getMessage(), payload);
         return Map.of("status", "offline-queued", "message", t.getMessage());
     }

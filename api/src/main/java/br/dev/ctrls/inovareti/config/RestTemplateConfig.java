@@ -50,8 +50,8 @@ public class RestTemplateConfig {
                 .build();
         org.springframework.http.client.JdkClientHttpRequestFactory factory = 
                 new org.springframework.http.client.JdkClientHttpRequestFactory(httpClient);
-        // Configuração de timeout de leitura resiliente de 15 segundos (15000ms) para chamadas HTTP gerais e Blip API
-        factory.setReadTimeout(java.time.Duration.ofSeconds(15));
+        // Configuração de timeout de leitura rígido de 10 segundos para chamadas HTTP externas (Blip, Conta Azul, etc.)
+        factory.setReadTimeout(java.time.Duration.ofSeconds(10));
         return factory;
     }
 
