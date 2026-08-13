@@ -10,7 +10,6 @@ import br.dev.ctrls.inovareti.core.shared.domain.model.exception.NotFoundExcepti
 import br.dev.ctrls.inovareti.modules.audit.domain.model.AuditAction;
 import br.dev.ctrls.inovareti.modules.audit.domain.model.AuditEvent;
 import br.dev.ctrls.inovareti.modules.audit.application.service.AuditLogService;
-import br.dev.ctrls.inovareti.modules.notification.infrastructure.adapter.output.discord.bot.DiscordDirectMessageService;
 import br.dev.ctrls.inovareti.modules.ticket.domain.model.Ticket;
 import br.dev.ctrls.inovareti.modules.ticket.domain.port.output.TicketRepositoryPort;
 import br.dev.ctrls.inovareti.modules.ticket.domain.model.TicketStatus;
@@ -27,7 +26,6 @@ public class ClaimTicketUseCase {
 
     private final TicketRepositoryPort ticketRepository;
     private final UserRepositoryPort userRepository;
-    private final DiscordDirectMessageService discordDirectMessageService;
     private final AuditLogService auditLogService;
     private final org.springframework.context.ApplicationEventPublisher eventPublisher;
 

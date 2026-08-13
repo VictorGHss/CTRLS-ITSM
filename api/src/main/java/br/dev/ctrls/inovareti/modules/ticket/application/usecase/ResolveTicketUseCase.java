@@ -22,7 +22,6 @@ import br.dev.ctrls.inovareti.modules.audit.domain.model.AuditAction;
 import br.dev.ctrls.inovareti.modules.audit.domain.model.AuditEvent;
 import br.dev.ctrls.inovareti.modules.inventory.application.service.StockDeductionService;
 import br.dev.ctrls.inovareti.modules.notification.application.service.CreateNotificationService;
-import br.dev.ctrls.inovareti.modules.notification.infrastructure.adapter.output.discord.bot.DiscordDirectMessageService;
 import br.dev.ctrls.inovareti.modules.ticket.application.dto.ResolveTicketDTO;
 import br.dev.ctrls.inovareti.modules.ticket.application.dto.TicketResponseDTO;
 import br.dev.ctrls.inovareti.modules.inventory.application.usecase.AllocateConsumableUseCase;
@@ -58,7 +57,6 @@ public class ResolveTicketUseCase {
         private final CreateNotificationService createNotificationService;
         private final StockDeductionService stockDeductionService;
         private final br.dev.ctrls.inovareti.modules.finance.application.service.FinancialService financialService;
-        private final DiscordDirectMessageService discordDirectMessageService;
         private final UserRepositoryPort userRepository;
         private final AuditLogService auditLogService;
         private final AllocateConsumableUseCase allocateConsumableUseCase;

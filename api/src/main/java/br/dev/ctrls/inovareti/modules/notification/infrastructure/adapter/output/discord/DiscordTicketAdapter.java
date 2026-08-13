@@ -421,7 +421,6 @@ public class DiscordTicketAdapter implements DiscordTicketPort {
 
     @Override
     @Transactional(readOnly = true)
-    @SuppressWarnings("null")
     public void reopenTicketChannel(Ticket ticketParam) {
         Ticket ticket = ticketRepository.findByIdWithRelations(ticketParam.getId()).orElse(ticketParam);
         log.info("[DISCORD-TICKET] Reabrindo canal para o chamado #{}.", ticket.getNumber());
