@@ -118,7 +118,7 @@ public class DiscordTicketAdapter implements DiscordTicketPort {
         }
 
         // Configura ações de override de permissão
-        var channelAction = activeCategory.createTextChannel(channelName)
+        var channelAction = activeCategory.createTextChannel(java.util.Objects.requireNonNull(channelName))
                 .addPermissionOverride(guild.getPublicRole(), null, EnumSet.of(Permission.VIEW_CHANNEL));
 
         if (requesterMember != null) {
