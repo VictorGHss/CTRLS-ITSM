@@ -106,6 +106,111 @@ public class DiscordSolicitarService {
      * @param quantidade      quantidade desejada (informada no comando)
      * @return mensagem de confirmação ou erro a ser exibida ao usuário
      */
+    public record ItemRequestOptionDTO(
+        String itemNameOrId,
+        int quantity
+    ) {}
+
+    /**
+     * Cria um Ticket de solicitação com opções estruturadas (item1, qtd1, item2, qtd2, etc.) a partir do comando /solicitar.
+     */
+    @Transactional
+    public String criarTicketDeSolicitacaoEstruturada(
+            String discordUserId,
+            List<ItemRequestOptionDTO> itemsRequested,
+            String observacao) {
+        User solicitante = userRepository.findByDiscordUserId(discordUserId).orElse(null);
+        if (solicitante == null) {
+            return "⚠️ Seu Discord não está vinculado à sua conta da clínica. Use `/vincular [seu-email]` primeiro.";
+        }
+
+        if (itemsRequested == null || itemsRequested.isEmpty()) {
+            return "❌ Informe ao menos um item válido na solicitação.";
+        }
+
+        TicketCategory categoria = ticketCategoryRepository.findAll().stream()
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException(
+                        "Nenhuma categoria de chamado cadastrada no sistema."));
+
+        LocalDateTime agora = LocalDateTime.now(ZoneId.of("America/Sao_Paulo"));
+
+        Item principalItemEstoque = null;
+        StringBuilder descBuilder = new StringBuilder();
+        descBuilder.append("[DISCORD] O usuário **").append(solicitante.getName())
+                .append("** solicitou os seguintes insumos:\n\n");
+
+        int index = 1;
+        for (ItemRequestOptionDTO reqItem : itemsRequested) {
+            String rawItem = reqItem.itemNameOrId().trim();
+            int qtd = Math.max(1, reqItem.quantity());
+            Item matchedItem = null;
+
+            if (ITEM_FORA_DE_ESTOQUE_ID.equals(rawItem)) {
+                descBuilder.append(index).append(". **Outros / Fora de Estoque** — ").append(qtd).append(" unid.\n");
+            } else {
+                try {
+                    UUID itemId = UUID.fromString(rawItem);
+                    matchedItem = itemRepository.findById(itemId).orElse(null);
+                } catch (IllegalArgumentException ignored) {}
+
+                if (matchedItem == null) {
+                    List<Item> matches = itemRepository.findTop25ByNameContainingIgnoreCase(rawItem);
+                    if (!matches.isEmpty()) {
+                        matchedItem = matches.get(0);
+                    }
+                }
+
+                if (matchedItem != null) {
+                    if (principalItemEstoque == null) {
+                        principalItemEstoque = matchedItem;
+                    }
+                    descBuilder.append(index).append(". **").append(matchedItem.getName())
+                            .append("** — ").append(qtd).append(" unid. (Estoque atual: ")
+                            .append(matchedItem.getCurrentStock()).append(")\n");
+                } else {
+                    descBuilder.append(index).append(". **").append(rawItem)
+                            .append("** — ").append(qtd).append(" unid.\n");
+                }
+            }
+            index++;
+        }
+
+        if (observacao != null && !observacao.isBlank()) {
+            descBuilder.append("\n**Observações:** ").append(observacao.trim());
+        }
+
+        String titulo;
+        if (itemsRequested.size() == 1) {
+            ItemRequestOptionDTO single = itemsRequested.get(0);
+            String itemLabel = principalItemEstoque != null ? principalItemEstoque.getName() : single.itemNameOrId();
+            titulo = "[DISCORD] Solicitação: " + single.quantity() + "x " + itemLabel;
+        } else {
+            titulo = "[DISCORD] Solicitação Multi-Item (" + itemsRequested.size() + " itens)";
+        }
+
+        Ticket ticket = Ticket.builder()
+                .title(titulo.length() > 150 ? titulo.substring(0, 147) + "..." : titulo)
+                .description(descBuilder.toString())
+                .status(TicketStatus.OPEN)
+                .priority(TicketPriority.NORMAL)
+                .requester(solicitante)
+                .category(categoria)
+                .requestedItem(principalItemEstoque)
+                .requestedQuantity(principalItemEstoque != null ? itemsRequested.get(0).quantity() : null)
+                .slaDeadline(agora.plusHours(categoria.getBaseSlaHours()))
+                .createdAt(agora)
+                .build();
+
+        Ticket salvo = ticketRepository.save(ticket);
+        String shortId = salvo.getId().toString().substring(0, 8).toUpperCase();
+
+        log.info("[DISCORD][/solicitar] Chamado #{} criado pelo usuário {} com {} itens.",
+                shortId, solicitante.getName(), itemsRequested.size());
+
+        return "✅ Solicitação **#" + shortId + "** registrada com sucesso! A TI foi notificada e analisará o seu pedido.";
+    }
+
     @Transactional
     public String criarTicketDeSolicitacao(String discordUserId, String itemSelecionado, int quantidade) {
         return criarTicketDeSolicitacao(discordUserId, itemSelecionado, quantidade, null);

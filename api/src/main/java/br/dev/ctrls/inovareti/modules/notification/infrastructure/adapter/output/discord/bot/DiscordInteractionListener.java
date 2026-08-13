@@ -1,5 +1,6 @@
 package br.dev.ctrls.inovareti.modules.notification.infrastructure.adapter.output.discord.bot;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -51,11 +52,20 @@ public class DiscordInteractionListener extends ListenerAdapter {
     @Value("${discord.bot.admin-ids:}")
     private String adminIdsRaw;
 
-    @Value("${discord.admin-id:${DISCORD_ADMIN_ID:1479124594962206782}}")
+    @Value("${discord.admin-id:${DISCORD_ADMIN_ID:}}")
     private String adminDiscordId;
 
     @Qualifier("discordExecutor")
     private final Executor discordExecutor;
+
+    @jakarta.annotation.PostConstruct
+    public void validateAdminConfig() {
+        if (adminDiscordId == null || adminDiscordId.isBlank()) {
+            log.warn("[DISCORD] AVISO: A variável 'DISCORD_ADMIN_ID' não foi configurada no .env. Comandos restritos validarão apenas privilégios de técnicos no ITSM.");
+        } else {
+            log.info("[DISCORD] DISCORD_ADMIN_ID configurado com sucesso via .env.");
+        }
+    }
 
     // ─────────────────────────────────────────────────────────────────────────
     // SLASH COMMANDS
@@ -108,34 +118,60 @@ public class DiscordInteractionListener extends ListenerAdapter {
         log.info("[DISCORD][/solicitar] Acionado por: {} ({})",
                 event.getUser().getAsTag(), event.getUser().getId());
 
-        var opcaoItens = event.getOption("itens");
-        var opcaoItem  = event.getOption("item");
-        var opcaoQtd   = event.getOption("quantidade");
-        var opcaoObs   = event.getOption("observacao");
+        var optItem1 = event.getOption("item1");
+        var optQtd1  = event.getOption("qtd1");
+        var optItem2 = event.getOption("item2");
+        var optQtd2  = event.getOption("qtd2");
+        var optItem3 = event.getOption("item3");
+        var optQtd3  = event.getOption("qtd3");
+        var optObs   = event.getOption("observacao");
 
-        String textoItens = null;
-        if (opcaoItens != null && !opcaoItens.getAsString().isBlank()) {
-            textoItens = opcaoItens.getAsString().trim();
-        } else if (opcaoItem != null && !opcaoItem.getAsString().isBlank()) {
-            textoItens = opcaoItem.getAsString().trim();
+        // Suporte legado a chamados únicos
+        var optItensLegacy = event.getOption("itens");
+        var optItemLegacy  = event.getOption("item");
+        var optQtdLegacy   = event.getOption("quantidade");
+
+        List<DiscordSolicitarService.ItemRequestOptionDTO> itemsRequested = new ArrayList<>();
+
+        if (optItem1 != null && !optItem1.getAsString().isBlank()) {
+            int q1 = optQtd1 != null ? Math.max(1, optQtd1.getAsInt()) : 1;
+            itemsRequested.add(new DiscordSolicitarService.ItemRequestOptionDTO(optItem1.getAsString().trim(), q1));
         }
 
-        if (textoItens == null || textoItens.isBlank()) {
-            event.reply("❌ Informe os itens solicitados.").setEphemeral(true).queue();
+        if (optItem2 != null && !optItem2.getAsString().isBlank()) {
+            int q2 = optQtd2 != null ? Math.max(1, optQtd2.getAsInt()) : 1;
+            itemsRequested.add(new DiscordSolicitarService.ItemRequestOptionDTO(optItem2.getAsString().trim(), q2));
+        }
+
+        if (optItem3 != null && !optItem3.getAsString().isBlank()) {
+            int q3 = optQtd3 != null ? Math.max(1, optQtd3.getAsInt()) : 1;
+            itemsRequested.add(new DiscordSolicitarService.ItemRequestOptionDTO(optItem3.getAsString().trim(), q3));
+        }
+
+        if (itemsRequested.isEmpty()) {
+            if (optItensLegacy != null && !optItensLegacy.getAsString().isBlank()) {
+                int qLeg = optQtdLegacy != null ? Math.max(1, optQtdLegacy.getAsInt()) : 1;
+                itemsRequested.add(new DiscordSolicitarService.ItemRequestOptionDTO(optItensLegacy.getAsString().trim(), qLeg));
+            } else if (optItemLegacy != null && !optItemLegacy.getAsString().isBlank()) {
+                int qLeg = optQtdLegacy != null ? Math.max(1, optQtdLegacy.getAsInt()) : 1;
+                itemsRequested.add(new DiscordSolicitarService.ItemRequestOptionDTO(optItemLegacy.getAsString().trim(), qLeg));
+            }
+        }
+
+        if (itemsRequested.isEmpty()) {
+            event.reply("❌ Informe ao menos um item a ser solicitado.").setEphemeral(true).queue();
             return;
         }
 
-        int quantidade = (opcaoQtd != null) ? Math.max(1, opcaoQtd.getAsInt()) : 1;
-        String observacao = (opcaoObs != null) ? opcaoObs.getAsString().trim() : null;
+        String observacao = optObs != null ? optObs.getAsString().trim() : null;
         String discordUserId = event.getUser().getId();
-        String itemInput = sanitizeInput(textoItens);
 
         event.deferReply().queue();
 
         discordExecutor.execute(() -> {
             try {
-                String resposta = solicitarService.criarTicketDeSolicitacao(
-                        discordUserId, itemInput, quantidade, observacao);
+                String resposta = solicitarService.criarTicketDeSolicitacaoEstruturada(
+                        discordUserId, itemsRequested, observacao);
                 if (resposta == null) {
                     resposta = "❌ Erro inesperado ao registrar sua solicitação.";
                 }
@@ -161,12 +197,14 @@ public class DiscordInteractionListener extends ListenerAdapter {
         }
 
         var opt = event.getFocusedOption();
-        if (!"item".equals(opt.getName()) && !"itens".equals(opt.getName())) {
+        String optionName = opt.getName();
+        if (!"item1".equals(optionName) && !"item2".equals(optionName) && !"item3".equals(optionName)
+                && !"item".equals(optionName) && !"itens".equals(optionName)) {
             return;
         }
 
         String textoDigitado = Objects.requireNonNull(opt.getValue(), "textoDigitado");
-        log.debug("[DISCORD][autocomplete] '/solicitar itens' — filtro: '{}'", textoDigitado);
+        log.debug("[DISCORD][autocomplete] '/solicitar {}' — filtro: '{}'", optionName, textoDigitado);
 
         try {
             List<Command.Choice> opcoes = List.copyOf(
