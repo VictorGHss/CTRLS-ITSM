@@ -40,6 +40,8 @@ public class DiscordTicketAdapter implements DiscordTicketPort {
     private static final String ARCHIVED_CATEGORY_ID = "1526959741585063957";
     private static final int CLINIC_BRAND_COLOR = 0xF97316; // Cor Laranja de Destaque Inovare TI (#F97316)
 
+    private final java.util.Set<java.util.UUID> processingResolution = java.util.Collections.newSetFromMap(new java.util.concurrent.ConcurrentHashMap<>());
+
     @Override
     @Transactional(readOnly = true)
     public void createTicketChannel(Ticket ticketParam, List<String> discordUserIds) {
@@ -217,110 +219,188 @@ public class DiscordTicketAdapter implements DiscordTicketPort {
     @Transactional(readOnly = true)
     @SuppressWarnings("null")
     public void archiveTicketChannel(Ticket ticketParam) {
-        Ticket dbTicket = ticketRepository.findById(ticketParam.getId()).orElse(ticketParam);
-        log.info("[DISCORD-TICKET] Iniciando arquivamento de canal para chamado #{}.", dbTicket.getNumber());
-
-        JDA jda = jdaProvider.getIfAvailable();
-        if (jda == null) {
-            log.warn("[DISCORD-TICKET] JDA indisponível. Arquivamento do canal para chamado #{} ignorado.", dbTicket.getNumber());
+        if (ticketParam == null || ticketParam.getId() == null) {
             return;
         }
 
-        Guild guild = resolveGuild(jda);
-        if (guild == null) {
-            log.warn("[DISCORD-TICKET] Guilda não encontrada. Arquivamento do canal para chamado #{} abortada.", dbTicket.getNumber());
+        java.util.UUID ticketId = ticketParam.getId();
+        if (!processingResolution.add(ticketId)) {
+            log.info("[DISCORD-TICKET] Arquivamento do chamado #{} (ID: {}) já está em andamento ou foi concluído. Ignorando execução duplicada.",
+                    ticketParam.getNumber(), ticketId);
             return;
         }
 
-        Category archivedCategory = guild.getCategoryById(ARCHIVED_CATEGORY_ID);
-        if (archivedCategory == null) {
-            log.warn("[DISCORD-TICKET] Categoria de chamados arquivados ({}) não encontrada.", ARCHIVED_CATEGORY_ID);
-            return;
-        }
+        try {
+            Ticket dbTicket = ticketRepository.findByIdWithRelations(ticketParam.getId()).orElse(ticketParam);
+            log.info("[DISCORD-TICKET] Iniciando arquivamento de canal para chamado #{}.", dbTicket.getNumber());
 
-        String prefix = "ticket-" + dbTicket.getNumber().toLowerCase();
-        List<TextChannel> channels = new java.util.ArrayList<>();
-        for (TextChannel tc : guild.getTextChannels()) {
-            if (tc.getName().startsWith(prefix)) {
-                channels.add(tc);
-            }
-        }
-
-        if (channels.isEmpty()) {
-            log.warn("[DISCORD-TICKET] Nenhum canal encontrado com o prefixo '{}' para o chamado #{}.",
-                    prefix, dbTicket.getNumber());
-            return;
-        }
-
-        // Recupera o texto de solução preferencialmente da memória do evento (ticketParam) ou do banco (dbTicket)
-        String rawSolution = ticketParam.getSolutionText();
-        if (rawSolution == null || rawSolution.isBlank()) {
-            rawSolution = dbTicket.getSolutionText();
-        }
-        if (rawSolution == null || rawSolution.isBlank()) {
-            if (dbTicket.getAsset() != null) {
-                rawSolution = "Ativo baixado: Patrimônio " + dbTicket.getAsset().getPatrimonyCode();
-            } else if (ticketParam.getAsset() != null) {
-                rawSolution = "Ativo baixado: Patrimônio " + ticketParam.getAsset().getPatrimonyCode();
-            } else {
-                rawSolution = "Chamado resolvido com sucesso.";
-            }
-        }
-
-        for (TextChannel channel : channels) {
-            // Envia e fixa embed de solução do chamado
-            net.dv8tion.jda.api.EmbedBuilder eb = new net.dv8tion.jda.api.EmbedBuilder();
-            String ticketNum = dbTicket.getNumber() != null ? dbTicket.getNumber() : "-";
-            eb.setTitle("✅ Chamado #" + ticketNum + " - Solução do Chamado");
-            eb.setColor(CLINIC_BRAND_COLOR);
-
-            String sanitizedSolution = DiscordLgpdSanitizer.sanitize(rawSolution);
-            eb.setDescription("**Solução Registrada:**\n" + (sanitizedSolution != null ? sanitizedSolution : "-"));
-
-            br.dev.ctrls.inovareti.modules.user.domain.model.User assignedUser = dbTicket.getAssignedTo() != null ? dbTicket.getAssignedTo() : ticketParam.getAssignedTo();
-            String assignedName = java.util.Objects.requireNonNullElse(
-                    assignedUser != null ? DiscordLgpdSanitizer.sanitize(assignedUser.getName()) : "Equipe Inovare TI",
-                    "Equipe Inovare TI");
-            eb.addField("Atendido por", java.util.Objects.requireNonNullElse(assignedName, "Equipe Inovare TI"), true);
-
-            var assetObj = dbTicket.getAsset() != null ? dbTicket.getAsset() : ticketParam.getAsset();
-            if (assetObj != null) {
-                eb.addField("Ativo Baixado", "Patrimônio " + assetObj.getPatrimonyCode(), true);
+            JDA jda = jdaProvider.getIfAvailable();
+            if (jda == null) {
+                log.warn("[DISCORD-TICKET] JDA indisponível. Arquivamento do canal para chamado #{} ignorado.", dbTicket.getNumber());
+                return;
             }
 
-            java.time.LocalDateTime closedAt = dbTicket.getClosedAt() != null ? dbTicket.getClosedAt() : ticketParam.getClosedAt();
-            String closedAtStr = closedAt != null
-                    ? closedAt.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"))
-                    : java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"));
-            eb.setFooter("Inovare TI • Chamado resolvido em: " + closedAtStr);
-            eb.setTimestamp(java.time.Instant.now());
+            Guild guild = resolveGuild(jda);
+            if (guild == null) {
+                log.warn("[DISCORD-TICKET] Guilda não encontrada. Arquivamento do canal para chamado #{} abortado.", dbTicket.getNumber());
+                return;
+            }
 
-            channel.sendMessageEmbeds(eb.build()).queue(
-                    message -> message.pin().queue(
-                            v -> log.info("[DISCORD-TICKET] Embed de solução do chamado #{} enviado e fixado no canal #{}", ticketNum, channel.getName()),
-                            pinErr -> log.warn("[DISCORD-TICKET] Embed de solução enviado, mas falhou ao fixar no canal #{}: {}", channel.getName(), pinErr.getMessage())
-                    ),
-                    err -> log.error("[DISCORD-TICKET] Falha ao enviar embed de resolução para canal #{}: {}", channel.getName(), err.getMessage())
-            );
+            Category baseArchivedCategory = guild.getCategoryById(ARCHIVED_CATEGORY_ID);
+            Category targetArchivedCategory = resolveAvailableArchivedCategory(guild, baseArchivedCategory);
+            if (targetArchivedCategory == null) {
+                log.warn("[DISCORD-TICKET] Nenhuma categoria de arquivados disponível para o chamado #{}.", dbTicket.getNumber());
+                return;
+            }
 
-            // Remove permissão de escrita de todos os membros humanos vinculados
-            for (PermissionOverride override : channel.getMemberPermissionOverrides()) {
-                long targetId = override.getIdLong();
-                if (targetId != jda.getSelfUser().getIdLong()) {
-                    channel.getManager().putMemberPermissionOverride(
-                            targetId,
-                            EnumSet.of(Permission.VIEW_CHANNEL, Permission.MESSAGE_HISTORY),
-                            EnumSet.of(Permission.MESSAGE_SEND)
-                    ).queue();
+            String prefix = "ticket-" + dbTicket.getNumber().toLowerCase();
+            List<TextChannel> channels = new java.util.ArrayList<>();
+            for (TextChannel tc : guild.getTextChannels()) {
+                if (tc.getName().startsWith(prefix)) {
+                    channels.add(tc);
                 }
             }
 
-            // Move para a categoria de arquivados
-            channel.getManager().setParent(archivedCategory).queue(
-                    v -> log.info("[DISCORD-TICKET] Canal #{} movido com sucesso para a categoria de arquivados ({}).",
-                            channel.getName(), archivedCategory.getName()),
-                    error -> log.error("[DISCORD-TICKET] Falha ao mover canal #{} para arquivados.", channel.getName(), error)
-            );
+            if (channels.isEmpty()) {
+                log.warn("[DISCORD-TICKET] Nenhum canal encontrado com o prefixo '{}' para o chamado #{}.",
+                        prefix, dbTicket.getNumber());
+                return;
+            }
+
+            // Recupera o texto de solução preferencialmente da memória do evento (ticketParam) ou do banco (dbTicket)
+            String rawSolution = ticketParam.getSolutionText();
+            if (rawSolution == null || rawSolution.isBlank()) {
+                rawSolution = dbTicket.getSolutionText();
+            }
+            if (rawSolution == null || rawSolution.isBlank()) {
+                if (dbTicket.getAsset() != null) {
+                    rawSolution = "Ativo baixado: Patrimônio " + dbTicket.getAsset().getPatrimonyCode();
+                } else if (ticketParam.getAsset() != null) {
+                    rawSolution = "Ativo baixado: Patrimônio " + ticketParam.getAsset().getPatrimonyCode();
+                } else {
+                    rawSolution = "Chamado resolvido com sucesso.";
+                }
+            }
+
+            for (TextChannel channel : channels) {
+                // Envia e fixa embed de solução do chamado
+                net.dv8tion.jda.api.EmbedBuilder eb = new net.dv8tion.jda.api.EmbedBuilder();
+                String ticketNum = dbTicket.getNumber() != null ? dbTicket.getNumber() : "-";
+                eb.setTitle("✅ Chamado #" + ticketNum + " - Solução do Chamado");
+                eb.setColor(CLINIC_BRAND_COLOR);
+
+                String sanitizedSolution = DiscordLgpdSanitizer.sanitize(rawSolution);
+                eb.setDescription("**Solução Registrada:**\n" + (sanitizedSolution != null ? sanitizedSolution : "-"));
+
+                br.dev.ctrls.inovareti.modules.user.domain.model.User assignedUser = dbTicket.getAssignedTo() != null ? dbTicket.getAssignedTo() : ticketParam.getAssignedTo();
+                String assignedName = java.util.Objects.requireNonNullElse(
+                        assignedUser != null ? DiscordLgpdSanitizer.sanitize(assignedUser.getName()) : "Equipe Inovare TI",
+                        "Equipe Inovare TI");
+                eb.addField("Atendido por", java.util.Objects.requireNonNullElse(assignedName, "Equipe Inovare TI"), true);
+
+                var assetObj = dbTicket.getAsset() != null ? dbTicket.getAsset() : ticketParam.getAsset();
+                if (assetObj != null) {
+                    eb.addField("Ativo Baixado", "Patrimônio " + assetObj.getPatrimonyCode(), true);
+                }
+
+                java.time.LocalDateTime closedAt = dbTicket.getClosedAt() != null ? dbTicket.getClosedAt() : ticketParam.getClosedAt();
+                String closedAtStr = closedAt != null
+                        ? closedAt.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"))
+                        : java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"));
+                eb.setFooter("Inovare TI • Chamado resolvido em: " + closedAtStr);
+                eb.setTimestamp(java.time.Instant.now());
+
+                channel.sendMessageEmbeds(eb.build()).queue(
+                        message -> message.pin().queue(
+                                v -> log.info("[DISCORD-TICKET] Embed de solução do chamado #{} enviado e fixado no canal #{}", ticketNum, channel.getName()),
+                                pinErr -> log.warn("[DISCORD-TICKET] Embed de solução enviado, mas falhou ao fixar no canal #{}: {}", channel.getName(), pinErr.getMessage())
+                        ),
+                        err -> log.error("[DISCORD-TICKET] Falha ao enviar embed de resolução para canal #{}: {}", channel.getName(), err.getMessage())
+                );
+
+                // Remove permissão de escrita de todos os membros humanos vinculados
+                for (PermissionOverride override : channel.getMemberPermissionOverrides()) {
+                    long targetId = override.getIdLong();
+                    if (targetId != jda.getSelfUser().getIdLong()) {
+                        try {
+                            channel.getManager().putMemberPermissionOverride(
+                                    targetId,
+                                    EnumSet.of(Permission.VIEW_CHANNEL, Permission.MESSAGE_HISTORY),
+                                    EnumSet.of(Permission.MESSAGE_SEND)
+                            ).queue();
+                        } catch (Exception ex) {
+                            log.warn("[DISCORD-TICKET] Falha ao remover permissões de escrita para membro no canal #{}: {}", channel.getName(), ex.getMessage());
+                        }
+                    }
+                }
+
+                // Move para a categoria de arquivados disponível com tratamento defensivo
+                try {
+                    channel.getManager().setParent(targetArchivedCategory).queue(
+                            v -> log.info("[DISCORD-TICKET] Canal #{} movido com sucesso para a categoria de arquivados '{}' (ID: {}).",
+                                    channel.getName(), targetArchivedCategory.getName(), targetArchivedCategory.getId()),
+                            error -> {
+                                log.error("[DISCORD-TICKET] Falha ao mover canal #{} para arquivados: {}", channel.getName(), error.getMessage());
+                                if (error.getMessage() != null && error.getMessage().contains("50035")) {
+                                    log.warn("[DISCORD-TICKET] Erro 50035 (limite 50 canais). Tentando criar/obter nova categoria de arquivados secundária.");
+                                    Category fallbackCategory = resolveAvailableArchivedCategory(guild, null);
+                                    if (fallbackCategory != null && !fallbackCategory.getId().equals(targetArchivedCategory.getId())) {
+                                        channel.getManager().setParent(fallbackCategory).queue(
+                                                v -> log.info("[DISCORD-TICKET] Canal #{} movido com sucesso para categoria alternativa '{}'", channel.getName(), fallbackCategory.getName()),
+                                                e -> log.error("[DISCORD-TICKET] Falha final ao mover canal #{}: {}", channel.getName(), e.getMessage())
+                                        );
+                                    }
+                                }
+                            }
+                    );
+                } catch (Exception ex) {
+                    log.error("[DISCORD-TICKET] Exceção ao agendar movimento do canal #{}: {}", channel.getName(), ex.getMessage());
+                }
+            }
+        } finally {
+            // Remove a trava de idempotência após 30 segundos
+            java.util.concurrent.CompletableFuture.delayedExecutor(30, java.util.concurrent.TimeUnit.SECONDS)
+                    .execute(() -> processingResolution.remove(ticketId));
+        }
+    }
+
+    private synchronized Category resolveAvailableArchivedCategory(Guild guild, Category baseCategory) {
+        if (baseCategory != null && baseCategory.getChannels().size() < 50) {
+            return baseCategory;
+        }
+
+        String baseName = (baseCategory != null) ? baseCategory.getName() : "📁 ⁃ CHAMADOS ARQUIVADOS";
+
+        // Procura por categorias existentes na guilda com menos de 50 canais
+        List<Category> matchingCategories = guild.getCategories().stream()
+                .filter(cat -> cat.getName() != null && (cat.getName().startsWith(baseName) || cat.getName().contains("CHAMADOS ARQUIVADOS")))
+                .sorted((c1, c2) -> c1.getName().compareTo(c2.getName()))
+                .toList();
+
+        for (Category cat : matchingCategories) {
+            if (cat.getChannels().size() < 50) {
+                log.info("[DISCORD-TICKET] Utilizando categoria de arquivados existente '{}' (ID: {}, canais: {}/50)",
+                        cat.getName(), cat.getId(), cat.getChannels().size());
+                return cat;
+            }
+        }
+
+        // Se todas as categorias existentes da guilda estiverem com 50 canais, cria automaticamente uma nova categoria secundária
+        int nextIndex = matchingCategories.size() + 1;
+        String newCategoryName = baseName + " " + nextIndex;
+        if (newCategoryName.length() > 32) {
+            newCategoryName = newCategoryName.substring(0, 32).trim();
+        }
+        log.info("[DISCORD-TICKET] Categoria de arquivados cheia (50 canais). Criando automaticamente nova categoria: '{}'", newCategoryName);
+
+        try {
+            Category newCategory = guild.createCategory(java.util.Objects.requireNonNull(newCategoryName)).complete();
+            log.info("[DISCORD-TICKET] Nova categoria criada com sucesso no Discord: '{}' (ID: {})",
+                    newCategory.getName(), newCategory.getId());
+            return newCategory;
+        } catch (Exception ex) {
+            log.error("[DISCORD-TICKET] Falha ao criar nova categoria de arquivados '{}': {}", newCategoryName, ex.getMessage(), ex);
+            return baseCategory;
         }
     }
 
