@@ -12,6 +12,7 @@ import { downloadAssetInvoice, getAssetCategories, getAssets, uploadAssetInvoice
 import type { Asset, AssetCategory, AssetFilterStatus, AssetSortBy, User } from '@/types/models';
 import AssetTable from './components/AssetTable';
 import NewAssetModal from './components/NewAssetModal';
+import { useDebounce } from '@/hooks/useDebounce';
 
 const inputClassName =
   'w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 shadow-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-brand-primary transition';
@@ -35,8 +36,8 @@ export default function Assets() {
   
   // Estados para a pesquisa global com debounce
   const [searchQuery, setSearchQuery] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
-  
+  const debouncedSearch = useDebounce(searchQuery, 400);
+
   const [currentPage, setCurrentPage] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
 
@@ -47,16 +48,9 @@ export default function Assets() {
     [users],
   );
 
-  // Efeito de debounce de 300ms para a pesquisa global de ativos
   useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedSearch(searchQuery);
-    }, 300);
-
-    return () => {
-      clearTimeout(handler);
-    };
-  }, [searchQuery]);
+    setCurrentPage(0);
+  }, [debouncedSearch]);
 
   const fetchInitialData = useCallback(async () => {
     if (!canManageAssets) return;

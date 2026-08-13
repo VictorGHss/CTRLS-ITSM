@@ -9,6 +9,7 @@ import BulkImportModal from './BulkImportModal';
 import EditUserModal from './EditUserModal';
 import NewUserModal from './NewUserModal';
 import PageHero from '@/components/ui/PageHero';
+import { useDebounce } from '@/hooks/useDebounce';
 
 export default function Users() {
   const { user: authenticatedUser, invalidateTwoFactorVerification } = useAuth();
@@ -31,6 +32,7 @@ export default function Users() {
   const [resetting2FA, setResetting2FA] = useState(false);
 
   const [searchQuery, setSearchQuery] = useState('');
+  const debouncedSearch = useDebounce(searchQuery, 400);
   const [sortOption, setSortOption] = useState<'name-asc' | 'name-desc' | 'sector-asc'>('name-asc');
   const [currentPage, setCurrentPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
@@ -49,13 +51,17 @@ export default function Users() {
     void loadSectors();
   }, []);
 
+  useEffect(() => {
+    setCurrentPage(0);
+  }, [debouncedSearch]);
+
   const loadUsers = useCallback(async () => {
     setLoading(true);
     try {
       const response = await getAllUsers({
         page: currentPage,
         size: 15,
-        search: searchQuery,
+        search: debouncedSearch,
         sort: sortOption,
       });
       setUsers(response.content);
@@ -66,7 +72,7 @@ export default function Users() {
     } finally {
       setLoading(false);
     }
-  }, [currentPage, searchQuery, sortOption]);
+  }, [currentPage, debouncedSearch, sortOption]);
 
   useEffect(() => {
     void loadUsers();

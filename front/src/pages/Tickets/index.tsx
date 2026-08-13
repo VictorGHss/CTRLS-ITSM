@@ -9,6 +9,7 @@ import PageHero from '@/components/ui/PageHero';
 import TicketsTable from '../Dashboard/TicketsTable';
 import { useAuth } from '../../contexts/AuthContext';
 import SearchableDropdown from '@/components/common/SearchableDropdown';
+import { useDebounce } from '@/hooks/useDebounce';
 
 export default function Tickets() {
   const navigate = useNavigate();
@@ -22,8 +23,8 @@ export default function Tickets() {
   
   // Estados para a pesquisa global com debounce
   const [searchQuery, setSearchQuery] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
-  
+  const debouncedSearch = useDebounce(searchQuery, 400);
+
   const [selectedPriority, setSelectedPriority] = useState<string>('all');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
@@ -32,17 +33,6 @@ export default function Tickets() {
   const [totalPages, setTotalPages] = useState(1);
 
   const isAdmin = user?.role === 'ADMIN' || user?.role === 'TECHNICIAN';
-
-  // Efeito de debounce para a pesquisa global
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedSearch(searchQuery);
-    }, 300);
-
-    return () => {
-      clearTimeout(handler);
-    };
-  }, [searchQuery]);
 
   const fetchTickets = useCallback(async () => {
     setLoading(true);

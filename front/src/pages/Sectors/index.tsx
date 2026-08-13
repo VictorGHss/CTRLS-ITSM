@@ -5,6 +5,7 @@ import { toast } from 'react-toastify';
 import { getSectors, createSector, updateSector, toggleSectorActive } from '../../services/userService';
 import type { Sector } from '../../types/models';
 import PageHero from '@/components/ui/PageHero';
+import { useDebounce } from '@/hooks/useDebounce';
 
 export default function Sectors() {
   const [sectors, setSectors] = useState<Sector[]>([]);
@@ -14,6 +15,7 @@ export default function Sectors() {
   const [submitting, setSubmitting] = useState(false);
 
   const [searchQuery, setSearchQuery] = useState('');
+  const debouncedSearch = useDebounce(searchQuery, 400);
   const [sortOption, setSortOption] = useState<'name-asc' | 'name-desc'>('name-asc');
 
   // Controle de Edição e Status
@@ -24,6 +26,10 @@ export default function Sectors() {
   const [currentPage, setCurrentPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
 
+  useEffect(() => {
+    setCurrentPage(0);
+  }, [debouncedSearch]);
+
   const loadSectors = useCallback(async () => {
     setLoading(true);
     try {
@@ -32,7 +38,7 @@ export default function Sectors() {
         page: currentPage,
         size: 15,
         activeOnly: false,
-        search: searchQuery,
+        search: debouncedSearch,
         sort: sortOption,
       });
       setSectors(response.content);
@@ -42,7 +48,7 @@ export default function Sectors() {
     } finally {
       setLoading(false);
     }
-  }, [currentPage, searchQuery, sortOption]);
+  }, [currentPage, debouncedSearch, sortOption]);
 
   useEffect(() => {
     loadSectors();
