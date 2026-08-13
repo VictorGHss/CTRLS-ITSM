@@ -83,6 +83,8 @@ public class IngestAppointmentsUseCase {
     private final br.dev.ctrls.inovareti.modules.appointment.infrastructure.config.BlipProperties blipProperties;
     private final BlipUserIdentityReconciliationRepositoryPort blipUserIdentityReconciliationRepository;
     private final br.dev.ctrls.inovareti.modules.appointment.domain.port.output.DoctorConfigurationRepository doctorConfigurationRepository;
+    private final br.dev.ctrls.inovareti.modules.appointment.application.service.AppointmentFilterService appointmentFilterService;
+    private final br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentExternalPort appointmentExternalPort;
     private final org.springframework.core.task.AsyncTaskExecutor applicationTaskExecutor;
 
     /**
@@ -241,6 +243,25 @@ public class IngestAppointmentsUseCase {
                 })
                 .collect(Collectors.toList());
         int aposEncaixe = appointments.size();
+
+        // Filtro de Agendas Bloqueadas no Feegow (/lock/list)
+        java.util.Map<LocalDate, List<br.dev.ctrls.inovareti.modules.appointment.application.dto.FeegowLockDto>> locksCacheMap = new java.util.HashMap<>();
+        appointments = appointments.stream()
+                .filter(a -> {
+                    if (a.startAt() != null) {
+                        LocalDate apptDate = a.startAt().toLocalDate();
+                        List<br.dev.ctrls.inovareti.modules.appointment.application.dto.FeegowLockDto> activeLocks = 
+                                locksCacheMap.computeIfAbsent(apptDate, d -> appointmentExternalPort.listLocks(d, d, null));
+                        if (appointmentFilterService.isScheduleBlocked(a, activeLocks)) {
+                            return false;
+                        }
+                    }
+                    return true;
+                })
+                .collect(Collectors.toList());
+        int aposBloqueio = appointments.size();
+        log.info("[FILTRO-BLOQUEIOS] Total após filtro de agenda bloqueada: {} (Removidos por bloqueio: {})",
+                aposBloqueio, (aposEncaixe - aposBloqueio));
         log.info("Agendamentos filtrados por encaixe. Total antes: {}, Total depois: {}", total, aposEncaixe);
 
         // Filtro de Procedimento: apenas IDs permitidos na propriedade ELIGIBLE_PROCEDURE_IDS

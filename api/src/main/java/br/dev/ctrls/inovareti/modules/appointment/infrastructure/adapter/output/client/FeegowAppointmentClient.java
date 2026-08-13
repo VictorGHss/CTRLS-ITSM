@@ -46,4 +46,9 @@ public interface FeegowAppointmentClient {
             URI uri,
             @RequestHeader("x-access-token") String accessToken,
             @RequestBody FeegowCancelPayload payload);
+
+    @GetExchange
+    ResponseEntity<String> getLocks(
+            URI uri,
+            @RequestHeader("x-access-token") String accessToken);
 }
