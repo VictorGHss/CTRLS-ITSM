@@ -287,7 +287,8 @@ public class DiscordInteractionListener extends ListenerAdapter {
             if (ticket != null) {
                 String result = discordCommandService.reabrirChamado(discordUserId, ticketIdStr);
                 discordTicketPort.reopenTicketChannel(ticket);
-                event.getHook().sendMessage(java.util.Objects.requireNonNullElse(result, "🔄 Chamado Reaberto!")).queue();
+                String messageText = (result != null && !result.isBlank()) ? result : "🔄 Chamado Reaberto!";
+                event.getHook().sendMessage(messageText).queue();
             } else {
                 event.getHook().sendMessage("❌ Chamado não encontrado.").setEphemeral(true).queue();
             }
