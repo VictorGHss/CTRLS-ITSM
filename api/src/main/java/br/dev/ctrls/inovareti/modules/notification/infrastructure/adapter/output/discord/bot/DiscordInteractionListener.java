@@ -5,7 +5,7 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.Executor;
 
-import org.springframework.beans.factory.Qualifier;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -227,7 +227,7 @@ public class DiscordInteractionListener extends ListenerAdapter {
             discordExecutor.execute(() -> {
                 try {
                     String result = discordCommandService.resolverChamadoComNota(event.getUser().getId(), ticketIdStr, solutionText);
-                    event.getHook().sendMessage(result).queue();
+                    event.getHook().sendMessage(Objects.requireNonNullElse(result, "✅ Chamado processado.")).queue();
                 } catch (Exception ex) {
                     log.error("[DISCORD][modal] Erro ao resolver chamado via modal: {}", ex.getMessage(), ex);
                     event.getHook().sendMessage("❌ Erro ao registrar solução do chamado: " + ex.getMessage()).queue();
