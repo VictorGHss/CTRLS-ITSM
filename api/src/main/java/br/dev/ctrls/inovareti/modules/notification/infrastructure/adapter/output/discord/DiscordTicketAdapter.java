@@ -43,7 +43,7 @@ public class DiscordTicketAdapter implements DiscordTicketPort {
     @Override
     @Transactional(readOnly = true)
     public void createTicketChannel(Ticket ticketParam, List<String> discordUserIds) {
-        final Ticket ticket = ticketRepository.findById(ticketParam.getId()).orElse(ticketParam);
+        final Ticket ticket = ticketRepository.findByIdWithRelations(ticketParam.getId()).orElse(ticketParam);
         log.info("[DISCORD-TICKET] Iniciando criação de canal para chamado #{} com {} usuários designados.",
                 ticket.getNumber(), discordUserIds.size());
 
@@ -64,10 +64,12 @@ public class DiscordTicketAdapter implements DiscordTicketPort {
             log.warn("[DISCORD-TICKET] Categoria de chamados ativos ({}) não encontrada.", ACTIVE_CATEGORY_ID);
             return;
         }
-        // Pre-resolve o nome do setor na thread síncrona com transação ativa para evitar LazyInitializationException no worker do Discord
-        final String preResolvedSectorName = (ticket.getRequester() != null && ticket.getRequester().getSector() != null)
-                ? ticket.getRequester().getSector().getName()
-                : "Geral";
+
+        // Pre-resolve dados na thread síncrona com transação ativa para evitar LazyInitializationException no worker do Discord
+        final String preResolvedRequesterName = safeGetRequesterName(ticket);
+        final String preResolvedSectorName = safeGetSectorName(ticket);
+        final String preResolvedCategoryName = safeGetCategoryName(ticket);
+        final String preResolvedRelatedTicketsSummary = safeGetRelatedTicketsSummary(ticket);
 
         // Resolve membros a serem permitidos no canal
         Member requesterMember = null;
@@ -135,14 +137,20 @@ public class DiscordTicketAdapter implements DiscordTicketPort {
                 channel -> {
                     log.info("[DISCORD-TICKET] Canal privado criado com sucesso: #{} (ID: {}) para chamado #{}",
                             channel.getName(), channel.getId(), ticket.getNumber());
-                    sendAndPinInitialTicketMessage(channel, ticket, preResolvedSectorName);
+                    sendAndPinInitialTicketMessage(channel, ticket, preResolvedRequesterName, preResolvedSectorName, preResolvedCategoryName, preResolvedRelatedTicketsSummary);
                 },
                 error -> log.error("[DISCORD-TICKET] Falha ao criar canal privado para chamado #{}", ticket.getNumber(), error)
         );
     }
 
     @SuppressWarnings("null")
-    private void sendAndPinInitialTicketMessage(TextChannel channel, Ticket ticket, String requesterSectorName) {
+    private void sendAndPinInitialTicketMessage(
+            TextChannel channel,
+            Ticket ticket,
+            String preResolvedRequesterName,
+            String preResolvedSectorName,
+            String preResolvedCategoryName,
+            String preResolvedRelatedTicketsSummary) {
         try {
             net.dv8tion.jda.api.EmbedBuilder eb = new net.dv8tion.jda.api.EmbedBuilder();
             String ticketNum = ticket.getNumber() != null ? ticket.getNumber() : "-";
@@ -157,15 +165,11 @@ public class DiscordTicketAdapter implements DiscordTicketPort {
             String sanitizedDescription = DiscordLgpdSanitizer.sanitize(rawDescription);
             eb.setDescription("**Descrição do Problema:**\n" + (sanitizedDescription != null ? sanitizedDescription : "-"));
 
-            String requesterName = java.util.Objects.requireNonNullElse(
-                    ticket.getRequester() != null ? DiscordLgpdSanitizer.sanitize(ticket.getRequester().getName()) : "-", "-");
-            String requesterSector = java.util.Objects.requireNonNullElse(requesterSectorName, "Geral");
-            String categoryName = java.util.Objects.requireNonNullElse(
-                    ticket.getCategory() != null ? ticket.getCategory().getName() : "-", "-");
-            String priority = java.util.Objects.requireNonNullElse(
-                    ticket.getPriority() != null ? ticket.getPriority().toString() : "-", "-");
-            String status = java.util.Objects.requireNonNullElse(
-                    ticket.getStatus() != null ? ticket.getStatus().toString() : "OPEN", "OPEN");
+            String requesterName = preResolvedRequesterName != null ? preResolvedRequesterName : safeGetRequesterName(ticket);
+            String requesterSector = preResolvedSectorName != null ? preResolvedSectorName : safeGetSectorName(ticket);
+            String categoryName = preResolvedCategoryName != null ? preResolvedCategoryName : safeGetCategoryName(ticket);
+            String priority = ticket.getPriority() != null ? ticket.getPriority().toString() : "-";
+            String status = ticket.getStatus() != null ? ticket.getStatus().toString() : "OPEN";
 
             eb.addField("Solicitante", requesterName, true);
             eb.addField("Setor", requesterSector, true);
@@ -179,13 +183,9 @@ public class DiscordTicketAdapter implements DiscordTicketPort {
                 eb.addField("Prazo SLA", formattedSla, true);
             }
 
-            if (ticket.getRelatedTickets() != null && !ticket.getRelatedTickets().isEmpty()) {
-                String linkedSummary = ticket.getRelatedTickets().stream()
-                        .map(t -> "#" + (t.getNumber() != null ? t.getNumber() : "-") + " - " + DiscordLgpdSanitizer.sanitize(t.getTitle()))
-                        .collect(java.util.stream.Collectors.joining("\n"));
-                if (!linkedSummary.isBlank()) {
-                    eb.addField("🔗 Chamados Vinculados", linkedSummary, false);
-                }
+            String relatedSummary = preResolvedRelatedTicketsSummary != null ? preResolvedRelatedTicketsSummary : safeGetRelatedTicketsSummary(ticket);
+            if (relatedSummary != null && !relatedSummary.isBlank()) {
+                eb.addField("🔗 Chamados Vinculados", relatedSummary, false);
             }
 
             String openedAt = ticket.getCreatedAt() != null
@@ -440,5 +440,61 @@ public class DiscordTicketAdapter implements DiscordTicketPort {
             guild = jda.getGuilds().stream().findFirst().orElse(null);
         }
         return guild;
+    }
+
+    private String safeGetCategoryName(Ticket ticket) {
+        if (ticket == null) return "Geral";
+        try {
+            if (ticket.getCategory() != null && ticket.getCategory().getName() != null && !ticket.getCategory().getName().isBlank()) {
+                return ticket.getCategory().getName();
+            }
+        } catch (Exception ex) {
+            log.warn("[DISCORD-TICKET] Não foi possível carregar categoria do chamado #{}: {}",
+                    ticket.getNumber() != null ? ticket.getNumber() : "-", ex.getMessage());
+        }
+        return "Geral";
+    }
+
+    private String safeGetRequesterName(Ticket ticket) {
+        if (ticket == null) return "-";
+        try {
+            if (ticket.getRequester() != null && ticket.getRequester().getName() != null) {
+                String sanitized = DiscordLgpdSanitizer.sanitize(ticket.getRequester().getName());
+                return sanitized != null ? sanitized : "-";
+            }
+        } catch (Exception ex) {
+            log.warn("[DISCORD-TICKET] Não foi possível carregar solicitante do chamado #{}: {}",
+                    ticket.getNumber() != null ? ticket.getNumber() : "-", ex.getMessage());
+        }
+        return "-";
+    }
+
+    private String safeGetSectorName(Ticket ticket) {
+        if (ticket == null) return "Geral";
+        try {
+            if (ticket.getRequester() != null && ticket.getRequester().getSector() != null
+                    && ticket.getRequester().getSector().getName() != null) {
+                return ticket.getRequester().getSector().getName();
+            }
+        } catch (Exception ex) {
+            log.warn("[DISCORD-TICKET] Não foi possível carregar setor do chamado #{}: {}",
+                    ticket.getNumber() != null ? ticket.getNumber() : "-", ex.getMessage());
+        }
+        return "Geral";
+    }
+
+    private String safeGetRelatedTicketsSummary(Ticket ticket) {
+        if (ticket == null) return "";
+        try {
+            if (ticket.getRelatedTickets() != null && !ticket.getRelatedTickets().isEmpty()) {
+                return ticket.getRelatedTickets().stream()
+                        .map(t -> "#" + (t.getNumber() != null ? t.getNumber() : "-") + " - " + DiscordLgpdSanitizer.sanitize(t.getTitle()))
+                        .collect(java.util.stream.Collectors.joining("\n"));
+            }
+        } catch (Exception ex) {
+            log.warn("[DISCORD-TICKET] Não foi possível carregar chamados relacionados para chamado #{}: {}",
+                    ticket.getNumber() != null ? ticket.getNumber() : "-", ex.getMessage());
+        }
+        return "";
     }
 }

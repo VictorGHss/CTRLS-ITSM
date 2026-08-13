@@ -263,9 +263,9 @@ public interface TicketJpaRepository extends JpaRepository<Ticket, UUID>, JpaSpe
              */
             @Query("""
                     SELECT t FROM Ticket t
-                    JOIN FETCH t.requester r
-                    JOIN FETCH r.sector
-                    JOIN FETCH t.category
+                    LEFT JOIN FETCH t.requester r
+                    LEFT JOIN FETCH r.sector
+                    LEFT JOIN FETCH t.category
                     LEFT JOIN FETCH t.assignedTo a
                     WHERE t.id = :id
                     """)

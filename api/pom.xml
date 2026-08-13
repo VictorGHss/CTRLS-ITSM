@@ -295,16 +295,18 @@
                 <version>${hibernate.version}</version>
                 <executions>
                     <execution>
-                        <?m2e ignore?>
                         <id>enhance</id>
                         <goals>
                             <goal>enhance</goal>
                         </goals>
                         <configuration>
                             <enableAssociationManagement>true</enableAssociationManagement>
+                            <failOnError>false</failOnError>
                         </configuration>
                     </execution>
                 </executions>
+                <dependencies/>
+
             </plugin>
             <plugin>
                 <groupId>org.graalvm.buildtools</groupId>
@@ -345,6 +347,36 @@
                 </configuration>
             </plugin>
         </plugins>
+        <pluginManagement>
+            <plugins>
+                <!-- Suppress m2e warnings and prevent Eclipse from running hibernate enhance on incremental builds -->
+                <plugin>
+                    <groupId>org.eclipse.m2e</groupId>
+                    <artifactId>lifecycle-mapping</artifactId>
+                    <version>1.0.0</version>
+                    <configuration>
+                        <lifecycleMappingMetadata>
+                            <pluginExecutions>
+                                <pluginExecution>
+                                    <pluginExecutionFilter>
+                                        <groupId>org.hibernate.orm</groupId>
+                                        <artifactId>hibernate-maven-plugin</artifactId>
+                                        <versionRange>[1.0,)</versionRange>
+                                        <goals>
+                                            <goal>enhance</goal>
+                                        </goals>
+                                    </pluginExecutionFilter>
+                                    <action>
+                                        <ignore/>
+                                    </action>
+                                </pluginExecution>
+                            </pluginExecutions>
+                        </lifecycleMappingMetadata>
+                    </configuration>
+                </plugin>
+            </plugins>
+        </pluginManagement>
     </build>
+
 
 </project>
