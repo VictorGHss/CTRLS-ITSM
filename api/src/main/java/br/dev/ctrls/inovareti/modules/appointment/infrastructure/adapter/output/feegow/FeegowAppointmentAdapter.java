@@ -30,6 +30,8 @@ import org.springframework.retry.annotation.Retryable;
 import org.springframework.retry.annotation.Backoff;
 import org.springframework.retry.annotation.Recover;
 import org.springframework.web.client.RestClientException;
+import org.springframework.cache.annotation.Cacheable;
+import br.dev.ctrls.inovareti.modules.appointment.application.dto.FeegowLockDto;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -544,6 +546,77 @@ public class FeegowAppointmentAdapter implements AppointmentExternalPort {
     public void recoverCancelAppointment(RestClientException ex, String appointmentId, String obs) {
         log.error("[RECOVERY-FEEGOW] Falha definitiva após 3 tentativas de cancelamento do agendamento {} na Feegow ERP. Erro: {}", 
             appointmentId, ex.getMessage(), ex);
+    }
+
+    @Override
+    @Cacheable(value = "feegow-locks", key = "(#startDate != null ? #startDate.toString() : '') + '-' + (#endDate != null ? #endDate.toString() : '') + '-' + (#unitId != null ? #unitId.toString() : 'all')")
+    public List<FeegowLockDto> listLocks(LocalDate startDate, LocalDate endDate, Long unitId) {
+        LocalDate start = startDate != null ? startDate : LocalDate.now();
+        LocalDate end = endDate != null ? endDate : start;
+
+        String formattedStart = start.format(DateTimeFormatter.ofPattern("dd-MM-yyyy"));
+        String formattedEnd = end.format(DateTimeFormatter.ofPattern("dd-MM-yyyy"));
+
+        UriComponentsBuilder uriBuilder = UriComponentsBuilder.fromUriString(properties.getFeegowBaseUrl())
+                .path("/lock/list")
+                .queryParam("date_start", formattedStart)
+                .queryParam("date_end", formattedEnd);
+
+        if (unitId != null && unitId > 0) {
+            uriBuilder.queryParam("unidade_id", unitId);
+        }
+
+        URI uri = uriBuilder.build().toUri();
+        log.info("[FEEGOW] [LOCK-LIST] Buscando bloqueios de agenda na URL: {}", uri);
+
+        try {
+            feegowConcurrencySemaphore.acquire();
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            log.warn("[FEEGOW] [LOCK-LIST] Thread interrompida ao aguardar semáforo.");
+            return List.of();
+        }
+
+        try {
+            ResponseEntity<String> response = appointmentClient.getLocks(uri, getAccessToken());
+            if (response == null || response.getBody() == null || response.getBody().isBlank()) {
+                return List.of();
+            }
+            return extractLocks(response.getBody());
+        } catch (Exception ex) {
+            log.warn("[FEEGOW] [LOCK-LIST] Falha ao buscar bloqueios de agenda na Feegow: {}", ex.getMessage());
+            return List.of();
+        } finally {
+            feegowConcurrencySemaphore.release();
+        }
+    }
+
+    private List<FeegowLockDto> extractLocks(String jsonResponse) {
+        if (jsonResponse == null || jsonResponse.isBlank()) {
+            return List.of();
+        }
+        try {
+            com.fasterxml.jackson.databind.JsonNode rootNode = objectMapper.readTree(jsonResponse);
+            com.fasterxml.jackson.databind.JsonNode contentNode = null;
+
+            if (rootNode.has("content")) {
+                contentNode = rootNode.get("content");
+            } else if (rootNode.isArray()) {
+                contentNode = rootNode;
+            }
+
+            if (contentNode == null || !contentNode.isArray()) {
+                return List.of();
+            }
+
+            return objectMapper.readValue(
+                    contentNode.traverse(),
+                    new TypeReference<List<FeegowLockDto>>() {}
+            );
+        } catch (Exception ex) {
+            log.warn("[FEEGOW] [LOCK-LIST] Erro ao deserializar resposta de bloqueios: {}", ex.getMessage());
+            return List.of();
+        }
     }
 
     /**

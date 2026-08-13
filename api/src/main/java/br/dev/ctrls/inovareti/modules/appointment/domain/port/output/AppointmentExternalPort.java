@@ -67,4 +67,14 @@ public interface AppointmentExternalPort {
      * @param obs observação/motivo do cancelamento
      */
     void cancelAppointment(String appointmentId, String obs);
+
+    /**
+     * Busca a lista de bloqueios de agenda cadastrados no Feegow ERP para um período e unidade.
+     *
+     * @param startDate data inicial do período
+     * @param endDate data final do período
+     * @param unitId ID da unidade (opcional)
+     * @return lista de DTOs de bloqueio
+     */
+    List<br.dev.ctrls.inovareti.modules.appointment.application.dto.FeegowLockDto> listLocks(LocalDate startDate, LocalDate endDate, Long unitId);
 }

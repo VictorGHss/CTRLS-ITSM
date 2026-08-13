@@ -37,6 +37,7 @@ public class SendPreAppointmentNoticeUseCase {
     private final br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentExternalPort appointmentExternalPort;
     private final br.dev.ctrls.inovareti.modules.appointment.domain.port.output.PatientExternalPort patientExternalPort;
     private final br.dev.ctrls.inovareti.modules.appointment.application.service.SendAppointmentReminderUseCase sendAppointmentReminderUseCase;
+    private final br.dev.ctrls.inovareti.modules.appointment.application.service.AppointmentFilterService appointmentFilterService;
 
     public void execute() {
         if (!appointmentMotorProperties.isEnabled()) {
@@ -57,6 +58,10 @@ public class SendPreAppointmentNoticeUseCase {
         log.info("[LEMBRETE-ANTECEDENCIA] Encontradas {} consulta(s) confirmada(s) elegíveis para o template '{}' (2h a 1h antes).",
                 candidateSessions.size(), TEMPLATE_NAME);
 
+        // Busca a lista de bloqueios da Feegow para o dia da consulta em uma única chamada (com cache)
+        List<br.dev.ctrls.inovareti.modules.appointment.application.dto.FeegowLockDto> activeLocks = 
+                appointmentExternalPort.listLocks(now.toLocalDate(), now.toLocalDate(), null);
+
         String eligibleIdsProp = appointmentMotorProperties.getEligibleProcedureIds();
         List<String> eligibleProcedureIds = (eligibleIdsProp != null && !eligibleIdsProp.isBlank())
                 ? java.util.Arrays.stream(eligibleIdsProp.split(",")).map(id -> id.trim()).filter(s -> !s.isEmpty()).toList()
@@ -65,6 +70,11 @@ public class SendPreAppointmentNoticeUseCase {
         for (AppointmentSession session : candidateSessions) {
             try {
                 if (session.getPhoneNumber() == null || session.getPhoneNumber().isBlank()) {
+                    continue;
+                }
+
+                // VALIDAÇÃO DE AGENDA BLOQUEADA NO FEEGOW (/lock/list)
+                if (appointmentFilterService.isScheduleBlocked(session, activeLocks)) {
                     continue;
                 }
 
