@@ -35,6 +35,7 @@ public class SendPreAppointmentNoticeUseCase {
     private final br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentDoctorMappingRepositoryPort appointmentDoctorMappingRepository;
     private final br.dev.ctrls.inovareti.modules.appointment.application.service.BlipContextService blipContextService;
     private final br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentExternalPort appointmentExternalPort;
+    private final br.dev.ctrls.inovareti.modules.appointment.domain.port.output.PatientExternalPort patientExternalPort;
     private final br.dev.ctrls.inovareti.modules.appointment.application.service.SendAppointmentReminderUseCase sendAppointmentReminderUseCase;
 
     public void execute() {
@@ -96,18 +97,47 @@ public class SendPreAppointmentNoticeUseCase {
                 var templateData = appointmentTemplateDataBuilder.build(session);
 
                 String resolvedQueue = "Recepção Central / Suporte";
+                String blipQueueId = null;
                 if (session.getDoctorProfissionalId() != null && !session.getDoctorProfissionalId().isBlank()) {
                     var mappingOpt = appointmentDoctorMappingRepository.findByProfissionalId(session.getDoctorProfissionalId().trim());
                     if (mappingOpt.isPresent()) {
                         String queueId = mappingOpt.get().getBlipQueueId();
                         if (queueId != null && !queueId.isBlank() && !"null".equalsIgnoreCase(queueId.trim())) {
-                            resolvedQueue = blipContextService.resolveQueueName(queueId.trim());
+                            blipQueueId = queueId.trim();
+                            resolvedQueue = blipContextService.resolveQueueName(blipQueueId);
                         }
                     }
                 }
 
-                // Sincroniza o contato no Blip com a fila exata do médico
-                blipContactClientPort.syncContact(session.getPhoneNumber(), templateData.patientName(), "", resolvedQueue, session.getDoctorProfissionalId());
+                String targetQueueToRedirect = (blipQueueId != null && !blipQueueId.isBlank()) ? blipQueueId : resolvedQueue;
+                blipContextService.setQueueRedirect(session.getPhoneNumber(), targetQueueToRedirect);
+
+                String cpf = "";
+                if (session.getPatientId() != null && !session.getPatientId().isBlank()) {
+                    try {
+                        var patient = patientExternalPort.patientInfo(session.getPatientId());
+                        if (patient != null && patient.cpf() != null) {
+                            cpf = patient.cpf().replaceAll("\\D", "");
+                        }
+                    } catch (Exception fEx) {
+                        log.warn("[LEMBRETE-ANTECEDENCIA] Falha ao consultar CPF para o paciente ID {}: {}", session.getPatientId(), fEx.getMessage());
+                    }
+                }
+
+                // Sincroniza o contato no Blip com a fila exata do médico e o CPF
+                blipContactClientPort.syncContact(session.getPhoneNumber(), templateData.patientName(), cpf, resolvedQueue, session.getDoctorProfissionalId());
+
+                // Injeta variáveis preventivas no contexto do paciente em escopo duplo
+                blipContextService.setUserContext(session.getPhoneNumber(), "attendanceQueueToRedirect", targetQueueToRedirect);
+                blipContextService.setUserContext(session.getPhoneNumber(), "attendanceQueueNameToRedirect", resolvedQueue);
+                blipContextService.setUserContext(session.getPhoneNumber(), "fila", resolvedQueue);
+                blipContextService.setUserContext(session.getPhoneNumber(), "deskFila", resolvedQueue);
+                blipContextService.setUserContext(session.getPhoneNumber(), "Medico", templateData.doctorName());
+                blipContextService.setUserContext(session.getPhoneNumber(), "idAgendamentoFeegow", session.getFeegowAppointmentId() != null ? session.getFeegowAppointmentId() : "");
+                blipContextService.setUserContext(session.getPhoneNumber(), "appointmentId", session.getId() != null ? session.getId().toString() : "");
+                blipContextService.setUserContext(session.getPhoneNumber(), "name", templateData.patientName());
+                blipContextService.setUserContext(session.getPhoneNumber(), "paciente", templateData.patientName());
+                blipContextService.setUserContext(session.getPhoneNumber(), "Nome", templateData.patientName());
 
                 // Força a atualização do Master-State do paciente no Blip para o bloco Preparar_Atendimento (stateId = a0776d9c-6486-42f3-8a4f-2706f0185908)
                 String prepararAtendimentoBlockId = "a0776d9c-6486-42f3-8a4f-2706f0185908";
