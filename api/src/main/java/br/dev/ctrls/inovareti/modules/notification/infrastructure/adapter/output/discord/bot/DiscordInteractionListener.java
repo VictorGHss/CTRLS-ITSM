@@ -135,26 +135,26 @@ public class DiscordInteractionListener extends ListenerAdapter {
 
         if (optItem1 != null && !optItem1.getAsString().isBlank()) {
             int q1 = optQtd1 != null ? Math.max(1, optQtd1.getAsInt()) : 1;
-            itemsRequested.add(new DiscordSolicitarService.ItemRequestOptionDTO(optItem1.getAsString().trim(), q1));
+            itemsRequested.add(new DiscordSolicitarService.ItemRequestOptionDTO(sanitizeInput(optItem1.getAsString()), q1));
         }
 
         if (optItem2 != null && !optItem2.getAsString().isBlank()) {
             int q2 = optQtd2 != null ? Math.max(1, optQtd2.getAsInt()) : 1;
-            itemsRequested.add(new DiscordSolicitarService.ItemRequestOptionDTO(optItem2.getAsString().trim(), q2));
+            itemsRequested.add(new DiscordSolicitarService.ItemRequestOptionDTO(sanitizeInput(optItem2.getAsString()), q2));
         }
 
         if (optItem3 != null && !optItem3.getAsString().isBlank()) {
             int q3 = optQtd3 != null ? Math.max(1, optQtd3.getAsInt()) : 1;
-            itemsRequested.add(new DiscordSolicitarService.ItemRequestOptionDTO(optItem3.getAsString().trim(), q3));
+            itemsRequested.add(new DiscordSolicitarService.ItemRequestOptionDTO(sanitizeInput(optItem3.getAsString()), q3));
         }
 
         if (itemsRequested.isEmpty()) {
             if (optItensLegacy != null && !optItensLegacy.getAsString().isBlank()) {
                 int qLeg = optQtdLegacy != null ? Math.max(1, optQtdLegacy.getAsInt()) : 1;
-                itemsRequested.add(new DiscordSolicitarService.ItemRequestOptionDTO(optItensLegacy.getAsString().trim(), qLeg));
+                itemsRequested.add(new DiscordSolicitarService.ItemRequestOptionDTO(sanitizeInput(optItensLegacy.getAsString()), qLeg));
             } else if (optItemLegacy != null && !optItemLegacy.getAsString().isBlank()) {
                 int qLeg = optQtdLegacy != null ? Math.max(1, optQtdLegacy.getAsInt()) : 1;
-                itemsRequested.add(new DiscordSolicitarService.ItemRequestOptionDTO(optItemLegacy.getAsString().trim(), qLeg));
+                itemsRequested.add(new DiscordSolicitarService.ItemRequestOptionDTO(sanitizeInput(optItemLegacy.getAsString()), qLeg));
             }
         }
 
@@ -265,7 +265,8 @@ public class DiscordInteractionListener extends ListenerAdapter {
             discordExecutor.execute(() -> {
                 try {
                     String result = discordCommandService.resolverChamadoComNota(event.getUser().getId(), ticketIdStr, solutionText);
-                    event.getHook().sendMessage(Objects.requireNonNullElse(result, "✅ Chamado processado.")).queue();
+                    String safeResult = (result != null && !result.isBlank()) ? result : "✅ Chamado processado.";
+                    event.getHook().sendMessage(safeResult).queue();
                 } catch (Exception ex) {
                     log.error("[DISCORD][modal] Erro ao resolver chamado via modal: {}", ex.getMessage(), ex);
                     event.getHook().sendMessage("❌ Erro ao registrar solução do chamado: " + ex.getMessage()).queue();
