@@ -15,6 +15,7 @@ import { getItems, getObsoleteItems } from '../../services/inventoryService';
 import type { Item } from '../../types/models';
 import AddBatchModal from './AddBatchModal';
 import PageHero from '@/components/ui/PageHero';
+import { useDebounce } from '@/hooks/useDebounce';
 
 type InventorySortOption = 'name-asc' | 'name-desc' | 'stock-desc' | 'stock-asc' | 'oldest-batch-asc';
 
@@ -62,7 +63,7 @@ export default function Inventory() {
   
   // Estados para a pesquisa global com debounce na tabela de inventário
   const [searchQuery, setSearchQuery] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const debouncedSearch = useDebounce(searchQuery, 400);
   
   const [isSortMenuOpen, setIsSortMenuOpen] = useState(false);
   const sortMenuRef = useRef<HTMLDivElement | null>(null);
@@ -72,16 +73,9 @@ export default function Inventory() {
 
   const lowStockOnly = searchParams.get('status') === LOW_STOCK_STATUS_PARAM;
 
-  // Efeito de debounce de 300ms para a pesquisa global de itens
   useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedSearch(searchQuery);
-    }, 300);
-
-    return () => {
-      clearTimeout(handler);
-    };
-  }, [searchQuery]);
+    setCurrentPage(0);
+  }, [debouncedSearch, activeTab]);
 
   const loadItems = useCallback(async () => {
     setLoading(true);

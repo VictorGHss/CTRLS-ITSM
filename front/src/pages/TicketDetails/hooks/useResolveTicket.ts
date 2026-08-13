@@ -209,7 +209,7 @@ export function useResolveTicket({
       }
       setLoadingAllAssets(true);
       try {
-        const allAssetsPage = await getAssets({ page: 0, size: 100 });
+        const allAssetsPage = await getAssets({ page: 0, size: 1000 });
         setAllAssets(allAssetsPage.content || []);
       } catch (err) {
         console.error('Erro ao carregar lista geral de ativos:', err);
@@ -268,7 +268,7 @@ export function useResolveTicket({
 
       setLoadingItems(true);
       try {
-        const allItemsPage = await getItems();
+        const allItemsPage = await getItems({ size: 1000 });
         const availableItems = allItemsPage.content.filter((item) => item.currentStock > 0);
         setItems(availableItems);
         setSelectedItemId('');

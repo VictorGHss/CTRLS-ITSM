@@ -55,7 +55,7 @@ export default function TicketForm({ type, onTypeChange }: Props) {
 
 
   useEffect(() => {
-    Promise.all([getTicketCategories(), getItems()])
+    Promise.all([getTicketCategories(), getItems({ page: 0, size: 1000 })])
       .then(([cats, itensPage]) => {
         setCategories(cats);
         setItems(itensPage.content);
@@ -128,10 +128,14 @@ export default function TicketForm({ type, onTypeChange }: Props) {
     try {
       const response = await getItems({
         page: 0,
-        size: 15,
+        size: 1000,
         search: searchTerm,
       });
-      setItems(response.content);
+      setItems((prev) => {
+        const existingIds = new Set(prev.map((i) => i.id));
+        const newItems = response.content.filter((i) => !existingIds.has(i.id));
+        return [...prev, ...newItems];
+      });
     } catch (error) {
       console.error('Erro ao efetuar busca remota de itens de inventário no incidente:', error);
     }

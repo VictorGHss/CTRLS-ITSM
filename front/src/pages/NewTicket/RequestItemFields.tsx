@@ -44,10 +44,14 @@ export default function RequestItemFields({
     try {
       const response = await getItems({
         page: 0,
-        size: 15,
+        size: 1000,
         search: searchTerm,
       });
-      setLocalItems(response.content);
+      setLocalItems((prev) => {
+        const existingIds = new Set(prev.map((i) => i.id));
+        const newItems = response.content.filter((i) => !existingIds.has(i.id));
+        return [...prev, ...newItems];
+      });
     } catch (error) {
       console.error('Erro ao efetuar pesquisa remota de itens de inventário:', error);
     }
