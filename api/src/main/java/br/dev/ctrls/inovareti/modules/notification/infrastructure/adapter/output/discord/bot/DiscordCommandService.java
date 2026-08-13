@@ -25,7 +25,6 @@ import br.dev.ctrls.inovareti.modules.knowledge.domain.port.output.ArticleReposi
 
 import br.dev.ctrls.inovareti.modules.ticket.application.usecase.ResolveTicketUseCase;
 import br.dev.ctrls.inovareti.modules.ticket.application.dto.ResolveTicketDTO;
-import br.dev.ctrls.inovareti.modules.ticket.domain.port.output.DiscordTicketPort;
 
 /**
  * Serviço de comando do Discord responsável pela lógica de negócios e transações
@@ -42,7 +41,6 @@ public class DiscordCommandService {
     private final AddAdditionalUserUseCase addAdditionalUserUseCase;
     private final ArticleRepositoryPort articleRepository;
     private final ResolveTicketUseCase resolveTicketUseCase;
-    private final DiscordTicketPort discordTicketPort;
 
     @Value("${app.frontend.url:http://localhost:5173}")
     private String frontendUrl;
@@ -161,11 +159,8 @@ public class DiscordCommandService {
                     tecnico.getId()
             );
 
-            try {
-                discordTicketPort.archiveTicketChannel(ticket);
-            } catch (Exception ex) {
-                log.warn("[DISCORD] Falha ao arquivar canal do chamado no Discord: {}", ex.getMessage());
-            }
+            // O arquivamento do canal será disparado automaticamente pelo DiscordTicketEventListener via TicketResolvedEvent
+
 
             String shortId = ticket.getId().toString().substring(0, 8).toUpperCase();
             return "✅ Chamado #" + shortId + " resolvido com sucesso por **" + tecnico.getName() + "**!";
