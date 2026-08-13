@@ -97,6 +97,7 @@ public class DiscordTicketAdapter implements DiscordTicketPort {
             }
         }
 
+        String shortNum = ticket.getNumber() != null ? ticket.getNumber().toLowerCase() : "ticket";
         String suffix = "";
         if (ticket.getTitle() != null && !ticket.getTitle().isBlank()) {
             String normalized = java.text.Normalizer.normalize(ticket.getTitle(), java.text.Normalizer.Form.NFD)
@@ -106,15 +107,15 @@ public class DiscordTicketAdapter implements DiscordTicketPort {
                     .replaceAll("\\s+", "-")
                     .replaceAll("-+", "-")
                     .trim();
-            if (normalized.length() > 50) {
-                normalized = normalized.substring(0, 50);
-            }
             if (!normalized.isEmpty()) {
                 suffix = "-" + normalized;
             }
         }
 
-        String channelName = "ticket-" + ticket.getNumber().toLowerCase() + suffix;
+        String channelName = "ticket-" + shortNum + suffix;
+        if (channelName.length() > 30) {
+            channelName = channelName.substring(0, 30).replaceAll("-$", "");
+        }
 
         // Configura ações de override de permissão
         var channelAction = activeCategory.createTextChannel(channelName)
@@ -193,7 +194,14 @@ public class DiscordTicketAdapter implements DiscordTicketPort {
             eb.setFooter("Inovare TI • Chamado aberto em: " + openedAt);
             eb.setTimestamp(java.time.Instant.now());
 
-            channel.sendMessageEmbeds(eb.build()).queue(
+            net.dv8tion.jda.api.interactions.components.buttons.Button btnAssumir =
+                    net.dv8tion.jda.api.interactions.components.buttons.Button.primary("ticket:assumir:" + ticket.getId(), "👤 Assumir Chamado");
+            net.dv8tion.jda.api.interactions.components.buttons.Button btnResolver =
+                    net.dv8tion.jda.api.interactions.components.buttons.Button.success("ticket:resolver:" + ticket.getId(), "✅ Resolver Chamado");
+
+            channel.sendMessageEmbeds(eb.build())
+                   .setActionRow(btnAssumir, btnResolver)
+                   .queue(
                     message -> message.pin().queue(
                             v -> log.info("[DISCORD-TICKET] Mensagem inicial de detalhes fixada no canal #{}", channel.getName()),
                             pinErr -> log.warn("[DISCORD-TICKET] Falha ao fixar mensagem inicial no canal #{}: {}", channel.getName(), pinErr.getMessage())
