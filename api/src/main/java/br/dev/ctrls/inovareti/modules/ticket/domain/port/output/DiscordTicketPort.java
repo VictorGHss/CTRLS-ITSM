@@ -35,4 +35,11 @@ public interface DiscordTicketPort {
      * @param ticket the ticket to sync permissions for
      */
     void syncTicketChannelPermissions(Ticket ticket);
+
+    /**
+     * Reopens a ticket channel in Discord, moving it back to active category and restoring write permissions.
+     *
+     * @param ticket the ticket to reopen
+     */
+    void reopenTicketChannel(Ticket ticket);
 }

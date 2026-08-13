@@ -131,6 +131,16 @@ public class DiscordMessageListener extends ListenerAdapter {
             String messageText = event.getMessage().getContentDisplay();
             StringBuilder commentContent = new StringBuilder(messageText);
 
+            // Adiciona imagens em formato Markdown ![imagem](url) para renderização inline
+            if (!event.getMessage().getAttachments().isEmpty()) {
+                for (var attachment : event.getMessage().getAttachments()) {
+                    String contentType = attachment.getContentType();
+                    if (attachment.isImage() || (contentType != null && contentType.startsWith("image/"))) {
+                        commentContent.append("\n\n![imagem](").append(attachment.getUrl()).append(")");
+                    }
+                }
+            }
+
             if (!savedAttachments.isEmpty()) {
                 if (commentContent.length() > 0) {
                     commentContent.append("\n\n");

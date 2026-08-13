@@ -171,6 +171,27 @@ public class DiscordCommandService {
     }
 
     /**
+     * Reabre um chamado resolvido, alterando seu status de volta para IN_PROGRESS no banco.
+     */
+    @Transactional
+    public String reabrirChamado(String discordUserId, String ticketIdStr) {
+        Ticket ticket = resolverTicket(ticketIdStr);
+        if (ticket == null) {
+            return "❌ Chamado não encontrado ou ID inválido.";
+        }
+
+        User usuario = userRepository.findByDiscordUserId(discordUserId).orElse(null);
+        String nomeUsuario = (usuario != null) ? usuario.getName() : "Usuário Discord";
+
+        ticket.setStatus(br.dev.ctrls.inovareti.modules.ticket.domain.model.TicketStatus.IN_PROGRESS);
+        ticket.setClosedAt(null);
+        ticketRepository.save(ticket);
+
+        log.info("[DISCORD] Chamado #{} reaberto pelo usuário Discord ID '{}' ({})", ticket.getNumber(), discordUserId, nomeUsuario);
+        return "🔄 **Chamado #" + ticket.getNumber() + " reaberto por <@" + discordUserId + ">!**";
+    }
+
+    /**
      * Realiza busca na tabela de FAQ local da TI baseada em cláusula LIKE.
      */
     @Transactional(readOnly = true)

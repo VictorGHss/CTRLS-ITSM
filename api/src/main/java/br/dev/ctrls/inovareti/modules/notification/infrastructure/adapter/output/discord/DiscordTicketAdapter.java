@@ -283,7 +283,7 @@ public class DiscordTicketAdapter implements DiscordTicketPort {
             }
 
             for (TextChannel channel : channels) {
-                // Envia e fixa embed de solução do chamado
+                // Envia e fixa embed de solução do chamado com botão de reabertura
                 net.dv8tion.jda.api.EmbedBuilder eb = new net.dv8tion.jda.api.EmbedBuilder();
                 String ticketNum = dbTicket.getNumber() != null ? dbTicket.getNumber() : "-";
                 eb.setTitle("✅ Chamado #" + ticketNum + " - Solução do Chamado");
@@ -310,7 +310,12 @@ public class DiscordTicketAdapter implements DiscordTicketPort {
                 eb.setFooter("Inovare TI • Chamado resolvido em: " + closedAtStr);
                 eb.setTimestamp(java.time.Instant.now());
 
-                channel.sendMessageEmbeds(eb.build()).queue(
+                net.dv8tion.jda.api.interactions.components.buttons.Button btnReabrir =
+                        net.dv8tion.jda.api.interactions.components.buttons.Button.secondary("ticket:reabrir:" + dbTicket.getId(), "🔄 Reabrir Chamado");
+
+                channel.sendMessageEmbeds(eb.build())
+                       .setActionRow(btnReabrir)
+                       .queue(
                         message -> message.pin().queue(
                                 v -> log.info("[DISCORD-TICKET] Embed de solução do chamado #{} enviado e fixado no canal #{}", ticketNum, channel.getName()),
                                 pinErr -> log.warn("[DISCORD-TICKET] Embed de solução enviado, mas falhou ao fixar no canal #{}: {}", channel.getName(), pinErr.getMessage())
@@ -334,7 +339,7 @@ public class DiscordTicketAdapter implements DiscordTicketPort {
                     }
                 }
 
-                // Move para a categoria de arquivados disponível com tratamento defensivo
+                // Move para a categoria semanal de arquivados disponível com tratamento defensivo
                 try {
                     channel.getManager().setParent(targetArchivedCategory).queue(
                             v -> log.info("[DISCORD-TICKET] Canal #{} movido com sucesso para a categoria de arquivados '{}' (ID: {}).",
@@ -364,43 +369,109 @@ public class DiscordTicketAdapter implements DiscordTicketPort {
         }
     }
 
+    private String getWeeklyArchivedCategoryName(java.time.LocalDate date) {
+        java.time.LocalDate sunday = date.with(java.time.temporal.TemporalAdjusters.previousOrSame(java.time.DayOfWeek.SUNDAY));
+        java.time.LocalDate saturday = date.with(java.time.temporal.TemporalAdjusters.nextOrSame(java.time.DayOfWeek.SATURDAY));
+
+        java.time.format.DateTimeFormatter fmt = java.time.format.DateTimeFormatter.ofPattern("dd/MM");
+        return "📁 ⁃ ARQUIVADOS (" + sunday.format(fmt) + " a " + saturday.format(fmt) + ")";
+    }
+
     private synchronized Category resolveAvailableArchivedCategory(Guild guild, Category baseCategory) {
-        if (baseCategory != null && baseCategory.getChannels().size() < 50) {
-            return baseCategory;
-        }
+        String baseWeeklyName = getWeeklyArchivedCategoryName(java.time.LocalDate.now());
 
-        String baseName = (baseCategory != null) ? baseCategory.getName() : "📁 ⁃ CHAMADOS ARQUIVADOS";
-
-        // Procura por categorias existentes na guilda com menos de 50 canais
+        // 1. Procura se a categoria semanal já existe na guilda com menos de 50 canais
         List<Category> matchingCategories = guild.getCategories().stream()
-                .filter(cat -> cat.getName() != null && (cat.getName().startsWith(baseName) || cat.getName().contains("CHAMADOS ARQUIVADOS")))
+                .filter(cat -> cat.getName() != null && cat.getName().startsWith(baseWeeklyName))
                 .sorted((c1, c2) -> c1.getName().compareTo(c2.getName()))
                 .toList();
 
         for (Category cat : matchingCategories) {
             if (cat.getChannels().size() < 50) {
-                log.info("[DISCORD-TICKET] Utilizando categoria de arquivados existente '{}' (ID: {}, canais: {}/50)",
+                log.info("[DISCORD-TICKET] Utilizando categoria semanal de arquivados existente '{}' (ID: {}, canais: {}/50)",
                         cat.getName(), cat.getId(), cat.getChannels().size());
                 return cat;
             }
         }
 
-        // Se todas as categorias existentes da guilda estiverem com 50 canais, cria automaticamente uma nova categoria secundária
-        int nextIndex = matchingCategories.size() + 1;
-        String newCategoryName = baseName + " " + nextIndex;
+        // 2. Se não existir ou todas estiverem com 50 canais, cria uma nova categoria semanal
+        String newCategoryName;
+        if (matchingCategories.isEmpty()) {
+            newCategoryName = baseWeeklyName;
+        } else {
+            int nextIndex = matchingCategories.size() + 1;
+            newCategoryName = baseWeeklyName + " - " + nextIndex;
+        }
+
         if (newCategoryName.length() > 32) {
             newCategoryName = newCategoryName.substring(0, 32).trim();
         }
-        log.info("[DISCORD-TICKET] Categoria de arquivados cheia (50 canais). Criando automaticamente nova categoria: '{}'", newCategoryName);
+        log.info("[DISCORD-TICKET] Criando automaticamente nova categoria semanal de arquivados: '{}'", newCategoryName);
 
         try {
             Category newCategory = guild.createCategory(java.util.Objects.requireNonNull(newCategoryName)).complete();
-            log.info("[DISCORD-TICKET] Nova categoria criada com sucesso no Discord: '{}' (ID: {})",
+            log.info("[DISCORD-TICKET] Categoria semanal de arquivados criada com sucesso: '{}' (ID: {})",
                     newCategory.getName(), newCategory.getId());
             return newCategory;
         } catch (Exception ex) {
-            log.error("[DISCORD-TICKET] Falha ao criar nova categoria de arquivados '{}': {}", newCategoryName, ex.getMessage(), ex);
-            return baseCategory;
+            log.error("[DISCORD-TICKET] Falha ao criar categoria semanal '{}': {}", newCategoryName, ex.getMessage(), ex);
+            return baseCategory != null ? baseCategory : guild.getCategoryById(ARCHIVED_CATEGORY_ID);
+        }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    @SuppressWarnings("null")
+    public void reopenTicketChannel(Ticket ticketParam) {
+        Ticket ticket = ticketRepository.findByIdWithRelations(ticketParam.getId()).orElse(ticketParam);
+        log.info("[DISCORD-TICKET] Reabrindo canal para o chamado #{}.", ticket.getNumber());
+
+        JDA jda = jdaProvider.getIfAvailable();
+        if (jda == null) return;
+
+        Guild guild = resolveGuild(jda);
+        if (guild == null) return;
+
+        Category activeCategory = guild.getCategoryById(ACTIVE_CATEGORY_ID);
+        if (activeCategory == null) {
+            log.warn("[DISCORD-TICKET] Categoria de chamados ativos não encontrada.");
+            return;
+        }
+
+        String prefix = "ticket-" + ticket.getNumber().toLowerCase();
+        List<TextChannel> channels = guild.getTextChannels().stream()
+                .filter(tc -> tc.getName().startsWith(prefix))
+                .toList();
+
+        for (TextChannel channel : channels) {
+            // Move de volta para a categoria de ativos
+            try {
+                channel.getManager().setParent(activeCategory).queue(
+                        v -> log.info("[DISCORD-TICKET] Canal #{} movido de volta para a categoria de ativos.", channel.getName()),
+                        err -> log.error("[DISCORD-TICKET] Falha ao mover canal #{} para ativos: {}", channel.getName(), err.getMessage())
+                );
+            } catch (Exception ex) {
+                log.error("[DISCORD-TICKET] Erro ao mover canal #{} para categoria ativa: {}", channel.getName(), ex.getMessage());
+            }
+
+            // Restaura permissão de escrita de membros no canal
+            for (PermissionOverride override : channel.getMemberPermissionOverrides()) {
+                long targetId = override.getIdLong();
+                if (targetId != jda.getSelfUser().getIdLong()) {
+                    try {
+                        channel.getManager().putMemberPermissionOverride(
+                                targetId,
+                                EnumSet.of(Permission.VIEW_CHANNEL, Permission.MESSAGE_SEND, Permission.MESSAGE_HISTORY),
+                                null
+                        ).queue();
+                    } catch (Exception ex) {
+                        log.warn("[DISCORD-TICKET] Falha ao restaurar permissão de escrita no canal #{}: {}", channel.getName(), ex.getMessage());
+                    }
+                }
+            }
+
+            // Envia notificação de reabertura no canal
+            channel.sendMessage("🔄 **Chamado Reaberto!** Este chamado foi reaberto e está novamente em atendimento.").queue();
         }
     }
 

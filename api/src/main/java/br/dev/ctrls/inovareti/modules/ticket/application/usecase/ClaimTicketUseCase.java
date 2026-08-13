@@ -52,11 +52,8 @@ public class ClaimTicketUseCase {
             .details("{\"assignedTo\": \"" + currentUser.getName() + "\"}")
             .build());
 
-        String shortId = savedTicket.getId().toString().substring(0, 8).toUpperCase();
-        String dmTitle = "Chamado Assumido";
-        String dmDescription = "Seu chamado #" + shortId
-            + " foi assumido pelo técnico **" + currentUser.getName() + "**.";
-        discordDirectMessageService.sendTicketUpdateDM(savedTicket, dmTitle, dmDescription);
+        // Acompanhamento ocorre exclusivamente dentro do canal dedicado do chamado no Discord
+        // discordDirectMessageService.sendTicketUpdateDM(savedTicket, dmTitle, dmDescription);
 
         eventPublisher.publishEvent(new br.dev.ctrls.inovareti.modules.ticket.domain.event.TicketPermissionsChangedEvent(savedTicket));
 

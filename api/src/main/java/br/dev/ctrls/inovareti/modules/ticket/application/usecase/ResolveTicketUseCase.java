@@ -318,38 +318,8 @@ public class ResolveTicketUseCase {
                 .details("{\"status\": \"RESOLVED\"}")
                 .build());
 
-        String shortId = resolvedTicket.getId().toString().substring(0, 8).toUpperCase();
-        String resolutionText = request.resolutionNotes() != null && !request.resolutionNotes().isBlank()
-                ? request.resolutionNotes().trim()
-                : "Não informada.";
-        String dmTitle = "Chamado Resolvido";
-        String dmDescription = "Seu chamado #" + shortId + " foi marcado como resolvido.\n"
-                + "**Resolução:** " + resolutionText;
-        discordDirectMessageService.sendTicketUpdateDM(resolvedTicket, dmTitle, dmDescription);
-
-        // Loop de notificação: DM para cada usuário adicional afetado pelo chamado
-        if (resolvedTicket.getAdditionalUsers() != null && !resolvedTicket.getAdditionalUsers().isEmpty()) {
-            String affectedTitle = "Problema Resolvido — Chamado #" + shortId;
-            String affectedDescription = "Um chamado que lhe afetava (#" + shortId + ") foi resolvido.\n"
-                    + "**Título:** " + resolvedTicket.getTitle() + "\n"
-                    + "**Resolução:** " + resolutionText;
-
-            for (br.dev.ctrls.inovareti.modules.user.domain.model.User affectedUser : resolvedTicket.getAdditionalUsers()) {
-                if (affectedUser.getDiscordUserId() != null && !affectedUser.getDiscordUserId().isBlank()) {
-                    discordDirectMessageService.sendTicketUpdateDMToUser(
-                            affectedUser.getDiscordUserId(),
-                            resolvedTicket.getId(),
-                            affectedTitle,
-                            affectedDescription
-                    );
-                    log.info("[TICKET] DM de resolução enviada para usuário adicional afetado '{}' no chamado {}",
-                            affectedUser.getName(), ticketId);
-                } else {
-                    log.debug("[TICKET] Usuário adicional '{}' não possui Discord vinculado. DM ignorada.",
-                            affectedUser.getName());
-                }
-            }
-        }
+        // Acompanhamento do chamado resolvido ocorre exclusivamente no canal dedicado do chamado
+        // discordDirectMessageService.sendTicketUpdateDM(resolvedTicket, dmTitle, dmDescription);
 
         createNotificationService.create(
                 resolvedTicket.getRequester().getId(),
