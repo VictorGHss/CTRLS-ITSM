@@ -700,6 +700,12 @@ public class HandleBlipWebhookUseCase {
             log.debug("[SILENT-ROUTING-CACHE] Roteamento silencioso já aplicado recentemente para {}. Pulando chamadas REST redundantes ao Blip.", searchPhone);
             return;
         }
+
+        // Limpeza preventiva de memória quando o cache excede 5.000 entradas
+        if (silentRoutingCache.size() > 5000) {
+            silentRoutingCache.entrySet().removeIf(entry -> entry.getValue() < nowTime - 600000L);
+        }
+
         silentRoutingCache.put(searchPhone, nowTime);
 
         String purifiedPhone = purifyPhoneNumberForSearch(searchPhone);
