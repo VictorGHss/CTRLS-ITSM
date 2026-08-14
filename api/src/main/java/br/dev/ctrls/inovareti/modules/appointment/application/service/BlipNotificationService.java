@@ -715,13 +715,24 @@ public class BlipNotificationService {
                 ? doctorIdOrParam.trim().replaceAll("\\s+", "")
                 : "default";
 
-        String safePatientName = (patientName != null && !patientName.isBlank() && !"null".equalsIgnoreCase(patientName.trim()))
-                ? patientName.trim()
-                : "Paciente";
+        String safePatientName = "Paciente";
+        if (patientName != null && !patientName.isBlank() && !"null".equalsIgnoreCase(patientName.trim())) {
+            String trimmedP = patientName.trim();
+            boolean isInvalid = trimmedP.matches("(?i).*[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}.*")
+                || trimmedP.matches("^\\d+$")
+                || br.dev.ctrls.inovareti.modules.access.infrastructure.adapter.output.BlipContactClientAdapter.isInvalidName(trimmedP);
+            if (!isInvalid) {
+                safePatientName = trimmedP;
+            }
+        }
 
-        String safeDoctorName = (doctorName != null && !doctorName.isBlank() && !"null".equalsIgnoreCase(doctorName.trim()))
-                ? doctorName.trim()
-                : "Clínica Inovare";
+        String safeDoctorName = "Clínica Inovare";
+        if (doctorName != null && !doctorName.isBlank() && !"null".equalsIgnoreCase(doctorName.trim())) {
+            String trimmedD = doctorName.trim();
+            if (!br.dev.ctrls.inovareti.modules.access.infrastructure.adapter.output.BlipContactClientAdapter.isInvalidName(trimmedD)) {
+                safeDoctorName = trimmedD;
+            }
+        }
 
         String effectiveTemplateName = (templateName != null && !templateName.isBlank())
                 ? templateName.trim()

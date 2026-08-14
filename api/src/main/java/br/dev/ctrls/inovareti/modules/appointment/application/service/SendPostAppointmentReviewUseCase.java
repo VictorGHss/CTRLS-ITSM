@@ -161,7 +161,10 @@ public class SendPostAppointmentReviewUseCase {
                                 phone = patient.phone();
                             }
                             if (patient.name() != null && !patient.name().isBlank()) {
-                                patientName = patient.name().trim();
+                                String cleanPName = patient.name().trim();
+                                if (!br.dev.ctrls.inovareti.modules.access.infrastructure.adapter.output.BlipContactClientAdapter.isInvalidName(cleanPName)) {
+                                    patientName = cleanPName;
+                                }
                             }
                         }
                     } catch (Exception pEx) {
