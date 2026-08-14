@@ -53,7 +53,7 @@ public class BlipIdentityReconciler {
                 String firstPart = local.substring(0, local.indexOf('.'));
                 if (firstPart.matches("^\\d+$")) {
                     String resolved = purifyPhoneNumber(firstPart);
-                    log.info("[RECONCILIATION] Identidade de túnel determinística resolvida via padrão: {} -> Telefone={}", 
+                    log.debug("[RECONCILIATION] Identidade de túnel determinística resolvida via padrão: {} -> Telefone={}", 
                         identity, resolved);
                     return resolved;
                 }
