@@ -67,6 +67,7 @@ public class AppointmentMotorProperties {
     private String blipTemplateConfirmation;
     private String blipTemplateNudgePending;
     private String blipTemplateGroup;
+    private String blipTemplatePreNotice = "lembrete_ativo_itsm_v2";
     private String eligibleProcedureIds;
     private String blipBlocksConfirmSuccess;
     private boolean feegowStartupProbeEnabled;

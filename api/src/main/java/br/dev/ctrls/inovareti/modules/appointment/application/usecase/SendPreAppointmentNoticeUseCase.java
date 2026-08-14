@@ -17,7 +17,7 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * Caso de Uso dedicado para envio do Lembrete Ativo de Proximidade (1 hora antes da consulta).
- * Utiliza o template ativo do WhatsApp 'lembrete_ativo_itsm_v1' para garantir a entrega
+ * Utiliza o template ativo do WhatsApp 'lembrete_ativo_itsm_v2' para garantir a entrega
  * mesmo fora da janela de 24h, aplicando antecedência de horário e idempotência no banco de dados.
  */
 @Slf4j
@@ -25,7 +25,7 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class SendPreAppointmentNoticeUseCase {
 
-    private static final String TEMPLATE_NAME = "lembrete_ativo_itsm_v1";
+    private static final String DEFAULT_TEMPLATE_NAME = "lembrete_ativo_itsm_v2";
 
     private final AppointmentSessionRepositoryPort appointmentSessionRepository;
     private final AppointmentTemplateDataBuilder appointmentTemplateDataBuilder;
@@ -55,8 +55,12 @@ public class SendPreAppointmentNoticeUseCase {
             return;
         }
 
+        String templateName = (appointmentMotorProperties.getBlipTemplatePreNotice() != null && !appointmentMotorProperties.getBlipTemplatePreNotice().isBlank())
+                ? appointmentMotorProperties.getBlipTemplatePreNotice().trim()
+                : DEFAULT_TEMPLATE_NAME;
+
         log.info("[LEMBRETE-ANTECEDENCIA] Encontradas {} consulta(s) confirmada(s) elegíveis para o template '{}' (2h a 1h antes).",
-                candidateSessions.size(), TEMPLATE_NAME);
+                candidateSessions.size(), templateName);
 
         // Busca a lista de bloqueios da Feegow para o dia da consulta em uma única chamada (com cache)
         List<br.dev.ctrls.inovareti.modules.appointment.application.dto.FeegowLockDto> activeLocks = 
@@ -168,10 +172,10 @@ public class SendPreAppointmentNoticeUseCase {
                 }
 
                 log.info("[LEMBRETE-ANTECEDENCIA] Disparando template '{}' para paciente='{}', médico='{}', hora='{}', tel='{}', fila='{}'",
-                        TEMPLATE_NAME, templateData.patientName(), templateData.doctorName(),
+                        templateName, templateData.patientName(), templateData.doctorName(),
                         templateData.appointmentTime(), session.getPhoneNumber(), resolvedQueue);
 
-                blipNotificationService.sendTemplateMessage(session.getPhoneNumber(), TEMPLATE_NAME, templateData);
+                blipNotificationService.sendTemplateMessage(session.getPhoneNumber(), templateName, templateData);
 
                 // Marca idempotência no banco para não reenviar no próximo ciclo
                 session.setStatusDetails("PRE_NOTICE_SENT_" + now.format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss")));
@@ -180,7 +184,7 @@ public class SendPreAppointmentNoticeUseCase {
 
             } catch (Exception ex) {
                 log.error("[LEMBRETE-ANTECEDENCIA] Falha ao disparar template '{}' para sessão ID={}: {}",
-                        TEMPLATE_NAME, session.getId(), ex.getMessage(), ex);
+                        templateName, session.getId(), ex.getMessage(), ex);
             }
         }
     }
