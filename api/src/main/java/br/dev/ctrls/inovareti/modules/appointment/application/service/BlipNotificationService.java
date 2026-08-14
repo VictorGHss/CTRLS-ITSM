@@ -423,8 +423,9 @@ public class BlipNotificationService {
             log.info("[FALLBACK-TEMPLATE-NUDGE] Acionando fallback defensivo do template de grupo '{}' -> '{}' para o destinatário {}",
                     templateName, fallbackTemplate, recipientE164);
             try {
-                sendSimpleTemplateMessage(destination, fallbackTemplate, null);
-                log.info("[FALLBACK-TEMPLATE-NUDGE] Fallback para '{}' disparado com sucesso no Blip para o destino {}", fallbackTemplate, recipientE164);
+                AppointmentTemplateData fallbackData = new AppointmentTemplateData(null, null, safePatientName, null, null, null, null, null, null, null, null, null);
+                sendSimpleTemplateMessage(destination, fallbackTemplate, fallbackData);
+                log.info("[FALLBACK-TEMPLATE-NUDGE] Fallback para '{}' com paciente '{}' disparado com sucesso no Blip para o destino {}", fallbackTemplate, safePatientName, recipientE164);
             } catch (Exception fallbackEx) {
                 log.error("[FALLBACK-TEMPLATE-NUDGE] Falha ao disparar template de fallback '{}' para {}: {}", fallbackTemplate, recipientE164, fallbackEx.getMessage());
                 throw e;
