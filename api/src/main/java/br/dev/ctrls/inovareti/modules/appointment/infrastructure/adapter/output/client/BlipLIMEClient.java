@@ -613,20 +613,29 @@ public class BlipLIMEClient implements BlipClientPort {
         String[] parts = identity.split("@");
         String phone = parts[0]; // ex: 5511999998888
         String domain = parts[1];
-        
-        // Tenta buscar como veio (com 9)
-        if (sessionRepository.existsByPhoneNumber(phone)) {
+
+        // Se o localPart for um UUID, GUID ou não for numérico (com 10 a 13 dígitos), pula consulta ao BD
+        if (!phone.matches("^\\d+$") || phone.length() < 10 || phone.length() > 13) {
             return identity;
         }
-        
-        // Se não achou, tenta remover o nono dígito (o '9' logo após o DDD)
-        // Ex: 55 11 9 99998888 -> 55 11 99998888
-        if (phone.startsWith("55") && phone.length() == 13) {
-            String phoneWithout9 = phone.substring(0, 4) + phone.substring(5);
-            if (sessionRepository.existsByPhoneNumber(phoneWithout9)) {
-                log.info("[RECONCILIAÇÃO-UNIVERSAL] Identidade ajustada para 8D: {} -> {}", phone, phoneWithout9);
-                return phoneWithout9 + "@" + domain;
+
+        try {
+            // Tenta buscar como veio (com 9)
+            if (sessionRepository.existsByPhoneNumber(phone)) {
+                return identity;
             }
+            
+            // Se não achou, tenta remover o nono dígito (o '9' logo após o DDD)
+            // Ex: 55 11 9 99998888 -> 55 11 99998888
+            if (phone.startsWith("55") && phone.length() == 13) {
+                String phoneWithout9 = phone.substring(0, 4) + phone.substring(5);
+                if (sessionRepository.existsByPhoneNumber(phoneWithout9)) {
+                    log.info("[RECONCILIAÇÃO-UNIVERSAL] Identidade ajustada para 8D: {} -> {}", phone, phoneWithout9);
+                    return phoneWithout9 + "@" + domain;
+                }
+            }
+        } catch (Exception ex) {
+            log.warn("[RECONCILIATION-DB-WARN] Falha ao consultar banco para reconciliação de nono dígito em {}: {}", identity, ex.getMessage());
         }
         
         return identity;

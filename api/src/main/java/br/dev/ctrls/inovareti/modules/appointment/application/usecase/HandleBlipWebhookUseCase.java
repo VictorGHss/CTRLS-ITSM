@@ -91,8 +91,16 @@ public class HandleBlipWebhookUseCase {
      * Ponto de entrada para execução do processamento do Webhook do Blip.
      */
     public WebhookResult execute(BlipWebhookPayload payload, boolean skipTokenValidation) {
+        if (payload == null) {
+            return null;
+        }
         String inboundIdentity = payload.from();
-        String reconciledIdentity = blipLimeClient.reconcileNinthDigit(inboundIdentity, appointmentSessionRepository);
+        String reconciledIdentity = inboundIdentity;
+        try {
+            reconciledIdentity = blipLimeClient.reconcileNinthDigit(inboundIdentity, appointmentSessionRepository);
+        } catch (Exception ex) {
+            log.warn("[WEBHOOK-RECONCILE-WARN] Falha graciosa ao reconciliar nono dígito para {}: {}", inboundIdentity, ex.getMessage());
+        }
         
         payload = new BlipWebhookPayload(
             payload.messageId(),
