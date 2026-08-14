@@ -755,10 +755,8 @@ public class HandleBlipWebhookUseCase {
         String queueName = "Recepção Central / Suporte";
         if (blipQueueId != null && !blipQueueId.isBlank()) {
             String resolved = blipContextService.resolveQueueName(blipQueueId);
-            if (resolved != null && !resolved.isBlank() && !"Recepção Central / Suporte".equalsIgnoreCase(resolved)) {
+            if (resolved != null && !resolved.isBlank() && !resolved.trim().matches("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")) {
                 queueName = resolved;
-            } else {
-                queueName = blipQueueId;
             }
         }
 
@@ -781,7 +779,7 @@ public class HandleBlipWebhookUseCase {
             }
         }
 
-        String targetQueueToRedirect = (blipQueueId != null && !blipQueueId.isBlank()) ? blipQueueId.trim() : queueName;
+        String targetQueueToRedirect = queueName;
 
         log.info("[SILENT-ROUTING] Paciente: '{}' (CPF: {}) | Medico: '{}' | Fila: '{}' (ToRedirect: '{}') | Feegow ID: '{}'",
                 patientName, patientCpf, doctorName, queueName, targetQueueToRedirect, feegowAppointmentId);
@@ -798,15 +796,15 @@ public class HandleBlipWebhookUseCase {
 
         // 2. Injeção de variáveis no contexto do Blip em ESCOPO DUPLO (Master + Túneis)
         try {
-            blipContextService.setQueueRedirect(searchPhone, targetQueueToRedirect);
+            blipContextService.setQueueRedirect(searchPhone, queueName);
             if (fromPhone != null && !fromPhone.equalsIgnoreCase(searchPhone)) {
-                blipContextService.setQueueRedirect(fromPhone, targetQueueToRedirect);
+                blipContextService.setQueueRedirect(fromPhone, queueName);
             }
 
             List<String> targets = List.of(fromPhone, searchPhone);
             for (String target : targets) {
                 if (target == null || target.isBlank()) continue;
-                blipContextService.setUserContext(target, "attendanceQueueToRedirect", targetQueueToRedirect);
+                blipContextService.setUserContext(target, "attendanceQueueToRedirect", queueName);
                 blipContextService.setUserContext(target, "attendanceQueueNameToRedirect", queueName);
                 blipContextService.setUserContext(target, "fila", queueName);
                 blipContextService.setUserContext(target, "deskFila", queueName);
