@@ -167,14 +167,8 @@ public class BlipPayloadBuilder {
         Map<String, String> paramValues;
         List<String> paramKeys;
 
-        String tNameGroup = templateName != null ? templateName.trim().toLowerCase() : "";
-        if (tNameGroup.equals("aviso_agendamento_grupo") || tNameGroup.equals("aviso_confirmacao_pendente_grupo") || tNameGroup.endsWith("_grupo")) {
-            paramValues = null;
-            paramKeys = null;
-        } else {
-            paramValues = Map.of("1", safePatientName);
-            paramKeys = List.of("1");
-        }
+        paramValues = Map.of("1", safePatientName);
+        paramKeys = List.of("1");
 
         String effectiveFlowId = (flowId != null && !flowId.isBlank()) 
                 ? flowId.trim() 

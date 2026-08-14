@@ -21,9 +21,11 @@ import br.dev.ctrls.inovareti.modules.appointment.domain.model.AppointmentSessio
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentConfigRepositoryPort;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentSessionRepositoryPort;
 import br.dev.ctrls.inovareti.modules.appointment.infrastructure.config.AppointmentMotorProperties;
-import lombok.RequiredArgsConstructor;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentExternalPort;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.FeegowAppointment;
+import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.PatientExternalPort;
+import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.FeegowPatient;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -40,6 +42,7 @@ public class MonitorAppointmentNudgesUseCase {
     private final BlipContextService blipContextService;
     private final BlipNotificationService blipNotificationService;
     private final AppointmentExternalPort appointmentExternalPort;
+    private final PatientExternalPort patientExternalPort;
     private final TransactionTemplate transactionTemplate;
 
     @Transactional
@@ -270,11 +273,26 @@ public class MonitorAppointmentNudgesUseCase {
                         .orElse(appointmentMotorProperties.getBlipTemplateNudgePending())
                 );
 
+                String patientName = "Paciente";
+                for (AppointmentSession s : activeSessions) {
+                    if (s.getPatientId() != null && !s.getPatientId().isBlank()) {
+                        try {
+                            FeegowPatient p = patientExternalPort.patientInfo(s.getPatientId());
+                            if (p != null && p.name() != null && !p.name().isBlank() && !br.dev.ctrls.inovareti.modules.access.infrastructure.adapter.output.BlipContactClientAdapter.isInvalidName(p.name())) {
+                                patientName = p.name().trim();
+                                break;
+                            }
+                        } catch (Exception ex) {
+                            log.warn("[GRUPO-NUDGE] Falha ao buscar dados do paciente Feegow ID {}: {}", s.getPatientId(), ex.getMessage());
+                        }
+                    }
+                }
+
                 try {
-                    log.info("[NUDGE-SEND] Enviando nudge recorrente de grupo para paciente ID {} (Último envio: {}).",
-                            activeSessions.get(0).getId(), activeSessions.get(0).getLastNotificationSentAt());
-                    log.info("[GRUPO-NUDGE] Enviando template de nudge recorrente '{}' para {}. groupId={}", templateId, phoneNumber, groupId);
-                    blipNotificationService.sendGroupTemplateMessage(phoneNumber, templateId, groupId, null);
+                    log.info("[NUDGE-SEND] Enviando nudge recorrente de grupo para paciente '{}' (ID {}) (Último envio: {}).",
+                            patientName, activeSessions.get(0).getId(), activeSessions.get(0).getLastNotificationSentAt());
+                    log.info("[GRUPO-NUDGE] Enviando template de nudge recorrente '{}' para {} (paciente: '{}'). groupId={}", templateId, phoneNumber, patientName, groupId);
+                    blipNotificationService.sendGroupTemplateMessage(phoneNumber, templateId, groupId, patientName);
                 } catch (Exception e) {
                     log.error("[GRUPO-NUDGE] Erro ao enviar template de nudge para {}. groupId={}", phoneNumber, groupId, e);
                 }

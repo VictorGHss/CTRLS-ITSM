@@ -583,6 +583,10 @@ public class FeegowAppointmentAdapter implements AppointmentExternalPort {
                 return List.of();
             }
             return extractLocks(response.getBody());
+        } catch (org.springframework.web.client.HttpStatusCodeException httpEx) {
+            log.warn("[FEEGOW] [LOCK-LIST] Feegow recusou busca de bloqueios de agenda (HTTP Status {} em {}). Aplicando fallback gracioso de lista vazia de bloqueios. Resposta: {}",
+                    httpEx.getStatusCode(), uri, httpEx.getResponseBodyAsString());
+            return List.of();
         } catch (Exception ex) {
             log.warn("[FEEGOW] [LOCK-LIST] Falha ao buscar bloqueios de agenda na Feegow: {}", ex.getMessage());
             return List.of();
