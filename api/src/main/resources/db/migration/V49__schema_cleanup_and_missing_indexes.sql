@@ -43,7 +43,6 @@ CREATE INDEX IF NOT EXISTS idx_vault_item_shares_shared_with ON vault_item_share
 CREATE INDEX IF NOT EXISTS idx_doctor_email_mapping_user ON doctor_email_mapping(user_id);
 CREATE INDEX IF NOT EXISTS idx_processed_receipts_financial_link ON processed_receipts(financial_link_id);
 CREATE INDEX IF NOT EXISTS idx_financial_transactions_ticket ON financial_transactions(ticket_id);
-CREATE INDEX IF NOT EXISTS idx_financial_transactions_status ON financial_transactions(status);
 
 -- 9. Índice Composto para Consultas de Sessões por Médico e Data
 CREATE INDEX IF NOT EXISTS idx_appointment_sessions_doctor_date 
