@@ -1086,11 +1086,11 @@ public class HandleBlipWebhookUseCase {
         }
     }
 
-    private enum WebhookIntent {
+    public enum WebhookIntent {
         CONFIRM, CANCEL, ALTER, UNKNOWN
     }
 
-    private WebhookIntent detectIntent(String text) {
+    public static WebhookIntent detectIntent(String text) {
         if (text == null || text.isBlank()) return WebhookIntent.UNKNOWN;
         
         String rawTrimmed = text.trim().toLowerCase();
