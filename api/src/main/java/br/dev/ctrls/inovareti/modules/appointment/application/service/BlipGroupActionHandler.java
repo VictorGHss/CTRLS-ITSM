@@ -304,9 +304,7 @@ public class BlipGroupActionHandler {
         if (lower == null || isMenuOrNavigationText(lower)) return false;
         String t = lower.trim();
         return t.contains("confirmar tudo") || t.contains("confirmar_tudo") ||
-               t.equalsIgnoreCase("1") || t.equalsIgnoreCase("1️⃣") ||
-               t.equalsIgnoreCase("opcao 1") || t.equalsIgnoreCase("opção 1") ||
-               t.equalsIgnoreCase("confirmar") || t.equalsIgnoreCase("confirmo") ||
+               t.contains("confirmar presenca") || t.contains("confirmar presença") ||
                t.startsWith("1 - confirmar") || t.startsWith("1. confirmar") ||
                t.startsWith("1 - tudo") || t.startsWith("1. tudo");
     }
@@ -315,9 +313,7 @@ public class BlipGroupActionHandler {
         if (lower == null || isMenuOrNavigationText(lower)) return false;
         String t = lower.trim();
         return t.contains("preciso alterar") || t.contains("preciso_alterar") ||
-               t.equalsIgnoreCase("2") || t.equalsIgnoreCase("2️⃣") ||
-               t.equalsIgnoreCase("opcao 2") || t.equalsIgnoreCase("opção 2") ||
-               t.equalsIgnoreCase("alterar") ||
+               t.contains("solicitar alteração") || t.contains("solicitar alteracao") ||
                t.startsWith("2 - alterar") || t.startsWith("2. alterar") ||
                t.startsWith("2 - preciso") || t.startsWith("2. preciso");
     }
