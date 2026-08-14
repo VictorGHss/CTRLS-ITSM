@@ -309,25 +309,11 @@ public class BlipWebhookController {
             boolean isBypassExplicit = rawActionTextLower.contains("ver agendamentos")
                 || rawActionTextLower.contains("ver agenda")
                 || rawActionTextLower.contains("ver_agenda")
-                || rawActionTextLower.contains("confirmar")
-                || rawActionTextLower.contains("confirma")
-                || rawActionTextLower.contains("confirmado")
-                || rawActionTextLower.contains("confirm_")
-                || rawActionTextLower.contains("sim")
-                || rawActionTextLower.contains("presença")
-                || rawActionTextLower.contains("presenca")
-                || rawActionTextLower.contains("alterar")
-                || rawActionTextLower.contains("remarcar")
-                || rawActionTextLower.contains("trocar")
-                || rawActionTextLower.contains("alter_")
-                || rawActionTextLower.equals("1")
-                || rawActionTextLower.equals("2")
-                || rawActionTextLower.startsWith("1 ")
-                || rawActionTextLower.startsWith("1-")
-                || rawActionTextLower.startsWith("1.")
-                || rawActionTextLower.startsWith("2 ")
-                || rawActionTextLower.startsWith("2-")
-                || rawActionTextLower.startsWith("2.");
+                || rawActionTextLower.contains("confirm_group_")
+                || rawActionTextLower.contains("confirmar_tudo")
+                || rawActionTextLower.contains("alter_group_")
+                || rawActionTextLower.contains("preciso_alterar")
+                || isConfirmationOrAlterationIntentText(rawText);
 
             boolean isNullOrEmpty = action == null || action.isBlank() || "null".equalsIgnoreCase(action.trim());
             boolean isButtonClick = isNullOrEmpty || isBypassExplicit || (action != null && (
@@ -630,6 +616,42 @@ public class BlipWebhookController {
         public WebhookResponse(String queue, String patientName, String patientCPF, String patientBirthdate, String action, String doctorName) {
             this("ok", queue, patientName, patientCPF, patientBirthdate, action, doctorName);
         }
+    }
+
+    private boolean isConfirmationOrAlterationIntentText(String text) {
+        if (text == null || text.isBlank()) return false;
+
+        String rawTrimmed = text.trim().toLowerCase();
+        String cleaned = rawTrimmed.replaceAll("[^a-z0-9áàâãéèêíïóôõöúçñ\\s]", " ").replaceAll("\\s+", " ").trim();
+
+        // 1. Regra de Tamanho: Se o texto tiver mais de 25 caracteres ou mais de 3 palavras -> false
+        if (cleaned.length() > 25) return false;
+        String[] words = cleaned.split(" ");
+        if (words.length > 3) return false;
+
+        // 2. Guarda de Negação/Condicional: Se o texto contiver palavras de negação ou condição -> false
+        for (String w : words) {
+            if (w.equals("não") || w.equals("nao") || w.equals("nunca") || w.equals("nem") ||
+                w.equals("se") || w.equals("caso") || w.equals("depois")) {
+                return false;
+            }
+        }
+
+        // 3. Casamento Estrito (Exact Match)
+        return switch (cleaned) {
+            case "1", "1️⃣", "sim", "confirmar", "confirmo", "confirmado", "confirma",
+                 "presença", "presenca", "confirmar presença", "confirmar presenca", "opcao 1", "opção 1",
+                 "2", "2️⃣", "alterar", "remarcar", "trocar",
+                 "solicitar alteração", "solicitar alteracao", "preciso alterar", "opcao 2", "opção 2",
+                 "cancelar", "cancel" -> true;
+            default -> {
+                if (cleaned.startsWith("1 ") || cleaned.startsWith("1-") || cleaned.startsWith("1.") ||
+                    cleaned.startsWith("2 ") || cleaned.startsWith("2-") || cleaned.startsWith("2.")) {
+                    yield true;
+                }
+                yield false;
+            }
+        };
     }
 
     private boolean secureCompare(String a, String b) {

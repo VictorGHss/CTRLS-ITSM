@@ -1091,32 +1091,39 @@ public class HandleBlipWebhookUseCase {
     }
 
     private WebhookIntent detectIntent(String text) {
-        if (text == null) return WebhookIntent.UNKNOWN;
-        String normalized = text.trim().toLowerCase();
+        if (text == null || text.isBlank()) return WebhookIntent.UNKNOWN;
         
-        return switch (normalized) {
-            case "sim", "confirmar", "confirma", "confirmado", "confirm", "confirmo", 
-                 "confirmar tudo", "confirmar_tudo", "presença", "presenca",
-                 "1", "1️⃣", "opcao 1", "opção 1" -> WebhookIntent.CONFIRM;
+        String rawTrimmed = text.trim().toLowerCase();
+        String cleaned = rawTrimmed.replaceAll("[^a-z0-9áàâãéèêíïóôõöúçñ\\s]", " ").replaceAll("\\s+", " ").trim();
+
+        // 1. Regra de Tamanho: Se o texto tiver mais de 25 caracteres ou mais de 3 palavras, trate como UNKNOWN
+        if (cleaned.length() > 25) return WebhookIntent.UNKNOWN;
+        String[] words = cleaned.split(" ");
+        if (words.length > 3) return WebhookIntent.UNKNOWN;
+
+        // 2. Guarda de Negação/Condicional: Se o texto contiver palavras de negação ou condição, retorne UNKNOWN
+        for (String w : words) {
+            if (w.equals("não") || w.equals("nao") || w.equals("nunca") || w.equals("nem") ||
+                w.equals("se") || w.equals("caso") || w.equals("depois")) {
+                return WebhookIntent.UNKNOWN;
+            }
+        }
+
+        // 3. Casamento Estrito (Exact Match)
+        return switch (cleaned) {
+            case "1", "1️⃣", "sim", "confirmar", "confirmo", "confirmado", "confirma",
+                 "presença", "presenca", "confirmar presença", "confirmar presenca", "opcao 1", "opção 1" -> WebhookIntent.CONFIRM;
 
             case "cancelar", "cancel" -> WebhookIntent.CANCEL;
 
-            case "solicitar alteração", "solicitar alteracao", "alterar", "remarcar", "trocar", 
-                 "preciso alterar", "preciso_alterar", "2", "2️⃣", "opcao 2", "opção 2" -> WebhookIntent.ALTER;
-
-            case String s when s.contains("confirmar") || s.contains("confirma") || s.contains("confirmado") 
-                            || s.contains("presença") || s.contains("presenca") || s.contains("confirmo") -> WebhookIntent.CONFIRM;
-
-            case String s when s.contains("cancelar presença") || s.contains("cancelar consulta") -> WebhookIntent.CANCEL;
-
-            case String s when s.contains("alterar") || s.contains("remarcar") || s.contains("trocar") 
-                            || s.contains("preciso alterar") || s.contains("solicitar alter") -> WebhookIntent.ALTER;
+            case "2", "2️⃣", "alterar", "remarcar", "trocar",
+                 "solicitar alteração", "solicitar alteracao", "preciso alterar", "opcao 2", "opção 2" -> WebhookIntent.ALTER;
 
             default -> {
-                if (normalized.startsWith("1 ") || normalized.startsWith("1-") || normalized.startsWith("1.")) {
+                if (cleaned.startsWith("1 ") || cleaned.startsWith("1-") || cleaned.startsWith("1.")) {
                     yield WebhookIntent.CONFIRM;
                 }
-                if (normalized.startsWith("2 ") || normalized.startsWith("2-") || normalized.startsWith("2.")) {
+                if (cleaned.startsWith("2 ") || cleaned.startsWith("2-") || cleaned.startsWith("2.")) {
                     yield WebhookIntent.ALTER;
                 }
                 yield WebhookIntent.UNKNOWN;
