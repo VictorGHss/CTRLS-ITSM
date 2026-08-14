@@ -167,6 +167,7 @@ public class FeegowAppointmentAdapter implements AppointmentExternalPort {
                 .path(properties.getFeegowSearchPath())
                 .queryParam("paciente_id", patientId.trim())
                 .queryParam("data_start", LocalDate.now().format(DateTimeFormatter.ofPattern("dd-MM-yyyy")))
+                .queryParam("data_end", LocalDate.now().plusYears(1).format(DateTimeFormatter.ofPattern("dd-MM-yyyy")))
                 .build().toUri();
 
         log.info("[FEEGOW] [APPOINTMENT-ADAPTER] Buscando agendamentos futuros do paciente ID {} na URL: {}", patientId, uri);
