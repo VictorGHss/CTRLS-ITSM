@@ -46,4 +46,4 @@ CREATE INDEX IF NOT EXISTS idx_financial_transactions_ticket ON financial_transa
 
 -- 9. Índice Composto para Consultas de Sessões por Médico e Data
 CREATE INDEX IF NOT EXISTS idx_appointment_sessions_doctor_date 
-    ON appointment_sessions(doctor_profissional_id, appointment_date);
+    ON appointment_sessions(doctor_profissional_id, appointment_at);
