@@ -618,7 +618,7 @@ public class BlipWebhookController {
         }
     }
 
-    private boolean isConfirmationOrAlterationIntentText(String text) {
+    public static boolean isConfirmationOrAlterationIntentText(String text) {
         if (text == null || text.isBlank()) return false;
 
         String rawTrimmed = text.trim().toLowerCase();
