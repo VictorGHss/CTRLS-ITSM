@@ -119,8 +119,8 @@ public class SendPreAppointmentNoticeUseCase {
                     }
                 }
 
-                String targetQueueToRedirect = (blipQueueId != null && !blipQueueId.isBlank()) ? blipQueueId : resolvedQueue;
-                blipContextService.setQueueRedirect(session.getPhoneNumber(), targetQueueToRedirect);
+                // Remove qualquer redirecionamento prévio de fila do Desk para garantir fluxo de auto-encerramento limpo
+                blipContextService.clearQueueRedirect(session.getPhoneNumber());
 
                 String cpf = "";
                 if (session.getPatientId() != null && !session.getPatientId().isBlank()) {
@@ -134,11 +134,11 @@ public class SendPreAppointmentNoticeUseCase {
                     }
                 }
 
-                // Sincroniza o contato no Blip com a fila exata do médico e o CPF
+                // Sincroniza o contato no Blip com os dados do paciente
                 blipContactClientPort.syncContact(session.getPhoneNumber(), templateData.patientName(), cpf, resolvedQueue, session.getDoctorProfissionalId());
 
-                // Injeta variáveis preventivas no contexto do paciente em escopo duplo
-                blipContextService.setUserContext(session.getPhoneNumber(), "attendanceQueueToRedirect", targetQueueToRedirect);
+                // Injeta variáveis preventivas no contexto do paciente em escopo duplo (definindo flow_action = reminder_notice)
+                blipContextService.setUserContext(session.getPhoneNumber(), "flow_action", "reminder_notice");
                 blipContextService.setUserContext(session.getPhoneNumber(), "attendanceQueueNameToRedirect", resolvedQueue);
                 blipContextService.setUserContext(session.getPhoneNumber(), "fila", resolvedQueue);
                 blipContextService.setUserContext(session.getPhoneNumber(), "deskFila", resolvedQueue);

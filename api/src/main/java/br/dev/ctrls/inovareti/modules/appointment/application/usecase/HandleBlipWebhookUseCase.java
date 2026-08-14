@@ -272,179 +272,40 @@ public class HandleBlipWebhookUseCase {
 
         if (isLembreteResposta) {
             String statusInfo = combinedActionText.contains("caminho") ? "Estou a caminho" : "Já estou na clínica";
-            log.info("[LEMBRETE-RESPOSTA] Paciente ID {} (De: {}) informou status: {}. Mapeando para ação de confirmação de agendamento.",
+            log.info("[LEMBRETE-RESPOSTA] Paciente ID {} (De: {}) informou status: {}.",
                     dbPhone.isEmpty() ? fromPhone : dbPhone, fromPhone, statusInfo);
 
             String searchPhone = (dbPhone != null && !dbPhone.isEmpty()) ? dbPhone : fromPhone;
-            String purifiedPhone = purifyPhoneNumberForSearch(searchPhone);
-            if (purifiedPhone.isEmpty()) {
-                purifiedPhone = purifyPhoneNumberForSearch(fromPhone);
-            }
 
-            AppointmentSession activeSession = null;
-            List<AppointmentSession> activeSessions = appointmentSessionRepository.findActiveByPhoneNumber(purifiedPhone);
-            if ((activeSessions == null || activeSessions.isEmpty()) && !purifiedPhone.startsWith("55")) {
-                activeSessions = appointmentSessionRepository.findActiveByPhoneNumber("55" + purifiedPhone);
-            }
-            if (activeSessions != null && !activeSessions.isEmpty()) {
-                activeSession = activeSessions.get(0);
-            }
-
-            String doctorId = activeSession != null ? activeSession.getDoctorProfissionalId() : null;
-            String feegowAppointmentId = activeSession != null ? activeSession.getFeegowAppointmentId() : "";
-
-            String blipQueueId = null;
-            String doctorName = null;
-
-            if (doctorId != null && !doctorId.isBlank()) {
-                Optional<AppointmentDoctorMapping> doctorMappingOpt = appointmentDoctorMappingRepository.findByProfissionalId(doctorId);
-                if (doctorMappingOpt.isPresent()) {
-                    AppointmentDoctorMapping mapping = doctorMappingOpt.get();
-                    blipQueueId = mapping.getBlipQueueId();
-                    doctorName = mapping.getProfissionalNome();
-                }
-                if (doctorName == null || doctorName.isBlank()) {
-                    try {
-                        doctorName = professionalExternalPort.getProfessionalName(doctorId);
-                    } catch (Exception ignored) {}
-                }
-            }
-
-            if (doctorName == null || doctorName.isBlank()) {
-                doctorName = "Clínica Inovare";
-            }
-
-            String queueName = "Recepção Central / Suporte";
-            if (blipQueueId != null && !blipQueueId.isBlank()) {
-                String resolved = blipContextService.resolveQueueName(blipQueueId);
-                if (resolved != null && !resolved.isBlank() && !"Recepção Central / Suporte".equalsIgnoreCase(resolved)) {
-                    queueName = resolved;
-                } else {
-                    queueName = blipQueueId;
-                }
-            }
-
-            String patientName = "Paciente";
-            String patientCpf = "";
-
-            List<String> patientNames = new java.util.ArrayList<>();
-            if (activeSessions != null && !activeSessions.isEmpty()) {
-                for (AppointmentSession s : activeSessions) {
-                    if (s.getPatientId() != null && !s.getPatientId().isBlank()) {
-                        try {
-                            br.dev.ctrls.inovareti.modules.appointment.domain.port.output.FeegowPatient p = patientExternalPort.patientInfo(s.getPatientId());
-                            if (p != null && p.name() != null && !p.name().isBlank() && !br.dev.ctrls.inovareti.modules.access.infrastructure.adapter.output.BlipContactClientAdapter.isInvalidName(p.name())) {
-                                String cleanPName = p.name().trim();
-                                if (!patientNames.contains(cleanPName)) {
-                                    patientNames.add(cleanPName);
-                                }
-                            }
-                            if (patientCpf.isEmpty() && p != null && p.cpf() != null) {
-                                patientCpf = p.cpf().replaceAll("\\D", "");
-                            }
-                        } catch (Exception ex) {
-                            log.warn("[LEMBRETE-RESPOSTA] Falha ao buscar dados do paciente Feegow para ID {}: {}", s.getPatientId(), ex.getMessage());
-                        }
-                    }
-                }
-            }
-
-            if (!patientNames.isEmpty()) {
-                patientName = String.join(" / ", patientNames);
-            }
-
-            log.info("[LEMBRETE-RESPOSTA] Enriquecendo contexto de lembrete: Paciente='{}' (CPF={}) | Medico='{}' | Fila='{}' (blipQueueId={})",
-                    patientName, patientCpf, doctorName, queueName, blipQueueId);
-
-            // 1. Sincronização obrigatória do contato no CRM do Blip (escopo duplo: WhatsApp + Túneis)
+            // 1. Remove qualquer redirecionamento para o Desk para evitar abertura de ticket humano
             try {
-                blipContactClientPort.syncContact(searchPhone, patientName, patientCpf, queueName, doctorId);
-                if (fromPhone != null && !fromPhone.equalsIgnoreCase(searchPhone)) {
-                    blipContactClientPort.syncContact(fromPhone, patientName, patientCpf, queueName, doctorId);
-                }
-            } catch (Exception ex) {
-                log.warn("[LEMBRETE-RESPOSTA] Falha ao sincronizar contato: {}", ex.getMessage());
-            }
-
-            // 2. Injeção de variáveis no contexto do Blip em ESCOPO DUPLO (Master + Túneis)
-            try {
-                String queueToRedirect = (blipQueueId != null && !blipQueueId.isBlank()) ? blipQueueId.trim() : queueName;
-                blipContextService.setQueueRedirect(fromPhone, queueToRedirect);
+                blipContextService.clearQueueRedirect(fromPhone);
                 if (searchPhone != null && !searchPhone.equalsIgnoreCase(fromPhone)) {
-                    blipContextService.setQueueRedirect(searchPhone, queueToRedirect);
+                    blipContextService.clearQueueRedirect(searchPhone);
                 }
 
-                List<String> targets = new java.util.ArrayList<>(List.of(fromPhone, searchPhone));
-
-                String subbotId = blipProperties.getSubbotId();
-                if (subbotId != null && !subbotId.isBlank()) {
-                    String subbotLocalPart = subbotId.trim();
-                    if (subbotLocalPart.contains("@")) {
-                        subbotLocalPart = subbotLocalPart.substring(0, subbotLocalPart.indexOf('@'));
-                    }
-                    String safePhone = fromPhone != null ? fromPhone : "";
-                    String phoneDigits = safePhone.contains("@") ? safePhone.substring(0, safePhone.indexOf('@')).replaceAll("\\D", "") : safePhone.replaceAll("\\D", "");
-                    if (!phoneDigits.startsWith("55") && !phoneDigits.isEmpty()) {
-                        phoneDigits = "55" + phoneDigits;
-                    }
-                    String deterministicTunnel = phoneDigits + "." + subbotLocalPart + "@tunnel.msging.net";
-                    if (!targets.contains(deterministicTunnel)) {
-                        targets.add(deterministicTunnel);
-                    }
-                }
-
+                // 2. Registra histórico/contexto da mensagem
+                List<String> targets = List.of(fromPhone, searchPhone);
                 for (String target : targets) {
                     if (target == null || target.isBlank()) continue;
-                    blipContextService.setUserContext(target, "attendanceQueueToRedirect", queueToRedirect);
-                    blipContextService.setUserContext(target, "attendanceQueueNameToRedirect", queueName);
-                    blipContextService.setUserContext(target, "fila", queueName);
-                    blipContextService.setUserContext(target, "deskFila", queueName);
-                    blipContextService.setUserContext(target, "Medico", doctorName);
-                    blipContextService.setUserContext(target, "idAgendamentoFeegow", feegowAppointmentId);
-                    blipContextService.setUserContext(target, "name", patientName);
-                    blipContextService.setUserContext(target, "paciente", patientName);
-                    blipContextService.setUserContext(target, "Nome", patientName);
+                    blipContextService.setUserContext(target, "flow_action", "reminder_notice");
                     blipContextService.setUserContext(target, "lembrete_resposta", statusInfo);
                 }
+
+                // 3. Direciona o Master State para o bloco de finalização/encerramento
+                String confirmSuccessBlockId = blipProperties.getBlocks().getConfirmSuccess();
+                if (confirmSuccessBlockId != null && !confirmSuccessBlockId.isBlank()) {
+                    blipContextService.changeMasterState(fromPhone, confirmSuccessBlockId);
+                    if (searchPhone != null && !searchPhone.equalsIgnoreCase(fromPhone)) {
+                        blipContextService.changeMasterState(searchPhone, confirmSuccessBlockId);
+                    }
+                }
             } catch (Exception ex) {
-                log.warn("[LEMBRETE-RESPOSTA] Falha ao injetar contexto dual de lembrete: {}", ex.getMessage());
+                log.warn("[LEMBRETE-FINALIZACAO] Falha ao ajustar estado de finalização no Blip: {}", ex.getMessage());
             }
 
-            String groupContextId = resolveGroupContextId(payload);
-            if (groupContextId != null && !groupContextId.isBlank()) {
-                action = "confirm_group_" + groupContextId;
-            } else {
-                String activeAppId = resolveActiveAppointmentId(payload);
-                if (activeAppId != null && !activeAppId.isBlank()) {
-                    action = "confirm_" + activeAppId;
-                }
-            }
-
-            if (action.startsWith("confirm_")) {
-                try {
-                    blipContextService.setUserContextForUser(fromPhone, "payloadclique", action);
-                    if (dbPhone != null && !dbPhone.isBlank() && !dbPhone.equalsIgnoreCase(fromPhone)) {
-                        blipContextService.setUserContextForUser(dbPhone, "payloadclique", action);
-                    }
-                    String subbotId = blipProperties.getSubbotId();
-                    if (subbotId != null && !subbotId.isBlank()) {
-                        String subbotLocalPart = subbotId.trim();
-                        if (subbotLocalPart.contains("@")) {
-                            subbotLocalPart = subbotLocalPart.substring(0, subbotLocalPart.indexOf('@'));
-                        }
-                        String safePhone = fromPhone != null ? fromPhone : "";
-                        String phoneDigits = safePhone.contains("@") ? safePhone.substring(0, safePhone.indexOf('@')).replaceAll("\\D", "") : safePhone.replaceAll("\\D", "");
-                        if (!phoneDigits.startsWith("55") && !phoneDigits.isEmpty()) {
-                            phoneDigits = "55" + phoneDigits;
-                        }
-                        String deterministicTunnel = phoneDigits + "." + subbotLocalPart + "@tunnel.msging.net";
-                        blipContextService.setUserContextForUser(deterministicTunnel, "payloadclique", action);
-                    }
-                    log.info("[LEMBRETE-RESPOSTA] Injetado payloadclique={} no contexto dual para {}.", action, fromPhone);
-                } catch (Exception ex) {
-                    log.warn("[LEMBRETE-RESPOSTA] Falha ao injetar payloadclique no contexto: {}", ex.getMessage());
-                }
-            }
+            log.info("[LEMBRETE-FINALIZACAO] Resposta de lembrete do paciente={} direcionada para auto-encerramento (sem fila de Desk).", searchPhone);
+            return new WebhookResult("", "", "", "", "reminder_notice_auto_closed", "");
         }
 
         java.util.regex.Pattern uuidPattern = java.util.regex.Pattern.compile("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$");
@@ -732,10 +593,30 @@ public class HandleBlipWebhookUseCase {
                     }
 
                     if (!isExplicitHumanRequest) {
-                        boolean isCourtesyText = textLower.matches("(?i)^(obrigado|obrigada|valeu|ok|otimo|ótimo|bom|boa|excelente|nota \\d+|\\d+|tudo certo|agradeço|agradeco|obg|blz|tmj)$");
-                        if (isCourtesyText) {
-                            log.info("[FREE-TEXT-ROUTING] Texto de cortesia/agradecimento '{}' recebido de {}. Ignorando roteamento silencioso para Desk.", textLower, searchPhone);
-                            return new WebhookResult("", "", "", "", "courtesy_text_ignored", "");
+                        String flowAction = blipContextService.getUserContext(fromPhone, "flow_action");
+                        boolean isReminderContext = "reminder_notice".equalsIgnoreCase(flowAction)
+                                || (mainSession.getStatusDetails() != null && mainSession.getStatusDetails().contains("PRE_NOTICE_SENT"));
+
+                        boolean isCourtesyOrConfirmationText = textLower.matches("(?i)^(obrigado|obrigada|valeu|ok|otimo|ótimo|bom|boa|excelente|nota \\d+|\\d+|tudo certo|agradeço|agradeco|obg|blz|tmj|sim|joia|jóa|confirmado|certo|estou a caminho|ja estou na clinica|já estou na clínica)$");
+
+                        if (isReminderContext || isCourtesyOrConfirmationText) {
+                            try {
+                                blipContextService.clearQueueRedirect(fromPhone);
+                                if (dbPhone != null && !dbPhone.isBlank() && !dbPhone.equalsIgnoreCase(fromPhone)) {
+                                    blipContextService.clearQueueRedirect(dbPhone);
+                                }
+                                String confirmSuccessBlockId = blipProperties.getBlocks().getConfirmSuccess();
+                                if (confirmSuccessBlockId != null && !confirmSuccessBlockId.isBlank()) {
+                                    blipContextService.changeMasterState(fromPhone, confirmSuccessBlockId);
+                                    if (dbPhone != null && !dbPhone.isBlank() && !dbPhone.equalsIgnoreCase(fromPhone)) {
+                                        blipContextService.changeMasterState(dbPhone, confirmSuccessBlockId);
+                                    }
+                                }
+                            } catch (Exception ex) {
+                                log.warn("[LEMBRETE-FINALIZACAO] Erro ao aplicar auto-encerramento em texto livre: {}", ex.getMessage());
+                            }
+                            log.info("[LEMBRETE-FINALIZACAO] Resposta/texto livre do paciente={} ('{}') direcionado para auto-encerramento (sem fila de Desk).", searchPhone, textLower);
+                            return new WebhookResult("", "", "", "", "reminder_notice_auto_closed", "");
                         }
                     }
 

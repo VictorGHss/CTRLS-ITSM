@@ -617,6 +617,35 @@ public class BlipContextService {
         return true;
     }
 
+    public boolean clearQueueRedirect(String userIdentity) {
+        if (userIdentity == null || userIdentity.isBlank()) return false;
+        String masterIdentity = resolveMasterIdentity(userIdentity);
+        String tunnelIdentity = resolveTunnelIdentity(userIdentity);
+
+        if (masterIdentity != null && !masterIdentity.isBlank()) {
+            deleteUserContext(masterIdentity, "attendanceQueueToRedirect");
+        }
+        if (tunnelIdentity != null && !tunnelIdentity.isBlank()) {
+            deleteUserContext(tunnelIdentity, "attendanceQueueToRedirect");
+        }
+        log.info("[BLIP-CONTEXT] Variável attendanceQueueToRedirect removida do contexto para master={} e tunnel={}", masterIdentity, tunnelIdentity);
+        return true;
+    }
+
+    public void changeMasterState(String userIdentity, String stateId) {
+        if (userIdentity == null || userIdentity.isBlank() || stateId == null || stateId.isBlank()) return;
+        String masterIdentity = resolveMasterIdentity(userIdentity);
+        String tunnelIdentity = resolveTunnelIdentity(userIdentity);
+
+        setMasterState(masterIdentity, "desk@msging.net", stateId);
+        setBuilderMasterState(masterIdentity, stateId);
+        if (tunnelIdentity != null && !tunnelIdentity.equalsIgnoreCase(masterIdentity)) {
+            setMasterState(tunnelIdentity, "desk@msging.net", stateId);
+            setBuilderMasterState(tunnelIdentity, stateId);
+        }
+        log.info("[BLIP-CONTEXT] Master State alterado para stateId={} no paciente master={} e tunnel={}", stateId, masterIdentity, tunnelIdentity);
+    }
+
     public String cleanQueueName(String queueName) {
         if (queueName == null) return "";
         String cleaned = queueName.replace("\u200E", "");
