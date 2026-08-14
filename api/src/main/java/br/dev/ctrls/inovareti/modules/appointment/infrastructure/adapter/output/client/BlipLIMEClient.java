@@ -228,10 +228,15 @@ public class BlipLIMEClient implements BlipClientPort {
 
     @Override
     @Retryable(
-        retryFor = { org.springframework.web.client.ResourceAccessException.class, org.springframework.dao.DataAccessException.class },
-        noRetryFor = { org.springframework.web.client.HttpClientErrorException.class, org.springframework.web.client.RestClientResponseException.class },
-        maxAttempts = 3,
-        backoff = @Backoff(delay = 1000, multiplier = 2.0)
+        retryFor = { org.springframework.web.client.ResourceAccessException.class },
+        noRetryFor = { 
+            org.springframework.web.client.HttpClientErrorException.class, 
+            org.springframework.web.client.RestClientResponseException.class,
+            org.springframework.transaction.CannotCreateTransactionException.class,
+            org.springframework.dao.DataAccessException.class 
+        },
+        maxAttempts = 2,
+        backoff = @Backoff(delay = 500)
     )
     public Map<String, Object> executeCommand(Map<String, Object> payload, AuthorizationScope scope) {
         AuthorizationScope actualScope = scope;
@@ -369,10 +374,15 @@ public class BlipLIMEClient implements BlipClientPort {
 
     @Override
     @Retryable(
-        retryFor = { org.springframework.web.client.ResourceAccessException.class, org.springframework.dao.DataAccessException.class },
-        noRetryFor = { org.springframework.web.client.HttpClientErrorException.class, org.springframework.web.client.RestClientResponseException.class },
-        maxAttempts = 3,
-        backoff = @Backoff(delay = 1000, multiplier = 2.0)
+        retryFor = { org.springframework.web.client.ResourceAccessException.class },
+        noRetryFor = { 
+            org.springframework.web.client.HttpClientErrorException.class, 
+            org.springframework.web.client.RestClientResponseException.class,
+            org.springframework.transaction.CannotCreateTransactionException.class,
+            org.springframework.dao.DataAccessException.class 
+        },
+        maxAttempts = 2,
+        backoff = @Backoff(delay = 500)
     )
     public Map<String, Object> executeMessage(Map<String, Object> payload, AuthorizationScope scope) {
         try {
@@ -607,37 +617,48 @@ public class BlipLIMEClient implements BlipClientPort {
         return Map.of("status", "offline-queued", "message", ex.getMessage());
     }
 
+    private final java.util.Map<String, String> reconciledNinthDigitCache = new java.util.concurrent.ConcurrentHashMap<>();
+
     public String reconcileNinthDigit(String identity, br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentSessionRepositoryPort sessionRepository) {
         if (identity == null || !identity.contains("@")) return identity;
         
+        String cached = reconciledNinthDigitCache.get(identity);
+        if (cached != null) {
+            return cached;
+        }
+
         String[] parts = identity.split("@");
         String phone = parts[0]; // ex: 5511999998888
         String domain = parts[1];
 
         // Se o localPart for um UUID, GUID ou não for numérico (com 10 a 13 dígitos), pula consulta ao BD
         if (!phone.matches("^\\d+$") || phone.length() < 10 || phone.length() > 13) {
+            reconciledNinthDigitCache.put(identity, identity);
             return identity;
         }
 
+        String result = identity;
         try {
             // Tenta buscar como veio (com 9)
             if (sessionRepository.existsByPhoneNumber(phone)) {
-                return identity;
-            }
-            
-            // Se não achou, tenta remover o nono dígito (o '9' logo após o DDD)
-            // Ex: 55 11 9 99998888 -> 55 11 99998888
-            if (phone.startsWith("55") && phone.length() == 13) {
+                result = identity;
+            } else if (phone.startsWith("55") && phone.length() == 13) {
+                // Se não achou, tenta remover o nono dígito (o '9' logo após o DDD)
                 String phoneWithout9 = phone.substring(0, 4) + phone.substring(5);
                 if (sessionRepository.existsByPhoneNumber(phoneWithout9)) {
                     log.info("[RECONCILIAÇÃO-UNIVERSAL] Identidade ajustada para 8D: {} -> {}", phone, phoneWithout9);
-                    return phoneWithout9 + "@" + domain;
+                    result = phoneWithout9 + "@" + domain;
                 }
             }
         } catch (Exception ex) {
             log.warn("[RECONCILIATION-DB-WARN] Falha ao consultar banco para reconciliação de nono dígito em {}: {}", identity, ex.getMessage());
+            return identity;
         }
         
-        return identity;
+        if (reconciledNinthDigitCache.size() > 5000) {
+            reconciledNinthDigitCache.clear();
+        }
+        reconciledNinthDigitCache.put(identity, result);
+        return result;
     }
 }
