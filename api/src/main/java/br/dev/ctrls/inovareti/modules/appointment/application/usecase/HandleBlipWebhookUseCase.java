@@ -76,6 +76,8 @@ public class HandleBlipWebhookUseCase {
     private final br.dev.ctrls.inovareti.modules.access.infrastructure.adapter.output.GerAcessoCatracaAdapter gerAcessoCatracaAdapter;
     private final br.dev.ctrls.inovareti.modules.access.domain.port.output.BlipContactClientPort blipContactClientPort;
 
+    private final java.util.Map<String, Long> silentRoutingCache = new java.util.concurrent.ConcurrentHashMap<>();
+
     private record SessionDbData(
         AppointmentSession session,
         AppointmentDoctorMapping doctorMapping
@@ -561,7 +563,30 @@ public class HandleBlipWebhookUseCase {
 
         if (!matcher.find()) {
             log.debug("[WEBHOOK] Ação ignorada (não é confirm_, alter_ nem cancel_). action='{}'", action);
-            
+
+            String textLower = rawContentText != null ? rawContentText.toLowerCase().trim() : "";
+
+            // Ignora chamadas de webhook sem texto do usuário (notificações de estado, eventos de sistema, etc.)
+            if (textLower.isBlank()) {
+                return null;
+            }
+
+            // Ignora chamadas de callback de blocos do sistema Blip
+            String safeAction = action != null ? action.trim().toLowerCase() : "";
+            boolean isBlipSystemAction = safeAction.contains("início")
+                    || safeAction.contains("inicio")
+                    || safeAction.contains("pesquisa")
+                    || safeAction.contains("agradecimento")
+                    || safeAction.contains("sucesso")
+                    || safeAction.contains("preparar")
+                    || safeAction.contains("exibir")
+                    || safeAction.contains("menu")
+                    || safeAction.contains("finalizar");
+
+            if (isBlipSystemAction) {
+                return null;
+            }
+
             // Verificação de segurança: se for um paciente com agendamento ativo no dia enviando texto livre
             try {
                 String searchPhone = !dbPhone.isEmpty() ? dbPhone : fromPhone;
@@ -571,7 +596,6 @@ public class HandleBlipWebhookUseCase {
 
                     // BLOQUEIO DE ROTEAMENTO SILENCIOSO PARA AVALIAÇÕES / AGRADECIMENTOS
                     boolean isReviewSent = mainSession.getReviewRequestedAt() != null;
-                    String textLower = rawContentText != null ? rawContentText.toLowerCase().trim() : "";
 
                     boolean isExplicitHumanRequest = textLower.contains("falar")
                             || textLower.contains("humano")
@@ -668,6 +692,16 @@ public class HandleBlipWebhookUseCase {
 
     private void applySilentDeskRouting(String fromPhone, String dbPhone, String statusInfo) {
         String searchPhone = (dbPhone != null && !dbPhone.isEmpty()) ? dbPhone : fromPhone;
+        if (searchPhone == null || searchPhone.isBlank()) return;
+
+        long nowTime = System.currentTimeMillis();
+        Long lastRouted = silentRoutingCache.get(searchPhone);
+        if (lastRouted != null && (nowTime - lastRouted) < 600000) {
+            log.debug("[SILENT-ROUTING-CACHE] Roteamento silencioso já aplicado recentemente para {}. Pulando chamadas REST redundantes ao Blip.", searchPhone);
+            return;
+        }
+        silentRoutingCache.put(searchPhone, nowTime);
+
         String purifiedPhone = purifyPhoneNumberForSearch(searchPhone);
         if (purifiedPhone.isEmpty()) {
             purifiedPhone = purifyPhoneNumberForSearch(fromPhone);
