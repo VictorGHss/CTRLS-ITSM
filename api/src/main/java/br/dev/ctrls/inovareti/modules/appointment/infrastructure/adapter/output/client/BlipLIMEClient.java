@@ -656,7 +656,14 @@ public class BlipLIMEClient implements BlipClientPort {
         }
         
         if (reconciledNinthDigitCache.size() > 5000) {
-            reconciledNinthDigitCache.clear();
+            // Evita cache stampede: expurga 1.000 entradas de forma parcial em vez de zerar o cache inteiro
+            var iterator = reconciledNinthDigitCache.keySet().iterator();
+            int removed = 0;
+            while (iterator.hasNext() && removed < 1000) {
+                iterator.next();
+                iterator.remove();
+                removed++;
+            }
         }
         reconciledNinthDigitCache.put(identity, result);
         return result;
