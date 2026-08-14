@@ -15,8 +15,8 @@ CREATE INDEX IF NOT EXISTS idx_ticket_comments_author ON ticket_comments(author_
 CREATE INDEX IF NOT EXISTS idx_ticket_attachments_ticket ON ticket_attachments(ticket_id);
 
 -- 3. Índices para Tags de Chamados
-CREATE INDEX IF NOT EXISTS idx_ttr_ticket ON ticket_tags_relations(ticket_id);
-CREATE INDEX IF NOT EXISTS idx_ttr_tag ON ticket_tags_relations(tag_id);
+CREATE INDEX IF NOT EXISTS idx_ttr_ticket ON ticket_tag_relations(ticket_id);
+CREATE INDEX IF NOT EXISTS idx_ttr_tag ON ticket_tag_relations(tag_id);
 
 -- 4. Índices para Usuários e Setores
 CREATE INDEX IF NOT EXISTS idx_users_sector ON users(sector_id);
