@@ -309,12 +309,25 @@ public class BlipWebhookController {
             boolean isBypassExplicit = rawActionTextLower.contains("ver agendamentos")
                 || rawActionTextLower.contains("ver agenda")
                 || rawActionTextLower.contains("ver_agenda")
-                || rawActionTextLower.contains("confirmar tudo")
-                || rawActionTextLower.contains("confirm_group_")
-                || rawActionTextLower.contains("confirmar_tudo")
-                || rawActionTextLower.contains("preciso alterar")
-                || rawActionTextLower.contains("alter_group_")
-                || rawActionTextLower.contains("preciso_alterar");
+                || rawActionTextLower.contains("confirmar")
+                || rawActionTextLower.contains("confirma")
+                || rawActionTextLower.contains("confirmado")
+                || rawActionTextLower.contains("confirm_")
+                || rawActionTextLower.contains("sim")
+                || rawActionTextLower.contains("presença")
+                || rawActionTextLower.contains("presenca")
+                || rawActionTextLower.contains("alterar")
+                || rawActionTextLower.contains("remarcar")
+                || rawActionTextLower.contains("trocar")
+                || rawActionTextLower.contains("alter_")
+                || rawActionTextLower.equals("1")
+                || rawActionTextLower.equals("2")
+                || rawActionTextLower.startsWith("1 ")
+                || rawActionTextLower.startsWith("1-")
+                || rawActionTextLower.startsWith("1.")
+                || rawActionTextLower.startsWith("2 ")
+                || rawActionTextLower.startsWith("2-")
+                || rawActionTextLower.startsWith("2.");
 
             boolean isNullOrEmpty = action == null || action.isBlank() || "null".equalsIgnoreCase(action.trim());
             boolean isButtonClick = isNullOrEmpty || isBypassExplicit || (action != null && (
@@ -344,6 +357,20 @@ public class BlipWebhookController {
 
                 log.info("[STATE-LOCK] Paciente {} enviou texto livre '{}' durante fluxo de confirmacao de agenda. Ignorando entrada.", from, action);
                 
+                // Congela/reset o Master State no Blip para evitar queda no onboarding ("Me informe seu nome completo")
+                try {
+                    String parkingBlockId = blipProperties.getBlocks().getWaitingResponse();
+                    if (parkingBlockId == null || parkingBlockId.isBlank()) {
+                        parkingBlockId = blipProperties.getBlocks().getExibirAgenda();
+                    }
+                    if (parkingBlockId != null && !parkingBlockId.isBlank()) {
+                        blipContextService.changeMasterState(from, parkingBlockId);
+                        log.info("[STATE-LOCK] Master State congelado/resetado no bloco seguro '{}' para o paciente {}.", parkingBlockId, from);
+                    }
+                } catch (Exception ex) {
+                    log.warn("[STATE-LOCK] Falha ao congelar Master State para {}: {}", from, ex.getMessage());
+                }
+
                 if (shouldSend.get()) {
                     try {
                         blipNotificationService.sendPlainTextMessage(from, "Por favor, utilize os botões acima para confirmar ou alterar seu agendamento.");

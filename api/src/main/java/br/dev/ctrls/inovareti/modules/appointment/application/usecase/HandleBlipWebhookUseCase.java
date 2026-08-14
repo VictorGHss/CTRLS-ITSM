@@ -1095,12 +1095,23 @@ public class HandleBlipWebhookUseCase {
         String normalized = text.trim().toLowerCase();
         
         return switch (normalized) {
-            case "sim", "confirmar", "confirm", "confirmo", "confirmar tudo", "confirmar_tudo", "1", "1️⃣", "opcao 1", "opção 1" -> WebhookIntent.CONFIRM;
+            case "sim", "confirmar", "confirma", "confirmado", "confirm", "confirmo", 
+                 "confirmar tudo", "confirmar_tudo", "presença", "presenca",
+                 "1", "1️⃣", "opcao 1", "opção 1" -> WebhookIntent.CONFIRM;
+
             case "cancelar", "cancel" -> WebhookIntent.CANCEL;
-            case "solicitar alteração", "solicitar alteracao", "alterar", "preciso alterar", "preciso_alterar", "2", "2️⃣", "opcao 2", "opção 2" -> WebhookIntent.ALTER;
-            case String s when s.contains("confirmar tudo") || s.contains("confirmar presença") || s.contains("confirmar consulta") || s.contains("confirmo") -> WebhookIntent.CONFIRM;
+
+            case "solicitar alteração", "solicitar alteracao", "alterar", "remarcar", "trocar", 
+                 "preciso alterar", "preciso_alterar", "2", "2️⃣", "opcao 2", "opção 2" -> WebhookIntent.ALTER;
+
+            case String s when s.contains("confirmar") || s.contains("confirma") || s.contains("confirmado") 
+                            || s.contains("presença") || s.contains("presenca") || s.contains("confirmo") -> WebhookIntent.CONFIRM;
+
             case String s when s.contains("cancelar presença") || s.contains("cancelar consulta") -> WebhookIntent.CANCEL;
-            case String s when s.contains("preciso alterar") || s.contains("solicitar alter") -> WebhookIntent.ALTER;
+
+            case String s when s.contains("alterar") || s.contains("remarcar") || s.contains("trocar") 
+                            || s.contains("preciso alterar") || s.contains("solicitar alter") -> WebhookIntent.ALTER;
+
             default -> {
                 if (normalized.startsWith("1 ") || normalized.startsWith("1-") || normalized.startsWith("1.")) {
                     yield WebhookIntent.CONFIRM;
