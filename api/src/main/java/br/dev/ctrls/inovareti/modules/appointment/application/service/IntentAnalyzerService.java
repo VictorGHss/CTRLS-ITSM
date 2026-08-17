@@ -231,6 +231,70 @@ public class IntentAnalyzerService {
             }
         }
 
+        Map<String, Object> interactiveList = null;
+        String formattedText = null;
+        String externalRedirectMessage = null;
+        String modo = "TEXTO";
+
+        if (hasAmbiguity && !paginatedMatches.isEmpty()) {
+            modo = "INTERATIVO";
+            List<Map<String, String>> rows = new ArrayList<>();
+            StringBuilder textSb = new StringBuilder("👨‍⚕️ *Encontramos os seguintes especialistas:*\n\n");
+
+            for (int i = 0; i < paginatedMatches.size(); i++) {
+                DoctorMatchDto doc = paginatedMatches.get(i);
+                String name = doc.getDoctorName() != null ? doc.getDoctorName().trim() : "Especialista";
+                String spec = doc.getSpecialty() != null ? doc.getSpecialty().trim() : "";
+                String rowId = String.valueOf(i + 1);
+
+                String title = name.length() > 24 ? name.substring(0, 21) + "..." : name;
+                String desc = spec.length() > 72 ? spec.substring(0, 69) + "..." : spec;
+
+                rows.add(Map.of(
+                        "id", rowId,
+                        "title", title,
+                        "description", desc
+                ));
+
+                textSb.append(String.format("%d️⃣ *%s* (%s)\n", i + 1, name, spec));
+            }
+
+            textSb.append(String.format("\n👉 *Digite o número (1 a %d) ou o nome desejado:*", paginatedMatches.size()));
+            formattedText = textSb.toString();
+
+            interactiveList = Map.of(
+                    "recipient_type", "individual",
+                    "type", "interactive",
+                    "interactive", Map.of(
+                            "type", "list",
+                            "header", Map.of("type", "text", "text", "Especialistas Encontrados"),
+                            "body", Map.of("text", "Encontramos mais de um especialista para sua busca. Selecione o médico desejado abaixo:"),
+                            "footer", Map.of("text", "Clínica Inovare"),
+                            "action", Map.of(
+                                    "button", "Ver Médicos",
+                                    "sections", List.of(
+                                            Map.of(
+                                                    "title", "Médicos Disponíveis",
+                                                    "rows", rows
+                                            )
+                                    )
+                            )
+                    )
+            );
+        } else if ("EXTERNAL".equalsIgnoreCase(routeType) && !allMatchDtos.isEmpty()) {
+            DoctorMatchDto singleDoc = allMatchDtos.get(0);
+            String docName = singleDoc.getDoctorName() != null ? singleDoc.getDoctorName().trim() : "Especialista";
+            String spec = singleDoc.getSpecialty() != null ? singleDoc.getSpecialty().trim() : "";
+            String link = singleDoc.getExternalLink() != null ? singleDoc.getExternalLink().trim() : "";
+
+            if (!link.isBlank()) {
+                externalRedirectMessage = String.format(
+                        "Para agendar com *%s (%s)*, clique no link abaixo para falar diretamente no WhatsApp:\n\n👉 %s",
+                        docName, spec, link
+                );
+            }
+        }
+
         return IntentAnalysisResultDto.builder()
                 .rawInput(rawInput)
                 .cleanedInput(cleanedText)
@@ -246,6 +310,10 @@ public class IntentAnalyzerService {
                 .totalPages(totalPages)
                 .hasNextPage(hasNextPage)
                 .matches(paginatedMatches)
+                .modo(modo)
+                .interactiveList(interactiveList)
+                .formattedText(formattedText)
+                .externalRedirectMessage(externalRedirectMessage)
                 .build();
     }
 
