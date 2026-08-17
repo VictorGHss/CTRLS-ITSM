@@ -17,6 +17,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import org.springframework.beans.factory.ObjectProvider;
+import br.dev.ctrls.inovareti.modules.access.domain.port.output.BlipContactClientPort;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 
@@ -33,6 +35,7 @@ public class PatientIntegrationController {
 
     private final PatientExternalPort patientExternalPort;
     private final AppointmentExternalPort appointmentExternalPort;
+    private final ObjectProvider<BlipContactClientPort> blipContactClientPortProvider;
 
     @Data
     @NoArgsConstructor
@@ -83,7 +86,11 @@ public class PatientIntegrationController {
      * Sanitiza o CPF removendo caracteres não numéricos e realiza a consulta no Feegow ERP.
      */
     @GetMapping("/search")
-    public ResponseEntity<PatientSearchResponse> searchByCpf(@RequestParam(name = "cpf") String rawCpf) {
+    public ResponseEntity<PatientSearchResponse> searchByCpf(
+            @RequestParam(name = "cpf") String rawCpf,
+            @RequestParam(name = "phone", required = false) String phone,
+            @RequestParam(name = "contactIdentity", required = false) String contactIdentity
+    ) {
         if (rawCpf == null || rawCpf.isBlank()) {
             return ResponseEntity.badRequest().body(
                     PatientSearchResponse.builder()
@@ -99,6 +106,21 @@ public class PatientIntegrationController {
         FeegowPatient patient = patientExternalPort.patientInfo(cleanCpf);
 
         if (patient != null && patient.id() != null && !patient.id().isBlank()) {
+            String targetPhone = (phone != null && !phone.isBlank()) ? phone : contactIdentity;
+            if (targetPhone != null && !targetPhone.isBlank()) {
+                BlipContactClientPort client = blipContactClientPortProvider.getIfAvailable();
+                if (client != null) {
+                    java.util.concurrent.CompletableFuture.runAsync(() -> {
+                        try {
+                            client.syncContact(targetPhone, patient.name(), cleanCpf, "", "");
+                            log.info("[PATIENT-SEARCH] Contato Blip sincronizado com precisão para o CPF {} e telefone {}", cleanCpf, targetPhone);
+                        } catch (Exception ex) {
+                            log.warn("[PATIENT-SEARCH] Falha assíncrona ao sincronizar contato Blip: {}", ex.getMessage());
+                        }
+                    });
+                }
+            }
+
             return ResponseEntity.ok(
                     PatientSearchResponse.builder()
                             .found(true)
@@ -155,6 +177,20 @@ public class PatientIntegrationController {
                     formattedIsoDate,
                     request.getTelefone()
             );
+
+            if (request.getTelefone() != null && !request.getTelefone().isBlank()) {
+                BlipContactClientPort client = blipContactClientPortProvider.getIfAvailable();
+                if (client != null) {
+                    java.util.concurrent.CompletableFuture.runAsync(() -> {
+                        try {
+                            client.syncContact(request.getTelefone(), createdPatient.name(), cleanCpf, "", "");
+                            log.info("[PATIENT-CREATE] Contato Blip sincronizado com precisão para o CPF {} e telefone {}", cleanCpf, request.getTelefone());
+                        } catch (Exception ex) {
+                            log.warn("[PATIENT-CREATE] Falha assíncrona ao sincronizar contato Blip: {}", ex.getMessage());
+                        }
+                    });
+                }
+            }
 
             return ResponseEntity.status(HttpStatus.CREATED).body(
                     PatientCreateResponse.builder()
