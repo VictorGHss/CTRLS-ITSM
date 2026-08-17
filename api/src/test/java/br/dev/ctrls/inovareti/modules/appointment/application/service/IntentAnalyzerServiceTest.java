@@ -94,6 +94,43 @@ class IntentAnalyzerServiceTest {
     }
 
     @Test
+    @DisplayName("Deve pontuar múltiplos tokens e retornar apenas Dr. Carlos Heidi Koga para 'carlos koga'")
+    void testAnalyzeIntentCarlosKoga() {
+        IntentAnalysisResultDto result = intentAnalyzerService.analyzeIntent("carlos koga");
+
+        assertNotNull(result);
+        assertFalse(result.isHasAmbiguity(), "Busca 'carlos koga' deve ser exata sem desambiguação");
+        assertEquals(1, result.getMatches().size());
+        assertEquals("Dr. Carlos Heidi Koga", result.getMatches().get(0).getDoctorName());
+        assertEquals("Urologia", result.getMatches().get(0).getSpecialty());
+    }
+
+    @Test
+    @DisplayName("Deve pontuar médico e especialidade retornando apenas Dr. Marcelo Valladao para 'marcelo cardio'")
+    void testAnalyzeIntentMarceloCardio() {
+        IntentAnalysisResultDto result = intentAnalyzerService.analyzeIntent("marcelo cardio");
+
+        assertNotNull(result);
+        assertFalse(result.isHasAmbiguity(), "Busca 'marcelo cardio' deve retornar apenas o cardiologista");
+        assertEquals(1, result.getMatches().size());
+        assertEquals("Dr. Marcelo Valladao Ferreira", result.getMatches().get(0).getDoctorName());
+        assertEquals("Cardiologia", result.getMatches().get(0).getSpecialty());
+    }
+
+    @Test
+    @DisplayName("Deve interceptar evento de encerramento de ticket do Blip Desk e retornar END_SESSION")
+    void testAnalyzeIntentDeskTicketClosed() {
+        String deskEvent = "{\"id\":\"84bc0443-2d82-43bf-b39f-01a010ec6de0\",\"sequentialId\":22,\"ownerIdentity\":\"fluxov22@msging.net\",\"status\":\"ClosedAttendant\"}";
+        IntentAnalysisResultDto result = intentAnalyzerService.analyzeIntent(deskEvent);
+
+        assertNotNull(result);
+        assertEquals("FINALIZACAO", result.getIntent());
+        assertEquals("END_SESSION", result.getRouteType());
+        assertEquals("FINALIZAR", result.getAcaoSeguinte());
+        assertFalse(result.isHasAmbiguity());
+    }
+
+    @Test
     @DisplayName("Deve converter datas em múltiplos formatos para o padrão ISO (YYYY-MM-DD)")
     void testDateParserUtils() {
         assertEquals("1990-08-15", DateParserUtils.parseToIsoDate("15/08/1990"));
