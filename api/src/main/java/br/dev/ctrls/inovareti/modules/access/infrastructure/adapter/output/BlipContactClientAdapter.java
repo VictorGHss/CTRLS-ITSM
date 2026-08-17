@@ -298,10 +298,14 @@ public class BlipContactClientAdapter implements BlipContactClientPort {
                             }
                         }
                     }
-                    if (!patientNames.isEmpty()) {
-                        String concatenatedNames = String.join(" / ", patientNames);
-                        log.info("[BlipContact-Adapter] Nome(s) do(s) paciente(s) ('{}') recuperado(s) com sucesso via Feegow/Session para {}", concatenatedNames, normalizedIdentity);
-                        return concatenatedNames;
+                    if (patientNames.size() == 1) {
+                        String singleName = patientNames.get(0);
+                        log.info("[BlipContact-Adapter] Nome do paciente único ('{}') recuperado via Feegow/Session para {}", singleName, normalizedIdentity);
+                        return singleName;
+                    } else if (patientNames.size() > 1) {
+                        log.info("[BlipContact-Adapter] Múltiplos pacientes ({}) cadastrados para o mesmo telefone {}. NÃO assumindo nenhum nome automaticamente sem confirmação de CPF.",
+                                patientNames, normalizedIdentity);
+                        return null;
                     }
                 }
             }

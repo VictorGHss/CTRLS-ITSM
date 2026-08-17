@@ -714,6 +714,34 @@ public class HandleBlipWebhookUseCase {
                 String resolvedPatientName = null;
                 String resolvedCpf = null;
 
+                // PRIORIDADE ABSOLUTA DO CPF: busca primeiro por CPF/feegowId autenticado na sessão ativa
+                String flowCpf = blipContextService.getUserContext(normalizedPhone, "cpf");
+                if (flowCpf == null || flowCpf.isBlank()) {
+                    flowCpf = blipContextService.getUserContext(normalizedPhone, "userCpf");
+                }
+                String flowPatientId = blipContextService.getUserContext(normalizedPhone, "feegowId");
+
+                if ((flowCpf != null && !flowCpf.isBlank()) || (flowPatientId != null && !flowPatientId.isBlank())) {
+                    String queryParam = (flowPatientId != null && !flowPatientId.isBlank())
+                            ? flowPatientId
+                            : (flowCpf != null ? flowCpf.replaceAll("\\D", "") : null);
+                    if (queryParam != null && !queryParam.isBlank()) {
+                        try {
+                            var patient = patientExternalPort.patientInfo(queryParam);
+                            if (patient != null) {
+                                if (patient.name() != null && !patient.name().isBlank() && !br.dev.ctrls.inovareti.modules.access.infrastructure.adapter.output.BlipContactClientAdapter.isInvalidName(patient.name()) && !br.dev.ctrls.inovareti.modules.access.infrastructure.adapter.output.BlipContactClientAdapter.isGenericName(patient.name())) {
+                                    resolvedPatientName = patient.name().trim();
+                                }
+                                if (patient.cpf() != null && !patient.cpf().isBlank()) {
+                                    resolvedCpf = patient.cpf().replaceAll("\\D", "");
+                                }
+                            }
+                        } catch (Exception ex) {
+                            log.debug("[WEBHOOK-BLOCK] Erro ao buscar paciente por CPF/feegowId da sessão: {}", ex.getMessage());
+                        }
+                    }
+                }
+
                 try {
                     String searchPhone = (dbPhone != null && !dbPhone.isEmpty()) ? dbPhone : from;
                     String purifiedPhone = purifyPhoneNumberForSearch(searchPhone);
@@ -726,29 +754,35 @@ public class HandleBlipWebhookUseCase {
                         activeSessions = appointmentSessionRepository.findActiveByPhoneNumber("55" + purifiedPhone);
                     }
 
-                    AppointmentSession session = (activeSessions != null && !activeSessions.isEmpty()) ? activeSessions.get(0) : null;
-                    if (session == null) {
-                        List<AppointmentSession> allSessions = findPendingSessionsByPhoneWithVariations(searchPhone, payload.bsuid());
-                        if (!allSessions.isEmpty()) {
-                            session = allSessions.get(0);
-                        }
-                    }
+                    if (activeSessions != null && !activeSessions.isEmpty()) {
+                        // Se o nome ainda não foi resolvido por CPF, verifica se é paciente único no telefone
+                        if (resolvedPatientName == null) {
+                            java.util.Set<String> patientIds = activeSessions.stream()
+                                    .filter(java.util.Objects::nonNull)
+                                    .map(s -> s.getPatientId())
+                                    .filter(java.util.Objects::nonNull)
+                                    .filter(id -> !id.isBlank())
+                                    .collect(java.util.stream.Collectors.toSet());
 
-                    if (session != null) {
-                        resolvedDoctorId = session.getDoctorProfissionalId();
-                        if (session.getPatientId() != null && !session.getPatientId().isBlank()) {
-                            try {
-                                var patient = patientExternalPort.patientInfo(session.getPatientId());
+                            if (patientIds.size() == 1) {
+                                String singlePatientId = patientIds.iterator().next();
+                                var patient = patientExternalPort.patientInfo(singlePatientId);
                                 if (patient != null) {
-                                    if (patient.name() != null && !patient.name().isBlank() && !br.dev.ctrls.inovareti.modules.access.infrastructure.adapter.output.BlipContactClientAdapter.isInvalidName(patient.name())) {
+                                    if (patient.name() != null && !patient.name().isBlank() && !br.dev.ctrls.inovareti.modules.access.infrastructure.adapter.output.BlipContactClientAdapter.isInvalidName(patient.name()) && !br.dev.ctrls.inovareti.modules.access.infrastructure.adapter.output.BlipContactClientAdapter.isGenericName(patient.name())) {
                                         resolvedPatientName = patient.name().trim();
                                     }
-                                    if (patient.cpf() != null) {
+                                    if (patient.cpf() != null && !patient.cpf().isBlank()) {
                                         resolvedCpf = patient.cpf().replaceAll("\\D", "");
                                     }
                                 }
-                            } catch (Exception ignored) {}
+                            } else if (patientIds.size() > 1) {
+                                log.info("[WEBHOOK-BLOCK] Múltiplos pacientes ({}) no telefone {}. NÃO sobrescrevendo nome/CPF por telefone sem autenticação por CPF.",
+                                        patientIds.size(), normalizedPhone);
+                            }
                         }
+
+                        AppointmentSession session = activeSessions.get(0);
+                        resolvedDoctorId = session.getDoctorProfissionalId();
                         if (resolvedDoctorId != null && !resolvedDoctorId.isBlank()) {
                             Optional<AppointmentDoctorMapping> doctorMappingOpt = appointmentDoctorMappingRepository.findByProfissionalId(resolvedDoctorId);
                             if (doctorMappingOpt.isPresent()) {
@@ -767,10 +801,6 @@ public class HandleBlipWebhookUseCase {
                     }
                 } catch (Exception ex) {
                     log.debug("[WEBHOOK-BLOCK] Falha defensiva ao resolver agendamento ativo em Preparar_Atendimento: {}", ex.getMessage());
-                }
-
-                if (resolvedPatientName == null || resolvedPatientName.isBlank() || "Paciente Não Identificado".equalsIgnoreCase(resolvedPatientName)) {
-                    resolvedPatientName = "Paciente";
                 }
 
                 try {
