@@ -5,6 +5,7 @@ import br.dev.ctrls.inovareti.modules.appointment.application.dto.IntentAnalysis
 import br.dev.ctrls.inovareti.modules.appointment.domain.model.DoctorCatalog;
 import io.micrometer.observation.annotation.Observed;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import java.text.Normalizer;
@@ -99,6 +100,7 @@ public class IntentAnalyzerService {
      * @param page Número da página solicitada (1-based)
      * @return IntentAnalysisResultDto contendo intenção, especialidade, médicos, decisão de roteamento e metadados de paginação
      */
+    @Cacheable(value = "doctorCatalogAnalysis", key = "(#rawInput != null ? #rawInput.toLowerCase().trim() : '') + '-' + #page")
     public IntentAnalysisResultDto analyzeIntent(String rawInput, int page) {
         if (rawInput == null || rawInput.isBlank()) {
             return IntentAnalysisResultDto.builder()

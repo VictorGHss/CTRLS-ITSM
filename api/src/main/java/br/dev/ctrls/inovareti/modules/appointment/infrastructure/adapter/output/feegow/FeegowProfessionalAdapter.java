@@ -22,6 +22,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.retry.annotation.Backoff;
 import org.springframework.retry.annotation.Recover;
 import org.springframework.retry.annotation.Retryable;
@@ -35,7 +36,7 @@ import lombok.extern.slf4j.Slf4j;
  * Este componente de infraestrutura faz a ponte de comunicação física com a API Feegow
  * para ações de Médicos e Profissionais. Ele implementa a Porta de Saída do Domínio 'ProfessionalExternalPort'
  * (Inversão de Dependência) e gerencia de forma isolada a resiliência (Circuit Breaker),
- * o cacheamento em Redis (StringRedisTemplate) por 24 horas e os retries diagnósticos
+ * o cacheamento em memória com Caffeine e Redis por 24 horas e os retries diagnósticos
  * de caminhos alternativos de API e unidade_id de forma robusta e modular.
  */
 @Slf4j
@@ -57,6 +58,7 @@ public class FeegowProfessionalAdapter extends AbstractFeegowAdapter implements 
     }
 
     @Override
+    @Cacheable(value = "feegowProfessionalName", key = "#professionalId != null ? #professionalId.trim() : ''")
     @CircuitBreaker(name = "feegowApiCircuit", fallbackMethod = "fallbackGetProfessionalName")
     @Retryable(
         retryFor = { RestClientException.class, org.springframework.web.client.ResourceAccessException.class, org.springframework.dao.DataAccessException.class },
@@ -170,6 +172,7 @@ public class FeegowProfessionalAdapter extends AbstractFeegowAdapter implements 
     }
 
     @Override
+    @Cacheable(value = "feegowProfessionalsList", key = "'all'")
     @CircuitBreaker(name = "feegowApiCircuit", fallbackMethod = "fallbackListProfessionals")
     @Retryable(
         retryFor = { RestClientException.class, org.springframework.web.client.ResourceAccessException.class, org.springframework.dao.DataAccessException.class },

@@ -4,6 +4,7 @@ import br.dev.ctrls.inovareti.modules.appointment.application.dto.IntentAnalysis
 import br.dev.ctrls.inovareti.modules.appointment.application.dto.IntentAnalysisResponse;
 import br.dev.ctrls.inovareti.modules.appointment.domain.model.DoctorCatalog;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import java.net.URLEncoder;
@@ -82,6 +83,7 @@ public class IntentAnalysisService {
      * @param request DTO contendo a mensagem do usuário e contexto opcional.
      * @return IntentAnalysisResponse com o tipo apropriado.
      */
+    @Cacheable(value = "intentAnalysisProcess", key = "(#request != null && #request.getMensagem() != null ? #request.getMensagem().toLowerCase().trim() : '') + '_' + (#request != null && #request.getContexto() != null ? #request.getContexto().toLowerCase().trim() : '')")
     public IntentAnalysisResponse processIntent(IntentAnalysisRequest request) {
         if (request == null || request.getMensagem() == null || request.getMensagem().isBlank()) {
             log.info("[IntentAnalysis] Requisição ou mensagem vazia recebida.");

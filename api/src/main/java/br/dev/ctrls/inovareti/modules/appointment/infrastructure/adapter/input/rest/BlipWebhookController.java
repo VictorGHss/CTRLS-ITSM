@@ -454,10 +454,11 @@ public class BlipWebhookController {
             ));
         } catch (Throwable ex) {
             log.error("[WEBHOOK-CRITICAL] Erro inesperado ao processar webhook do Blip para messageId='{}', action='{}'", messageId, action, ex);
-            return ResponseEntity.status(org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
+            // Retorna 200 OK com fallback seguro para evitar propagar erro 500 para o Blip / WhatsApp
+            return ResponseEntity.ok(Map.of(
                 "status", "error",
-                "reason", "internal-server-error",
-                "message", ex.getMessage() != null ? ex.getMessage() : "Erro interno de servidor"
+                "reason", "internal-fallback-handled",
+                "message", ex.getMessage() != null ? ex.getMessage() : "Erro tratado com fallback seguro"
             ));
         }
 

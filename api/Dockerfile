@@ -8,9 +8,8 @@ RUN mvn clean package -DskipTests && rm -f target/*-plain.jar
 
 # Estágio 2: Runtime
 FROM eclipse-temurin:21-jre-alpine
-WORKDIR /app
 ENV TZ=America/Sao_Paulo
 RUN apk add --no-cache tzdata postgresql-client
 COPY --from=builder /app/target/*.jar app.jar
-ENTRYPOINT ["java", "-Duser.timezone=America/Sao_Paulo", "-jar", "app.jar"]
+ENTRYPOINT ["java", "-Xms512m", "-Xmx2g", "-XX:+UseG1GC", "-XX:+UseStringDeduplication", "-Duser.timezone=America/Sao_Paulo", "-jar", "app.jar"]
 
