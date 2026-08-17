@@ -352,6 +352,10 @@ public class HandleBlipWebhookUseCase {
         action = resolveTextIntentions(normalizedAction, action, payload);
 
         switch (action) {
+            case "already_confirmed_handled":
+                log.info("[WEBHOOK] Agendamento já confirmado tratado amigavelmente para {}", fromPhone);
+                return new WebhookResult("", "", "", "", "already_confirmed_handled", "");
+
             case "Sucesso_Confirmacao":
                 log.info("[WEBHOOK] Recebida ação Sucesso_Confirmacao. De: {} | ID: {}", fromPhone, payload.messageId());
                 try {
@@ -867,8 +871,16 @@ public class HandleBlipWebhookUseCase {
                     if ((activeSessions == null || activeSessions.isEmpty()) && !purifiedPhone.startsWith("55")) {
                         activeSessions = appointmentSessionRepository.findActiveByPhoneNumber("55" + purifiedPhone);
                     }
-                    if (activeSessions != null && !activeSessions.isEmpty()) {
-                        AppointmentSession session = activeSessions.get(0);
+
+                    AppointmentSession session = (activeSessions != null && !activeSessions.isEmpty()) ? activeSessions.get(0) : null;
+                    if (session == null) {
+                        List<AppointmentSession> allSessions = findPendingSessionsByPhoneWithVariations(searchPhone, payload.bsuid());
+                        if (!allSessions.isEmpty()) {
+                            session = allSessions.get(0);
+                        }
+                    }
+
+                    if (session != null) {
                         resolvedDoctorId = session.getDoctorProfissionalId();
                         if (session.getPatientId() != null && !session.getPatientId().isBlank()) {
                             try {
@@ -903,10 +915,14 @@ public class HandleBlipWebhookUseCase {
                     log.debug("[WEBHOOK-BLOCK] Falha defensiva ao resolver agendamento ativo em Preparar_Atendimento: {}", ex.getMessage());
                 }
 
+                if (resolvedPatientName == null || resolvedPatientName.isBlank() || "Paciente Não Identificado".equalsIgnoreCase(resolvedPatientName)) {
+                    resolvedPatientName = "Paciente";
+                }
+
                 try {
                     blipContactClientPort.syncContact(
                         normalizedPhone,
-                        resolvedPatientName != null ? resolvedPatientName : "",
+                        resolvedPatientName,
                         resolvedCpf != null ? resolvedCpf : "",
                         resolvedQueueName,
                         resolvedDoctorId != null ? resolvedDoctorId : ""
@@ -1131,26 +1147,148 @@ public class HandleBlipWebhookUseCase {
         };
     }
 
+    private java.util.List<AppointmentSession> findPendingSessionsByPhoneWithVariations(String rawPhone, String bsuid) {
+        if (rawPhone == null || rawPhone.isBlank()) {
+            return java.util.List.of();
+        }
+
+        String dbPhone = blipIdentityReconciler.resolveAndReconcileIdentity(rawPhone, bsuid);
+        String searchPhone = (dbPhone != null && !dbPhone.isBlank()) ? dbPhone : rawPhone;
+        String digitsOnly = searchPhone.trim().replaceAll("\\D", "");
+
+        if (digitsOnly.isBlank()) {
+            digitsOnly = rawPhone.trim().replaceAll("\\D", "");
+        }
+        if (digitsOnly.isBlank()) {
+            return java.util.List.of();
+        }
+
+        java.util.Set<String> phoneVariations = new java.util.LinkedHashSet<>();
+        phoneVariations.add(digitsOnly);
+
+        String without55 = digitsOnly.startsWith("55") ? digitsOnly.substring(2) : digitsOnly;
+        String with55 = digitsOnly.startsWith("55") ? digitsOnly : "55" + digitsOnly;
+
+        phoneVariations.add(without55);
+        phoneVariations.add(with55);
+
+        // Normalização de 9º dígito para telefones do Brasil (DDD + 8 ou 9 dígitos)
+        if (without55.length() == 11 && without55.charAt(2) == '9') {
+            String eightDigit = without55.substring(0, 2) + without55.substring(3);
+            phoneVariations.add(eightDigit);
+            phoneVariations.add("55" + eightDigit);
+        } else if (without55.length() == 10) {
+            String nineDigit = without55.substring(0, 2) + "9" + without55.substring(2);
+            phoneVariations.add(nineDigit);
+            phoneVariations.add("55" + nineDigit);
+        }
+
+        java.util.Map<UUID, AppointmentSession> sessionMap = new java.util.LinkedHashMap<>();
+        for (String phoneVar : phoneVariations) {
+            List<AppointmentSession> sessions = appointmentSessionRepository.findActiveByPhoneNumber(phoneVar);
+            if (sessions != null) {
+                for (AppointmentSession s : sessions) {
+                    if (s.getStatus() != null 
+                            && s.getStatus() != AppointmentSessionStatus.CONFIRMED 
+                            && s.getStatus() != AppointmentSessionStatus.CANCELLED 
+                            && s.getStatus() != AppointmentSessionStatus.EXPIRED) {
+                        sessionMap.put(s.getId(), s);
+                    }
+                }
+            }
+        }
+
+        return new java.util.ArrayList<>(sessionMap.values());
+    }
+
+    private boolean hasRecentlyConfirmedSession(String rawPhone, String bsuid) {
+        if (rawPhone == null || rawPhone.isBlank()) return false;
+        
+        String dbPhone = blipIdentityReconciler.resolveAndReconcileIdentity(rawPhone, bsuid);
+        String searchPhone = (dbPhone != null && !dbPhone.isBlank()) ? dbPhone : rawPhone;
+        String purified = purifyPhoneNumberForSearch(searchPhone);
+        if (purified.isBlank()) {
+            purified = purifyPhoneNumberForSearch(rawPhone);
+        }
+        if (purified.isBlank()) return false;
+
+        List<AppointmentSession> sessions = appointmentSessionRepository.findActiveByPhoneNumber(purified);
+        if ((sessions == null || sessions.isEmpty()) && !purified.startsWith("55")) {
+            sessions = appointmentSessionRepository.findActiveByPhoneNumber("55" + purified);
+        }
+        
+        if (sessions != null) {
+            for (AppointmentSession s : sessions) {
+                if (s.getStatus() == AppointmentSessionStatus.CONFIRMED) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     private String resolveTextIntentions(String normalizedAction, String action, BlipWebhookPayload payload) {
         WebhookIntent intent = detectIntent(normalizedAction);
-        String groupContextId = resolveGroupContextId(payload);
-        
-        return switch (intent) {
-            case CONFIRM -> {
-                if (groupContextId != null) {
-                    yield "confirm_group_" + groupContextId;
+        if (intent == WebhookIntent.UNKNOWN) {
+            return action;
+        }
+
+        String fromPhone = payload != null ? payload.from() : null;
+        String bsuid = payload != null ? payload.bsuid() : null;
+
+        // 1. Busca agendamentos pendentes por telefone (com normalização de DDI 55 e 9º dígito)
+        List<AppointmentSession> pendingSessions = findPendingSessionsByPhoneWithVariations(fromPhone, bsuid);
+
+        if (pendingSessions.size() == 1) {
+            AppointmentSession singleSession = pendingSessions.get(0);
+            String feegowId = singleSession.getFeegowAppointmentId();
+            log.info("[WEBHOOK-PHONE-RESOLVE] 1 agendamento pendente (Feegow ID: {}) encontrado por telefone para {}. Mapeando para {}_{}",
+                    feegowId, fromPhone, intent.name().toLowerCase(), feegowId);
+            
+            return switch (intent) {
+                case CONFIRM -> "confirm_" + feegowId;
+                case ALTER -> "alter_" + feegowId;
+                case CANCEL -> "cancel_" + feegowId;
+                default -> action;
+            };
+        } else if (pendingSessions.size() > 1) {
+            log.info("[WEBHOOK-PHONE-RESOLVE] {} agendamentos pendentes encontrados por telefone para {}. Direcionando para confirmação em lote.",
+                    pendingSessions.size(), fromPhone);
+            for (AppointmentSession session : pendingSessions) {
+                if (session.getCurrentGroupId() != null) {
+                    String gId = session.getCurrentGroupId().toString();
+                    return (intent == WebhookIntent.CONFIRM ? "confirm_group_" : "alter_group_") + gId;
                 }
-                yield processIntent("confirm", action, payload, "confirmação");
             }
-            case CANCEL -> processIntent("cancel", action, payload, "cancelamento");
-            case ALTER -> {
-                if (groupContextId != null) {
-                    yield "alter_group_" + groupContextId;
+            return (intent == WebhookIntent.CONFIRM ? "confirm_group_fallback" : "alter_group_fallback");
+        } else {
+            // 0 agendamentos pendentes encontrados
+            if (hasRecentlyConfirmedSession(fromPhone, bsuid)) {
+                log.info("[WEBHOOK-PHONE-RESOLVE] 0 agendamentos pendentes, porém consulta já confirmada recentemente para {}. Enviando resposta de cortesia.", fromPhone);
+                try {
+                    blipNotificationService.sendPlainTextMessage(fromPhone, "Olá! Identificamos que seu agendamento já se encontra confirmado. Estamos te aguardando!");
+                    String confirmSuccessBlockId = blipProperties.getBlocks().getConfirmSuccess();
+                    if (confirmSuccessBlockId != null && !confirmSuccessBlockId.isBlank()) {
+                        blipContextService.changeMasterState(fromPhone, confirmSuccessBlockId);
+                    }
+                } catch (Exception ex) {
+                    log.warn("[WEBHOOK-PHONE-RESOLVE] Erro ao enviar mensagem de consulta já confirmada para {}: {}", fromPhone, ex.getMessage());
                 }
-                yield processIntent("alter", action, payload, "alteração");
+                return "already_confirmed_handled";
             }
-            case UNKNOWN -> action;
-        };
+            
+            // Fallback de contexto de grupo se existir
+            String groupContextId = resolveGroupContextId(payload);
+            if (groupContextId != null) {
+                if (intent == WebhookIntent.CONFIRM) {
+                    return "confirm_group_" + groupContextId;
+                } else if (intent == WebhookIntent.ALTER) {
+                    return "alter_group_" + groupContextId;
+                }
+            }
+
+            return processIntent(intent.name().toLowerCase(), action, payload, intent.name().toLowerCase());
+        }
     }
 
     private String resolveGroupContextId(BlipWebhookPayload payload) {

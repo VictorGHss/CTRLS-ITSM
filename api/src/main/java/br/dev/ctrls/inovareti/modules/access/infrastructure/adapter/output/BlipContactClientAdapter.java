@@ -305,10 +305,10 @@ public class BlipContactClientAdapter implements BlipContactClientPort {
         }
 
         if (name != null && !name.isBlank()) {
-            log.warn("[BlipContact-Adapter] Nome fornecido ('{}') é inválido (GUID/identidade de túnel). Usando fallback 'Paciente Não Identificado' para forçar sobrescrita no Blip.", name);
+            log.warn("[BlipContact-Adapter] Nome fornecido ('{}') é inválido. Usando fallback 'Paciente' para sobrescrita no Blip.", name);
         }
 
-        return "Paciente Não Identificado";
+        return "Paciente";
     }
 
     private boolean sendContactCommand(String identity, String name, String formattedPhone, String plainPhone, String cleanCpf, String cleanQueue, String digitsOnly) {
