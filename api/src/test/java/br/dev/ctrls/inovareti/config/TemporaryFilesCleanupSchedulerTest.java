@@ -19,9 +19,11 @@ class TemporaryFilesCleanupSchedulerTest {
     @Test
     @DisplayName("Deve remover arquivos antigos com mais de 24h e preservar arquivos recentes")
     void shouldDeleteOldFilesAndKeepNewFiles(@TempDir Path tempDir) throws IOException {
-        TemporaryFilesCleanupScheduler scheduler = new TemporaryFilesCleanupScheduler();
-        ReflectionTestUtils.setField(scheduler, "tempRetentionHours", 24);
-        ReflectionTestUtils.setField(scheduler, "orphanRetentionDays", 30);
+        CleanupProperties cleanupProperties = new CleanupProperties();
+        cleanupProperties.setTempRetentionHours(24);
+        cleanupProperties.setOrphanRetentionDays(30);
+
+        TemporaryFilesCleanupScheduler scheduler = new TemporaryFilesCleanupScheduler(cleanupProperties);
         ReflectionTestUtils.setField(scheduler, "backupTempDir", tempDir.toString());
         ReflectionTestUtils.setField(scheduler, "uploadDir", tempDir.toString());
 
@@ -46,9 +48,8 @@ class TemporaryFilesCleanupSchedulerTest {
     @Test
     @DisplayName("Deve lidar graciosamente quando os diretórios configurados não existem")
     void shouldHandleNonExistentDirectoriesGracefully() {
-        TemporaryFilesCleanupScheduler scheduler = new TemporaryFilesCleanupScheduler();
-        ReflectionTestUtils.setField(scheduler, "tempRetentionHours", 24);
-        ReflectionTestUtils.setField(scheduler, "orphanRetentionDays", 30);
+        CleanupProperties cleanupProperties = new CleanupProperties();
+        TemporaryFilesCleanupScheduler scheduler = new TemporaryFilesCleanupScheduler(cleanupProperties);
         ReflectionTestUtils.setField(scheduler, "backupTempDir", "/caminho/inexistente/backup/12345");
         ReflectionTestUtils.setField(scheduler, "uploadDir", "/caminho/inexistente/upload/12345");
 
