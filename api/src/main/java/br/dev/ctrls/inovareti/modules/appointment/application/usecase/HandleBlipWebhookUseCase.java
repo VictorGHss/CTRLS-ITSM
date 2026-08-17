@@ -17,6 +17,7 @@ import br.dev.ctrls.inovareti.modules.appointment.application.service.BlipGroupA
 import br.dev.ctrls.inovareti.modules.appointment.application.service.FeegowBulkIntegrationHandler;
 import br.dev.ctrls.inovareti.modules.appointment.application.service.BlipIdempotencyService;
 import br.dev.ctrls.inovareti.modules.appointment.application.service.BlipIdentityReconciler;
+import br.dev.ctrls.inovareti.modules.appointment.application.service.BlipNotificationService;
 import br.dev.ctrls.inovareti.modules.appointment.application.service.BlipNudgeResponseHandler;
 import br.dev.ctrls.inovareti.modules.appointment.application.service.BlipPayloadParser;
 import br.dev.ctrls.inovareti.modules.appointment.application.service.BlipTextSanitizer;
@@ -75,6 +76,7 @@ public class HandleBlipWebhookUseCase {
     private final br.dev.ctrls.inovareti.modules.appointment.domain.port.output.PatientExternalPort patientExternalPort;
     private final br.dev.ctrls.inovareti.modules.access.infrastructure.adapter.output.GerAcessoCatracaAdapter gerAcessoCatracaAdapter;
     private final br.dev.ctrls.inovareti.modules.access.domain.port.output.BlipContactClientPort blipContactClientPort;
+    private final BlipNotificationService blipNotificationService;
 
     private final java.util.Map<String, Long> silentRoutingCache = new java.util.concurrent.ConcurrentHashMap<>();
 
@@ -1190,8 +1192,8 @@ public class HandleBlipWebhookUseCase {
                 for (AppointmentSession s : sessions) {
                     if (s.getStatus() != null 
                             && s.getStatus() != AppointmentSessionStatus.CONFIRMED 
-                            && s.getStatus() != AppointmentSessionStatus.CANCELLED 
-                            && s.getStatus() != AppointmentSessionStatus.EXPIRED) {
+                            && s.getStatus() != AppointmentSessionStatus.CANCELED 
+                            && s.getStatus() != AppointmentSessionStatus.CANCELED_NO_RESPONSE) {
                         sessionMap.put(s.getId(), s);
                     }
                 }
