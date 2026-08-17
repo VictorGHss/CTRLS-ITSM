@@ -46,23 +46,23 @@ public class RestTemplateConfig {
 
     private org.springframework.http.client.ClientHttpRequestFactory createJdkClientRequestFactory() {
         java.net.http.HttpClient httpClient = java.net.http.HttpClient.newBuilder()
-                .connectTimeout(java.time.Duration.ofSeconds(5))
+                .connectTimeout(java.time.Duration.ofSeconds(3))
                 .build();
         org.springframework.http.client.JdkClientHttpRequestFactory factory = 
                 new org.springframework.http.client.JdkClientHttpRequestFactory(httpClient);
-        // Configuração de timeout de leitura rígido de 10 segundos para chamadas HTTP externas (Blip, Conta Azul, etc.)
-        factory.setReadTimeout(java.time.Duration.ofSeconds(10));
+        // Configuração estrita de timeout de leitura de 5 segundos para chamadas HTTP externas para evitar thread hanging
+        factory.setReadTimeout(java.time.Duration.ofSeconds(5));
         return factory;
     }
 
     private org.springframework.http.client.ClientHttpRequestFactory createFeegowClientRequestFactory() {
         java.net.http.HttpClient httpClient = java.net.http.HttpClient.newBuilder()
-                .connectTimeout(java.time.Duration.ofSeconds(10))
+                .connectTimeout(java.time.Duration.ofSeconds(3))
                 .build();
         org.springframework.http.client.JdkClientHttpRequestFactory factory = 
                 new org.springframework.http.client.JdkClientHttpRequestFactory(httpClient);
-        // Timeout de leitura de 30 segundos dedicado ao Feegow para evitar Request Cancelled em consultas lentas
-        factory.setReadTimeout(java.time.Duration.ofSeconds(30));
+        // Configuração estrita de timeout de leitura de 5 segundos dedicada ao Feegow para evitar thread hanging
+        factory.setReadTimeout(java.time.Duration.ofSeconds(5));
         return factory;
     }
 

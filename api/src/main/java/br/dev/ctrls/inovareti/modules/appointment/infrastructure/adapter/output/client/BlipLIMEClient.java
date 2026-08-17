@@ -69,7 +69,7 @@ public class BlipLIMEClient implements BlipClientPort {
             // (~250ms por request). Com pool, reutiliza conexões existentes reduzindo para ~50ms.
             org.apache.hc.client5.http.config.ConnectionConfig connectionConfig =
                 org.apache.hc.client5.http.config.ConnectionConfig.custom()
-                    .setConnectTimeout(org.apache.hc.core5.util.Timeout.ofMilliseconds(5000))
+                    .setConnectTimeout(org.apache.hc.core5.util.Timeout.ofMilliseconds(3000))
                     .build();
 
             org.apache.hc.client5.http.impl.classic.CloseableHttpClient httpClient =
@@ -83,11 +83,11 @@ public class BlipLIMEClient implements BlipClientPort {
                             .setDefaultConnectionConfig(connectionConfig)
                             .build()
                     )
-                    // Configura timeout de conexão (5s) e leitura (10s) por request
+                    // Configura timeout de conexão (3s) e leitura (5s) por request para evitar thread hanging
                     .setDefaultRequestConfig(
                         org.apache.hc.client5.http.config.RequestConfig.custom()
-                            .setConnectionRequestTimeout(org.apache.hc.core5.util.Timeout.ofMilliseconds(5000))
-                            .setResponseTimeout(org.apache.hc.core5.util.Timeout.ofMilliseconds(10000))
+                            .setConnectionRequestTimeout(org.apache.hc.core5.util.Timeout.ofMilliseconds(3000))
+                            .setResponseTimeout(org.apache.hc.core5.util.Timeout.ofMilliseconds(5000))
                             .build()
                     )
                     // Desativa retries automáticos de HTTP em caso de status 429 ou 4xx para evitar travamentos
@@ -99,7 +99,7 @@ public class BlipLIMEClient implements BlipClientPort {
             blipRestTemplate.setMessageConverters(new ArrayList<>(injectedRestTemplate.getMessageConverters()));
             blipRestTemplate.setInterceptors(new ArrayList<>(injectedRestTemplate.getInterceptors()));
             blipRestTemplate.setErrorHandler(injectedRestTemplate.getErrorHandler());
-            log.info("Blip RestTemplate configurado com pool de conexões HTTP (max=100, timeout=5s, retryStrategy=0)");
+            log.info("Blip RestTemplate configurado com pool de conexões HTTP (max=100, connectTimeout=3s, readTimeout=5s, retryStrategy=0)");
         } catch (Exception ex) {
             log.warn("Falha ao configurar Blip RestTemplate com pool; usando RestTemplate injetado", ex);
             blipRestTemplate = injectedRestTemplate;

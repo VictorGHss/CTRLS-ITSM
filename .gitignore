@@ -52,9 +52,10 @@ application-local.properties
 application-local.yml
 
 # ========================
-# Kiro
+# Kiro / Antigravity
 # ========================
 .kiro/
+brain/
 
 # ========================
 # Segurança, Chaves e Credenciais

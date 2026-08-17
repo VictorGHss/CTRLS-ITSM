@@ -17,6 +17,11 @@ services:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - inovare_network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
     deploy:
       resources:
         limits:
@@ -42,6 +47,11 @@ services:
       - redis_data:/data
     networks:
       - inovare_network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
     deploy:
       resources:
         limits:
@@ -67,7 +77,7 @@ services:
       - SPRING_PROFILES_ACTIVE=${SPRING_PROFILES_ACTIVE:-prod}
       - TZ=America/Sao_Paulo
       - JAVA_OPTS=-Djava.net.preferIPv4Stack=true -Djava.net.preferIPv4Addresses=true
-      - JAVA_TOOL_OPTIONS=-Dfile.encoding=UTF-8 -Dsun.jnu.encoding=UTF-8 -Xms1g -Xmx2g -XX:+UseG1GC -XX:+UseStringDeduplication -Djdk.tracePinnedThreads=short -Djava.net.preferIPv4Stack=true -Djava.net.preferIPv4Addresses=true
+      - JAVA_TOOL_OPTIONS=-Dfile.encoding=UTF-8 -Dsun.jnu.encoding=UTF-8 -Xms512m -Xmx2g -XX:+UseG1GC -XX:+UseStringDeduplication -Djdk.tracePinnedThreads=short -Djava.net.preferIPv4Stack=true -Djava.net.preferIPv4Addresses=true
     expose:
       - "8085"
     ports:
@@ -78,6 +88,11 @@ services:
       - /mnt/data/uploads:/app/uploads
       - /mnt/data/backups:/app/backups
       - /mnt/data/logs:/app/logs
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
     deploy:
       resources:
         limits:
@@ -103,6 +118,11 @@ services:
       - "5173:80"
     environment:
       - TZ=America/Sao_Paulo
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
     deploy:
       resources:
         limits:
@@ -127,6 +147,11 @@ services:
       - ./docs/prometheus/alert.rules.yml:/etc/prometheus/alert.rules.yml:ro
       - ./api/prometheus.rules.yml:/etc/prometheus/prometheus.rules.yml:ro
       - prometheus_data:/prometheus
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
     deploy:
       resources:
         limits:
@@ -153,6 +178,11 @@ services:
       - grafana_data:/var/lib/grafana
       - ./docs/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./docs/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
     deploy:
       resources:
         limits:

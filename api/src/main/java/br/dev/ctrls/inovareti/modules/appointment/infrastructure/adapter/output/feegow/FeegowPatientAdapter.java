@@ -51,21 +51,26 @@ public class FeegowPatientAdapter implements PatientExternalPort {
 
     @Override
     public FeegowPatient patientInfo(String patientId) {
-        FeegowPatientDetailsDto.PatientItem patientDetails = getPatientDetails(patientId);
-        if (patientDetails == null) {
+        try {
+            FeegowPatientDetailsDto.PatientItem patientDetails = getPatientDetails(patientId);
+            if (patientDetails == null) {
+                return new FeegowPatient(patientId, null, null, null, null);
+            }
+
+            String resolvedPatientId = patientDetails.getId() == null || patientDetails.getId().isBlank()
+                    ? patientId
+                    : patientDetails.getId();
+
+            return new FeegowPatient(
+                    resolvedPatientId,
+                    patientDetails.getNome(),
+                    resolvePreferredPhone(patientDetails),
+                    sanitizeCpf(patientDetails.getCpf()),
+                    patientDetails.getNascimento());
+        } catch (Exception ex) {
+            log.warn("[FEEGOW] Falha ao obter informações do paciente ID {}: {}. Retornando fallback seguro.", patientId, ex.getMessage());
             return new FeegowPatient(patientId, null, null, null, null);
         }
-
-        String resolvedPatientId = patientDetails.getId() == null || patientDetails.getId().isBlank()
-                ? patientId
-                : patientDetails.getId();
-
-        return new FeegowPatient(
-                resolvedPatientId,
-                patientDetails.getNome(),
-                resolvePreferredPhone(patientDetails),
-                sanitizeCpf(patientDetails.getCpf()),
-                patientDetails.getNascimento());
     }
 
     @CircuitBreaker(name = "feegowApiCircuit", fallbackMethod = "fallbackGetPatientDetails")
@@ -107,12 +112,20 @@ public class FeegowPatientAdapter implements PatientExternalPort {
                 log.warn("[FEEGOW] Paciente não encontrado ou conflito (HTTP {}): {}. Retornando null.", statusCode, ex.getMessage());
                 return null;
             }
+            if (statusCode >= 500) {
+                log.warn("[FEEGOW] Servidor Feegow indisponível ou erro 5xx (HTTP {}): {}. Retornando fallback null para não quebrar o fluxo Blip.", statusCode, ex.getMessage());
+                return null;
+            }
             log.warn("Erro HTTP ao buscar detalhes do paciente id={} na Feegow: {}", patientId, ex.getMessage());
             throw ex;
         } catch (org.springframework.web.client.RestClientResponseException ex) {
             int statusCode = ex.getStatusCode().value();
             if (statusCode == 404 || statusCode == 409) {
                 log.warn("[FEEGOW] Paciente não encontrado ou conflito (HTTP {}): {}. Retornando null.", statusCode, ex.getMessage());
+                return null;
+            }
+            if (statusCode >= 500) {
+                log.warn("[FEEGOW] Servidor Feegow indisponível ou erro 5xx (HTTP {}): {}. Retornando fallback null para não quebrar o fluxo Blip.", statusCode, ex.getMessage());
                 return null;
             }
             log.warn("Erro ao buscar detalhes do paciente id={} na Feegow: {}", patientId, ex.getMessage());
