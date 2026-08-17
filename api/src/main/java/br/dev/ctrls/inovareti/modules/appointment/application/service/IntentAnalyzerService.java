@@ -405,14 +405,23 @@ public class IntentAnalyzerService {
             return Collections.emptyList();
         }
 
-        // Encontra a maior pontuação obtida
-        int maxScore = scoreMap.values().stream().max(Integer::compareTo).orElse(0);
+        // Encontra a maior pontuação obtida de forma nula-segura
+        int maxScore = 0;
+        for (Integer score : scoreMap.values()) {
+            if (score != null && score > maxScore) {
+                maxScore = score;
+            }
+        }
 
         // Se houver correspondência com múltiplos tokens (ex: "carlos koga"), filtra apenas os médicos com a pontuação máxima
-        return scoreMap.entrySet().stream()
-                .filter(entry -> entry.getValue() == maxScore || (tokens.size() == 1 && entry.getValue() > 0))
-                .map(Map.Entry::getKey)
-                .collect(Collectors.toList());
+        List<DoctorCatalog> result = new ArrayList<>();
+        for (Map.Entry<DoctorCatalog, Integer> entry : scoreMap.entrySet()) {
+            Integer score = entry.getValue();
+            if (score != null && (score == maxScore || (tokens.size() == 1 && score > 0))) {
+                result.add(entry.getKey());
+            }
+        }
+        return result;
     }
 
     private DoctorMatchDto toDoctorMatchDto(DoctorCatalog catalog) {
