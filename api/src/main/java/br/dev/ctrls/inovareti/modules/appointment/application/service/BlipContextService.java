@@ -286,6 +286,15 @@ public class BlipContextService {
     }
 
     private void sendSingleMasterState(String normalizedIdentity, String targetBot, String operation) {
+        if (normalizedIdentity == null || normalizedIdentity.isBlank()) return;
+
+        // SALVAGUARDA DESK: NUNCA enviar Master-State para desk@msging.net em identidades de túnel (@tunnel.msging.net).
+        // Isso evita a abertura de tickets duplicados/fantasmas com UUID na fila Default do Blip Desk!
+        if ("desk@msging.net".equalsIgnoreCase(targetBot) && normalizedIdentity.contains("@tunnel.msging.net")) {
+            log.info("[BLIP-CONTEXT-GUARD] Ignorado Master-State para desk@msging.net na identidade de túnel '{}' para evitar ticket duplicado no Desk.", normalizedIdentity);
+            return;
+        }
+
         if (isRedundantContextCall("mstate:" + normalizedIdentity + ":" + targetBot + ":" + operation)) {
             return;
         }
@@ -670,7 +679,6 @@ public class BlipContextService {
         setMasterState(masterIdentity, "desk@msging.net", stateId);
         setBuilderMasterState(masterIdentity, stateId);
         if (tunnelIdentity != null && !tunnelIdentity.equalsIgnoreCase(masterIdentity)) {
-            setMasterState(tunnelIdentity, "desk@msging.net", stateId);
             setBuilderMasterState(tunnelIdentity, stateId);
         }
         log.info("[BLIP-CONTEXT] Master State alterado para stateId={} no paciente master={} e tunnel={}", stateId, masterIdentity, tunnelIdentity);
