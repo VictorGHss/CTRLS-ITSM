@@ -47,19 +47,14 @@ public class BlipPayloadBuilder {
     ) {
         String recipientE164 = formatE164Recipient(recipientPhone);
 
-        String effectiveFlowId = (flowId != null && !flowId.isBlank())
+        String effectiveFlowId = (flowId != null && !flowId.isBlank() && !flowId.toLowerCase().contains("fluxov1"))
                 ? flowId.trim()
-                : (masterState != null && !masterState.isBlank() ? masterState.trim() : null);
+                : ((masterState != null && !masterState.isBlank() && !masterState.toLowerCase().contains("fluxov1")) ? masterState.trim() : null);
 
-        String finalMasterState = (masterState != null && !masterState.isBlank()) ? masterState.trim() : null;
+        String finalMasterState = (masterState != null && !masterState.isBlank() && !masterState.toLowerCase().contains("fluxov1")) ? masterState.trim() : null;
         String finalStateId = (stateId != null && !stateId.isBlank()) ? stateId.trim() : null;
 
-        String finalFlowId = null;
-        if (effectiveFlowId != null && !effectiveFlowId.isBlank()) {
-            finalFlowId = effectiveFlowId;
-        } else if (finalMasterState != null || finalStateId != null) {
-            finalFlowId = "fluxov1@msging.net";
-        }
+        String finalFlowId = (effectiveFlowId != null && !effectiveFlowId.isBlank()) ? effectiveFlowId : null;
 
         CampaignDto campaignDto = CampaignDto.builder()
                 .name(campaignName != null && !campaignName.isBlank() ? campaignName : "Notificacao - " + UUID.randomUUID())

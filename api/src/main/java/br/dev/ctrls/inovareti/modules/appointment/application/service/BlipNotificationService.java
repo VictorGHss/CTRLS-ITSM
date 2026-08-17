@@ -357,25 +357,27 @@ public class BlipNotificationService {
                 ? patientName.trim()
                 : "Paciente";
 
-        String targetBot = "desk@msging.net";
+        String targetBot = null;
         String builderBotId = motorProperties.getBlipBuilderBotId();
-        if (builderBotId != null && !builderBotId.isBlank()) {
+        if (builderBotId != null && !builderBotId.isBlank() && !builderBotId.toLowerCase().contains("fluxov1")) {
             targetBot = builderBotId;
         }
 
-        // Define o Master-State do paciente no bloco Preparar_Atendimento (a0776d9c-6486-42f3-8a4f-2706f0185908)
-        try {
-            blipContextService.setMasterState(recipientE164, targetBot, stateIdPrepararAtendimento);
-            if (destination != null && !destination.equalsIgnoreCase(recipientE164)) {
-                blipContextService.setMasterState(destination, targetBot, stateIdPrepararAtendimento);
+        // Define o Master-State do paciente se houver bot de produção configurado e não for ambiente de teste
+        if (targetBot != null && !targetBot.isBlank()) {
+            try {
+                blipContextService.setMasterState(recipientE164, targetBot, stateIdPrepararAtendimento);
+                if (destination != null && !destination.equalsIgnoreCase(recipientE164)) {
+                    blipContextService.setMasterState(destination, targetBot, stateIdPrepararAtendimento);
+                }
+            } catch (Exception ex) {
+                log.warn("[MENSAGERIA-GRUPO] Falha ao definir master-state para Preparar_Atendimento: {}", ex.getMessage());
             }
-        } catch (Exception ex) {
-            log.warn("[MENSAGERIA-GRUPO] Falha ao definir master-state para Preparar_Atendimento: {}", ex.getMessage());
         }
 
         Map<String, Object> commandPayload = blipPayloadBuilder.buildGroupTemplatePayload(
                 recipientE164, templateName, resolveWabaNamespace(), groupId, safePatientName,
-                targetBot, stateIdPrepararAtendimento, targetBot
+                targetBot, targetBot != null ? stateIdPrepararAtendimento : null, targetBot
         );
 
         log.info("[MENSAGERIA-GRUPO] Transmitindo template de grupo '{}' (0 parâmetros) via Active Campaign (/campaign/full) para o telefone={} com o groupId={}", templateName, recipientE164, groupId);

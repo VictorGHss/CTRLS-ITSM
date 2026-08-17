@@ -1090,7 +1090,7 @@ public class IngestAppointmentsUseCase {
 
             String subbotId = blipProperties.getSubbotId();
             String subbotLocalPart = null;
-            if (subbotId != null && !subbotId.isBlank()) {
+            if (subbotId != null && !subbotId.isBlank() && !subbotId.toLowerCase().contains("fluxov1")) {
                 subbotLocalPart = subbotId.trim();
                 if (subbotLocalPart.contains("@")) {
                     subbotLocalPart = subbotLocalPart.substring(0, subbotLocalPart.indexOf('@'));
@@ -1108,7 +1108,7 @@ public class IngestAppointmentsUseCase {
                 for (var rec : reconciliations) {
                     if (rec.getBlipGuid() != null && !rec.getBlipGuid().isBlank()) {
                         String realTunnel = rec.getBlipGuid().trim() + "@tunnel.msging.net";
-                        if (!tunnelIdentities.contains(realTunnel)) {
+                        if (!tunnelIdentities.contains(realTunnel) && !realTunnel.toLowerCase().contains("fluxov1")) {
                             tunnelIdentities.add(realTunnel);
                             log.info("[INGESTAO-GRUPO-CONTEXTO] Identidade de túnel real reconciliada encontrada: {} para o telefone: {}", realTunnel, phoneDigits);
                         }
@@ -1134,7 +1134,7 @@ public class IngestAppointmentsUseCase {
 
             String prepararAtendimentoBlockId = blipProperties.getBlocks().getPrepararAtendimento();
 
-            if (prepararAtendimentoBlockId != null && !prepararAtendimentoBlockId.isBlank()) {
+            if (prepararAtendimentoBlockId != null && !prepararAtendimentoBlockId.isBlank() && subbotId != null && !subbotId.isBlank() && !subbotId.toLowerCase().contains("fluxov1")) {
                 // Roteador Master-State
                 try {
                     blipContextService.setMasterState(cleanPhone, subbotId, prepararAtendimentoBlockId);

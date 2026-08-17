@@ -67,9 +67,12 @@ public class BlipContextService {
         String phoneDigits = normalized.contains("@") ? normalized.substring(0, normalized.indexOf('@')).replaceAll("\\D", "") : normalized.replaceAll("\\D", "");
         if (phoneDigits.isBlank()) return null;
 
-        String subbotLocalPart = "fluxov1";
-        if (blipAppointmentId != null && !blipAppointmentId.isBlank()) {
+        String subbotLocalPart = null;
+        if (blipAppointmentId != null && !blipAppointmentId.isBlank() && !blipAppointmentId.toLowerCase().contains("fluxov1")) {
             subbotLocalPart = blipAppointmentId.contains("@") ? blipAppointmentId.substring(0, blipAppointmentId.indexOf('@')) : blipAppointmentId.trim();
+        }
+        if (subbotLocalPart == null || subbotLocalPart.isBlank()) {
+            return null;
         }
         return phoneDigits + "." + subbotLocalPart + "@tunnel.msging.net";
     }
@@ -338,7 +341,13 @@ public class BlipContextService {
     }
 
     private void sendSingleMasterState(String normalizedIdentity, String targetBot, String operation) {
-        if (normalizedIdentity == null || normalizedIdentity.isBlank()) return;
+        if (normalizedIdentity == null || normalizedIdentity.isBlank() || targetBot == null || targetBot.isBlank()) return;
+
+        // SALVAGUARDA TOTAL FLUXOV1: NUNCA redirecionar pacientes reais para fluxov1 (fluxo de testes/desenvolvimento)
+        if (targetBot.toLowerCase().contains("fluxov1")) {
+            log.warn("[BLIP-CONTEXT-GUARD] BLOQUEADO: Tentativa de definir Master-State para o subbot de teste '{}' na identidade '{}'. Operacao cancelada.", targetBot, normalizedIdentity);
+            return;
+        }
 
         // SALVAGUARDA DESK: NUNCA enviar Master-State para desk@msging.net em identidades de túnel (@tunnel.msging.net).
         // Isso evita a abertura de tickets duplicados/fantasmas com UUID na fila Default do Blip Desk!
@@ -389,6 +398,14 @@ public class BlipContextService {
     }
 
     private void sendSingleBuilderMasterState(String normalizedIdentity, String stateId) {
+        if (normalizedIdentity == null || normalizedIdentity.isBlank()) return;
+
+        // SALVAGUARDA TOTAL FLUXOV1: NUNCA definir builder master-state para identidades de teste do fluxov1
+        if (normalizedIdentity.toLowerCase().contains("fluxov1")) {
+            log.warn("[BLIP-CONTEXT-GUARD] BLOQUEADO: Tentativa de definir builder master-state para identidade '{}'. Operacao cancelada.", normalizedIdentity);
+            return;
+        }
+
         if (isRedundantContextCall("bstate:" + normalizedIdentity + ":" + stateId)) {
             return;
         }

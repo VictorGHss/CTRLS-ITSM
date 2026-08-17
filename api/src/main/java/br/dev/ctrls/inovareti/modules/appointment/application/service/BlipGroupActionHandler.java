@@ -222,7 +222,7 @@ public class BlipGroupActionHandler {
                                         if (syncOk) {
                                             blipContextService.setQueueRedirect(fromPhone, blipQueueName);
                                             log.info("[WEBHOOK-FALLBACK] Forçando redirecionamento de Master-State do usuário {} para o bloco de destino humano de pauta.", fromPhone);
-                                            String targetBot = "fluxov1@msging.net";
+                                            String targetBot = "desk@msging.net";
                                             String stateId = "b3461299-9500-46b1-b423-12ffef3e1aba";
                                             blipContextService.setMasterState(fromPhone, targetBot, stateId);
 
@@ -236,7 +236,6 @@ public class BlipGroupActionHandler {
                                                     String tunnelId = cleanBsuid + "@tunnel.msging.net";
                                                     if (!tunnelId.equalsIgnoreCase(fromPhone)) {
                                                         blipContextService.setQueueRedirect(tunnelId, blipQueueName);
-                                                        blipContextService.setMasterState(tunnelId, targetBot, stateId);
                                                     }
                                                 }
                                             }

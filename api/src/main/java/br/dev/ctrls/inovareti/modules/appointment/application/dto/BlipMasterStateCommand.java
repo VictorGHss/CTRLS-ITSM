@@ -10,5 +10,5 @@ public class BlipMasterStateCommand {
     private final String method = "set";
     private String uri; // Mapear para: "/contexts/{identity}/Master-State"
     private final String type = "text/plain";
-    private String resource = "fluxov1@msging.net"; // ID do sub-bot de destino no roteador
+    private String resource = "desk@msging.net"; // ID do sub-bot de destino no roteador
 }
