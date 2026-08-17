@@ -176,10 +176,10 @@ public class BlipContactClientAdapter implements BlipContactClientPort {
         java.util.List<String> targetIdentities = new java.util.ArrayList<>();
         targetIdentities.add(normalizedIdentity);
 
-        // Resolve túnel determinístico (ex: 5542999999999.fluxov1@tunnel.msging.net)
+        // Resolve túnel determinístico
         try {
             String subbotId = blipProperties != null ? blipProperties.getSubbotId() : null;
-            if (subbotId != null && !subbotId.isBlank()) {
+            if (subbotId != null && !subbotId.isBlank() && !subbotId.toLowerCase().contains("fluxov1")) {
                 String subbotLocalPart = subbotId.trim();
                 if (subbotLocalPart.contains("@")) {
                     subbotLocalPart = subbotLocalPart.substring(0, subbotLocalPart.indexOf('@'));
@@ -208,7 +208,7 @@ public class BlipContactClientAdapter implements BlipContactClientPort {
                     for (var rec : reconciliations) {
                         if (rec.getBlipGuid() != null && !rec.getBlipGuid().isBlank()) {
                             String tunnelId = rec.getBlipGuid().trim() + "@tunnel.msging.net";
-                            if (!targetIdentities.contains(tunnelId)) {
+                            if (!targetIdentities.contains(tunnelId) && !tunnelId.toLowerCase().contains("fluxov1")) {
                                 targetIdentities.add(tunnelId);
                             }
                         }

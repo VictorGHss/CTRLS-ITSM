@@ -159,23 +159,8 @@ public class SendPreAppointmentNoticeUseCase {
                 blipContextService.setUserContext(session.getPhoneNumber(), "paciente", templateData.patientName());
                 blipContextService.setUserContext(session.getPhoneNumber(), "Nome", templateData.patientName());
 
-                // Força a atualização do Master-State do paciente no Blip para o bloco Preparar_Atendimento (stateId = a0776d9c-6486-42f3-8a4f-2706f0185908)
-                String prepararAtendimentoBlockId = "a0776d9c-6486-42f3-8a4f-2706f0185908";
-                try {
-                    String cleanPhone = session.getPhoneNumber().replaceAll("\\D", "");
-                    if (!cleanPhone.startsWith("55") && !cleanPhone.isBlank()) {
-                        cleanPhone = "55" + cleanPhone;
-                    }
-                    String masterIdentity = cleanPhone + "@wa.gw.msging.net";
-                    String tunnelIdentity = cleanPhone + ".fluxov1@tunnel.msging.net";
-                    
-                    blipContextService.setBuilderMasterState(masterIdentity, prepararAtendimentoBlockId);
-                    blipContextService.setBuilderMasterState(tunnelIdentity, prepararAtendimentoBlockId);
-                    blipContextService.setBuilderMasterState(session.getPhoneNumber(), prepararAtendimentoBlockId);
-                    log.info("[LEMBRETE-ANTECEDENCIA] Master-State do Blip atualizado para Preparar_Atendimento ({}) no paciente {}", prepararAtendimentoBlockId, session.getPhoneNumber());
-                } catch (Exception ex) {
-                    log.warn("[LEMBRETE-ANTECEDENCIA] Falha ao atualizar Master-State no Blip para {}: {}", session.getPhoneNumber(), ex.getMessage());
-                }
+                // Contexto preventivo injetado com sucesso
+                log.info("[LEMBRETE-ANTECEDENCIA] Contexto configurado para o paciente {}", session.getPhoneNumber());
 
                 log.info("[LEMBRETE-ANTECEDENCIA] Disparando template '{}' para paciente='{}', médico='{}', hora='{}', tel='{}', fila='{}'",
                         templateName, templateData.patientName(), templateData.doctorName(),

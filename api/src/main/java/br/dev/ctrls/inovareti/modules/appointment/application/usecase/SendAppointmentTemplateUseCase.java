@@ -481,7 +481,7 @@ public class SendAppointmentTemplateUseCase {
                 List<String> tunnelIdentities = new ArrayList<>();
                 String subbotId = blipProperties.getSubbotId();
                 String subbotLocalPart = null;
-                if (subbotId != null && !subbotId.isBlank()) {
+                if (subbotId != null && !subbotId.isBlank() && !subbotId.toLowerCase().contains("fluxov1")) {
                     subbotLocalPart = subbotId.trim();
                     if (subbotLocalPart.contains("@")) {
                         subbotLocalPart = subbotLocalPart.substring(0, subbotLocalPart.indexOf('@'));
@@ -497,27 +497,29 @@ public class SendAppointmentTemplateUseCase {
                     for (var rec : reconciliations) {
                         if (rec.getBlipGuid() != null && !rec.getBlipGuid().isBlank()) {
                             String realTunnel = rec.getBlipGuid().trim() + "@tunnel.msging.net";
-                            if (!tunnelIdentities.contains(realTunnel)) {
+                            if (!tunnelIdentities.contains(realTunnel) && !realTunnel.toLowerCase().contains("fluxov1")) {
                                 tunnelIdentities.add(realTunnel);
                             }
                         }
                     }
                 }
 
-                // Redireciona Master-State
-                try {
-                    blipContextService.setMasterState(cleanPhone, subbotId, prepararAtendimentoBlockId);
-                    log.info("[SOLO-CTX] Master-State do Roteador atualizado ao enviar template solo para {}", cleanPhone);
-                } catch (Exception e) {
-                    log.error("[SOLO-CTX] Erro ao atualizar Master-State no Roteador para {}", cleanPhone, e);
-                }
-
-                for (String tunnel : tunnelIdentities) {
+                // Redireciona Master-State apenas se subbotId for válido e não for fluxo de teste
+                if (subbotId != null && !subbotId.isBlank() && !subbotId.toLowerCase().contains("fluxov1")) {
                     try {
-                        blipContextService.setBuilderMasterState(tunnel, prepararAtendimentoBlockId);
-                        log.info("[SOLO-CTX] Builder Master-State atualizado ao enviar template solo para tunnel {}", tunnel);
+                        blipContextService.setMasterState(cleanPhone, subbotId, prepararAtendimentoBlockId);
+                        log.info("[SOLO-CTX] Master-State do Roteador atualizado ao enviar template solo para {}", cleanPhone);
                     } catch (Exception e) {
-                        log.error("[SOLO-CTX] Erro ao atualizar Builder Master-State no Subbot para tunnel {}", tunnel, e);
+                        log.error("[SOLO-CTX] Erro ao atualizar Master-State no Roteador para {}", cleanPhone, e);
+                    }
+
+                    for (String tunnel : tunnelIdentities) {
+                        try {
+                            blipContextService.setBuilderMasterState(tunnel, prepararAtendimentoBlockId);
+                            log.info("[SOLO-CTX] Builder Master-State atualizado ao enviar template solo para tunnel {}", tunnel);
+                        } catch (Exception e) {
+                            log.error("[SOLO-CTX] Erro ao atualizar Builder Master-State no Subbot para tunnel {}", tunnel, e);
+                        }
                     }
                 }
             } catch (Exception e) {

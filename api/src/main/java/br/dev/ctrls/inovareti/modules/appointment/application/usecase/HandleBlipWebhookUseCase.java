@@ -127,7 +127,7 @@ public class HandleBlipWebhookUseCase {
                 try {
                     String subbotId = blipProperties.getSubbotId();
                     String subbotLocalPart = null;
-                    if (subbotId != null && !subbotId.isBlank()) {
+                    if (subbotId != null && !subbotId.isBlank() && !subbotId.toLowerCase().contains("fluxov1")) {
                         subbotLocalPart = subbotId.trim();
                         if (subbotLocalPart.contains("@")) {
                             subbotLocalPart = subbotLocalPart.substring(0, subbotLocalPart.indexOf('@'));

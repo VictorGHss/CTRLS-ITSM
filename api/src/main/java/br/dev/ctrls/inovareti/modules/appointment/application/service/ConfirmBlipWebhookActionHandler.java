@@ -227,7 +227,7 @@ public class ConfirmBlipWebhookActionHandler implements BlipWebhookActionHandler
                         List<String> tunnelIdentities = new ArrayList<>();
                         String subbotId = blipProperties.getSubbotId();
                         String subbotLocalPart = null;
-                        if (subbotId != null && !subbotId.isBlank()) {
+                        if (subbotId != null && !subbotId.isBlank() && !subbotId.toLowerCase().contains("fluxov1")) {
                             subbotLocalPart = subbotId.trim();
                             if (subbotLocalPart.contains("@")) {
                                 subbotLocalPart = subbotLocalPart.substring(0, subbotLocalPart.indexOf('@'));
@@ -256,7 +256,7 @@ public class ConfirmBlipWebhookActionHandler implements BlipWebhookActionHandler
                         for (var rec : reconciliations) {
                             if (rec.getBlipGuid() != null && !rec.getBlipGuid().isBlank()) {
                                 String tunnelId = rec.getBlipGuid().trim() + "@tunnel.msging.net";
-                                if (!tunnelIdentities.contains(tunnelId)) {
+                                if (!tunnelIdentities.contains(tunnelId) && !tunnelId.toLowerCase().contains("fluxov1")) {
                                     tunnelIdentities.add(tunnelId);
                                 }
                             }
@@ -534,7 +534,7 @@ public class ConfirmBlipWebhookActionHandler implements BlipWebhookActionHandler
                     List<String> tunnelIdentities = new ArrayList<>();
                     String subbotId = blipProperties.getSubbotId();
                     String subbotLocalPart = null;
-                    if (subbotId != null && !subbotId.isBlank()) {
+                    if (subbotId != null && !subbotId.isBlank() && !subbotId.toLowerCase().contains("fluxov1")) {
                         subbotLocalPart = subbotId.trim();
                         if (subbotLocalPart.contains("@")) {
                             subbotLocalPart = subbotLocalPart.substring(0, subbotLocalPart.indexOf('@'));
@@ -563,7 +563,7 @@ public class ConfirmBlipWebhookActionHandler implements BlipWebhookActionHandler
                     for (var rec : reconciliations) {
                         if (rec.getBlipGuid() != null && !rec.getBlipGuid().isBlank()) {
                             String tunnelId = rec.getBlipGuid().trim() + "@tunnel.msging.net";
-                            if (!tunnelIdentities.contains(tunnelId)) {
+                            if (!tunnelIdentities.contains(tunnelId) && !tunnelId.toLowerCase().contains("fluxov1")) {
                                 tunnelIdentities.add(tunnelId);
                             }
                         }
