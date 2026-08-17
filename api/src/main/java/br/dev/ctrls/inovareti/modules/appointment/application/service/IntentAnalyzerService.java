@@ -118,6 +118,26 @@ public class IntentAnalyzerService {
                     .build();
         }
 
+        // Salvaguarda para eventos de encerramento de ticket do Desk
+        if (rawInput.contains("ClosedAttendant") || rawInput.contains("ClosedClient") || rawInput.contains("\"status\":\"Closed") || (rawInput.contains("\"sequentialId\"") && rawInput.contains("\"ownerIdentity\""))) {
+            log.info("[INTENT-ANALYZER] Detectado evento de encerramento de ticket Desk no fluxo. Finalizando sessão.");
+            return IntentAnalysisResultDto.builder()
+                    .rawInput(rawInput)
+                    .cleanedInput("")
+                    .intent("FINALIZACAO")
+                    .routeType("END_SESSION")
+                    .acaoSeguinte("FINALIZAR")
+                    .selectedQueue(null)
+                    .hasAmbiguity(false)
+                    .page(1)
+                    .pageSize(PAGE_SIZE)
+                    .totalMatches(0)
+                    .totalPages(0)
+                    .hasNextPage(false)
+                    .matches(Collections.emptyList())
+                    .build();
+        }
+
         String normalized = stripAccents(rawInput.toLowerCase().trim());
 
         // 1. Verificação de solicitação explícita de Atendimento Humano ou Trigger ITSM
@@ -134,7 +154,7 @@ public class IntentAnalyzerService {
         // Mapear gírias/apelidos de especialidade
         String mappedSpecialty = resolveSpecialtyNickname(tokens);
 
-        // Buscar médicos correspondentes no DoctorCatalog
+        // Buscar médicos correspondentes no DoctorCatalog com pontuação por múltiplos tokens
         List<DoctorCatalog> matchedCatalogs = findMatchingDoctorCatalogs(tokens, mappedSpecialty);
 
         List<DoctorMatchDto> allMatchDtos = matchedCatalogs.stream()
@@ -264,16 +284,19 @@ public class IntentAnalyzerService {
 
             interactiveList = Map.of(
                     "recipient_type", "individual",
-                    "type", "list",
-                    "header", Map.of("type", "text", "text", "Especialistas Encontrados"),
-                    "body", Map.of("text", "Encontramos mais de um especialista para sua busca. Selecione o médico desejado abaixo:"),
-                    "footer", Map.of("text", "Clínica Inovare"),
-                    "action", Map.of(
-                            "button", "Ver Médicos",
-                            "sections", List.of(
-                                    Map.of(
-                                            "title", "Médicos Disponíveis",
-                                            "rows", rows
+                    "type", "interactive",
+                    "interactive", Map.of(
+                            "type", "list",
+                            "header", Map.of("type", "text", "text", "Especialistas Encontrados"),
+                            "body", Map.of("text", "Encontramos mais de um especialista para sua busca. Selecione o médico desejado abaixo:"),
+                            "footer", Map.of("text", "Clínica Inovare"),
+                            "action", Map.of(
+                                    "button", "Ver Médicos",
+                                    "sections", List.of(
+                                            Map.of(
+                                                    "title", "Médicos Disponíveis",
+                                                    "rows", rows
+                                            )
                                     )
                             )
                     )
@@ -343,24 +366,53 @@ public class IntentAnalyzerService {
     }
 
     private List<DoctorCatalog> findMatchingDoctorCatalogs(List<String> tokens, String mappedSpecialty) {
-        Set<DoctorCatalog> matches = new LinkedHashSet<>();
+        if (tokens.isEmpty() && mappedSpecialty == null) {
+            return Collections.emptyList();
+        }
+
+        Map<DoctorCatalog, Integer> scoreMap = new LinkedHashMap<>();
 
         for (DoctorCatalog catalog : DoctorCatalog.values()) {
-            // Se especialidade foi mapeada, checa igualdade
+            int score = 0;
+
+            // 1. Se especialidade foi mapeada exatamente, pontua alto
             if (mappedSpecialty != null && catalog.getSpecialty().equalsIgnoreCase(mappedSpecialty)) {
-                matches.add(catalog);
-                continue;
+                score += 10;
             }
 
-            // Checa interseção de tokens
+            // 2. Pontua por cada token correspondente
             for (String token : tokens) {
-                if (token.length() >= 3 && catalog.getTokens().contains(token)) {
-                    matches.add(catalog);
+                if (token.length() >= 2) {
+                    if (catalog.getTokens().contains(token)) {
+                        score += 10;
+                    } else {
+                        // Correspondência parcial nos tokens ou no nome/especialidade
+                        String normalizedDoc = stripAccents(catalog.getDoctorName().toLowerCase());
+                        String normalizedSpec = stripAccents(catalog.getSpecialty().toLowerCase());
+                        if (normalizedDoc.contains(token) || normalizedSpec.contains(token)) {
+                            score += 5;
+                        }
+                    }
                 }
+            }
+
+            if (score > 0) {
+                scoreMap.put(catalog, score);
             }
         }
 
-        return new ArrayList<>(matches);
+        if (scoreMap.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        // Encontra a maior pontuação obtida
+        int maxScore = scoreMap.values().stream().max(Integer::compareTo).orElse(0);
+
+        // Se houver correspondência com múltiplos tokens (ex: "carlos koga"), filtra apenas os médicos com a pontuação máxima
+        return scoreMap.entrySet().stream()
+                .filter(entry -> entry.getValue() == maxScore || (tokens.size() == 1 && entry.getValue() > 0))
+                .map(Map.Entry::getKey)
+                .collect(Collectors.toList());
     }
 
     private DoctorMatchDto toDoctorMatchDto(DoctorCatalog catalog) {
