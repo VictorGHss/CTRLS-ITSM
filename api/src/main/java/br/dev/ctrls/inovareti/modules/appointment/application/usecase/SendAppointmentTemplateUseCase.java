@@ -71,6 +71,13 @@ public class SendAppointmentTemplateUseCase {
         log.info("[DISPATCH CTX] Enviando template com dados pré-resolvidos: paciente='{}', médico='{}', data='{}', hora='{}'",
             ctx.patientName(), ctx.doctorName(), ctx.appointmentDateShort(), ctx.appointmentTime());
 
+        if (category != AppointmentCategory.CONFIRMATION && category != AppointmentCategory.GROUP_NOTIFICATION) {
+            if (blipContextService.hasActiveTicket(ctx.phoneNumber())) {
+                log.info("[ATTENDANCE-GUARD] Contato {} possui ticket aberto no Desk. Abortando envio de template para categoria {}.", ctx.phoneNumber(), category);
+                return false;
+            }
+        }
+
         AppointmentTemplateData templateData = new AppointmentTemplateData(
             ctx.feegowAppointmentId(),
             ctx.patientId(),
@@ -184,6 +191,13 @@ public class SendAppointmentTemplateUseCase {
             appointmentConfigRepository.findByCategory(category)
                 .orElseThrow(() -> new NotFoundException("Configuração não encontrada para categoria " + category))
         );
+
+        if (category != AppointmentCategory.CONFIRMATION && category != AppointmentCategory.GROUP_NOTIFICATION) {
+            if (blipContextService.hasActiveTicket(session.getPhoneNumber(), session.getLastNotificationSentAt())) {
+                log.info("[ATTENDANCE-GUARD] Contato {} possui ticket aberto no Desk. Abortando envio de template para categoria {}.", session.getPhoneNumber(), category);
+                return false;
+            }
+        }
 
         AppointmentTemplateData templateData = appointmentTemplateDataBuilder.build(session);
 

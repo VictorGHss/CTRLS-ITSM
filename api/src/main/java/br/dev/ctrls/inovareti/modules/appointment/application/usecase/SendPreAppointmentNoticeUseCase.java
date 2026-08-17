@@ -77,6 +77,12 @@ public class SendPreAppointmentNoticeUseCase {
                     continue;
                 }
 
+                // VALIDAÇÃO DE ATENDIMENTO HUMANO NO DESK
+                if (blipContextService.hasActiveTicket(session.getPhoneNumber(), session.getLastNotificationSentAt())) {
+                    log.info("[ATTENDANCE-GUARD] Contato {} possui ticket aberto no Desk. Ignorando envio de lembrete de proximidade/antecedência para não poluir a conversa da secretária.", session.getPhoneNumber());
+                    continue;
+                }
+
                 // VALIDAÇÃO DE AGENDA BLOQUEADA NO FEEGOW (/lock/list)
                 if (appointmentFilterService.isScheduleBlocked(session, activeLocks)) {
                     continue;

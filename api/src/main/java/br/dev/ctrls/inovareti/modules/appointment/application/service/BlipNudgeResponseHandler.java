@@ -72,6 +72,7 @@ public class BlipNudgeResponseHandler {
     }
 
     private void transferToDesk(String fromPhone) {
+        blipContextService.clearConfirmationContext(fromPhone);
         String deskBlockId = blipProperties.getBlocks().getDeskStateId();
         blipContextService.setMasterState(fromPhone, "desk@msging.net", deskBlockId);
         log.info("[WEBHOOK-NUDGE] Transbordo concluído para {} direcionando ao Bloco: 'desk:{}'", fromPhone, deskBlockId);

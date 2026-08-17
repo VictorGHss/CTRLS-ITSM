@@ -36,6 +36,7 @@ public class NotificationAccumulatorService {
     private final PatientExternalPort patientExternalPort;
     private final SendAppointmentTemplateUseCase sendAppointmentTemplateUseCase;
     private final BlipNotificationService blipNotificationService;
+    private final BlipContextService blipContextService;
     private final AppointmentMotorProperties motorProperties;
     private final TransactionTemplate transactionTemplate;
 
@@ -86,6 +87,13 @@ public class NotificationAccumulatorService {
     private void processIndividualNotification(AppointmentSession session) {
         log.info("[ACÚMULO] Processando notificação individual para o agendamento Feegow ID: {}", session.getFeegowAppointmentId());
         
+        if (session.getPhoneNumber() != null && !session.getPhoneNumber().isBlank()) {
+            if (blipContextService.hasActiveTicket(session.getPhoneNumber(), session.getLastNotificationSentAt())) {
+                log.info("[ATTENDANCE-GUARD] Contato {} possui ticket aberto no Desk. Ignorando disparo de notificação individual acumulada.", session.getPhoneNumber());
+                return;
+            }
+        }
+
         try {
             boolean sent = sendAppointmentTemplateUseCase.execute(session, AppointmentCategory.CONFIRMATION);
             if (sent) {
@@ -109,6 +117,14 @@ public class NotificationAccumulatorService {
         UUID groupId = UUID.randomUUID();
         log.info("[ACÚMULO] Processando notificação agrupada. group_id={}, telefone={}, total_consultas={}", 
             groupId, phoneNumber, sessions.size());
+
+        if (phoneNumber != null && !phoneNumber.isBlank()) {
+            LocalDateTime lastSent = sessions.isEmpty() ? null : sessions.get(0).getLastNotificationSentAt();
+            if (blipContextService.hasActiveTicket(phoneNumber, lastSent)) {
+                log.info("[ATTENDANCE-GUARD] Contato {} possui ticket aberto no Desk. Ignorando disparo de notificação agrupada acumulada.", phoneNumber);
+                return;
+            }
+        }
 
         // 4. Salvar na tabela 'notification_groups'
         List<NotificationGroup> groupEntities = new ArrayList<>();
