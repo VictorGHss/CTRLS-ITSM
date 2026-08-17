@@ -8,6 +8,7 @@ import lombok.NoArgsConstructor;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * DTO com o resultado refinado do Motor de Intenções para o Take Blip.
@@ -41,6 +42,12 @@ public class IntentAnalysisResultDto {
     private int totalMatches;
     private int totalPages;
     private boolean hasNextPage;
+
+    // Campos de Formatação e Mensageria Interativa
+    private String modo;
+    private Map<String, Object> interactiveList;
+    private String formattedText;
+    private String externalRedirectMessage;
 
     @Builder.Default
     private List<DoctorMatchDto> matches = new ArrayList<>();
