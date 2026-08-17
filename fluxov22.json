@@ -342,16 +342,15 @@
         {
           "$id": "sm_text_script_clean",
           "type": "ExecuteScript",
-          "$title": "Monta Payload Especialistas WhatsApp e Simulador",
+          "$title": "Monta Payload Especialistas WhatsApp Interativo",
           "settings": {
             "function": "run",
-            "source": "function run(nlpResponse, listaMedicosJson, contactIdentity) {\n    try {\n        var resp = typeof nlpResponse === 'string' ? JSON.parse(nlpResponse || \"{}\") : (nlpResponse || {});\n        var doctors = resp.matches || (typeof listaMedicosJson === 'string' ? JSON.parse(listaMedicosJson || \"[]\") : (listaMedicosJson || []));\n        var total = doctors.length > 10 ? 10 : doctors.length;\n        \n        var id = (contactIdentity || \"\").toLowerCase();\n        var isWhatsApp = id.indexOf(\"@wa.gw.msging.net\") !== -1;\n\n        if (total === 0) {\n            return JSON.stringify({\n                \"modo\": \"TEXTO\",\n                \"payload\": \"Nenhum especialista encontrado. Digite o nome do médico desejado:\"\n            });\n        }\n\n        // Cenário 1: WhatsApp Real -> Lista Interativa Oficial Meta/Blip\n        if (isWhatsApp) {\n            var rows = [];\n            for (var i = 0; i < total; i++) {\n                var d = doctors[i];\n                var rawName = (d.doctorName || d.name || \"Especialista\").toString().replace(/[*_~`]/g, \"\").trim();\n                var rawSpec = (d.specialty || d.description || \"\").toString().replace(/[*_~`]/g, \"\").trim();\n\n                // Regras estritas: title <= 24 chars, description <= 72 chars\n                var title = rawName.length > 24 ? rawName.substring(0, 21) + \"...\" : rawName;\n                var desc = rawSpec.length > 72 ? rawSpec.substring(0, 69) + \"...\" : rawSpec;\n\n                rows.push({\n                    \"id\": (i + 1).toString(),\n                    \"title\": title,\n                    \"description\": desc\n                });\n            }\n\n            var interactiveListPayload = {\n                \"recipient_type\": \"individual\",\n                \"type\": \"interactive\",\n                \"interactive\": {\n                    \"type\": \"list\",\n                    \"header\": {\n                        \"type\": \"text\",\n                        \"text\": \"Clínica Inovare 🩺\"\n                    },\n                    \"body\": {\n                        \"text\": \"Encontramos os seguintes especialistas para o seu agendamento. Toque no botão abaixo para escolher:\"\n                    },\n                    \"footer\": {\n                        \"text\": \"Selecione um médico\"\n                    },\n                    \"action\": {\n                        \"button\": \"Ver Especialistas\",\n                        \"sections\": [\n                            {\n                                \"title\": \"Médicos Disponíveis\",\n                                \"rows\": rows\n                            }\n                        ]\n                    }\n                }\n            };\n\n            return JSON.stringify({\n                \"modo\": \"WA_LIST\",\n                \"payload\": JSON.stringify(interactiveListPayload)\n            });\n        }\n\n        // Cenário 2: Simulador / WebChat (Texto Numerado Seguro)\n        var textoSimulador = \"👨‍⚕️ *Encontramos os seguintes especialistas:*\\n\\n\";\n        for (var j = 0; j < total; j++) {\n            var m = doctors[j];\n            var mName = m.doctorName || \"Especialista\";\n            var mSpec = m.specialty ? \" (\" + m.specialty + \")\" : \"\";\n            textoSimulador += (j + 1) + \"️⃣ *\" + mName + \"*\" + mSpec + \"\\n\";\n        }\n        textoSimulador += \"\\n👉 *Digite o número (1 a \" + total + \") ou o nome desejado:*\";\n\n        return JSON.stringify({\n            \"modo\": \"TEXTO\",\n            \"payload\": textoSimulador\n        });\n\n    } catch (e) {\n        return JSON.stringify({\n            \"modo\": \"TEXTO\",\n            \"payload\": \"Por favor, digite o número ou nome do médico desejado:\"\n        });\n    }\n}",
+            "source": "function run(nlpResponse, listaMedicosJson) {\n    try {\n        var resp = typeof nlpResponse === 'string' ? JSON.parse(nlpResponse || \"{}\") : (nlpResponse || {});\n        var doctors = resp.matches || (typeof listaMedicosJson === 'string' ? JSON.parse(listaMedicosJson || \"[]\") : (listaMedicosJson || []));\n        var total = doctors.length > 10 ? 10 : doctors.length;\n        var rows = [];\n        if (total === 0) {\n            rows.push({\n                \"id\": \"1\",\n                \"title\": \"Digitar Especialista\",\n                \"description\": \"Informe o nome desejado\"\n            });\n        } else {\n            for (var i = 0; i < total; i++) {\n                var d = doctors[i];\n                var rawName = (d.doctorName || d.name || \"Especialista\").toString().replace(/[*_~`]/g, \"\").trim();\n                var rawSpec = (d.specialty || d.description || \"\").toString().replace(/[*_~`]/g, \"\").trim();\n                var title = rawName.length > 24 ? rawName.substring(0, 21) + \"...\" : rawName;\n                var desc = rawSpec.length > 72 ? rawSpec.substring(0, 69) + \"...\" : rawSpec;\n                rows.push({\n                    \"id\": (i + 1).toString(),\n                    \"title\": title,\n                    \"description\": desc\n                });\n            }\n        }\n        var interactiveListPayload = {\n            \"recipient_type\": \"individual\",\n            \"type\": \"interactive\",\n            \"interactive\": {\n                \"type\": \"list\",\n                \"header\": {\n                    \"type\": \"text\",\n                    \"text\": \"Clínica Inovare 🩺\"\n                },\n                \"body\": {\n                    \"text\": \"Encontramos os seguintes especialistas para o seu agendamento. Toque no botão abaixo para escolher:\"\n                },\n                \"footer\": {\n                    \"text\": \"Selecione um médico\"\n                },\n                \"action\": {\n                    \"button\": \"Ver Especialistas\",\n                    \"sections\": [\n                        {\n                            \"title\": \"Médicos Disponíveis\",\n                            \"rows\": rows\n                        }\n                    ]\n                }\n            }\n        };\n        return JSON.stringify(interactiveListPayload);\n    } catch (e) {\n        return JSON.stringify({\n            \"recipient_type\": \"individual\",\n            \"type\": \"interactive\",\n            \"interactive\": {\n                \"type\": \"list\",\n                \"header\": { \"type\": \"text\", \"text\": \"Clínica Inovare 🩺\" },\n                \"body\": { \"text\": \"Por favor, selecione uma opção ou digite o nome do médico:\"\n                },\n                \"action\": {\n                    \"button\": \"Ver Especialistas\",\n                    \"sections\": [{\n                        \"title\": \"Opções\",\n                        \"rows\": [{ \"id\": \"1\", \"title\": \"Digitar Médico\", \"description\": \"Informe o nome desejado\" }]\n                    }]\n                }\n            }\n        });\n    }\n}",
             "inputVariables": [
               "nlpResponse",
-              "listaMedicosJson",
-              "contact.identity"
+              "listaMedicosJson"
             ],
-            "outputVariable": "dadosEspecialistas"
+            "outputVariable": "payloadEspecialistas"
           },
           "conditions": [],
           "$invalid": false
@@ -364,13 +363,13 @@
             "type": "SendMessage",
             "settings": {
               "type": "application/json",
-              "content": "{{dadosEspecialistas@payload}}"
+              "content": "{{payloadEspecialistas}}"
             },
             "$cardContent": {
               "document": {
                 "id": "doc_wa_list_interactive",
                 "type": "application/json",
-                "content": "{{dadosEspecialistas@payload}}"
+                "content": "{{payloadEspecialistas}}"
               },
               "editable": true,
               "deletable": true,
@@ -378,48 +377,6 @@
             },
             "$invalid": false
           },
-          "conditions": [
-            {
-              "source": "context",
-              "comparison": "equals",
-              "values": [
-                "WA_LIST"
-              ],
-              "variable": "dadosEspecialistas@modo"
-            }
-          ],
-          "$invalid": false
-        },
-        {
-          "action": {
-            "$id": "card_texto_simulador",
-            "type": "SendMessage",
-            "settings": {
-              "type": "text/plain",
-              "content": "{{dadosEspecialistas@payload}}"
-            },
-            "$cardContent": {
-              "document": {
-                "id": "doc_texto_simulador",
-                "type": "text/plain",
-                "content": "{{dadosEspecialistas@payload}}"
-              },
-              "editable": true,
-              "deletable": true,
-              "position": "left"
-            },
-            "$invalid": false
-          },
-          "conditions": [
-            {
-              "source": "context",
-              "comparison": "equals",
-              "values": [
-                "TEXTO"
-              ],
-              "variable": "dadosEspecialistas@modo"
-            }
-          ],
           "$invalid": false
         },
         {
