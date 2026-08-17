@@ -351,7 +351,21 @@ public class HandleBlipWebhookUseCase {
 
         action = resolveTextIntentions(normalizedAction, action, payload);
 
+        if ("Atendimento humano".equalsIgnoreCase(actionValue) 
+                || "atendimento humano".equalsIgnoreCase(actionValue) 
+                || "atendimento_humano".equalsIgnoreCase(actionValue)
+                || "Atendimento humano".equalsIgnoreCase(action) 
+                || "atendimento humano".equalsIgnoreCase(action) 
+                || "atendimento_humano".equalsIgnoreCase(action)) {
+            log.info("[WEBHOOK] Recebida ação Atendimento humano para {}", fromPhone);
+            return applySilentDeskRouting(fromPhone, payload);
+        }
+
         switch (action) {
+            case "Atendimento humano", "atendimento humano", "atendimento_humano":
+                log.info("[WEBHOOK] Recebida ação Atendimento humano para {}", fromPhone);
+                return applySilentDeskRouting(fromPhone, payload);
+
             case "already_confirmed_handled":
                 log.info("[WEBHOOK] Agendamento já confirmado tratado amigavelmente para {}", fromPhone);
                 return new WebhookResult("", "", "", "", "already_confirmed_handled", "");
@@ -628,32 +642,35 @@ public class HandleBlipWebhookUseCase {
                         return new WebhookResult("", "", "", "", "review_response_ignored", "");
                     }
 
-                    if (!isExplicitHumanRequest) {
-                        String flowAction = blipContextService.getUserContext(fromPhone, "flow_action");
-                        boolean isReminderContext = "reminder_notice".equalsIgnoreCase(flowAction)
-                                || (mainSession.getStatusDetails() != null && mainSession.getStatusDetails().contains("PRE_NOTICE_SENT"));
+                    if (isExplicitHumanRequest) {
+                        log.info("[WEBHOOK] Solicitação explícita de atendimento humano em texto livre de {}. Limpando contexto de confirmação e roteando.", searchPhone);
+                        return applySilentDeskRouting(fromPhone, payload);
+                    }
 
-                        boolean isCourtesyOrConfirmationText = textLower.matches("(?i)^(obrigado|obrigada|valeu|ok|otimo|ótimo|bom|boa|excelente|nota \\d+|\\d+|tudo certo|agradeço|agradeco|obg|blz|tmj|sim|joia|jóa|confirmado|certo|estou a caminho|ja estou na clinica|já estou na clínica)$");
+                    String flowAction = blipContextService.getUserContext(fromPhone, "flow_action");
+                    boolean isReminderContext = "reminder_notice".equalsIgnoreCase(flowAction)
+                            || (mainSession.getStatusDetails() != null && mainSession.getStatusDetails().contains("PRE_NOTICE_SENT"));
 
-                        if (isReminderContext || isCourtesyOrConfirmationText) {
-                            try {
-                                blipContextService.clearQueueRedirect(fromPhone);
-                                if (dbPhone != null && !dbPhone.isBlank() && !dbPhone.equalsIgnoreCase(fromPhone)) {
-                                    blipContextService.clearQueueRedirect(dbPhone);
-                                }
-                                String confirmSuccessBlockId = blipProperties.getBlocks().getConfirmSuccess();
-                                if (confirmSuccessBlockId != null && !confirmSuccessBlockId.isBlank()) {
-                                    blipContextService.changeMasterState(fromPhone, confirmSuccessBlockId);
-                                    if (dbPhone != null && !dbPhone.isBlank() && !dbPhone.equalsIgnoreCase(fromPhone)) {
-                                        blipContextService.changeMasterState(dbPhone, confirmSuccessBlockId);
-                                    }
-                                }
-                            } catch (Exception ex) {
-                                log.warn("[LEMBRETE-FINALIZACAO] Erro ao aplicar auto-encerramento em texto livre: {}", ex.getMessage());
+                    boolean isCourtesyOrConfirmationText = textLower.matches("(?i)^(obrigado|obrigada|valeu|ok|otimo|ótimo|bom|boa|excelente|nota \\d+|\\d+|tudo certo|agradeço|agradeco|obg|blz|tmj|sim|joia|jóa|confirmado|certo|estou a caminho|ja estou na clinica|já estou na clínica)$");
+
+                    if (isReminderContext || isCourtesyOrConfirmationText) {
+                        try {
+                            blipContextService.clearQueueRedirect(fromPhone);
+                            if (dbPhone != null && !dbPhone.isBlank() && !dbPhone.equalsIgnoreCase(fromPhone)) {
+                                blipContextService.clearQueueRedirect(dbPhone);
                             }
-                            log.info("[LEMBRETE-FINALIZACAO] Resposta/texto livre do paciente={} ('{}') direcionado para auto-encerramento (sem fila de Desk).", searchPhone, textLower);
-                            return new WebhookResult("", "", "", "", "reminder_notice_auto_closed", "");
+                            String confirmSuccessBlockId = blipProperties.getBlocks().getConfirmSuccess();
+                            if (confirmSuccessBlockId != null && !confirmSuccessBlockId.isBlank()) {
+                                blipContextService.changeMasterState(fromPhone, confirmSuccessBlockId);
+                                if (dbPhone != null && !dbPhone.isBlank() && !dbPhone.equalsIgnoreCase(fromPhone)) {
+                                    blipContextService.changeMasterState(dbPhone, confirmSuccessBlockId);
+                                }
+                            }
+                        } catch (Exception ex) {
+                            log.warn("[LEMBRETE-FINALIZACAO] Erro ao aplicar auto-encerramento em texto livre: {}", ex.getMessage());
                         }
+                        log.info("[LEMBRETE-FINALIZACAO] Resposta/texto livre do paciente={} ('{}') direcionado para auto-encerramento (sem fila de Desk).", searchPhone, textLower);
+                        return new WebhookResult("", "", "", "", "reminder_notice_auto_closed", "");
                     }
 
                     log.debug("[FREE-TEXT-ROUTING] Paciente {} em autoatendimento/triagem. Roteamento silencioso forçado desativado para permitir navegação livre no bot.", searchPhone);
@@ -699,6 +716,76 @@ public class HandleBlipWebhookUseCase {
                 queue,
                 dispatchIdentity
         );
+    }
+
+    public WebhookResult applySilentDeskRouting(String fromPhone) {
+        return applySilentDeskRouting(fromPhone, null);
+    }
+
+    public WebhookResult applySilentDeskRouting(String fromPhone, BlipWebhookPayload payload) {
+        log.info("[DESK-ROUTING] Processando transbordo para Desk/Atendimento Humano para o contato: {}", fromPhone);
+        
+        // 1. Limpa sincronamente variáveis de contexto de confirmação em ambos os escopos (Master e Túnel)
+        blipContextService.clearConfirmationContext(fromPhone);
+
+        String dbPhone = blipIdentityReconciler.resolveAndReconcileIdentity(fromPhone, payload != null ? payload.bsuid() : null);
+        String searchPhone = (dbPhone != null && !dbPhone.isBlank()) ? dbPhone : fromPhone;
+        String purifiedPhone = purifyPhoneNumberForSearch(searchPhone);
+        if (purifiedPhone.isEmpty()) {
+            purifiedPhone = purifyPhoneNumberForSearch(fromPhone);
+        }
+
+        String resolvedQueue = "Recepção Central / Suporte";
+        String resolvedPatientName = "";
+        String resolvedCpf = "";
+        String resolvedDoctorName = "";
+        String resolvedBirthdate = "";
+
+        try {
+            List<AppointmentSession> activeSessions = appointmentSessionRepository.findActiveByPhoneNumber(purifiedPhone);
+            if ((activeSessions == null || activeSessions.isEmpty()) && !purifiedPhone.startsWith("55")) {
+                activeSessions = appointmentSessionRepository.findActiveByPhoneNumber("55" + purifiedPhone);
+            }
+
+            if (activeSessions != null && !activeSessions.isEmpty()) {
+                AppointmentSession session = activeSessions.get(0);
+                if (session.getDoctorProfissionalId() != null && !session.getDoctorProfissionalId().isBlank()) {
+                    Optional<AppointmentDoctorMapping> doctorMappingOpt = appointmentDoctorMappingRepository.findByProfissionalId(session.getDoctorProfissionalId());
+                    if (doctorMappingOpt.isPresent()) {
+                        String queueId = doctorMappingOpt.get().getBlipQueueId();
+                        if (queueId != null && !queueId.isBlank()) {
+                            resolvedQueue = blipContextService.resolveQueueName(queueId.trim());
+                        }
+                        if (doctorMappingOpt.get().getProfissionalNome() != null) {
+                            resolvedDoctorName = doctorMappingOpt.get().getProfissionalNome();
+                        }
+                    }
+                }
+
+                if (session.getPatientId() != null && !session.getPatientId().isBlank()) {
+                    try {
+                        var patient = patientExternalPort.patientInfo(session.getPatientId());
+                        if (patient != null) {
+                            if (patient.name() != null) resolvedPatientName = patient.name();
+                            if (patient.cpf() != null) resolvedCpf = patient.cpf().replaceAll("\\D", "");
+                            if (patient.birthdate() != null) resolvedBirthdate = patient.birthdate();
+                        }
+                    } catch (Exception ex) {
+                        log.debug("[DESK-ROUTING] Erro ao consultar paciente para {}: {}", session.getPatientId(), ex.getMessage());
+                    }
+                }
+            }
+        } catch (Exception ex) {
+            log.warn("[DESK-ROUTING] Falha defensiva ao carregar dados do agendamento para Desk: {}", ex.getMessage());
+        }
+
+        try {
+            blipContextService.setQueueRedirect(fromPhone, resolvedQueue);
+        } catch (Exception ex) {
+            log.warn("[DESK-ROUTING] Falha ao configurar redirecionamento de fila para {}: {}", fromPhone, ex.getMessage());
+        }
+
+        return new WebhookResult(resolvedQueue, resolvedPatientName, resolvedCpf, resolvedBirthdate, "Atendimento humano", resolvedDoctorName);
     }
 
     private WebhookResult handlePrepararOuExibir(BlipWebhookPayload payload, boolean isPrepararAtendimento) {

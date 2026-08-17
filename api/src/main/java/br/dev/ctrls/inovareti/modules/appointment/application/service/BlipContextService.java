@@ -19,6 +19,7 @@ public class BlipContextService {
     private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
     private final org.springframework.core.task.AsyncTaskExecutor applicationTaskExecutor;
     private final BlipIdentityReconciler blipIdentityReconciler;
+    private final br.dev.ctrls.inovareti.modules.appointment.infrastructure.config.BlipProperties blipProperties;
 
     @org.springframework.beans.factory.annotation.Value("${APP_BLIP_APPOINTMENT_ID:}")
     private String blipAppointmentId;
@@ -27,11 +28,13 @@ public class BlipContextService {
             BlipLIMEClient limeClient, 
             com.fasterxml.jackson.databind.ObjectMapper objectMapper, 
             org.springframework.core.task.AsyncTaskExecutor applicationTaskExecutor,
-            BlipIdentityReconciler blipIdentityReconciler) {
+            BlipIdentityReconciler blipIdentityReconciler,
+            br.dev.ctrls.inovareti.modules.appointment.infrastructure.config.BlipProperties blipProperties) {
         this.limeClient = limeClient;
         this.objectMapper = objectMapper;
         this.applicationTaskExecutor = applicationTaskExecutor;
         this.blipIdentityReconciler = blipIdentityReconciler;
+        this.blipProperties = blipProperties;
     }
 
     public String resolveMasterIdentity(String userIdentity) {
@@ -211,7 +214,25 @@ public class BlipContextService {
     public void deleteUserContext(String userIdentity, String key) {
         if (userIdentity == null || userIdentity.isBlank() || key == null || key.isBlank()) return;
 
-        String normalizedIdentity = limeClient.normalizeUserIdentity(userIdentity);
+        String masterIdentity = resolveMasterIdentity(userIdentity);
+        String tunnelIdentity = resolveTunnelIdentity(userIdentity);
+
+        java.util.List<java.util.concurrent.CompletableFuture<Void>> futures = new java.util.ArrayList<>();
+        if (masterIdentity != null && !masterIdentity.isBlank()) {
+            futures.add(java.util.concurrent.CompletableFuture.runAsync(
+                () -> sendSingleDeleteUserContext(masterIdentity, key), applicationTaskExecutor));
+        }
+        if (tunnelIdentity != null && !tunnelIdentity.isBlank() && !tunnelIdentity.equalsIgnoreCase(masterIdentity)) {
+            futures.add(java.util.concurrent.CompletableFuture.runAsync(
+                () -> sendSingleDeleteUserContext(tunnelIdentity, key), applicationTaskExecutor));
+        }
+        try {
+            java.util.concurrent.CompletableFuture.allOf(futures.toArray(java.util.concurrent.CompletableFuture[]::new)).join();
+        } catch (Exception ignored) {}
+    }
+
+    private void sendSingleDeleteUserContext(String normalizedIdentity, String key) {
+        if (normalizedIdentity == null || normalizedIdentity.isBlank() || key == null || key.isBlank()) return;
 
         Map<String, Object> command = Map.of(
             "id", UUID.randomUUID().toString(),
@@ -225,6 +246,37 @@ public class BlipContextService {
             log.info("Contexto removido. identity={}, key={}", normalizedIdentity, key);
         } catch (org.springframework.web.client.RestClientException ex) {
             log.warn("Falha ao remover contexto. identity={}, key={}", normalizedIdentity, key, ex);
+        }
+    }
+
+    /**
+     * Remove sincronamente as variáveis de contexto relacionadas ao fluxo de confirmação
+     * (isConfirmingAgenda, isGroupFlow, payloadclique, requiresCpfFallback) em ambos os escopos (Master e Túnel).
+     */
+    public void clearConfirmationContext(String userIdentity) {
+        if (userIdentity == null || userIdentity.isBlank()) return;
+
+        String masterIdentity = resolveMasterIdentity(userIdentity);
+        String tunnelIdentity = resolveTunnelIdentity(userIdentity);
+
+        java.util.List<String> keys = java.util.List.of("isConfirmingAgenda", "isGroupFlow", "payloadclique", "requiresCpfFallback");
+
+        java.util.List<java.util.concurrent.CompletableFuture<Void>> futures = new java.util.ArrayList<>();
+        for (String key : keys) {
+            if (masterIdentity != null && !masterIdentity.isBlank()) {
+                futures.add(java.util.concurrent.CompletableFuture.runAsync(
+                    () -> sendSingleDeleteUserContext(masterIdentity, key), applicationTaskExecutor));
+            }
+            if (tunnelIdentity != null && !tunnelIdentity.isBlank() && !tunnelIdentity.equalsIgnoreCase(masterIdentity)) {
+                futures.add(java.util.concurrent.CompletableFuture.runAsync(
+                    () -> sendSingleDeleteUserContext(tunnelIdentity, key), applicationTaskExecutor));
+            }
+        }
+        try {
+            java.util.concurrent.CompletableFuture.allOf(futures.toArray(java.util.concurrent.CompletableFuture[]::new)).join();
+            log.info("[BLIP-CONTEXT] Variáveis de confirmação removidas com sucesso (escopo dual) para {}: {}", userIdentity, keys);
+        } catch (Exception ex) {
+            log.warn("[BLIP-CONTEXT] Erro ao remover variáveis de confirmação para {}: {}", userIdentity, ex.getMessage());
         }
     }
 
@@ -496,7 +548,24 @@ public class BlipContextService {
      */
     public boolean hasActiveTicket(String userIdentity, LocalDateTime lastNotificationSentAt) {
         if (userIdentity == null || userIdentity.isBlank()) return false;
-        String normalizedIdentity = limeClient.normalizeUserIdentity(userIdentity);
+        
+        String masterIdentity = resolveMasterIdentity(userIdentity);
+        String tunnelIdentity = resolveTunnelIdentity(userIdentity);
+
+        if (checkActiveTicketForIdentity(masterIdentity)) {
+            return true;
+        }
+        if (tunnelIdentity != null && !tunnelIdentity.equalsIgnoreCase(masterIdentity)) {
+            if (checkActiveTicketForIdentity(tunnelIdentity)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean checkActiveTicketForIdentity(String identity) {
+        if (identity == null || identity.isBlank()) return false;
+        String normalizedIdentity = limeClient.normalizeUserIdentity(identity);
 
         Map<String, Object> command = Map.of(
             "id", UUID.randomUUID().toString(),
@@ -511,6 +580,9 @@ public class BlipContextService {
             Object resourceNode = response.get("resource");
             if (resourceNode instanceof Map<?, ?> resourceMap) {
                 Object itemsNode = resourceMap.get("items");
+                if (itemsNode == null) itemsNode = resourceMap.get("tickets");
+                if (itemsNode == null) itemsNode = resourceMap.get("data");
+
                 if (itemsNode instanceof java.util.Collection<?> itemsList) {
                     boolean hasActive = false;
 
@@ -556,6 +628,30 @@ public class BlipContextService {
         } catch (Exception ex) {
             log.warn("[ATTENDANCE-GUARD] Falha ao verificar ticket ativo no Desk para {}: {}", normalizedIdentity, ex.getMessage());
             return false; // Fail-open para não travar os nudges normais em caso de falha de rede/autorização
+        }
+    }
+
+    /**
+     * Verifica se o contato está em atendimento humano ativo ou na fila do Blip Desk.
+     * Avalia tanto o master-state quanto tickets ativos/em espera na API do Desk.
+     */
+    public boolean isInHumanAttendance(String userIdentity) {
+        if (userIdentity == null || userIdentity.isBlank()) return false;
+        try {
+            String masterState = getUserContext(userIdentity, "master-state");
+            if (masterState != null && !masterState.isBlank()) {
+                String deskBlockId = blipProperties != null && blipProperties.getBlocks() != null 
+                        ? blipProperties.getBlocks().getDeskStateId() : null;
+                if (masterState.toLowerCase().contains("desk") 
+                        || (deskBlockId != null && !deskBlockId.isBlank() && masterState.equalsIgnoreCase(deskBlockId))) {
+                    log.info("[ATTENDANCE-GUARD] Contato {} com master-state apontando para Desk ('{}').", userIdentity, masterState);
+                    return true;
+                }
+            }
+            return hasActiveTicket(userIdentity);
+        } catch (Exception ex) {
+            log.warn("[ATTENDANCE-GUARD] Falha ao verificar atendimento humano para {}: {}", userIdentity, ex.getMessage());
+            return false;
         }
     }
 

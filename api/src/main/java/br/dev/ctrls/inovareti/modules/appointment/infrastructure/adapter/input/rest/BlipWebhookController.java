@@ -294,6 +294,23 @@ public class BlipWebhookController {
         }
 
         if (isConfirming) {
+            // GUARDA DE ATENDIMENTO HUMANO / DESK:
+            // Se o contato estiver em atendimento humano ou com ticket aberto no Desk, desativa o State-Lock imediatamente
+            boolean inHumanAttendance = false;
+            try {
+                inHumanAttendance = blipContextService.isInHumanAttendance(from);
+            } catch (Exception ex) {
+                log.warn("[STATE-LOCK] Erro ao verificar atendimento humano para {}: {}", from, ex.getMessage());
+            }
+
+            if (inHumanAttendance) {
+                log.info("[STATE-LOCK-BYPASS] Paciente {} está em atendimento humano ativo ou fila do Desk. Desativando State-Lock e limpando contexto de confirmação.", from);
+                blipContextService.clearConfirmationContext(from);
+                isConfirming = false;
+            }
+        }
+
+        if (isConfirming) {
             String actionValue = action != null ? action.trim() : "";
             String rawText = actionValue + " " + (content != null ? content.toString() : "");
             String rawActionTextLower = rawText.toLowerCase();
