@@ -378,15 +378,15 @@ public class BlipNotificationService {
                 targetBot, stateIdPrepararAtendimento, targetBot
         );
 
-        log.info("[MENSAGERIA-GRUPO] Transmitindo template de grupo '{}' via Active Campaign (/campaign/full) para o telefone={} com o groupId={}", templateName, recipientE164, groupId);
+        log.info("[MENSAGERIA-GRUPO] Transmitindo template de grupo '{}' (0 parâmetros) via Active Campaign (/campaign/full) para o telefone={} com o groupId={}", templateName, recipientE164, groupId);
         try {
             var response = limeClient.executeCommand(commandPayload, BlipLIMEClient.AuthorizationScope.ROUTER);
             validateBlipResponse(response, templateName, recipientE164);
             log.info("[MENSAGERIA-GRUPO] Template de grupo '{}' disparado com sucesso via Active Campaign para o telefone={}", templateName, recipientE164);
         } catch (Exception e) {
             String errMsg = e.getMessage() != null ? e.getMessage() : "";
-            if (errMsg.contains("131008")) {
-                log.warn("[AUTOCORRECAO-TEMPLATE] Meta recusou disparo de '{}' sem parâmetros (131008). Reenviando com parâmetro 1 (nome do paciente)...", templateName);
+            if (errMsg.contains("131008") || errMsg.contains("number of localizable_params (0) does not match the expected number of params (1)")) {
+                log.warn("[AUTOCORRECAO-TEMPLATE] Meta indicou que o template de grupo '{}' requer 1 parâmetro (131008). Reenviando com parâmetro 1 (nome do paciente)...", templateName);
                 try {
                     Map<String, Object> retryPayload = blipPayloadBuilder.buildActiveCampaignCommandPayload(
                             "Aviso Grupo Retry 131008 - " + UUID.randomUUID().toString().substring(0, 8), recipientE164, templateName,
@@ -399,12 +399,12 @@ public class BlipNotificationService {
                 } catch (Exception retryEx) {
                     log.error("[AUTOCORRECAO-TEMPLATE] Falha no reenvio com parâmetro 1: {}", retryEx.getMessage());
                 }
-            } else if (errMsg.contains("132000")) {
-                log.warn("[AUTOCORRECAO-TEMPLATE] Meta recusou disparo de '{}' com parâmetros (132000). Reenviando estaticamente com 0 parâmetros...", templateName);
+            } else if (errMsg.contains("132000") || errMsg.contains("number of localizable_params (1) does not match the expected number of params (0)")) {
+                log.warn("[AUTOCORRECAO-TEMPLATE] Meta indicou que o template de grupo '{}' não aceita parâmetros (132000). Reenviando com 0 parâmetros...", templateName);
                 try {
                     Map<String, Object> retryPayload = blipPayloadBuilder.buildActiveCampaignCommandPayload(
                             "Aviso Grupo Retry 132000 - " + UUID.randomUUID().toString().substring(0, 8), recipientE164, templateName,
-                            Map.of(), List.of(), targetBot, stateIdPrepararAtendimento, targetBot
+                            null, null, targetBot, stateIdPrepararAtendimento, targetBot
                     );
                     var retryResponse = limeClient.executeCommand(retryPayload, BlipLIMEClient.AuthorizationScope.ROUTER);
                     validateBlipResponse(retryResponse, templateName, recipientE164);

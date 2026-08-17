@@ -154,21 +154,16 @@ public class BlipPayloadBuilder {
     /**
      * Constrói o mapa de dados para envio do template de grupo (ex: aviso_agendamento_grupo)
      * utilizando a Active Campaign Growth API (/campaign/full).
-     * Templates de grupo (_grupo) ou estáticos enviam messageParams omitidos (null).
+     * O template aprovado na Meta não possui variáveis no corpo (0 parâmetros / 0 localizable_params).
      */
     public Map<String, Object> buildGroupTemplatePayload(String toPhone, String templateName, String namespace, UUID groupId, String patientName, String masterState, String stateId, String flowId) {
-        String safePatientName = (patientName != null && !patientName.isBlank() && !"null".equalsIgnoreCase(patientName.trim()))
-                ? patientName.trim()
-                : "Paciente";
-
         String uniqueSuffix = UUID.randomUUID().toString().substring(0, 8);
         String campaignName = "Aviso Grupo - " + (groupId != null ? groupId.toString() : uniqueSuffix) + " - " + uniqueSuffix;
-        
-        Map<String, String> paramValues;
-        List<String> paramKeys;
 
-        paramValues = Map.of("1", safePatientName);
-        paramKeys = List.of("1");
+        // Templates de grupo aprovados na Meta não possuem variáveis no corpo (0 parâmetros).
+        // Passamos null para omitir messageParams no JSON e evitar o erro Meta #132000.
+        Map<String, String> paramValues = null;
+        List<String> paramKeys = null;
 
         String effectiveFlowId = (flowId != null && !flowId.isBlank()) 
                 ? flowId.trim() 
