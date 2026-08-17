@@ -16,6 +16,7 @@ public class DiscordProperties {
     private Webhook webhook = new Webhook();
     private Operational operational = new Operational();
     private Thumbnail thumbnail = new Thumbnail();
+    private String adminId;
 
     @Getter
     @Setter

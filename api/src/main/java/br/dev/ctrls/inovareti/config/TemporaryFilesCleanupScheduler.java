@@ -18,6 +18,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -26,14 +27,11 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 @Component
+@RequiredArgsConstructor
 @ConditionalOnProperty(name = "app.cleanup.enabled", havingValue = "true", matchIfMissing = true)
 public class TemporaryFilesCleanupScheduler {
 
-    @Value("${app.cleanup.temp-retention-hours:24}")
-    private int tempRetentionHours;
-
-    @Value("${app.cleanup.orphan-retention-days:30}")
-    private int orphanRetentionDays;
+    private final CleanupProperties cleanupProperties;
 
     @Value("${app.backup.temp-dir:/app/backups/temp}")
     private String backupTempDir;
@@ -53,9 +51,11 @@ public class TemporaryFilesCleanupScheduler {
 
         List<Path> targetDirectories = resolveTargetDirectories();
 
+        int retentionHours = cleanupProperties != null ? cleanupProperties.getTempRetentionHours() : 24;
+
         for (Path directory : targetDirectories) {
             if (Files.exists(directory) && Files.isDirectory(directory)) {
-                cleanDirectory(directory, Duration.ofHours(tempRetentionHours), totalDeletedFiles, totalFreedBytes);
+                cleanDirectory(directory, Duration.ofHours(retentionHours), totalDeletedFiles, totalFreedBytes);
             }
         }
 
@@ -130,7 +130,8 @@ public class TemporaryFilesCleanupScheduler {
             return;
         }
 
-        Instant cutoffTime = Instant.now().minus(Duration.ofHours(tempRetentionHours));
+        int retentionHours = cleanupProperties != null ? cleanupProperties.getTempRetentionHours() : 24;
+        Instant cutoffTime = Instant.now().minus(Duration.ofHours(retentionHours));
 
         try (Stream<Path> stream = Files.list(tempPath)) {
             stream.filter(Files::isRegularFile)
