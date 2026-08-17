@@ -264,19 +264,16 @@ public class IntentAnalyzerService {
 
             interactiveList = Map.of(
                     "recipient_type", "individual",
-                    "type", "interactive",
-                    "interactive", Map.of(
-                            "type", "list",
-                            "header", Map.of("type", "text", "text", "Especialistas Encontrados"),
-                            "body", Map.of("text", "Encontramos mais de um especialista para sua busca. Selecione o médico desejado abaixo:"),
-                            "footer", Map.of("text", "Clínica Inovare"),
-                            "action", Map.of(
-                                    "button", "Ver Médicos",
-                                    "sections", List.of(
-                                            Map.of(
-                                                    "title", "Médicos Disponíveis",
-                                                    "rows", rows
-                                            )
+                    "type", "list",
+                    "header", Map.of("type", "text", "text", "Especialistas Encontrados"),
+                    "body", Map.of("text", "Encontramos mais de um especialista para sua busca. Selecione o médico desejado abaixo:"),
+                    "footer", Map.of("text", "Clínica Inovare"),
+                    "action", Map.of(
+                            "button", "Ver Médicos",
+                            "sections", List.of(
+                                    Map.of(
+                                            "title", "Médicos Disponíveis",
+                                            "rows", rows
                                     )
                             )
                     )
