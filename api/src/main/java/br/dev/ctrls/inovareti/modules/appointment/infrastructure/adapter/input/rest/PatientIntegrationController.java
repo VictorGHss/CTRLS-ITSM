@@ -19,8 +19,6 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.format.DateTimeFormatter;
 import java.util.List;
-import java.util.Objects;
-import java.util.stream.Stream;
 
 /**
  * Controller REST responsável pela gestão e integração de Pacientes com o Feegow ERP.
@@ -221,13 +219,11 @@ public class PatientIntegrationController {
             String dataFormatada = (appt.startAt() != null) ? appt.startAt().format(dateFormatter) : "Data a definir";
             String horaFormatada = (appt.startAt() != null) ? appt.startAt().format(timeFormatter) : "--:--";
 
-            String profissional = Stream.of(
-                    appt.doctorName()
-            ).filter(Objects::nonNull).map(String::trim).filter(s -> !s.isBlank()).findFirst().orElse("Profissional");
+            String rawDoctor = appt.doctorName();
+            String profissional = (rawDoctor != null && !rawDoctor.trim().isBlank()) ? rawDoctor.trim() : "Profissional";
 
-            String especialidade = Stream.of(
-                    appt.procedureName()
-            ).filter(Objects::nonNull).map(String::trim).filter(s -> !s.isBlank()).findFirst().orElse("Consulta");
+            String rawProcedure = appt.procedureName();
+            String especialidade = (rawProcedure != null && !rawProcedure.trim().isBlank()) ? rawProcedure.trim() : "Consulta";
 
             sb.append(String.format("• %s às %s - %s (%s)\n", dataFormatada, horaFormatada, profissional, especialidade));
         }

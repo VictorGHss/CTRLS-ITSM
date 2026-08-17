@@ -9,8 +9,6 @@ import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
-import java.util.stream.Stream;
 import java.util.concurrent.Semaphore;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
@@ -404,16 +402,14 @@ public class FeegowAppointmentAdapter implements AppointmentExternalPort {
             return null;
         }
 
-        String doctorName = Stream.of(
-                item.doctorName()
-        ).filter(Objects::nonNull).map(String::trim).filter(s -> !s.isBlank()).findFirst().orElse("Profissional");
+        String rawDoctor = item.doctorName();
+        String doctorName = (rawDoctor != null && !rawDoctor.trim().isBlank()) ? rawDoctor.trim() : "Profissional";
 
         String unitName = item.unitName() != null && !item.unitName().isBlank() ? item.unitName().trim() : "Clínica Inovare";
         String statusId = item.statusId() != null ? String.valueOf(item.statusId()) : "";
 
-        String procedureName = Stream.of(
-                item.procedureName()
-        ).filter(Objects::nonNull).map(String::trim).filter(s -> !s.isBlank()).findFirst().orElse("Consulta");
+        String rawProcedure = item.procedureName();
+        String procedureName = (rawProcedure != null && !rawProcedure.trim().isBlank()) ? rawProcedure.trim() : "Consulta";
 
         String procedureId = item.procedureId() != null ? item.procedureId().trim() : "";
 
