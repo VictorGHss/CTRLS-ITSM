@@ -78,8 +78,6 @@ public class HandleBlipWebhookUseCase {
     private final br.dev.ctrls.inovareti.modules.access.domain.port.output.BlipContactClientPort blipContactClientPort;
     private final BlipNotificationService blipNotificationService;
 
-    private final java.util.Map<String, Long> silentRoutingCache = new java.util.concurrent.ConcurrentHashMap<>();
-
     private record SessionDbData(
         AppointmentSession session,
         AppointmentDoctorMapping doctorMapping
@@ -658,9 +656,8 @@ public class HandleBlipWebhookUseCase {
                         }
                     }
 
-                    log.info("[FREE-TEXT-ROUTING] Paciente {} possui {} agendamento(s) ativo(s). Aplicando roteamento silencioso para Desk.", searchPhone, activeSessions.size());
-                    applySilentDeskRouting(fromPhone, dbPhone, null);
-                    return new WebhookResult("", "", "", "", "free_text_desk_routed", "");
+                    log.debug("[FREE-TEXT-ROUTING] Paciente {} em autoatendimento/triagem. Roteamento silencioso forçado desativado para permitir navegação livre no bot.", searchPhone);
+                    return null;
                 }
             } catch (Exception ex) {
                 log.warn("[FREE-TEXT-ROUTING] Erro ao verificar agendamentos ativos para texto livre de {}: {}", fromPhone, ex.getMessage());
@@ -702,151 +699,6 @@ public class HandleBlipWebhookUseCase {
                 queue,
                 dispatchIdentity
         );
-    }
-
-    private void applySilentDeskRouting(String fromPhone, String dbPhone, String statusInfo) {
-        String searchPhone = (dbPhone != null && !dbPhone.isEmpty()) ? dbPhone : fromPhone;
-        if (searchPhone == null || searchPhone.isBlank()) return;
-
-        long nowTime = System.currentTimeMillis();
-        Long lastRouted = silentRoutingCache.get(searchPhone);
-        if (lastRouted != null && (nowTime - lastRouted) < 600000) {
-            log.debug("[SILENT-ROUTING-CACHE] Roteamento silencioso já aplicado recentemente para {}. Pulando chamadas REST redundantes ao Blip.", searchPhone);
-            return;
-        }
-
-        // Limpeza preventiva de memória quando o cache excede 5.000 entradas
-        if (silentRoutingCache.size() > 5000) {
-            silentRoutingCache.entrySet().removeIf(entry -> entry.getValue() < nowTime - 600000L);
-        }
-
-        silentRoutingCache.put(searchPhone, nowTime);
-
-        String purifiedPhone = purifyPhoneNumberForSearch(searchPhone);
-        if (purifiedPhone.isEmpty()) {
-            purifiedPhone = purifyPhoneNumberForSearch(fromPhone);
-        }
-
-        AppointmentSession session = null;
-        List<AppointmentSession> activeSessions = appointmentSessionRepository.findActiveByPhoneNumber(purifiedPhone);
-        if (activeSessions != null && !activeSessions.isEmpty()) {
-            session = activeSessions.get(0);
-        }
-
-        String doctorId = session != null ? session.getDoctorProfissionalId() : null;
-        String feegowAppointmentId = session != null ? session.getFeegowAppointmentId() : "";
-        String patientId = session != null ? session.getPatientId() : null;
-
-        String blipQueueId = null;
-        String doctorName = null;
-
-        if (doctorId != null && !doctorId.isBlank()) {
-            Optional<AppointmentDoctorMapping> doctorMappingOpt = appointmentDoctorMappingRepository.findByProfissionalId(doctorId);
-            if (doctorMappingOpt.isPresent()) {
-                AppointmentDoctorMapping mapping = doctorMappingOpt.get();
-                blipQueueId = mapping.getBlipQueueId();
-                doctorName = mapping.getProfissionalNome();
-            }
-            if (doctorName == null || doctorName.isBlank()) {
-                try {
-                    doctorName = professionalExternalPort.getProfessionalName(doctorId);
-                } catch (Exception ignored) {}
-            }
-        }
-
-        if (doctorName == null || doctorName.isBlank()) {
-            doctorName = "Clínica Inovare";
-        }
-
-        String queueName = "Recepção Central / Suporte";
-        if (blipQueueId != null && !blipQueueId.isBlank()) {
-            String resolved = blipContextService.resolveQueueName(blipQueueId);
-            if (resolved != null && !resolved.isBlank() && !resolved.trim().matches("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")) {
-                queueName = resolved;
-            }
-        }
-
-        String patientName = "Paciente";
-        String patientCpf = "";
-
-        if (patientId != null && !patientId.isBlank()) {
-            try {
-                br.dev.ctrls.inovareti.modules.appointment.domain.port.output.FeegowPatient patient = patientExternalPort.patientInfo(patientId);
-                if (patient != null) {
-                    if (patient.name() != null && !patient.name().isBlank() && !br.dev.ctrls.inovareti.modules.access.infrastructure.adapter.output.BlipContactClientAdapter.isInvalidName(patient.name())) {
-                        patientName = patient.name().trim();
-                    }
-                    if (patient.cpf() != null) {
-                        patientCpf = patient.cpf().replaceAll("\\D", "");
-                    }
-                }
-            } catch (Exception ex) {
-                log.warn("[SILENT-ROUTING] Falha ao buscar dados do paciente Feegow para ID {}: {}", patientId, ex.getMessage());
-            }
-        }
-
-        String targetQueueToRedirect = queueName;
-
-        log.info("[SILENT-ROUTING] Paciente: '{}' (CPF: {}) | Medico: '{}' | Fila: '{}' (ToRedirect: '{}') | Feegow ID: '{}'",
-                patientName, patientCpf, doctorName, queueName, targetQueueToRedirect, feegowAppointmentId);
-
-        // 1. Sincronização obrigatória do contato no CRM do Blip (escopo duplo: WhatsApp + Túneis)
-        try {
-            blipContactClientPort.syncContact(searchPhone, patientName, patientCpf, queueName, doctorId);
-            if (fromPhone != null && !fromPhone.equalsIgnoreCase(searchPhone)) {
-                blipContactClientPort.syncContact(fromPhone, patientName, patientCpf, queueName, doctorId);
-            }
-        } catch (Exception ex) {
-            log.warn("[SILENT-ROUTING] Falha ao sincronizar contato: {}", ex.getMessage());
-        }
-
-        // 2. Injeção de variáveis no contexto do Blip em ESCOPO DUPLO (Master + Túneis)
-        try {
-            blipContextService.setQueueRedirect(searchPhone, queueName);
-            if (fromPhone != null && !fromPhone.equalsIgnoreCase(searchPhone)) {
-                blipContextService.setQueueRedirect(fromPhone, queueName);
-            }
-
-            List<String> targets = List.of(fromPhone, searchPhone);
-            for (String target : targets) {
-                if (target == null || target.isBlank()) continue;
-                blipContextService.setUserContext(target, "attendanceQueueToRedirect", queueName);
-                blipContextService.setUserContext(target, "attendanceQueueNameToRedirect", queueName);
-                blipContextService.setUserContext(target, "fila", queueName);
-                blipContextService.setUserContext(target, "deskFila", queueName);
-                blipContextService.setUserContext(target, "Medico", doctorName);
-                blipContextService.setUserContext(target, "idAgendamentoFeegow", feegowAppointmentId);
-                blipContextService.setUserContext(target, "hasActiveAppointment", "true");
-                blipContextService.setUserContext(target, "isConfirmingAgenda", "false");
-                blipContextService.setUserContext(target, "payloadclique", "");
-                blipContextService.setUserContext(target, "name", patientName);
-                blipContextService.setUserContext(target, "paciente", patientName);
-                if (statusInfo != null && !statusInfo.isBlank()) {
-                    blipContextService.setUserContext(target, "lembrete_resposta", statusInfo);
-                }
-            }
-        } catch (Exception ex) {
-            log.warn("[SILENT-ROUTING] Falha ao injetar contexto dual: {}", ex.getMessage());
-        }
-
-        // 3. Atualiza Master-State e Builder Master-State para o bloco de Desk
-        try {
-            if (fromPhone != null && !fromPhone.isBlank()) {
-                String deskStateId = blipProperties.getBlocks().getDeskStateId();
-                if (deskStateId == null || deskStateId.isBlank()) {
-                    deskStateId = "644d54dd-aefd-478b-93eb-10081acdd387";
-                }
-                String targetBot = "desk@msging.net";
-                blipContextService.setMasterState(fromPhone, targetBot, deskStateId);
-                blipContextService.setBuilderMasterState(fromPhone, deskStateId);
-                if (searchPhone != null && !fromPhone.equalsIgnoreCase(searchPhone)) {
-                    blipContextService.setMasterState(searchPhone, targetBot, deskStateId);
-                    blipContextService.setBuilderMasterState(searchPhone, deskStateId);
-                }
-            }
-        } catch (Exception ex) {
-            log.warn("[SILENT-ROUTING] Falha ao ajustar Master-State de Desk para {}: {}", fromPhone, ex.getMessage());
-        }
     }
 
     private WebhookResult handlePrepararOuExibir(BlipWebhookPayload payload, boolean isPrepararAtendimento) {

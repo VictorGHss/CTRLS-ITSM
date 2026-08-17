@@ -39,6 +39,9 @@ public class IntentAnalysisResponse {
     @JsonProperty("rota")
     private String rota;
 
+    @JsonProperty("isInternal")
+    private String isInternal;
+
     @JsonProperty("linkWa")
     private String linkWa;
 
@@ -82,6 +85,9 @@ public class IntentAnalysisResponse {
 
         @JsonProperty("rota")
         private String rota;
+
+        @JsonProperty("isInternal")
+        private String isInternal;
 
         @JsonProperty("linkWa")
         private String linkWa;
