@@ -144,6 +144,7 @@ public class IntentAnalysisService {
                         .especialidade(selected.getSpecialty())
                         .fila(selected.getQueue())
                         .rota(selected.getRoute())
+                        .isInternal(isInternal ? "true" : "false")
                         .linkWa(buildWaLink(selected))
                         .routeType(isInternal ? "INTERNAL" : "EXTERNAL")
                         .acaoSeguinte(isInternal ? "REDIRECIONAR_DESK" : "EXIBIR_LINK_EXTERNO")
@@ -184,6 +185,7 @@ public class IntentAnalysisService {
                 .especialidade(bestMatch.getSpecialty())
                 .fila(bestMatch.getQueue())
                 .rota(bestMatch.getRoute())
+                .isInternal(isInternal ? "true" : "false")
                 .linkWa(buildWaLink(bestMatch))
                 .routeType(hasSpecificQueue ? "INTERNAL" : (isInternal ? "MENU_POS_CPF" : "EXTERNAL"))
                 .acaoSeguinte(hasSpecificQueue ? "REDIRECIONAR_DESK" : (isInternal ? "EXIBIR_MENU_POS_CPF" : "EXIBIR_LINK_EXTERNO"))
@@ -193,13 +195,17 @@ public class IntentAnalysisService {
             log.info("[IntentAnalysis] MULTIPLOS_RESULTADOS ({}) para termo '{}'", topMatches.size(), termoBuscado);
 
             List<IntentAnalysisResponse.DoctorOption> options = topMatches.stream()
-                .map(match -> IntentAnalysisResponse.DoctorOption.builder()
-                    .medico(match.getDoctorName())
-                    .especialidade(match.getSpecialty())
-                    .fila(match.getQueue())
-                    .rota(match.getRoute())
-                    .linkWa(buildWaLink(match))
-                    .build())
+                .map(match -> {
+                    boolean optInternal = "DESK".equalsIgnoreCase(match.getRoute());
+                    return IntentAnalysisResponse.DoctorOption.builder()
+                        .medico(match.getDoctorName())
+                        .especialidade(match.getSpecialty())
+                        .fila(match.getQueue())
+                        .rota(match.getRoute())
+                        .isInternal(optInternal ? "true" : "false")
+                        .linkWa(buildWaLink(match))
+                        .build();
+                })
                 .toList();
 
             StringBuilder sb = new StringBuilder();
@@ -331,9 +337,17 @@ public class IntentAnalysisService {
     }
 
     private String buildWaLink(DoctorCatalog catalog) {
+        if (catalog == null || "DESK".equalsIgnoreCase(catalog.getRoute())) {
+            return null;
+        }
         try {
+            if (catalog == DoctorCatalog.EXAMES_IMAGEM) {
+                String message = "Olá! Gostaria de informações/agendamento sobre Exames de Imagem.";
+                String encodedMsg = URLEncoder.encode(message, StandardCharsets.UTF_8).replace("+", "%20");
+                return "https://wa.me/554230262633?text=" + encodedMsg;
+            }
             String message = "Olá! Gostaria de agendar atendimento com " + catalog.getDoctorName() + " (" + catalog.getSpecialty() + ").";
-            String encodedMsg = URLEncoder.encode(message, StandardCharsets.UTF_8);
+            String encodedMsg = URLEncoder.encode(message, StandardCharsets.UTF_8).replace("+", "%20");
             return "https://wa.me/554230262600?text=" + encodedMsg;
         } catch (Exception e) {
             return null;

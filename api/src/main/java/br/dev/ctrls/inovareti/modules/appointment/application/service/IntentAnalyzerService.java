@@ -300,14 +300,33 @@ public class IntentAnalyzerService {
 
     private DoctorMatchDto toDoctorMatchDto(DoctorCatalog catalog) {
         boolean isInternal = "DESK".equalsIgnoreCase(catalog.getRoute());
+        String externalLink = null;
+        String externalPhone = null;
+
+        if (!isInternal) {
+            try {
+                if (catalog == DoctorCatalog.EXAMES_IMAGEM) {
+                    String message = "Olá! Gostaria de informações/agendamento sobre Exames de Imagem.";
+                    String encodedMsg = java.net.URLEncoder.encode(message, java.nio.charset.StandardCharsets.UTF_8).replace("+", "%20");
+                    externalLink = "https://wa.me/554230262633?text=" + encodedMsg;
+                    externalPhone = "(42) 3026-2633";
+                } else {
+                    String message = "Olá! Gostaria de agendar atendimento com " + catalog.getDoctorName() + " (" + catalog.getSpecialty() + ").";
+                    String encodedMsg = java.net.URLEncoder.encode(message, java.nio.charset.StandardCharsets.UTF_8).replace("+", "%20");
+                    externalLink = "https://wa.me/554230262600?text=" + encodedMsg;
+                    externalPhone = "(42) 3026-2600";
+                }
+            } catch (Exception ignored) {}
+        }
+
         return DoctorMatchDto.builder()
                 .doctorName(catalog.getDoctorName())
                 .specialty(catalog.getSpecialty())
                 .route(catalog.getRoute())
                 .queue(catalog.getQueue())
                 .isInternal(isInternal)
-                .externalLink(!isInternal ? "https://wa.me/554230262633" : null)
-                .externalPhone(!isInternal ? "(42) 3026-2633" : null)
+                .externalLink(externalLink)
+                .externalPhone(externalPhone)
                 .isSynthetic(false)
                 .build();
     }
