@@ -88,10 +88,12 @@ public class BlipContactClientAdapter implements BlipContactClientPort {
             return true;
         }
         String trimmed = name.trim();
-        if (trimmed.contains("@") || trimmed.contains("msging.net")) {
+        if (trimmed.contains("@") || trimmed.contains("msging.net") || trimmed.contains("tunnel")) {
             return true;
         }
-        if (trimmed.matches("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")) {
+        if (trimmed.matches("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+                || trimmed.matches("^[0-9a-fA-F-]{36}$")
+                || trimmed.matches("^[0-9a-fA-F]{32}$")) {
             return true;
         }
         return false;
@@ -104,7 +106,10 @@ public class BlipContactClientAdapter implements BlipContactClientPort {
         String trimmed = name.trim().toLowerCase();
         return trimmed.equals("paciente") 
             || trimmed.equals("paciente não identificado") 
-            || trimmed.equals("paciente nao identificado");
+            || trimmed.equals("paciente nao identificado")
+            || trimmed.equals("cliente")
+            || trimmed.equals("usuário")
+            || trimmed.equals("usuario");
     }
 
     @Override
@@ -271,7 +276,7 @@ public class BlipContactClientAdapter implements BlipContactClientPort {
     }
 
     private String resolveCleanName(String phoneNumber, String normalizedIdentity, String name) {
-        if (!isInvalidName(name)) {
+        if (name != null && !name.isBlank() && !isInvalidName(name) && !isGenericName(name)) {
             return name.trim();
         }
 
@@ -285,7 +290,7 @@ public class BlipContactClientAdapter implements BlipContactClientPort {
                     for (var session : activeSessions) {
                         if (session.getPatientId() != null && !session.getPatientId().isBlank()) {
                             var patient = patientExternalPort.patientInfo(session.getPatientId());
-                            if (patient != null && patient.name() != null && !isInvalidName(patient.name())) {
+                            if (patient != null && patient.name() != null && !isInvalidName(patient.name()) && !isGenericName(patient.name())) {
                                 String cleanPName = patient.name().trim();
                                 if (!patientNames.contains(cleanPName)) {
                                     patientNames.add(cleanPName);
@@ -304,11 +309,8 @@ public class BlipContactClientAdapter implements BlipContactClientPort {
             log.debug("[BlipContact-Adapter] Erro defensivo ao tentar buscar nome(s) do(s) paciente(s) no Feegow: {}", ex.getMessage());
         }
 
-        if (name != null && !name.isBlank()) {
-            log.warn("[BlipContact-Adapter] Nome fornecido ('{}') é inválido. Usando fallback 'Paciente' para sobrescrita no Blip.", name);
-        }
-
-        return "Paciente";
+        // Se o nome for nulo, inválido ou GUID, retorna null para omitir o campo e NUNCA sobrescrever no Blip CRM
+        return null;
     }
 
     private boolean sendContactCommand(String identity, String name, String formattedPhone, String plainPhone, String cleanCpf, String cleanQueue, String digitsOnly) {
@@ -319,10 +321,8 @@ public class BlipContactClientAdapter implements BlipContactClientPort {
 
         Map<String, Object> contactResource = new java.util.LinkedHashMap<>();
         contactResource.put("identity", identity);
-        if (!isInvalidName(name)) {
-            contactResource.put("name", name);
-        } else {
-            contactResource.put("name", "Paciente");
+        if (name != null && !name.isBlank() && !isInvalidName(name) && !isGenericName(name)) {
+            contactResource.put("name", name.trim());
         }
         if (!digitsOnly.isBlank()) {
             contactResource.put("phoneNumber", formattedPhone);

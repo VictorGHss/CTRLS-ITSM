@@ -200,6 +200,42 @@ public class BlipIdentityReconciler {
         
         return digitsOnly;
     }
+
+    /**
+     * Valida se um nome fornecido é válido e não é um GUID, UUID ou identificador de túnel.
+     */
+    public boolean isValidPatientName(String name) {
+        if (name == null || name.isBlank() || "null".equalsIgnoreCase(name.trim())) {
+            return false;
+        }
+        String trimmed = name.trim();
+        if (trimmed.contains("@") || trimmed.contains("msging.net") || trimmed.contains("tunnel")) {
+            return false;
+        }
+        if (trimmed.matches("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+                || trimmed.matches("^[0-9a-fA-F-]{36}$")
+                || trimmed.matches("^[0-9a-fA-F]{32}$")) {
+            return false;
+        }
+        String lower = trimmed.toLowerCase();
+        return !lower.equals("paciente") 
+            && !lower.equals("paciente não identificado") 
+            && !lower.equals("paciente nao identificado")
+            && !lower.equals("cliente")
+            && !lower.equals("usuário")
+            && !lower.equals("usuario");
+    }
+
+    /**
+     * Sanitiza o nome do paciente, retornando null se for um GUID ou inválido,
+     * garantindo que nenhuma sobrescrita indevida ocorra no CRM do Blip.
+     */
+    public String sanitizePatientName(String name) {
+        if (!isValidPatientName(name)) {
+            return null;
+        }
+        return name.trim();
+    }
 }
 
 

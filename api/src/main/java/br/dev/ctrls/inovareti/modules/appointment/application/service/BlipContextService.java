@@ -138,12 +138,18 @@ public class BlipContextService {
         String masterIdentity = resolveMasterIdentity(userIdentity);
         String tunnelIdentity = resolveTunnelIdentity(userIdentity);
 
+        java.util.List<java.util.concurrent.CompletableFuture<Void>> futures = new java.util.ArrayList<>();
         if (masterIdentity != null && !masterIdentity.isBlank()) {
-            sendSingleUserContext(masterIdentity, key, value);
+            futures.add(java.util.concurrent.CompletableFuture.runAsync(
+                () -> sendSingleUserContext(masterIdentity, key, value), applicationTaskExecutor));
         }
         if (tunnelIdentity != null && !tunnelIdentity.isBlank() && !tunnelIdentity.equalsIgnoreCase(masterIdentity)) {
-            sendSingleUserContext(tunnelIdentity, key, value);
+            futures.add(java.util.concurrent.CompletableFuture.runAsync(
+                () -> sendSingleUserContext(tunnelIdentity, key, value), applicationTaskExecutor));
         }
+        try {
+            java.util.concurrent.CompletableFuture.allOf(futures.toArray(java.util.concurrent.CompletableFuture[]::new)).join();
+        } catch (Exception ignored) {}
     }
 
     public static final String STATE_REVIEW_FINISHED = "932c1f15-4e83-4b55-b343-1d3564cf57ff";
@@ -391,9 +397,11 @@ public class BlipContextService {
             extras.put("nascimento", payload.getPatientBirthdate());
             extras.put("data_nascimento", payload.getPatientBirthdate());
 
-            // Injeta o nome também nas chaves extras de texto que o fluxo lê
-            extras.put("paciente", payload.getPatientName());
-            extras.put("Nome", payload.getPatientName());
+            String cleanPName = blipIdentityReconciler.sanitizePatientName(payload.getPatientName());
+            if (cleanPName != null) {
+                extras.put("paciente", cleanPName);
+                extras.put("Nome", cleanPName);
+            }
 
             String blipBirthDate = convertBirthdateToBlipFormat(payload.getPatientBirthdate());
 
@@ -402,7 +410,9 @@ public class BlipContextService {
                 BlipContactUpdateCommand masterCommand = new BlipContactUpdateCommand();
                 BlipContactUpdateCommand.ContactResource masterResource = new BlipContactUpdateCommand.ContactResource();
                 masterResource.setIdentity(masterIdentity);
-                masterResource.setName(payload.getPatientName());
+                if (cleanPName != null) {
+                    masterResource.setName(cleanPName);
+                }
                 masterResource.setTaxDocument(payload.getPatientCPF());
                 masterResource.setBirthDate(blipBirthDate);
                 masterResource.setExtras(extras);
@@ -421,7 +431,9 @@ public class BlipContextService {
                 BlipContactUpdateCommand tunnelCommand = new BlipContactUpdateCommand();
                 BlipContactUpdateCommand.ContactResource tunnelResource = new BlipContactUpdateCommand.ContactResource();
                 tunnelResource.setIdentity(tunnelIdentity);
-                tunnelResource.setName(payload.getPatientName());
+                if (cleanPName != null) {
+                    tunnelResource.setName(cleanPName);
+                }
                 tunnelResource.setTaxDocument(payload.getPatientCPF());
                 tunnelResource.setBirthDate(blipBirthDate);
                 tunnelResource.setExtras(extras);
@@ -593,27 +605,42 @@ public class BlipContextService {
 
         String masterIdentity = resolveMasterIdentity(userIdentity);
         String tunnelIdentity = resolveTunnelIdentity(userIdentity);
-
-        // Garante o uso do NOME LEGÍVEL da fila para attendanceQueueToRedirect. O Blip Desk faz matching pelo nome da fila; passar UUID faz cair na fila default.
         String queueValueForRedirect = safeQueueName;
 
-        if (masterIdentity != null && !masterIdentity.isBlank()) {
-            setUserContext(masterIdentity, "attendanceQueueToRedirect", queueValueForRedirect);
-            setUserContext(masterIdentity, "attendanceQueueNameToRedirect", safeQueueName);
-            setUserContext(masterIdentity, "fila", safeQueueName);
-            setUserContext(masterIdentity, "deskFila", safeQueueName);
-        }
-        if (tunnelIdentity != null && !tunnelIdentity.isBlank() && !tunnelIdentity.equalsIgnoreCase(masterIdentity)) {
-            setUserContext(tunnelIdentity, "attendanceQueueToRedirect", queueValueForRedirect);
-            setUserContext(tunnelIdentity, "attendanceQueueNameToRedirect", safeQueueName);
-            setUserContext(tunnelIdentity, "fila", safeQueueName);
-            setUserContext(tunnelIdentity, "deskFila", safeQueueName);
-        }
+        // Disparo assíncrono em background para que o endpoint do webhook responda ao Blip em <50ms
+        java.util.concurrent.CompletableFuture.runAsync(() -> {
+            try {
+                // 1. Agrupa todas as variáveis em um único payload de extras no contato
+                Map<String, String> extras = new java.util.LinkedHashMap<>();
+                extras.put("attendanceQueueToRedirect", queueValueForRedirect);
+                extras.put("attendanceQueueNameToRedirect", safeQueueName);
+                extras.put("fila", safeQueueName);
+                extras.put("deskFila", safeQueueName);
+                if (rawQueueId != null && !rawQueueId.isBlank()) {
+                    extras.put("blipQueueId", rawQueueId.trim());
+                }
+                updateContactExtras(userIdentity, extras);
 
-        // Sincronização explícita dos extras do contato no Roteador e no Desk/Subbot
-        updateContactExtras(userIdentity, safeQueueName, rawQueueId);
+                // 2. Atualiza contextos do usuário em paralelo
+                Map<String, String> contextFields = Map.of(
+                    "attendanceQueueToRedirect", queueValueForRedirect,
+                    "attendanceQueueNameToRedirect", safeQueueName,
+                    "fila", safeQueueName,
+                    "deskFila", safeQueueName
+                );
+                if (masterIdentity != null && !masterIdentity.isBlank()) {
+                    setUserContextFieldsInParallel(masterIdentity, contextFields);
+                }
+                if (tunnelIdentity != null && !tunnelIdentity.isBlank() && !tunnelIdentity.equalsIgnoreCase(masterIdentity)) {
+                    setUserContextFieldsInParallel(tunnelIdentity, contextFields);
+                }
+                log.info("[BLIP-CONTEXT] Fila de redirecionamento e extras configurados no contexto (escopo dual). master={}, tunnel={}, fila='{}'",
+                        masterIdentity, tunnelIdentity, safeQueueName);
+            } catch (Exception ex) {
+                log.warn("[BLIP-CONTEXT] Falha assíncrona ao configurar redirecionamento de fila para {}: {}", userIdentity, ex.getMessage());
+            }
+        }, applicationTaskExecutor);
 
-        log.info("Fila de redirecionamento e extras configurados no contexto (escopo dual). master={}, tunnel={}, queueToRedirect={}, queueNameToRedirect={}", masterIdentity, tunnelIdentity, queueValueForRedirect, safeQueueName);
         return true;
     }
 
@@ -622,13 +649,16 @@ public class BlipContextService {
         String masterIdentity = resolveMasterIdentity(userIdentity);
         String tunnelIdentity = resolveTunnelIdentity(userIdentity);
 
-        if (masterIdentity != null && !masterIdentity.isBlank()) {
-            deleteUserContext(masterIdentity, "attendanceQueueToRedirect");
-        }
-        if (tunnelIdentity != null && !tunnelIdentity.isBlank()) {
-            deleteUserContext(tunnelIdentity, "attendanceQueueToRedirect");
-        }
-        log.info("[BLIP-CONTEXT] Variável attendanceQueueToRedirect removida do contexto para master={} e tunnel={}", masterIdentity, tunnelIdentity);
+        java.util.concurrent.CompletableFuture.runAsync(() -> {
+            if (masterIdentity != null && !masterIdentity.isBlank()) {
+                deleteUserContext(masterIdentity, "attendanceQueueToRedirect");
+            }
+            if (tunnelIdentity != null && !tunnelIdentity.isBlank()) {
+                deleteUserContext(tunnelIdentity, "attendanceQueueToRedirect");
+            }
+            log.info("[BLIP-CONTEXT] Variável attendanceQueueToRedirect removida do contexto para master={} e tunnel={}", masterIdentity, tunnelIdentity);
+        }, applicationTaskExecutor);
+
         return true;
     }
 
@@ -693,13 +723,27 @@ public class BlipContextService {
             String masterIdentity = resolveMasterIdentity(userIdentity);
             String tunnelIdentity = resolveTunnelIdentity(userIdentity);
 
+            java.util.List<java.util.concurrent.CompletableFuture<Void>> futures = new java.util.ArrayList<>();
             if (masterIdentity != null && !masterIdentity.isBlank()) {
-                limeClient.mergeContactExtras(masterIdentity, extras, BlipLIMEClient.AuthorizationScope.ROUTER);
+                futures.add(java.util.concurrent.CompletableFuture.runAsync(() -> {
+                    try {
+                        limeClient.mergeContactExtras(masterIdentity, extras, BlipLIMEClient.AuthorizationScope.ROUTER);
+                    } catch (Exception ex) {
+                        log.warn("[BLIP-CONTEXT] Falha ao atualizar extras no Roteador para {}: {}", masterIdentity, ex.getMessage());
+                    }
+                }, applicationTaskExecutor));
             }
             if (tunnelIdentity != null && !tunnelIdentity.isBlank() && !tunnelIdentity.equalsIgnoreCase(masterIdentity)) {
-                limeClient.mergeContactExtras(tunnelIdentity, extras, BlipLIMEClient.AuthorizationScope.DESK);
+                futures.add(java.util.concurrent.CompletableFuture.runAsync(() -> {
+                    try {
+                        limeClient.mergeContactExtras(tunnelIdentity, extras, BlipLIMEClient.AuthorizationScope.DESK);
+                    } catch (Exception ex) {
+                        log.warn("[BLIP-CONTEXT] Falha ao atualizar extras no Desk/Subbot para {}: {}", tunnelIdentity, ex.getMessage());
+                    }
+                }, applicationTaskExecutor));
             }
-            log.info("[BLIP-CONTEXT] Extras do contato atualizados sincronamente em escopo duplo para {}: {}", userIdentity, extras.keySet());
+            java.util.concurrent.CompletableFuture.allOf(futures.toArray(java.util.concurrent.CompletableFuture[]::new)).join();
+            log.info("[BLIP-CONTEXT] Extras do contato atualizados em escopo duplo para {}: {}", userIdentity, extras.keySet());
         } catch (Exception ex) {
             log.warn("[BLIP-CONTEXT] Falha ao atualizar extras do contato em escopo duplo para {}: {}", userIdentity, ex.getMessage());
         }
