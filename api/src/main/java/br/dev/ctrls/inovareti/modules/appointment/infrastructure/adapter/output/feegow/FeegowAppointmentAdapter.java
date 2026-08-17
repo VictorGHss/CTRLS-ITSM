@@ -14,6 +14,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.util.UriComponentsBuilder;
+import org.springframework.beans.factory.ObjectProvider;
+import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentDoctorMappingRepositoryPort;
+import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.ProfessionalExternalPort;
 import br.dev.ctrls.inovareti.modules.appointment.application.dto.FeegowSearchResponseDto;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentExternalPort;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.FeegowAppointment;
@@ -57,6 +60,8 @@ public class FeegowAppointmentAdapter implements AppointmentExternalPort {
     private final FeegowProperties feegowProperties;
     private final ObjectMapper objectMapper;
     private final FeegowAppointmentClient appointmentClient;
+    private final ObjectProvider<AppointmentDoctorMappingRepositoryPort> doctorMappingRepositoryProvider;
+    private final ObjectProvider<ProfessionalExternalPort> professionalExternalPortProvider;
 
     /**
      * Limits the number of concurrent outbound HTTP/2 streams to the Feegow API.
@@ -403,14 +408,50 @@ public class FeegowAppointmentAdapter implements AppointmentExternalPort {
         }
 
         String rawDoctor = item.doctorName();
-        String doctorName = (rawDoctor != null && !rawDoctor.trim().isBlank()) ? rawDoctor.trim() : "Profissional";
+        String doctorName = (rawDoctor != null && !rawDoctor.trim().isBlank() && !"Profissional".equalsIgnoreCase(rawDoctor.trim())) ? rawDoctor.trim() : null;
+
+        String rawProcedure = item.procedureName();
+        String procedureName = (rawProcedure != null && !rawProcedure.trim().isBlank() && !"Consulta".equalsIgnoreCase(rawProcedure.trim())) ? rawProcedure.trim() : null;
+
+        if ((doctorName == null || procedureName == null) && profissionalId != null && !profissionalId.isBlank()) {
+            AppointmentDoctorMappingRepositoryPort mappingRepo = doctorMappingRepositoryProvider.getIfAvailable();
+            if (mappingRepo != null) {
+                try {
+                    var mappingOpt = mappingRepo.findByProfissionalId(profissionalId);
+                    if (mappingOpt.isPresent()) {
+                        var mapping = mappingOpt.get();
+                        if (doctorName == null && mapping.getProfissionalNome() != null && !mapping.getProfissionalNome().isBlank()) {
+                            doctorName = mapping.getProfissionalNome().trim();
+                        }
+                        if (procedureName == null && mapping.getBlipQueueId() != null && mapping.getBlipQueueId().contains(" - ")) {
+                            procedureName = mapping.getBlipQueueId().split(" - ")[0].trim();
+                        }
+                    }
+                } catch (Exception ignored) {}
+            }
+
+            if (doctorName == null) {
+                ProfessionalExternalPort profPort = professionalExternalPortProvider.getIfAvailable();
+                if (profPort != null) {
+                    try {
+                        String name = profPort.getProfessionalName(profissionalId);
+                        if (name != null && !name.isBlank() && !"Profissional".equalsIgnoreCase(name.trim())) {
+                            doctorName = name.trim();
+                        }
+                    } catch (Exception ignored) {}
+                }
+            }
+        }
+
+        if (doctorName == null || doctorName.isBlank()) {
+            doctorName = "Profissional";
+        }
+        if (procedureName == null || procedureName.isBlank()) {
+            procedureName = "Consulta";
+        }
 
         String unitName = item.unitName() != null && !item.unitName().isBlank() ? item.unitName().trim() : "Clínica Inovare";
         String statusId = item.statusId() != null ? String.valueOf(item.statusId()) : "";
-
-        String rawProcedure = item.procedureName();
-        String procedureName = (rawProcedure != null && !rawProcedure.trim().isBlank()) ? rawProcedure.trim() : "Consulta";
-
         String procedureId = item.procedureId() != null ? item.procedureId().trim() : "";
 
         Boolean encaixe = false;
