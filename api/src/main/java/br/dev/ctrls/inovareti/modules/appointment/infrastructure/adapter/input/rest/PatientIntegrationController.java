@@ -19,6 +19,8 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Objects;
+import java.util.stream.Stream;
 
 /**
  * Controller REST responsável pela gestão e integração de Pacientes com o Feegow ERP.
@@ -211,19 +213,23 @@ public class PatientIntegrationController {
             return "Nenhuma consulta futura localizada para o cadastro informado.";
         }
 
-        DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy 'às' HH:mm");
+        DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+        DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("HH:mm");
         StringBuilder sb = new StringBuilder("📅 Suas Próximas Consultas:\n\n");
 
         for (FeegowAppointment appt : appointments) {
-            String dateTimeStr = appt.startAt() != null ? appt.startAt().format(dateFormatter) : "Data a definir";
-            String doctor = appt.doctorName() != null ? appt.doctorName() : "Profissional Inovare";
-            String procedure = appt.procedureName() != null ? appt.procedureName() : "Consulta/Exame";
-            String unit = appt.unitName() != null ? appt.unitName() : "Clínica Inovare";
+            String dataFormatada = (appt.startAt() != null) ? appt.startAt().format(dateFormatter) : "Data a definir";
+            String horaFormatada = (appt.startAt() != null) ? appt.startAt().format(timeFormatter) : "--:--";
 
-            sb.append("• ").append(dateTimeStr)
-                    .append(" - ").append(doctor)
-                    .append(" (").append(procedure).append(")")
-                    .append(" - ").append(unit).append("\n");
+            String profissional = Stream.of(
+                    appt.doctorName()
+            ).filter(Objects::nonNull).map(String::trim).filter(s -> !s.isBlank()).findFirst().orElse("Profissional");
+
+            String especialidade = Stream.of(
+                    appt.procedureName()
+            ).filter(Objects::nonNull).map(String::trim).filter(s -> !s.isBlank()).findFirst().orElse("Consulta");
+
+            sb.append(String.format("• %s às %s - %s (%s)\n", dataFormatada, horaFormatada, profissional, especialidade));
         }
 
         sb.append("\nQualquer dúvida ou alteração, estamos à disposição!");

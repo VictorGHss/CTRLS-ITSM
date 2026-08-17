@@ -8,7 +8,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record FeegowSearchResponseDto(
-        @JsonProperty("content") List<FeegowSearchAppointmentDto> content,
+        @JsonProperty("content") @JsonAlias({"content", "data", "result", "appointments", "agendamentos", "Consultas"}) List<FeegowSearchAppointmentDto> content,
         @JsonProperty("data") List<FeegowSearchAppointmentDto> data) {
 
     public List<FeegowSearchAppointmentDto> appointments() {
@@ -20,29 +20,21 @@ public record FeegowSearchResponseDto(
             return data;
         }
 
-        if (content != null) {
-            return content;
-        }
-
-        if (data != null) {
-            return data;
-        }
-
         return List.of();
     }
 
-        @JsonIgnoreProperties(ignoreUnknown = true)
-        public record FeegowSearchAppointmentDto(
-            @JsonProperty("agendamento_id") @JsonAlias({"id", "agendamento_id", "agendamentoId"}) Object appointmentId,
-            @JsonProperty("paciente_id") @JsonAlias({"patientId", "paciente_id", "pacienteId"}) String patientId,
-            @JsonProperty("profissional_id") @JsonAlias({"doctorId", "profissional_id", "profissionalId"}) String doctorId,
-            @JsonProperty("nome") String doctorName,
-            @JsonProperty("unidade") String unitName,
-            @JsonProperty("data") String appointmentDate,
-            @JsonProperty("horario") String appointmentTime,
-            @JsonProperty("status_id") @JsonAlias({"statusId", "status_id", "status"}) Object statusId,
-            @JsonProperty("procedimento_nome") @JsonAlias({"procedimento", "procedimento_nome", "procedimentoNome"}) String procedureName,
-            @JsonProperty("procedimento_id") @JsonAlias({"procedimentoId", "procedimento_id"}) String procedureId,
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record FeegowSearchAppointmentDto(
+            @JsonProperty("agendamento_id") @JsonAlias({"id", "agendamento_id", "agendamentoId", "appointment_id", "appointmentId"}) Object appointmentId,
+            @JsonProperty("paciente_id") @JsonAlias({"patientId", "paciente_id", "pacienteId", "patient_id"}) String patientId,
+            @JsonProperty("profissional_id") @JsonAlias({"doctorId", "profissional_id", "profissionalId", "doctor_id", "medico_id", "medicoId"}) String doctorId,
+            @JsonProperty("nome_profissional") @JsonAlias({"nome_profissional", "profissional_nome", "nome_medico", "medico", "profissional", "nome", "doctor_name", "doctorName"}) String doctorName,
+            @JsonProperty("unidade") @JsonAlias({"unidade", "unidade_nome", "local", "local_nome", "unit_name", "unitName"}) String unitName,
+            @JsonProperty("data") @JsonAlias({"data", "data_agendamento", "date", "appointment_date", "appointmentDate"}) String appointmentDate,
+            @JsonProperty("horario") @JsonAlias({"horario", "hora", "hora_agendamento", "time", "appointment_time", "appointmentTime"}) String appointmentTime,
+            @JsonProperty("status_id") @JsonAlias({"statusId", "status_id", "status", "statusID"}) Object statusId,
+            @JsonProperty("especialidade_nome") @JsonAlias({"especialidade_nome", "especialidade", "nome_especialidade", "procedimento_nome", "procedimento", "procedimentoNome", "procedure_name", "procedureName", "procedimento_descricao"}) String procedureName,
+            @JsonProperty("procedimento_id") @JsonAlias({"procedimentoId", "procedimento_id", "procedure_id", "procedureId", "especialidade_id", "especialidadeId"}) String procedureId,
             @JsonProperty("encaixe") Object encaixe) {
-        }
+    }
 }
