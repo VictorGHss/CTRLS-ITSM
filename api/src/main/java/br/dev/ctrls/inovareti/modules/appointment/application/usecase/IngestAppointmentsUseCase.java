@@ -281,15 +281,20 @@ public class IngestAppointmentsUseCase {
         appointments = appointments.stream()
                 .filter(a -> {
                     String procId = a.procedureId();
-                    if (procId == null || procId.isBlank()) {
-                        log.info("[FILTRO-PROCEDIMENTO] Agendamento ID={} ignorado porque o ID do procedimento está nulo ou vazio.", a.id());
-                        return false;
+                    String procName = a.procedureName();
+
+                    // Se o nome do procedimento for "Consulta" ou começar com "Consulta", é SEMPRE elegível
+                    if (procName != null && (procName.trim().equalsIgnoreCase("Consulta") || procName.trim().toLowerCase().startsWith("consulta"))) {
+                        return true;
                     }
-                    boolean val = eligibleProcedureIdsList.contains(procId.trim());
-                    if (!val) {
-                        log.info("[FILTRO-PROCEDIMENTO] Agendamento ID={} ignorado porque o procedimento_id '{}' (nome: '{}') não está na lista de procedimentos elegíveis.", a.id(), procId, a.procedureName());
+
+                    // Se o ID do procedimento estiver na lista explícita de procedimentos elegíveis
+                    if (procId != null && !procId.isBlank() && eligibleProcedureIdsList.contains(procId.trim())) {
+                        return true;
                     }
-                    return val;
+
+                    log.info("[FILTRO-PROCEDIMENTO] Agendamento ID={} ignorado porque o procedimento_id '{}' (nome: '{}') não está na lista de procedimentos elegíveis e não é uma consulta.", a.id(), procId, procName);
+                    return false;
                 })
                 .collect(Collectors.toList());
         int aposProcedimentos = appointments.size();
