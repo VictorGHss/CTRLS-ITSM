@@ -29,11 +29,13 @@ import br.dev.ctrls.inovareti.modules.appointment.infrastructure.config.Appointm
 public class DoctorBusinessRulesTest {
 
     @Test
-    public void testWednesdayD2ConstraintLogic() {
+    public void testWednesdayAndThursdayD2ConstraintLogic() {
         LocalDate wednesday = LocalDate.of(2026, 7, 29); // Wednesday
+        LocalDate thursday = LocalDate.of(2026, 7, 30);  // Thursday
         LocalDate tuesday = LocalDate.of(2026, 7, 28);   // Tuesday
 
         assertEquals(DayOfWeek.WEDNESDAY, wednesday.getDayOfWeek());
+        assertEquals(DayOfWeek.THURSDAY, thursday.getDayOfWeek());
         assertEquals(DayOfWeek.TUESDAY, tuesday.getDayOfWeek());
 
         DoctorConfiguration d2Config = DoctorConfiguration.builder()
@@ -43,11 +45,17 @@ public class DoctorBusinessRulesTest {
                 .isActive(true)
                 .build();
 
-        // Simulate logic check
-        boolean shouldRunOnWednesday = d2Config.getResolvedAdvanceNoticeDays() == 2 && wednesday.getDayOfWeek() == DayOfWeek.WEDNESDAY;
-        boolean shouldRunOnTuesday = d2Config.getResolvedAdvanceNoticeDays() == 2 && tuesday.getDayOfWeek() == DayOfWeek.WEDNESDAY;
+        // Simulate logic check: D+2 runs on Wednesday (for Friday D+2) and Thursday (for Saturday D+2)
+        boolean isAllowedWed = wednesday.getDayOfWeek() == DayOfWeek.WEDNESDAY || wednesday.getDayOfWeek() == DayOfWeek.THURSDAY;
+        boolean isAllowedThu = thursday.getDayOfWeek() == DayOfWeek.WEDNESDAY || thursday.getDayOfWeek() == DayOfWeek.THURSDAY;
+        boolean isAllowedTue = tuesday.getDayOfWeek() == DayOfWeek.WEDNESDAY || tuesday.getDayOfWeek() == DayOfWeek.THURSDAY;
 
-        assertTrue(shouldRunOnWednesday, "D+2 deve executar na Quarta-feira");
+        boolean shouldRunOnWednesday = d2Config.getResolvedAdvanceNoticeDays() == 2 && isAllowedWed;
+        boolean shouldRunOnThursday = d2Config.getResolvedAdvanceNoticeDays() == 2 && isAllowedThu;
+        boolean shouldRunOnTuesday = d2Config.getResolvedAdvanceNoticeDays() == 2 && isAllowedTue;
+
+        assertTrue(shouldRunOnWednesday, "D+2 deve executar na Quarta-feira (para agendamentos de Sexta-feira)");
+        assertTrue(shouldRunOnThursday, "D+2 deve executar na Quinta-feira (para agendamentos de Sábado)");
         assertFalse(shouldRunOnTuesday, "D+2 deve ser ignorado na Terça-feira");
     }
 
