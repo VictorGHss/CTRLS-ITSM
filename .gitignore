@@ -77,3 +77,11 @@ brain/
 *.sql.gz
 *.backup
 *.dump
+
+# ========================
+# Fluxos do Blip e Exportações Locais
+# ========================
+fluxo*.json
+*fluxo*.json
+procedimentos_feegow.*
+
