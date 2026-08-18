@@ -168,9 +168,10 @@ public class IngestAppointmentsUseCase {
             for (var docConfig : customAdvanceDoctors) {
                 int advanceDays = docConfig.getResolvedAdvanceNoticeDays();
 
-                // Regra 2A: Trava D+2 - Se advanceDays == 2, SÓ executa se HOJE for QUARTA-FEIRA (DayOfWeek.WEDNESDAY)
-                if (advanceDays == 2 && today.getDayOfWeek() != java.time.DayOfWeek.WEDNESDAY) {
-                    log.info("[INGESTÃO-ANTECEDÊNCIA] Ignorando busca D+2 para o médico {} (ID {}) pois hoje é {} (D+2 é executado exclusivamente nas quartas-feiras).",
+                // Regra 2A: Trava D+2 - Se advanceDays == 2, executa na QUARTA-FEIRA (para Sexta D+2) e na QUINTA-FEIRA (para Sábado D+2)
+                boolean isAllowedD2Day = today.getDayOfWeek() == java.time.DayOfWeek.WEDNESDAY || today.getDayOfWeek() == java.time.DayOfWeek.THURSDAY;
+                if (advanceDays == 2 && !isAllowedD2Day) {
+                    log.info("[INGESTÃO-ANTECEDÊNCIA] Ignorando busca D+2 para o médico {} (ID {}) pois hoje é {} (D+2 é executado exclusivamente nas quartas-feiras para sexta e nas quintas-feiras para sábado).",
                             docConfig.getDoctorName(), docConfig.getFeegowProfissionalId(), today.getDayOfWeek());
                     continue;
                 }
