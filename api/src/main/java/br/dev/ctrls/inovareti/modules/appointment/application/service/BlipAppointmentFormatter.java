@@ -11,8 +11,10 @@ import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.Appointment
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.ProfessionalExternalPort;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.PatientExternalPort;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.FeegowPatient;
+import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.DoctorConfigurationRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import java.time.LocalDateTime;
 
 /**
  * Componente especialista na formatação do layout visual de listagem de consultas
@@ -28,6 +30,7 @@ public class BlipAppointmentFormatter {
     private final AppointmentDoctorMappingRepositoryPort appointmentDoctorMappingRepository;
     private final ProfessionalExternalPort professionalExternalPort;
     private final BlipTextSanitizer blipTextSanitizer;
+    private final DoctorConfigurationRepository doctorConfigurationRepository;
 
     /**
      * Constrói a string formatada da lista de agendamentos (lista_detalhada) de acordo
@@ -55,8 +58,33 @@ public class BlipAppointmentFormatter {
             if (s == null || s.getAppointmentAt() == null) {
                 continue;
             }
-            String dateStr = s.getAppointmentAt().toLocalDate().format(DateTimeFormatter.ofPattern("dd/MM"));
-            String timeStr = s.getAppointmentAt().toLocalTime().format(DateTimeFormatter.ofPattern("HH:mm"));
+
+            LocalDateTime apptDateTime = s.getAppointmentAt();
+            if (s.getDoctorProfissionalId() != null && !s.getDoctorProfissionalId().isBlank()) {
+                try {
+                    Long docProfId = Long.parseLong(s.getDoctorProfissionalId().trim());
+                    if (doctorConfigurationRepository != null) {
+                        var doctorConfigOpt = doctorConfigurationRepository.findById(docProfId);
+                        if (doctorConfigOpt.isPresent()) {
+                            int offset = doctorConfigOpt.get().getResolvedDisplayTimeOffsetMinutes();
+                            if (offset != 0) {
+                                apptDateTime = apptDateTime.plusMinutes(offset);
+                                log.info("[TIME-SHIFT] [GRUPO-FORMATTER] Aplicado deslocamento de {} minutos para o médico {} (ID {}). Horário original: {}, Horário ajustado: {}",
+                                        offset, doctorConfigOpt.get().getDoctorName(), docProfId,
+                                        s.getAppointmentAt().toLocalTime().format(DateTimeFormatter.ofPattern("HH:mm")),
+                                        apptDateTime.toLocalTime().format(DateTimeFormatter.ofPattern("HH:mm")));
+                            }
+                        } else if ("28".equals(s.getDoctorProfissionalId().trim())) {
+                            apptDateTime = apptDateTime.minusMinutes(10);
+                        }
+                    }
+                } catch (Exception ex) {
+                    log.warn("[TIME-SHIFT] Falha ao verificar deslocamento de horário para grupo profissionalId={}: {}", s.getDoctorProfissionalId(), ex.getMessage());
+                }
+            }
+
+            String dateStr = apptDateTime.toLocalDate().format(DateTimeFormatter.ofPattern("dd/MM"));
+            String timeStr = apptDateTime.toLocalTime().format(DateTimeFormatter.ofPattern("HH:mm"));
 
             String patientName = "Paciente";
             try {

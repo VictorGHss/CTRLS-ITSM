@@ -58,6 +58,26 @@ public class IntentAnalysisResponse {
     @JsonInclude(JsonInclude.Include.ALWAYS)
     private String selectedQueue;
 
+    @JsonProperty("doctorName")
+    public String getDoctorName() {
+        return medico;
+    }
+
+    @JsonProperty("queue")
+    public String getQueue() {
+        return fila;
+    }
+
+    @JsonProperty("queueName")
+    public String getQueueName() {
+        return fila;
+    }
+
+    @JsonProperty("externalLink")
+    public String getExternalLink() {
+        return linkWa;
+    }
+
     @JsonProperty("opcoes")
     private List<DoctorOption> opcoes;
 
@@ -91,5 +111,25 @@ public class IntentAnalysisResponse {
 
         @JsonProperty("linkWa")
         private String linkWa;
+
+        @JsonProperty("doctorName")
+        public String getDoctorName() {
+            return medico;
+        }
+
+        @JsonProperty("queue")
+        public String getQueue() {
+            return fila;
+        }
+
+        @JsonProperty("queueName")
+        public String getQueueName() {
+            return fila;
+        }
+
+        @JsonProperty("externalLink")
+        public String getExternalLink() {
+            return linkWa;
+        }
     }
 }
