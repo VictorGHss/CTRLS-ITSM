@@ -386,13 +386,13 @@ export default function ProfessionalMappingPanel() {
 
                     <td className="px-4 py-3 align-middle w-36">
                       <select
-                        title="Antecedência de busca/envio em dias. Ex: 2 dias para confirmar procedimentos de sexta na quarta."
+                        title="Antecedência de busca/envio em dias. Ex: 2 dias para confirmar procedimentos de sexta na quarta e de sábado na quinta."
                         value={row.advanceNoticeDays ?? 1}
                         onChange={(e) => updateField(row.profissionalId, 'advanceNoticeDays', Number(e.target.value))}
                         className="w-full rounded-lg border border-slate-200 px-2 py-1 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#feb56c]"
                       >
-                        <option value={1}>1 dia (Padrão)</option>
-                        <option value={2}>2 dias (Quarta ➔ Sexta)</option>
+                        <option value={1}>1 dia (Padrão: D+1)</option>
+                        <option value={2}>2 dias (Quarta ➔ Sexta | Quinta ➔ Sábado)</option>
                         <option value={3}>3 dias</option>
                         <option value={4}>4 dias</option>
                       </select>
