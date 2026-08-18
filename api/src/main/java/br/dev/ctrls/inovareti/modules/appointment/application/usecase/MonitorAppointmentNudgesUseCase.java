@@ -132,12 +132,12 @@ public class MonitorAppointmentNudgesUseCase {
                         FeegowAppointment feegowAppt = appointmentExternalPort.findById(lockedSession.getFeegowAppointmentId());
                         if (feegowAppt != null) {
                             String statusId = feegowAppt.statusId();
-                            // Se no Feegow o agendamento não estiver mais com status_id == 1 (Marcado)
-                            if (statusId != null && !"1".equals(statusId.trim())) {
-                                AppointmentSessionStatus newStatus = "7".equals(statusId.trim())
+                            // Se no Feegow o agendamento não estiver mais com status_id == 1 (Marcado) ou 15 (Remarcado)
+                            if (statusId != null && !"1".equals(statusId.trim()) && !"15".equals(statusId.trim())) {
+                                AppointmentSessionStatus newStatus = ("7".equals(statusId.trim()) || "2".equals(statusId.trim()) || "3".equals(statusId.trim()))
                                         ? AppointmentSessionStatus.CONFIRMED
                                         : AppointmentSessionStatus.CANCELED;
-                                log.info("[NUDGE-GUARD] Agendamento Feegow ID {} possui status '{}' no ERP (diferente de 1 Marcado). Atualizando sessão local para {} e cancelando envio de lembrete.",
+                                log.info("[NUDGE-GUARD] Agendamento Feegow ID {} possui status '{}' no ERP (não pendente). Atualizando sessão local para {} e cancelando envio de lembrete.",
                                         lockedSession.getFeegowAppointmentId(), statusId, newStatus);
                                 lockedSession.setStatus(newStatus);
                                 lockedSession.setClosedAt(LocalDateTime.now(SAO_PAULO_ZONE));
@@ -220,8 +220,8 @@ public class MonitorAppointmentNudgesUseCase {
                         FeegowAppointment feegowAppt = appointmentExternalPort.findById(s.getFeegowAppointmentId());
                         if (feegowAppt != null) {
                             String statusId = feegowAppt.statusId();
-                            if (statusId != null && !"1".equals(statusId.trim())) {
-                                AppointmentSessionStatus newStatus = "7".equals(statusId.trim())
+                            if (statusId != null && !"1".equals(statusId.trim()) && !"15".equals(statusId.trim())) {
+                                AppointmentSessionStatus newStatus = ("7".equals(statusId.trim()) || "2".equals(statusId.trim()) || "3".equals(statusId.trim()))
                                         ? AppointmentSessionStatus.CONFIRMED
                                         : AppointmentSessionStatus.CANCELED;
                                 log.info("[GRUPO-NUDGE-GUARD] Agendamento Feegow ID {} do grupo {} possui status '{}'. Atualizando sessão para {} e abortando envio.",
