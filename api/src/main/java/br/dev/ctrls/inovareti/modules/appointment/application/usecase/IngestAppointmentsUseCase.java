@@ -359,49 +359,51 @@ public class IngestAppointmentsUseCase {
 
         List<FeegowAppointment> activeAppointments = appointments.stream()
                 .filter(appointment -> {
-                    String statusId = appointment.statusId();
-                    if ("1".equals(statusId)) {
+                    String statusId = appointment.statusId() != null ? appointment.statusId().trim() : "";
+                    // Status 1 (Marcado - não confirmado) e Status 15 (Remarcado) são elegíveis para disparo de confirmação
+                    if ("1".equals(statusId) || "15".equals(statusId)) {
                         return true;
                     }
                     
-                    if (!"1".equals(statusId)) {
-                        String normId = normalizeFeegowAppointmentId(appointment.id());
-                        sessionCache.computeIfPresent(normId, (id, session) -> {
-                            if (session.getStatus() == AppointmentSessionStatus.PENDING ||
-                                session.getStatus() == AppointmentSessionStatus.NUDGE_1_SENT ||
-                                session.getStatus() == AppointmentSessionStatus.NUDGE_FINAL_SENT) {
-                                
-                                if ("2".equals(statusId) || "7".equals(statusId)) {
-                                    log.info("[RECONCILIAÇÃO-FEEGOW] Agendamento ID={} confirmado no Feegow (statusId={}). Atualizando BD local para CONFIRMED.", normId, statusId);
-                                    session.setStatus(AppointmentSessionStatus.CONFIRMED);
-                                    session.setClosedAt(LocalDateTime.now());
-                                    appointmentSessionRepository.save(session);
-                                } else if ("6".equals(statusId) || "11".equals(statusId)) {
-                                    log.info("[RECONCILIAÇÃO-FEEGOW] Agendamento ID={} cancelado/falta no Feegow (statusId={}). Atualizando BD local para CANCELED.", normId, statusId);
-                                    session.setStatus(AppointmentSessionStatus.CANCELED);
-                                    session.setClosedAt(LocalDateTime.now());
-                                    appointmentSessionRepository.save(session);
-                                }
+                    String normId = normalizeFeegowAppointmentId(appointment.id());
+                    sessionCache.computeIfPresent(normId, (id, session) -> {
+                        if (session.getStatus() == AppointmentSessionStatus.PENDING ||
+                            session.getStatus() == AppointmentSessionStatus.NUDGE_1_SENT ||
+                            session.getStatus() == AppointmentSessionStatus.NUDGE_FINAL_SENT) {
+                            
+                            if ("7".equals(statusId) || "2".equals(statusId) || "3".equals(statusId)) {
+                                log.info("[RECONCILIAÇÃO-FEEGOW] Agendamento ID={} confirmado/atendido no Feegow (statusId={}). Atualizando BD local para CONFIRMED.", normId, statusId);
+                                session.setStatus(AppointmentSessionStatus.CONFIRMED);
+                                session.setClosedAt(LocalDateTime.now());
+                                appointmentSessionRepository.save(session);
+                            } else if ("6".equals(statusId) || "11".equals(statusId) || "16".equals(statusId)) {
+                                log.info("[RECONCILIAÇÃO-FEEGOW] Agendamento ID={} cancelado/desmarcado/falta no Feegow (statusId={}). Atualizando BD local para CANCELED.", normId, statusId);
+                                session.setStatus(AppointmentSessionStatus.CANCELED);
+                                session.setClosedAt(LocalDateTime.now());
+                                appointmentSessionRepository.save(session);
                             }
-                            return session;
-                        });
-                    }
+                        }
+                        return session;
+                    });
 
-                    String statusDescription = switch (statusId != null ? statusId.trim() : "") {
-                        case "2" -> "Confirmado";
-                        case "3" -> "Triagem";
-                        case "4" -> "Em Atendimento";
-                        case "5" -> "Atendido";
-                        case "6" -> "Cancelado";
-                        case "7" -> "Confirmado (Feegow)";
-                        case "11" -> "Falta";
-                        case "15" -> "Pré-Agendamento";
-                        case "16" -> "Remarcado";
-                        case "101", "103", "105" -> "Status de Telemedicina ou Integração";
-                        default -> "Outro Status Desconhecido";
+                    String statusDescription = switch (statusId) {
+                        case "1" -> "Marcado - não confirmado";
+                        case "2" -> "Em atendimento";
+                        case "3" -> "Atendido";
+                        case "4" -> "Aguardando | Atendimento";
+                        case "5" -> "Chamando | atendimento";
+                        case "6" -> "Não compareceu";
+                        case "7" -> "Marcado - confirmado";
+                        case "11" -> "Desmarcado pelo paciente";
+                        case "15" -> "Remarcado";
+                        case "16" -> "Desmarcado pelo profissional";
+                        case "101" -> "Aguardando | Triagem";
+                        case "103" -> "Em atendimento | Triagem";
+                        case "105" -> "Chamando | Triagem";
+                        default -> "Outro Status (" + statusId + ")";
                     };
                     
-                    log.info("[ELEGIBILIDADE-STATUS] Agendamento ID={} descartado sumariamente da esteira. Status ID={} ({}) não elegível. Apenas o status '1' (Marcado - não confirmado) é permitido para disparo.",
+                    log.info("[ELEGIBILIDADE-STATUS] Agendamento ID={} descartado sumariamente da esteira. Status ID={} ({}) não elegível. Apenas status 1 (Marcado - não confirmado) e 15 (Remarcado) são permitidos para disparo.",
                             appointment.id(), statusId, statusDescription);
                     return false;
                 })
@@ -589,9 +591,10 @@ public class IngestAppointmentsUseCase {
             boolean isConfirmedOnFeegow = confirmedStatusId.trim().equalsIgnoreCase(appointment.statusId());
 
             // --- REGRA DE INVALIDAÇÃO DE REAGENDAMENTO (Reset ON Reschedule) ---
-            // Se a Feegow retornar status_id == 1 (Não confirmado) E a data/horário/médico for diferente dos gravados na sessão local,
+            // Se a Feegow retornar status_id == 1 (Não confirmado) ou 15 (Remarcado) E a data/horário/médico for diferente dos gravados na sessão local,
             // significa que o agendamento foi reagendado. Reseta o status da sessão local para PENDING e limpa timestamps de envio.
-            if (existing != null && "1".equalsIgnoreCase(appointment.statusId() != null ? appointment.statusId().trim() : "")) {
+            String apptStatus = appointment.statusId() != null ? appointment.statusId().trim() : "";
+            if (existing != null && ("1".equalsIgnoreCase(apptStatus) || "15".equalsIgnoreCase(apptStatus))) {
                 boolean dateTimeChanged = existing.getAppointmentAt() != null 
                         && appointment.startAt() != null 
                         && !existing.getAppointmentAt().isEqual(appointment.startAt());
@@ -686,7 +689,7 @@ public class IngestAppointmentsUseCase {
             if (latestSessionOpt.isPresent()) {
                 AppointmentSession existing = latestSessionOpt.get();
 
-                // Se a consulta foi reagendada no Feegow (data/horário ou médico alterados e statusId == 1), reseta a sessão local
+                // Se a consulta foi reagendada no Feegow (data/horário ou médico alterados e statusId == 1 ou 15), reseta a sessão local
                 boolean dateTimeChanged = existing.getAppointmentAt() != null 
                         && appointment.startAt() != null 
                         && !existing.getAppointmentAt().isEqual(appointment.startAt());
@@ -694,7 +697,8 @@ public class IngestAppointmentsUseCase {
                         && appointment.doctorId() != null 
                         && !existing.getDoctorProfissionalId().trim().equalsIgnoreCase(appointment.doctorId().trim());
 
-                if ((dateTimeChanged || doctorChanged) && "1".equalsIgnoreCase(appointment.statusId() != null ? appointment.statusId().trim() : "")) {
+                String sStatus = appointment.statusId() != null ? appointment.statusId().trim() : "";
+                if ((dateTimeChanged || doctorChanged) && ("1".equalsIgnoreCase(sStatus) || "15".equalsIgnoreCase(sStatus))) {
                     log.info("[REAGENDAMENTO-SESSAO] Atualizando sessão do agendamento reagendado ID={}. Nova data: {}, Novo Dr: {}",
                             feegowAppointmentId, appointment.startAt(), appointment.doctorId());
                     existing.setStatus(AppointmentSessionStatus.PENDING);

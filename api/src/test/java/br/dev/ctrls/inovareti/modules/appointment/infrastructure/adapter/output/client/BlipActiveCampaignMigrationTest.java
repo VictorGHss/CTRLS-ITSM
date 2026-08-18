@@ -59,7 +59,7 @@ class BlipActiveCampaignMigrationTest {
                 "confirmacao_consulta_v6_itsm",
                 Map.of("1", "Paciente"),
                 List.of("1"),
-                "fluxov1@msging.net",
+                "custom_master_state@msging.net",
                 "a0776d9c-6486-42f3-8a4f-2706f0185908",
                 "test-flow-id"
         );
@@ -69,7 +69,7 @@ class BlipActiveCampaignMigrationTest {
         @SuppressWarnings("unchecked")
         Map<String, Object> campaign = (Map<String, Object>) resource.get("campaign");
 
-        assertEquals("fluxov1@msging.net", campaign.get("masterState"));
+        assertEquals("custom_master_state@msging.net", campaign.get("masterState"));
         assertEquals("a0776d9c-6486-42f3-8a4f-2706f0185908", campaign.get("stateId"));
         assertEquals("test-flow-id", campaign.get("flowId"));
     }
@@ -84,9 +84,9 @@ class BlipActiveCampaignMigrationTest {
                 "waba_namespace",
                 groupId,
                 "João da Silva",
-                "fluxov1@msging.net",
+                "custom_master_state@msging.net",
                 "a0776d9c-6486-42f3-8a4f-2706f0185908",
-                "fluxov1@msging.net"
+                "custom_flow_id"
         );
 
         @SuppressWarnings("unchecked")
@@ -101,9 +101,9 @@ class BlipActiveCampaignMigrationTest {
         assertFalse(audience.containsKey("messageParams"), "audience não deveria conter a chave messageParams quando nula");
         assertFalse(message.containsKey("messageParams"), "message não deveria conter a chave messageParams quando nula");
 
-        assertEquals("fluxov1@msging.net", campaign.get("masterState"));
+        assertEquals("custom_master_state@msging.net", campaign.get("masterState"));
         assertEquals("a0776d9c-6486-42f3-8a4f-2706f0185908", campaign.get("stateId"));
-        assertEquals("fluxov1@msging.net", campaign.get("flowId"));
+        assertEquals("custom_flow_id", campaign.get("flowId"));
 
         String jsonOutput = objectMapper.writeValueAsString(payload);
         assertFalse(jsonOutput.contains("messageParams"), "O JSON final gerado não pode conter a chave 'messageParams'");
