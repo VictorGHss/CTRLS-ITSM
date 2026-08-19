@@ -61,6 +61,12 @@ public class SendPostAppointmentReviewUseCase {
 
     @Transactional
     public int execute() {
+        java.time.LocalTime nowTime = java.time.LocalTime.now(java.time.ZoneId.of("America/Sao_Paulo"));
+        if (nowTime.isBefore(java.time.LocalTime.of(7, 0)) || nowTime.isAfter(java.time.LocalTime.of(19, 0))) {
+            log.info("[GOOGLE-REVIEW] Horário atual ({}) fora do expediente da clínica (07:00 às 19:00). Abortando envio de avaliações.", nowTime);
+            return 0;
+        }
+
         LocalDate today = LocalDate.now();
         log.info("[GOOGLE-REVIEW] Iniciando verificação de consultas atendidas (StatusID=3) na Feegow para a data {}", today);
 

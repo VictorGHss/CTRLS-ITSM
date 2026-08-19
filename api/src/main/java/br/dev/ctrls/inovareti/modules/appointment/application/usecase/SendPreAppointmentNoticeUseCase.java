@@ -45,6 +45,12 @@ public class SendPreAppointmentNoticeUseCase {
         }
 
         LocalDateTime now = LocalDateTime.now(ZoneId.of("America/Sao_Paulo"));
+        java.time.LocalTime nowTime = now.toLocalTime();
+        if (nowTime.isBefore(java.time.LocalTime.of(7, 0)) || nowTime.isAfter(java.time.LocalTime.of(19, 0))) {
+            log.info("[LEMBRETE-ANTECEDENCIA] Horário atual ({}) fora do expediente da clínica (07:00 às 19:00). Abortando ciclo.", nowTime);
+            return;
+        }
+
         // Janela de 2h a 1h antes da consulta (de 60 a 120 minutos no futuro)
         LocalDateTime windowStart = now.plusMinutes(60);
         LocalDateTime windowEnd = now.plusMinutes(120);
@@ -153,6 +159,8 @@ public class SendPreAppointmentNoticeUseCase {
 
                 // Injeta variáveis preventivas no contexto do paciente em escopo duplo (definindo flow_action = reminder_notice)
                 blipContextService.setUserContext(session.getPhoneNumber(), "flow_action", "reminder_notice");
+                blipContextService.setUserContext(session.getPhoneNumber(), "isConfirmingAgenda", "false");
+                blipContextService.setUserContext(session.getPhoneNumber(), "hasActiveAppointment", "false");
                 blipContextService.setUserContext(session.getPhoneNumber(), "attendanceQueueNameToRedirect", resolvedQueue);
                 blipContextService.setUserContext(session.getPhoneNumber(), "fila", resolvedQueue);
                 blipContextService.setUserContext(session.getPhoneNumber(), "deskFila", resolvedQueue);
@@ -162,6 +170,12 @@ public class SendPreAppointmentNoticeUseCase {
                 blipContextService.setUserContext(session.getPhoneNumber(), "name", templateData.patientName());
                 blipContextService.setUserContext(session.getPhoneNumber(), "paciente", templateData.patientName());
                 blipContextService.setUserContext(session.getPhoneNumber(), "Nome", templateData.patientName());
+
+                // Posiciona o paciente no bloco de sucesso/finalização para evitar cobrança de resposta
+                String confirmSuccessBlockId = appointmentMotorProperties.getBlipBlocksConfirmSuccess();
+                if (confirmSuccessBlockId != null && !confirmSuccessBlockId.isBlank()) {
+                    blipContextService.changeMasterState(session.getPhoneNumber(), confirmSuccessBlockId);
+                }
 
                 // Contexto preventivo injetado com sucesso
                 log.info("[LEMBRETE-ANTECEDENCIA] Contexto configurado para o paciente {}", session.getPhoneNumber());

@@ -47,6 +47,12 @@ public class MonitorAppointmentNudgesUseCase {
 
     @Transactional
     public void execute() {
+        java.time.LocalTime nowTime = java.time.LocalTime.now(SAO_PAULO_ZONE);
+        if (nowTime.isBefore(java.time.LocalTime.of(7, 0)) || nowTime.isAfter(java.time.LocalTime.of(19, 0))) {
+            log.info("[NUDGE-MONITOR] Horário atual ({}) fora da janela de atendimento da clínica (07:00 às 19:00). Abortando ciclo.", nowTime);
+            return;
+        }
+
         // --- 1. RESOLVER TIMING DE REENVIO RECORRENTE (Padrão: 2 horas) ---
         int nudgeHours = appointmentConfigRepository.findByCategory(AppointmentCategory.NUDGE_1)
                 .map(config -> config.getTimingHours())
