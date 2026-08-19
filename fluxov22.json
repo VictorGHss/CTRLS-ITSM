@@ -325,7 +325,7 @@
           "$title": "Monta Menu Interativo Especialistas",
           "settings": {
             "function": "run",
-            "source": "function run(listaMedicosJson) {\n    try {\n        var doctors = JSON.parse(listaMedicosJson || \"[]\");\n        var total = doctors.length > 10 ? 10 : doctors.length;\n        if (total === 0) {\n            return JSON.stringify({\n                \"recipient_type\": \"individual\",\n                \"type\": \"text\",\n                \"text\": { \"body\": \"Com qual médico ou especialidade você gostaria de agendar? 🩺\\n\\n(Por favor, digite o nome do médico desejado):\" }\n            });\n        }\n\n        var rows = [];\n        for (var i = 0; i < total; i++) {\n            var d = doctors[i];\n            var name = d.doctorName || d.name || \"Especialista\";\n            var spec = d.specialty || d.spec || \"\";\n            var title = name;\n            if (title.length > 24) title = title.substring(0, 24);\n\n            var desc = spec;\n            if (desc.length > 72) desc = desc.substring(0, 72);\n\n            rows.push({\n                \"id\": (i + 1).toString(),\n                \"title\": title,\n                \"description\": desc\n            });\n        }\n\n        var payload = {\n            \"recipient_type\": \"individual\",\n            \"type\": \"interactive\",\n            \"interactive\": {\n                \"type\": \"list\",\n                \"header\": { \"type\": \"text\", \"text\": \"Especialistas\" },\n                \"body\": { \"text\": \"Encontramos os seguintes especialistas para o seu agendamento.\\n\\n👉 *Toque no botão abaixo para selecionar:* \" },\n                \"footer\": { \"text\": \"Clínica Inovare\" },\n                \"action\": {\n                    \"button\": \"Ver Especialistas\",\n                    \"sections\": [\n                        {\n                            \"title\": \"Médicos Disponíveis\",\n                            \"rows\": rows\n                        }\n                    ]\n                }\n            }\n        };\n\n        return JSON.stringify(payload);\n    } catch (e) {\n        return JSON.stringify({\n            \"recipient_type\": \"individual\",\n            \"type\": \"text\",\n            \"text\": { \"body\": \"Por favor, digite o nome do médico desejado:\" }\n        });\n    }\n}",
+            "source": "function run(listaMedicosJson) {\n    try {\n        var doctors = JSON.parse(listaMedicosJson || \"[]\");\n        var total = doctors.length > 10 ? 10 : doctors.length;\n        if (total === 0) {\n            return JSON.stringify({\n                \"scope\": \"immediate\",\n                \"text\": \"Com qual médico você gostaria de agendar? 🩺\",\n                \"options\": []\n            });\n        }\n\n        var options = [];\n        for (var i = 0; i < total; i++) {\n            var d = doctors[i];\n            var name = d.doctorName || d.name || \"Especialista\";\n            var spec = d.specialty || d.spec || \"\";\n            var optText = name + (spec ? \" (\" + spec + \")\" : \"\");\n            options.push({\n                \"text\": optText\n            });\n        }\n\n        var payload = {\n            \"scope\": \"immediate\",\n            \"text\": \"Encontramos os seguintes especialistas para o seu agendamento:\\n\\n👉 *Toque na opção desejada abaixo:*\",\n            \"options\": options\n        };\n\n        return JSON.stringify(payload);\n    } catch (e) {\n        return JSON.stringify({\n            \"scope\": \"immediate\",\n            \"text\": \"Por favor, digite o nome do médico desejado:\",\n            \"options\": []\n        });\n    }\n}",
             "inputVariables": [
               "listaMedicosJson"
             ],
@@ -339,12 +339,55 @@
       "$contentActions": [
         {
           "action": {
-            "$id": "card_interactive_select_especialistas",
+            "$id": "cs_spec_menu_chatstate",
+            "$typeOfContent": "chat-state",
             "type": "SendMessage",
             "settings": {
-              "id": "doc_select_especialistas",
-              "type": "application/json",
-              "content": "{{menuEspecialistasSelect}}"
+              "id": "cs_spec_menu_doc",
+              "type": "application/vnd.lime.chatstate+json",
+              "content": {
+                "state": "composing",
+                "interval": 1000
+              }
+            },
+            "$cardContent": {
+              "document": {
+                "id": "cs_spec_menu_doc",
+                "type": "application/vnd.lime.chatstate+json",
+                "content": {
+                  "state": "composing",
+                  "interval": 1000
+                }
+              },
+              "editable": true,
+              "deletable": true,
+              "position": "left"
+            },
+            "conditions": [],
+            "$invalid": false
+          },
+          "$invalid": false
+        },
+        {
+          "action": {
+            "$id": "card_dynamic_select_especialistas",
+            "$typeOfContent": "dynamic",
+            "type": "SendMessage",
+            "settings": {
+              "id": "doc_dynamic_select_especialistas",
+              "type": "application/vnd.lime.select+json",
+              "content": "{{menuEspecialistasSelect}}",
+              "rawContent": "{{menuEspecialistasSelect}}"
+            },
+            "$cardContent": {
+              "document": {
+                "id": "doc_dynamic_select_especialistas",
+                "type": "application/vnd.lime.select+json",
+                "content": "{{menuEspecialistasSelect}}"
+              },
+              "editable": true,
+              "deletable": true,
+              "position": "left"
             },
             "conditions": [],
             "$invalid": false
