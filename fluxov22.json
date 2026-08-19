@@ -320,16 +320,16 @@
           "$invalid": false
         },
         {
-          "$id": "gen_text_spec_menu",
+          "$id": "gen_interactive_spec_menu",
           "type": "ExecuteScript",
-          "$title": "Monta Texto Formatado Especialistas",
+          "$title": "Monta Menu Interativo Especialistas",
           "settings": {
             "function": "run",
-            "source": "function run(listaMedicosJson) {\n    try {\n        var doctors = JSON.parse(listaMedicosJson || \"[]\");\n        var total = doctors.length > 10 ? 10 : doctors.length;\n        if (total === 0) {\n            return \"Com qual médico ou especialidade você gostaria de agendar? 🩺\\n\\n(Por favor, digite o nome do médico desejado):\";\n        }\n        var emojis = [\"1️⃣\", \"2️⃣\", \"3️⃣\", \"4️⃣\", \"5️⃣\", \"6️⃣\", \"7️⃣\", \"8️⃣\", \"9️⃣\", \"🔟\"];\n        var sb = \"Encontramos os seguintes especialistas para o seu agendamento:\\n\\n\";\n        for (var i = 0; i < total; i++) {\n            var d = doctors[i];\n            var emoji = i < emojis.length ? emojis[i] : (i + 1) + \".\";\n            var name = d.doctorName || d.name || \"Especialista\";\n            var spec = d.specialty || d.spec || \"\";\n            sb += emoji + \" *\" + name + \"*\" + (spec ? \" (\" + spec + \")\" : \"\") + \"\\n\";\n        }\n        sb += \"\\n👉 *Toque em um dos botões abaixo (1 a \" + total + \") ou digite o nome do médico:*\";\n        return sb;\n    } catch (e) {\n        return \"Por favor, digite o nome do médico desejado:\";\n    }\n}",
+            "source": "function run(listaMedicosJson) {\n    try {\n        var doctors = JSON.parse(listaMedicosJson || \"[]\");\n        var total = doctors.length > 10 ? 10 : doctors.length;\n        if (total === 0) {\n            return JSON.stringify({\n                \"recipient_type\": \"individual\",\n                \"type\": \"text\",\n                \"text\": { \"body\": \"Com qual médico ou especialidade você gostaria de agendar? 🩺\\n\\n(Por favor, digite o nome do médico desejado):\" }\n            });\n        }\n\n        var rows = [];\n        for (var i = 0; i < total; i++) {\n            var d = doctors[i];\n            var name = (d.doctorName || d.name || \"Especialista\").replace(/[*_~`]/g, \"\").trim();\n            var spec = (d.specialty || d.spec || \"\").replace(/[*_~`]/g, \"\").trim();\n\n            var title = name;\n            if (title.length > 24) {\n                title = title.substring(0, 24).trim();\n            }\n\n            var desc = spec;\n            if (desc.length > 72) {\n                desc = desc.substring(0, 72).trim();\n            }\n\n            rows.push({\n                \"id\": (i + 1).toString(),\n                \"title\": title,\n                \"description\": desc\n            });\n        }\n\n        var payload = {\n            \"recipient_type\": \"individual\",\n            \"type\": \"interactive\",\n            \"interactive\": {\n                \"type\": \"list\",\n                \"header\": {\n                    \"type\": \"text\",\n                    \"text\": \"Especialistas\"\n                },\n                \"body\": {\n                    \"text\": \"Encontramos os seguintes especialistas para o seu agendamento.\\n\\n👉 Toque no botão abaixo para escolher:\"\n                },\n                \"action\": {\n                    \"button\": \"Ver Médicos\",\n                    \"sections\": [\n                        {\n                            \"title\": \"Especialistas\",\n                            \"rows\": rows\n                        }\n                    ]\n                }\n            }\n        };\n\n        return JSON.stringify(payload);\n    } catch (e) {\n        return JSON.stringify({\n            \"recipient_type\": \"individual\",\n            \"type\": \"text\",\n            \"text\": { \"body\": \"Por favor, digite o nome do médico desejado:\" }\n        });\n    }\n}",
             "inputVariables": [
               "listaMedicosJson"
             ],
-            "outputVariable": "textoEspecialistas",
+            "outputVariable": "menuEspecialistasSelect",
             "LocalTimeZoneEnabled": false
           },
           "conditions": [],
@@ -370,19 +370,19 @@
         },
         {
           "action": {
-            "$id": "card_text_especialistas",
-            "$typeOfContent": "text",
+            "$id": "card_dynamic_list_especialistas",
+            "$typeOfContent": "dynamic",
             "type": "SendMessage",
             "settings": {
-              "id": "doc_text_especialistas",
-              "type": "text/plain",
-              "content": "{{textoEspecialistas}}"
+              "id": "doc_dynamic_list_especialistas",
+              "type": "application/json",
+              "content": "{{menuEspecialistasSelect}}"
             },
             "$cardContent": {
               "document": {
-                "id": "doc_text_especialistas",
-                "type": "text/plain",
-                "content": "{{textoEspecialistas}}"
+                "id": "doc_dynamic_list_especialistas",
+                "type": "application/json",
+                "content": "{{menuEspecialistasSelect}}"
               },
               "editable": true,
               "deletable": true,
