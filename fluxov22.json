@@ -1,0 +1,3059 @@
+{
+  "flow": {
+    "onboarding": {
+      "id": "onboarding",
+      "root": true,
+      "$title": "[1. Início]",
+      "$position": {
+        "top": "100px",
+        "left": "100px"
+      },
+      "$contentActions": [
+        {
+          "input": {
+            "bypass": false,
+            "variable": "mensagemOriginal",
+            "$cardContent": {
+              "document": {
+                "id": "a9cb76f2-0818-4d55-b58d-7cc554d85d8b",
+                "type": "text/plain",
+                "content": "Entrada do usuário"
+              },
+              "editable": false,
+              "deletable": false,
+              "position": "right"
+            },
+            "$invalid": false
+          },
+          "$invalid": false
+        }
+      ],
+      "$conditionOutputs": [
+        {
+          "id": "466be39e-9f44-49f4-83e9-74a9aa8b889d",
+          "stateId": "nlp-analysis",
+          "typeOfStateId": "state",
+          "$connId": "con_3",
+          "conditions": [
+            {
+              "source": "input",
+              "comparison": "matches",
+              "values": [
+                ".*"
+              ]
+            }
+          ],
+          "$id": "50fecbf0-de19-4b82-9fd0-a53dd8569349",
+          "$invalid": false
+        }
+      ],
+      "$enteringCustomActions": [
+        {
+          "$id": "detect_channel_onboarding",
+          "type": "ExecuteScript",
+          "$title": "Detecta Canal WhatsApp",
+          "settings": {
+            "function": "run",
+            "source": "function run(contactIdentity, tunnelUser) {\n    var id = (contactIdentity || tunnelUser || \"\").toLowerCase();\n    if (id.indexOf(\"wa.gw.msging.net\") !== -1 || id.indexOf(\"tunnel.msging.net\") !== -1 || id.indexOf(\"@wa\") !== -1) {\n        return \"WhatsApp\";\n    }\n    return \"WhatsApp\"; // Default WhatsApp para garantir renderização interativa\n}",
+            "inputVariables": [
+              "contact.identity",
+              "tunnel.user"
+            ],
+            "outputVariable": "canal"
+          },
+          "conditions": [],
+          "$invalid": false
+        }
+      ],
+      "$leavingCustomActions": [],
+      "$defaultOutput": {
+        "stateId": "nlp-analysis",
+        "$invalid": false
+      },
+      "isAiGenerated": false,
+      "$tags": [
+        {
+          "id": "blip-tag-f8f09397-75f0-4c6f-b212-4ed99c1cd3e2",
+          "label": "Início",
+          "background": "#000000",
+          "canChangeBackground": false
+        }
+      ],
+      "$invalid": false,
+      "$inputSuggestions": [],
+      "$invalidContentActions": false,
+      "$invalidOutputs": false,
+      "$invalidCustomActions": false
+    },
+    "nlp-analysis": {
+      "id": "nlp-analysis",
+      "root": false,
+      "$title": "[2. Análise de Intenção API]",
+      "$position": {
+        "top": "100px",
+        "left": "450px"
+      },
+      "$contentActions": [
+        {
+          "input": {
+            "bypass": true,
+            "$cardContent": {
+              "document": {
+                "id": "037bdbe6-4b55-455b-b487-f38640a17d02",
+                "type": "text/plain",
+                "content": "Processando NLP..."
+              },
+              "editable": false,
+              "deletable": true,
+              "position": "right"
+            },
+            "$invalid": false
+          },
+          "$invalid": false
+        }
+      ],
+      "$enteringCustomActions": [
+        {
+          "$id": "nlp_native_catalog_script",
+          "type": "ExecuteScript",
+          "$title": "NLP Nativo e DoctorCatalog",
+          "settings": {
+            "function": "run",
+            "source": "function run(inputContent, inputVar, msgOriginal) {\n    var raw = (inputContent || inputVar || msgOriginal || \"\").toString();\n    \n    function stripAccents(str) {\n        if (!str) return \"\";\n        try {\n            return str.normalize(\"NFD\").replace(/[\\u0300-\\u036f]/g, \"\").toLowerCase();\n        } catch(e) {\n            return str.toLowerCase();\n        }\n    }\n\n    var normalized = stripAccents(raw).trim();\n\n    // 1. Verificação de solicitação explícita de Atendimento Humano ou Recepção\n    var isExplicitHuman = normalized.indexOf(\"atendente\") !== -1 ||\n        normalized.indexOf(\"humano\") !== -1 ||\n        normalized.indexOf(\"secretaria\") !== -1 ||\n        normalized.indexOf(\"recepcao\") !== -1 ||\n        normalized.indexOf(\"falar com atendente\") !== -1 ||\n        normalized.indexOf(\"falar com secretaria\") !== -1;\n\n    if (isExplicitHuman) {\n        var humanResult = {\n            acaoSeguinte: \"PEDIR_CPF\",\n            listaMedicosJson: \"[]\",\n            externalLink: \"\",\n            externalPhone: \"\",\n            isInternal: \"true\",\n            queueName: \"Atendimento Geral\",\n            formattedText: \"\",\n            externalRedirectMessage: \"\",\n            hasAmbiguity: false,\n            matches: []\n        };\n        return JSON.stringify(humanResult);\n    }\n\n    var DOCTOR_CATALOG = [\n        // 1. Alergia e Imunologia\n        { name: \"Dra. Vânia Gulin\", specialty: \"Alergia e Imunologia\", route: \"DESK\", queue: \"Alergia e Imunologia - Dra. Vânia Gulin\", tokens: [\"vania\", \"gulin\", \"alergia\", \"imunologia\", \"alergologista\", \"imuno\"] },\n\n        // 2. Anestesiologia\n        { name: \"Anestesiologia (Secretaria do Setor)\", specialty: \"Anestesiologia\", route: \"DESK\", queue: \"Anestesiologia - Secretaria\", tokens: [\"anestesia\", \"anestesiologia\", \"anestesista\"] },\n\n        // 3. Cardiologia\n        { name: \"Dra. Liliana Elias Pena Pilatti\", specialty: \"Cardiologia\", route: \"DESK\", queue: \"Cardiologia - Dra. Liliana Elias Pena Pilatti\", tokens: [\"liliana\", \"elias\", \"pena\", \"pilatti\", \"cardiologia\", \"cardio\"] },\n        { name: \"Dr. Marcelo Valladao Ferreira\", specialty: \"Cardiologia\", route: \"DESK\", queue: \"Cardiologia - Dr. Marcelo Valladao Ferreira\", tokens: [\"marcelo\", \"valladao\", \"ferreira\", \"cardiologia\", \"cardio\"] },\n        { name: \"Dr. Rubens Sirtoli Filho\", specialty: \"Cardiologia\", route: \"DESK\", queue: \"Cardiologia - Dr. Rubens Sirtoli Filho\", tokens: [\"rubens\", \"sirtoli\", \"cardiologia\", \"cardio\"] },\n\n        // 4. Cirurgia do Aparelho Digestivo\n        { name: \"Dr. Cesar Toshio Oda\", specialty: \"Cirurgia do Aparelho Digestivo\", route: \"DESK\", queue: \"Cirurgia do Aparelho Digestivo - Dr. Cesar Toshio Oda\", tokens: [\"cesar\", \"toshio\", \"oda\", \"digestivo\", \"cirurgia\"] },\n        { name: \"Dr. Joelson José Gulin\", specialty: \"Cirurgia do Aparelho Digestivo\", route: \"DESK\", queue: \"Cirurgia do Aparelho Digestivo - Dr. Joelson José Gulin\", tokens: [\"joelson\", \"jose\", \"gulin\", \"digestivo\", \"cirurgia\"] },\n\n        // 5. Cirurgia Geral\n        { name: \"Dr. Daniel Oda\", specialty: \"Cirurgia Geral\", route: \"DESK\", queue: \"Cirurgia Geral - Dr. Daniel Oda\", tokens: [\"daniel\", \"oda\", \"cirurgia\", \"geral\"] },\n\n        // 6. Cirurgia Plástica\n        { name: \"Dr. Victor Mauro\", specialty: \"Cirurgia Plástica\", route: \"DESK\", queue: \"Cirurgia Plástica - Dr. Victor Mauro\", tokens: [\"victor\", \"mauro\", \"plastica\", \"cirurgia\"] },\n\n        // 7. Cirurgia Torácica\n        { name: \"Dr. Magno Zanellato\", specialty: \"Cirurgia Torácica\", route: \"DESK\", queue: \"Cirurgia Torácica - Dr. Magno Zanellato\", tokens: [\"magno\", \"zanellato\", \"toracica\", \"pneumologia\", \"pneumo\"] },\n\n        // 8. Cirurgia Vascular\n        { name: \"Dr. Bruno Figueiredo Pançan\", specialty: \"Cirurgia Vascular\", route: \"DESK\", queue: \"Cirurgia Vascular - Dr. Bruno Figueiredo Pançan\", tokens: [\"bruno\", \"figueiredo\", \"pancan\", \"vascular\"] },\n        { name: \"Dra. Karen Kono Miyabukuro\", specialty: \"Cirurgia Vascular\", route: \"DESK\", queue: \"Cirurgia Vascular - Dra. Karen Kono Miyabukuro\", tokens: [\"karen\", \"kono\", \"miyabukuro\", \"vascular\"] },\n        { name: \"Dr. Ricardo Zanetti Gomes\", specialty: \"Cirurgia Vascular\", route: \"DESK\", queue: \"Cirurgia Vascular - Dr. Ricardo Zanetti Gomes\", tokens: [\"ricardo\", \"zanetti\", \"gomes\", \"vascular\"] },\n\n        // 9. Clínica Geral\n        { name: \"Dra. Ana Paula Costa Pádua de Carvalho\", specialty: \"Clínica Geral\", route: \"DESK\", queue: \"Clínica Geral - Dra. Ana Paula Costa Pádua de Carvalho\", tokens: [\"ana\", \"paula\", \"padua\", \"carvalho\", \"clinica\", \"geral\", \"clinico\"] },\n        { name: \"Dr. Luiz Henrique Strack\", specialty: \"Clínica Geral\", route: \"DESK\", queue: \"Clínica Geral - Dr. Luiz Henrique Strack\", tokens: [\"luiz\", \"henrique\", \"strack\", \"clinica\", \"geral\", \"clinico\"] },\n\n        // 10. Dermatologia\n        { name: \"Dr. Giuliano Schultz Doretto Campanari\", specialty: \"Dermatologia\", route: \"DESK\", queue: \"Dermatologia - Dr. Giuliano Schultz Doretto Campanari\", tokens: [\"giuliano\", \"schultz\", \"doretto\", \"campanari\", \"dermatologia\", \"dermato\"] },\n\n        // 11. Endocrinologia\n        { name: \"Dr. Alexandre Barão Acuña\", specialty: \"Endocrinologia\", route: \"EXTERNAL_WA\", queue: \"Endocrinologia - Dr. Alexandre Barão Acuña\", tokens: [\"alexandre\", \"barao\", \"acuna\", \"endocrinologia\", \"endocrino\"] },\n\n        // 12. Fisioterapia\n        { name: \"Dra. Juliana Borato\", specialty: \"Fisioterapia\", route: \"DESK\", queue: \"Fisioterapia - Dra. Juliana Borato\", tokens: [\"juliana\", \"borato\", \"fisioterapia\", \"fisio\"] },\n\n        // 13. Fonoaudiologia\n        { name: \"Dra. Cíntia Simão Cenovicz\", specialty: \"Fonoaudiologia\", route: \"EXTERNAL_WA\", queue: \"Fonoaudiologia - Dra. Cíntia Simão Cenovicz\", tokens: [\"cintia\", \"simao\", \"cenovicz\", \"fonoaudiologia\", \"fono\"] },\n\n        // 14. Gastroenterologia\n        { name: \"Dra. Caroline Tatim Saad\", specialty: \"Gastroenterologia\", route: \"EXTERNAL_WA\", queue: \"Gastroenterologia - Dra. Caroline Tatim Saad\", tokens: [\"caroline\", \"tatim\", \"saad\", \"gastroenterologia\", \"gastro\"] },\n        { name: \"Dr. Claudio Solak\", specialty: \"Gastroenterologia\", route: \"EXTERNAL_WA\", queue: \"Gastroenterologia - Dr. Claudio Solak\", tokens: [\"claudio\", \"solak\", \"gastroenterologia\", \"gastro\"] },\n        { name: \"Dr. Danilo Saad\", specialty: \"Gastroenterologia\", route: \"EXTERNAL_WA\", queue: \"Gastroenterologia - Dr. Danilo Saad\", tokens: [\"danilo\", \"saad\", \"gastroenterologia\", \"gastro\"] },\n\n        // 15. Ginecologia\n        { name: \"Dra. Brenda de Almeida Aguiar\", specialty: \"Ginecologia\", route: \"EXTERNAL_WA\", queue: \"Ginecologia - Dra. Brenda de Almeida Aguiar\", tokens: [\"brenda\", \"almeida\", \"aguiar\", \"ginecologia\", \"gineco\"] },\n        { name: \"Dr. Carlos Alberto Batista da Silva\", specialty: \"Ginecologia\", route: \"EXTERNAL_WA\", queue: \"Ginecologia - Dr. Carlos Alberto Batista da Silva\", tokens: [\"carlos\", \"alberto\", \"batista\", \"ginecologia\", \"gineco\"] },\n        { name: \"Dr. Edson Delfrate\", specialty: \"Ginecologia\", route: \"EXTERNAL_WA\", queue: \"Ginecologia - Dr. Edson Delfrate\", tokens: [\"edson\", \"delfrate\", \"ginecologia\", \"gineco\"] },\n        { name: \"Dr. Eduardo Serman\", specialty: \"Ginecologia\", route: \"EXTERNAL_WA\", queue: \"Ginecologia - Dr. Eduardo Serman\", tokens: [\"eduardo\", \"serman\", \"ginecologia\", \"gineco\"] },\n        { name: \"Dra. Isabela Baumel Mongruel\", specialty: \"Ginecologia\", route: \"EXTERNAL_WA\", queue: \"Ginecologia - Dra. Isabela Baumel Mongruel\", tokens: [\"isabela\", \"baumel\", \"mongruel\", \"ginecologia\", \"gineco\"] },\n        { name: \"Dra. Lisa Paula Fernandes Teixeira\", specialty: \"Ginecologia\", route: \"EXTERNAL_WA\", queue: \"Ginecologia - Dra. Lisa Paula Fernandes Teixeira\", tokens: [\"lisa\", \"paula\", \"fernandes\", \"teixeira\", \"ginecologia\", \"gineco\"] },\n        { name: \"Dra. Tatyellen Dalzotto\", specialty: \"Ginecologia\", route: \"EXTERNAL_WA\", queue: \"Ginecologia - Dra. Tatyellen Dalzotto\", tokens: [\"tatyellen\", \"dalzotto\", \"ginecologia\", \"gineco\"] },\n\n        // 16. Hepatologia\n        { name: \"Dr. Filipe Fernandes Justus\", specialty: \"Hepatologia\", route: \"EXTERNAL_WA\", queue: \"Hepatologia - Dr. Filipe Fernandes Justus\", tokens: [\"filipe\", \"fernandes\", \"justus\", \"hepatologia\", \"hepato\"] },\n\n        // 17. Nefrologia\n        { name: \"Dr. João Felipe Lara Bueno\", specialty: \"Nefrologia\", route: \"DESK\", queue: \"Nefrologia - Dr. João Felipe Lara Bueno\", tokens: [\"joao\", \"felipe\", \"lara\", \"bueno\", \"nefrologia\", \"nefro\"] },\n\n        // 18. Neurologia\n        { name: \"Dr. Carlos Henrique Ferreira Camargo\", specialty: \"Neurologia\", route: \"DESK\", queue: \"Neurologia - Dr. Carlos Henrique Ferreira Camargo\", tokens: [\"carlos\", \"henrique\", \"camargo\", \"neurologia\", \"neuro\"] },\n        { name: \"Dr. Marcelo Tessari\", specialty: \"Neurologia\", route: \"DESK\", queue: \"Neurologia - Dr. Marcelo Tessari\", tokens: [\"marcelo\", \"tessari\", \"neurologia\", \"neuro\"] },\n\n        // 19. Nutrição\n        { name: \"Paola Francielle Pavlak\", specialty: \"Nutrição\", route: \"DESK\", queue: \"Nutrição - Paola Francielle Pavlak\", tokens: [\"paola\", \"francielle\", \"pavlak\", \"nutricao\", \"nutricionista\", \"nutri\"] },\n\n        // 20. Odontologia\n        { name: \"Dr. Roberto Kravchychyn\", specialty: \"Odontologia\", route: \"DESK\", queue: \"Odontologia - Dr. Roberto Kravchychyn\", tokens: [\"roberto\", \"kravchychyn\", \"odontologia\", \"odonto\", \"dentista\"] },\n\n        // 21. Oftalmologia\n        { name: \"Dra. Fernanda Cenovicz\", specialty: \"Oftalmologia\", route: \"EXTERNAL_WA\", queue: \"Oftalmologia - Dra. Fernanda Cenovicz\", tokens: [\"fernanda\", \"cenovicz\", \"oftalmologia\", \"oftalmo\"] },\n        { name: \"Dr. Marcelo Cenovicz\", specialty: \"Oftalmologia\", route: \"EXTERNAL_WA\", queue: \"Oftalmologia - Dr. Marcelo Cenovicz\", tokens: [\"marcelo\", \"cenovicz\", \"oftalmologia\", \"oftalmo\"] },\n        { name: \"Dr. Murilo Cenovicz\", specialty: \"Oftalmologia\", route: \"EXTERNAL_WA\", queue: \"Oftalmologia - Dr. Murilo Cenovicz\", tokens: [\"murilo\", \"cenovicz\", \"oftalmologia\", \"oftalmo\"] },\n\n        // 22. Ortopedia\n        { name: \"Dr. Carlos Miers\", specialty: \"Ortopedia\", route: \"DESK\", queue: \"Ortopedia - Dr. Carlos Miers\", tokens: [\"carlos\", \"miers\", \"ortopedia\", \"ortopedista\", \"orto\"] },\n        { name: \"Dr. Cristiano Gatelli\", specialty: \"Ortopedia\", route: \"DESK\", queue: \"Ortopedia - Dr. Cristiano Gatelli\", tokens: [\"cristiano\", \"gatelli\", \"ortopedia\", \"ortopedista\", \"orto\"] },\n        { name: \"Dr. Daniel Cartelli\", specialty: \"Ortopedia\", route: \"DESK\", queue: \"Ortopedia - Dr. Daniel Cartelli\", tokens: [\"daniel\", \"cartelli\", \"ortopedia\", \"ortopedista\", \"orto\"] },\n        { name: \"Dr. Franklin Roberto Hilgemberg\", specialty: \"Ortopedia\", route: \"DESK\", queue: \"Ortopedia - Dr. Franklin Roberto Hilgemberg\", tokens: [\"franklin\", \"roberto\", \"hilgemberg\", \"ortopedia\", \"ortopedista\", \"orto\"] },\n        { name: \"Dr. Luis Felipe Villas Bôas\", specialty: \"Ortopedia\", route: \"DESK\", queue: \"Ortopedia - Dr. Luis Felipe Villas Bôas\", tokens: [\"luis\", \"felipe\", \"villas\", \"boas\", \"ortopedia\", \"ortopedista\", \"orto\"] },\n        { name: \"Dra. Marina Polydoro\", specialty: \"Ortopedia\", route: \"DESK\", queue: \"Ortopedia - Dra. Marina Polydoro\", tokens: [\"marina\", \"polydoro\", \"ortopedia\", \"ortopedista\", \"orto\"] },\n        { name: \"Dr. Rafael Pançan de Biaggi\", specialty: \"Ortopedia\", route: \"DESK\", queue: \"Ortopedia - Dr. Rafael Pançan de Biaggi\", tokens: [\"rafael\", \"pancan\", \"biaggi\", \"ortopedia\", \"ortopedista\", \"orto\"] },\n        { name: \"Dr. Rodrigo Caldonazzo Fávaro\", specialty: \"Ortopedia\", route: \"DESK\", queue: \"Ortopedia - Dr. Rodrigo Caldonazzo Fávaro\", tokens: [\"rodrigo\", \"caldonazzo\", \"favaro\", \"ortopedia\", \"ortopedista\", \"orto\"] },\n\n        // 23. Ortopedia Pediátrica\n        { name: \"Dr. Eduardo Mattos\", specialty: \"Ortopedia Pediátrica\", route: \"DESK\", queue: \"Ortopedia Pediátrica - Dr. Eduardo Mattos\", tokens: [\"eduardo\", \"mattos\", \"ortopedia\", \"pediatrica\"] },\n\n        // 24. Pediatria\n        { name: \"Dra. Fabíola Moreira Baigorria\", specialty: \"Pediatria\", route: \"DESK\", queue: \"Pediatria - Dra. Fabíola Moreira Baigorria\", tokens: [\"fabiola\", \"moreira\", \"baigorria\", \"pediatria\", \"pediatra\"] },\n\n        // 25. Psicologia\n        { name: \"Dra. Thais Fernanda Silvestre\", specialty: \"Psicologia\", route: \"DESK\", queue: \"Psicologia - Dra. Thais Fernanda Silvestre\", tokens: [\"thais\", \"fernanda\", \"silvestre\", \"psicologia\", \"psicologa\"] },\n\n        // 26. Psiquiatria\n        { name: \"Dra. Kelly Melina Brito Costa\", specialty: \"Psiquiatria\", route: \"DESK\", queue: \"Psiquiatria - Dra. Kelly Melina Brito Costa\", tokens: [\"kelly\", \"melina\", \"brito\", \"costa\", \"psiquiatria\", \"psiquiatra\"] },\n\n        // 27. Reumatologia\n        { name: \"Dr. Marcelo Schafranski\", specialty: \"Reumatologia\", route: \"EXTERNAL_WA\", queue: \"Reumatologia - Dr. Marcelo Schafranski\", tokens: [\"marcelo\", \"schafranski\", \"reumatologia\", \"reumato\"] },\n\n        // 28. Urologia\n        { name: \"Dr. Alisson Vinicius Emerique Fucio\", specialty: \"Urologia\", route: \"DESK\", queue: \"Urologia - Dr. Alisson Vinicius Emerique Fucio\", tokens: [\"alisson\", \"vinicius\", \"fucio\", \"urologia\", \"uro\"] },\n        { name: \"Dr. Carlos Heidi Koga\", specialty: \"Urologia\", route: \"DESK\", queue: \"Urologia - Dr. Carlos Heidi Koga\", tokens: [\"carlos\", \"heidi\", \"koga\", \"urologia\", \"uro\"] },\n        { name: \"Dr. Eduardo Bisinella\", specialty: \"Urologia\", route: \"DESK\", queue: \"Urologia - Dr. Eduardo Bisinella\", tokens: [\"eduardo\", \"bisinella\", \"urologia\", \"uro\"] },\n        { name: \"Dr. Ricardo Angelo Jeczmionski\", specialty: \"Urologia\", route: \"DESK\", queue: \"Urologia - Dr. Ricardo Angelo Jeczmionski\", tokens: [\"ricardo\", \"angelo\", \"jeczmionski\", \"urologia\", \"uro\"] },\n\n        // Exames\n        { name: \"Teste Ergométrico\", specialty: \"Exames de Cardiologia\", route: \"DESK\", queue: \"Exames - Teste Ergométrico\", tokens: [\"ergometrico\", \"esteira\", \"teste\"] },\n        { name: \"Endoscopia / Colonoscopia\", specialty: \"Exames Digestivos\", route: \"DESK\", queue: \"Exames Digestivos - Endoscopia / Colonoscopia\", tokens: [\"endoscopia\", \"colonoscopia\", \"phmetria\", \"manometria\"] },\n        { name: \"Espirometria\", specialty: \"Exames Pulmonares\", route: \"DESK\", queue: \"Exames - Espirometria\", tokens: [\"espirometria\", \"sopro\", \"pulmao\"] },\n        { name: \"MAPA e Holter\", specialty: \"Exames de Cardiologia\", route: \"DESK\", queue: \"Exames - MAPA e Holter\", tokens: [\"mapa\", \"holter\", \"pressao\"] },\n        { name: \"PHmetria e Manometria Esofágica\", specialty: \"Exames Digestivos\", route: \"DESK\", queue: \"Exames Digestivos - PHmetria e Manometria\", tokens: [\"phmetria\", \"manometria\", \"esofagica\"] },\n        { name: \"Clínica da Imagem / Clinipon\", specialty: \"Exames de Imagem\", route: \"EXTERNAL_WA\", queue: \"Exames de Imagem - Clínica da Imagem / Clinipon\", tokens: [\"imagem\", \"clinipon\", \"ecocardiograma\", \"eletrocardiograma\", \"ultrassom\", \"tomografia\"] }\n    ];\n\n    var STOP_WORDS = {\n        \"ola\":1, \"olaa\":1, \"oi\":1, \"bom\":1, \"dia\":1, \"boa\":1, \"tarde\":1, \"noite\":1,\n        \"agendar\":1, \"agendamento\":1, \"consulta\":1, \"marcar\":1, \"com\":1, \"quero\":1,\n        \"por\":1, \"favor\":1, \"gostaria\":1, \"de\":1, \"para\":1, \"o\":1, \"a\":1, \"os\":1, \"as\":1,\n        \"um\":1, \"uma\":1, \"dr\":1, \"dra\":1, \"doutor\":1, \"doutora\":1, \"medico\":1, \"medica\":1,\n        \"preciso\":1, \"ver\":1, \"passar\":1, \"clinica\":1\n    };\n\n    var NICKNAME_SPECIALTY_MAP = {\n        \"anestesia\": \"Anestesiologia\", \"anestesiologia\": \"Anestesiologia\", \"anestesista\": \"Anestesiologia\",\n        \"gineco\": \"Ginecologia\", \"ginecologista\": \"Ginecologia\",\n        \"oftalmo\": \"Oftalmologia\", \"oftalmologista\": \"Oftalmologia\",\n        \"cardio\": \"Cardiologia\", \"cardiologista\": \"Cardiologia\",\n        \"uro\": \"Urologia\", \"urologista\": \"Urologia\",\n        \"pneumo\": \"Cirurgia Torácica\", \"pneumologista\": \"Cirurgia Torácica\",\n        \"reumato\": \"Reumatologia\", \"reumatologista\": \"Reumatologia\",\n        \"imuno\": \"Alergia e Imunologia\", \"alergista\": \"Alergia e Imunologia\", \"alergia\": \"Alergia e Imunologia\",\n        \"digestivo\": \"Cirurgia do Aparelho Digestivo\", \"plastica\": \"Cirurgia Plástica\",\n        \"vascular\": \"Cirurgia Vascular\", \"toracica\": \"Cirurgia Torácica\",\n        \"dermato\": \"Dermatologia\", \"dermatologista\": \"Dermatologia\",\n        \"orto\": \"Ortopedia\", \"ortopedista\": \"Ortopedia\",\n        \"endocrino\": \"Endocrinologia\", \"endocrinologista\": \"Endocrinologia\",\n        \"gastro\": \"Gastroenterologia\", \"gastroenterologista\": \"Gastroenterologia\",\n        \"hepato\": \"Hepatologia\", \"hepatologista\": \"Hepatologia\",\n        \"nefro\": \"Nefrologia\", \"nefrologista\": \"Nefrologia\",\n        \"neuro\": \"Neurologia\", \"neurologista\": \"Neurologia\",\n        \"nutri\": \"Nutrição\", \"nutricionista\": \"Nutrição\",\n        \"odonto\": \"Odontologia\", \"dentista\": \"Odontologia\",\n        \"fisio\": \"Fisioterapia\", \"fisioterapeuta\": \"Fisioterapia\",\n        \"fono\": \"Fonoaudiologia\", \"fonoaudiologa\": \"Fonoaudiologia\",\n        \"psico\": \"Psicologia\", \"psicologa\": \"Psicologia\",\n        \"psiquiatra\": \"Psiquiatria\", \"pediatra\": \"Pediatria\", \"pediatria\": \"Pediatria\"\n    };\n\n    var rawTokens = normalized.split(/[^a-z0-9]+/);\n    var tokens = [];\n    for (var i = 0; i < rawTokens.length; i++) {\n        var t = rawTokens[i];\n        if (t.length > 0 && !STOP_WORDS[t]) {\n            tokens.push(t);\n        }\n    }\n\n    var mappedSpecialty = null;\n    for (var j = 0; j < tokens.length; j++) {\n        if (NICKNAME_SPECIALTY_MAP[tokens[j]]) {\n            mappedSpecialty = NICKNAME_SPECIALTY_MAP[tokens[j]];\n            break;\n        }\n    }\n\n    var scoreMap = [];\n    var maxScore = 0;\n\n    for (var k = 0; k < DOCTOR_CATALOG.length; k++) {\n        var doc = DOCTOR_CATALOG[k];\n        var score = 0;\n\n        if (mappedSpecialty && doc.specialty.toLowerCase() === mappedSpecialty.toLowerCase()) {\n            score += 10;\n        }\n\n        var docNormName = stripAccents(doc.name);\n        var docNormSpec = stripAccents(doc.specialty);\n\n        for (var m = 0; m < tokens.length; m++) {\n            var tok = tokens[m];\n            if (tok.length >= 2) {\n                if (doc.tokens.indexOf(tok) !== -1) {\n                    score += 10;\n                } else if (docNormName.indexOf(tok) !== -1 || docNormSpec.indexOf(tok) !== -1) {\n                    score += 5;\n                }\n            }\n        }\n\n        if (score > 0) {\n            if (score > maxScore) maxScore = score;\n            scoreMap.push({ doc: doc, score: score });\n        }\n    }\n\n    var matches = [];\n    for (var n = 0; n < scoreMap.length; n++) {\n        var item = scoreMap[n];\n        if (item.score === maxScore || (tokens.length === 1 && item.score > 0)) {\n            var d = item.doc;\n            var isInternal = d.route === \"DESK\";\n            var extLink = \"\";\n            var extPhone = \"\";\n            if (!isInternal) {\n                if (d.name.indexOf(\"Clinipon\") !== -1) {\n                    extLink = \"https://wa.me/554230262633?text=\" + encodeURIComponent(\"Olá! Gostaria de informações/agendamento sobre Exames de Imagem.\");\n                    extPhone = \"(42) 3026-2633\";\n                } else {\n                    extLink = \"https://wa.me/554230262600?text=\" + encodeURIComponent(\"Olá! Gostaria de agendar atendimento com \" + d.name + \" (\" + d.specialty + \").\");\n                    extPhone = \"(42) 3026-2600\";\n                }\n            }\n            matches.push({\n                doctorName: d.name,\n                specialty: d.specialty,\n                isInternal: isInternal,\n                route: d.route,\n                queue: d.queue,\n                externalLink: extLink,\n                externalPhone: extPhone,\n                isSynthetic: false\n            });\n        }\n    }\n\n    var totalMatches = matches.length;\n    var hasAmbiguity = totalMatches > 1;\n\n    var result = {\n        acaoSeguinte: \"PEDIR_CPF\",\n        listaMedicosJson: \"[]\",\n        externalLink: \"\",\n        externalPhone: \"\",\n        isInternal: \"false\",\n        queueName: \"Recepção Central / Suporte\",\n        formattedText: \"\",\n        externalRedirectMessage: \"\",\n        hasAmbiguity: hasAmbiguity,\n        matches: matches\n    };\n\n    if (hasAmbiguity) {\n        result.acaoSeguinte = \"MENU_DESAMBIGUACAO\";\n        result.listaMedicosJson = JSON.stringify(matches);\n        \n        var textSb = \"👨‍⚕️ *Encontramos os seguintes especialistas:*\n\n\";\n        for (var p = 0; p < Math.min(totalMatches, 10); p++) {\n            textSb += (p + 1) + \"️⃣ *\" + matches[p].doctorName + \"* (\" + matches[p].specialty + \")\n\";\n        }\n        textSb += \"\n👉 *Digite o número (1 a \" + Math.min(totalMatches, 10) + \") ou o nome desejado:*\";\n        result.formattedText = textSb;\n    } else if (totalMatches === 1) {\n        var match = matches[0];\n        result.acaoSeguinte = \"PEDIR_CPF\";\n        result.isInternal = match.isInternal ? \"true\" : \"false\";\n        result.queueName = match.queue || \"Recepção Central / Suporte\";\n        result.externalLink = match.externalLink || \"\";\n        result.externalPhone = match.externalPhone || \"\";\n        if (!match.isInternal && match.externalLink) {\n            result.externalRedirectMessage = \"Para agendar com *\" + match.doctorName + \" (\" + match.specialty + \")*, clique no link abaixo para falar diretamente no WhatsApp:\n\n👉 \" + match.externalLink;\n        }\n    }\n\n    return JSON.stringify(result);\n}",
+            "inputVariables": [
+              "input.content",
+              "input",
+              "mensagemOriginal"
+            ],
+            "outputVariable": "parsedNlpResult"
+          },
+          "conditions": [],
+          "$invalid": false
+        },
+        {
+          "$id": "nlp_sync_response_var",
+          "type": "ExecuteScript",
+          "$title": "Sincroniza nlpResponse",
+          "settings": {
+            "function": "run",
+            "source": "function run(parsedNlpResult) { return parsedNlpResult || \"{}\"; }",
+            "inputVariables": [
+              "parsedNlpResult"
+            ],
+            "outputVariable": "nlpResponse"
+          },
+          "conditions": [],
+          "$invalid": false
+        },
+        {
+          "$id": "ext_redirect_msg_nlp_9988",
+          "type": "ExecuteScript",
+          "$title": "Extrai externalRedirectMessage",
+          "settings": {
+            "function": "run",
+            "source": "function run(parsedNlpResult) {\n    try { return JSON.parse(parsedNlpResult).externalRedirectMessage || \"\"; } catch(e) { return \"\"; }\n}",
+            "inputVariables": [
+              "parsedNlpResult"
+            ],
+            "outputVariable": "externalRedirectMessage"
+          },
+          "conditions": [],
+          "$invalid": false
+        }
+      ],
+      "$leavingCustomActions": [
+        {
+          "$id": "757360ef-3b47-494b-a167-3e654d0adaf5",
+          "type": "ExecuteScript",
+          "$title": "Parse Resposta NLP",
+          "settings": {
+            "function": "run",
+            "source": "function run(nlpStatus, nlpResponse) {\n    var result = {\n        acaoSeguinte: \"PEDIR_CPF\",\n        listaMedicosJson: \"[]\",\n        externalLink: \"\",\n        externalPhone: \"\",\n        isInternal: \"false\",\n        queueName: \"Recepção Central / Suporte\"\n    };\n    try {\n        if (parseInt(nlpStatus, 10) !== 200 || !nlpResponse) {\n            return JSON.stringify(result);\n        }\n        var response = JSON.parse(nlpResponse);\n\n        // Identifica lista de médicos (matches ou doctors)\n        var doctorsList = response.matches || response.doctors || [];\n        var isAmbiguous = (response.hasAmbiguity === true) || \n                          (response.intent === \"DESAMBIGUACAO\") || \n                          (response.routeType === \"DESAMBIGUACAO\") || \n                          (response.acaoSeguinte === \"EXIBIR_LISTA_DESAMBIGUACAO\") ||\n                          (Array.isArray(doctorsList) && doctorsList.length > 1);\n\n        if (isAmbiguous && doctorsList.length > 0) {\n            result.acaoSeguinte = \"MENU_DESAMBIGUACAO\";\n            result.listaMedicosJson = JSON.stringify(doctorsList);\n        } else {\n            result.acaoSeguinte = \"PEDIR_CPF\";\n\n            if (doctorsList.length === 1) {\n                var match = doctorsList[0];\n                if (match.externalLink) result.externalLink = match.externalLink;\n                if (match.externalPhone) result.externalPhone = match.externalPhone;\n                if (match.isInternal !== undefined) {\n                    result.isInternal = (match.isInternal === true || match.isInternal === \"true\" || match.isInternal === \"TRUE\") ? \"true\" : \"false\";\n                }\n                if (match.queue || match.queueName) {\n                    result.queueName = match.queue || match.queueName;\n                }\n            } else {\n                if (response.externalLink) result.externalLink = response.externalLink;\n                if (response.externalPhone) result.externalPhone = response.externalPhone;\n                if (response.isInternal !== undefined) {\n                    result.isInternal = (response.isInternal === true || response.isInternal === \"true\" || response.isInternal === \"TRUE\") ? \"true\" : \"false\";\n                }\n                if (response.queue || response.queueName) {\n                    result.queueName = response.queue || response.queueName;\n                }\n            }\n        }\n    } catch (e) {\n        result.acaoSeguinte = \"PEDIR_CPF\";\n    }\n    return JSON.stringify(result);\n}",
+            "inputVariables": [
+              "nlpStatus",
+              "nlpResponse"
+            ],
+            "outputVariable": "parsedNlpResult"
+          },
+          "conditions": [],
+          "$invalid": false
+        },
+        {
+          "$id": "231b96f6-0ba1-4ad8-ad87-65089e71257d",
+          "type": "ExecuteScript",
+          "$title": "Extrai acaoSeguinte",
+          "settings": {
+            "function": "run",
+            "source": "function run(parsedNlpResult) {\n    try {\n        var res = JSON.parse(parsedNlpResult);\n        return res.acaoSeguinte || \"PEDIR_CPF\";\n    } catch(e) { return \"PEDIR_CPF\"; }\n}",
+            "inputVariables": [
+              "parsedNlpResult"
+            ],
+            "outputVariable": "acaoSeguinte"
+          },
+          "conditions": [],
+          "$invalid": false
+        },
+        {
+          "$id": "4f72a80d-05a6-4999-bb81-5c0cd2fa5e22",
+          "type": "ExecuteScript",
+          "$title": "Extrai listaMedicosJson",
+          "settings": {
+            "function": "run",
+            "source": "function run(parsedNlpResult) {\n    try {\n        var res = JSON.parse(parsedNlpResult);\n        return res.listaMedicosJson || \"[]\";\n    } catch(e) { return \"[]\"; }\n}",
+            "inputVariables": [
+              "parsedNlpResult"
+            ],
+            "outputVariable": "listaMedicosJson"
+          },
+          "conditions": [],
+          "$invalid": false
+        },
+        {
+          "$id": "24ef3d17-34d4-436e-9046-35b9826ac79d",
+          "type": "ExecuteScript",
+          "$title": "Extrai externalLink",
+          "settings": {
+            "function": "run",
+            "source": "function run(parsedNlpResult) {\n    try { return JSON.parse(parsedNlpResult).externalLink || \"\"; } catch(e) { return \"\"; }\n}",
+            "inputVariables": [
+              "parsedNlpResult"
+            ],
+            "outputVariable": "externalLink"
+          },
+          "conditions": [],
+          "$invalid": false
+        },
+        {
+          "$id": "7e51d4c1-089a-471b-8e6c-79e43292ba71",
+          "type": "ExecuteScript",
+          "$title": "Extrai externalPhone",
+          "settings": {
+            "function": "run",
+            "source": "function run(parsedNlpResult) {\n    try { return JSON.parse(parsedNlpResult).externalPhone || \"\"; } catch(e) { return \"\"; }\n}",
+            "inputVariables": [
+              "parsedNlpResult"
+            ],
+            "outputVariable": "externalPhone"
+          },
+          "conditions": [],
+          "$invalid": false
+        },
+        {
+          "$id": "93c1a876-e28f-4729-be6b-66b7545211dc",
+          "type": "ExecuteScript",
+          "$title": "Extrai isInternal",
+          "settings": {
+            "function": "run",
+            "source": "function run(parsedNlpResult) {\n    try { return JSON.parse(parsedNlpResult).isInternal || \"false\"; } catch(e) { return \"false\"; }\n}",
+            "inputVariables": [
+              "parsedNlpResult"
+            ],
+            "outputVariable": "isInternal"
+          },
+          "conditions": [],
+          "$invalid": false
+        },
+        {
+          "$id": "bbfe9f8d-1cab-46dc-8504-f53d7f27329a",
+          "type": "ExecuteScript",
+          "$title": "Extrai queueName",
+          "settings": {
+            "function": "run",
+            "source": "function run(parsedNlpResult) {\n    try {\n        var res = JSON.parse(parsedNlpResult);\n        return res.queueName || \"Recepção Central / Suporte\";\n    } catch(e) { return \"Recepção Central / Suporte\"; }\n}",
+            "inputVariables": [
+              "parsedNlpResult"
+            ],
+            "outputVariable": "queueName"
+          },
+          "conditions": [],
+          "$invalid": false
+        }
+      ],
+      "$conditionOutputs": [
+        {
+          "id": "85704434-87c4-4d97-85ef-0737f06086ee",
+          "stateId": "specialist-menu",
+          "typeOfStateId": "state",
+          "$connId": "con_8",
+          "conditions": [
+            {
+              "source": "context",
+              "variable": "acaoSeguinte",
+              "comparison": "equals",
+              "values": [
+                "MENU_DESAMBIGUACAO"
+              ]
+            }
+          ],
+          "$invalid": false,
+          "$id": "b68d67e4-f273-4340-a0e5-4b6cfac666bc"
+        },
+        {
+          "id": "229184fc-8921-419b-a012-9c12480b1234",
+          "stateId": "smart-router",
+          "typeOfStateId": "state",
+          "$connId": "con_nlp_to_router",
+          "conditions": [
+            {
+              "source": "context",
+              "variable": "acaoCadastro",
+              "comparison": "equals",
+              "values": [
+                "EXISTENTE"
+              ]
+            }
+          ],
+          "$invalid": false,
+          "$id": "c491823a-1029-4819-bf91-102948192019"
+        }
+      ],
+      "$defaultOutput": {
+        "stateId": "cpf-request",
+        "$invalid": false
+      },
+      "isAiGenerated": false,
+      "$tags": [
+        {
+          "id": "blip-tag-49181401-0c25-426a-a2e1-19d5439e8f55",
+          "label": "NLP",
+          "background": "#FF961E",
+          "canChangeBackground": false
+        },
+        {
+          "id": "blip-tag-7ce7dcd6-a5ca-4b14-8d27-05fcf4a5fe6a",
+          "label": "HTTP",
+          "background": "#1EA1FF",
+          "canChangeBackground": false
+        }
+      ],
+      "$invalid": false,
+      "$inputSuggestions": [],
+      "$invalidContentActions": false,
+      "$invalidOutputs": false,
+      "$invalidCustomActions": false
+    },
+    "specialist-menu": {
+      "id": "specialist-menu",
+      "root": false,
+      "$title": "[3. Menu de Especialistas]",
+      "$position": {
+        "top": "100px",
+        "left": "800px"
+      },
+      "$enteringCustomActions": [
+        {
+          "$id": "track_sm_journey_1",
+          "type": "TrackContactsJourney",
+          "$title": "Registrar Jornada de Contatos",
+          "settings": {
+            "stateId": "specialist-menu",
+            "stateName": "[3. Menu de Especialistas]"
+          },
+          "conditions": [],
+          "$invalid": false
+        },
+        {
+          "$id": "sm_text_script_clean",
+          "type": "ExecuteScript",
+          "$title": "Monta Lista de Especialistas Formatada",
+          "settings": {
+            "function": "run",
+            "source": "function run(nlpResponse, listaMedicosJson) {\n    try {\n        var resp = typeof nlpResponse === 'string' ? JSON.parse(nlpResponse || \"{}\") : (nlpResponse || {});\n        var doctors = resp.matches || (typeof listaMedicosJson === 'string' ? JSON.parse(listaMedicosJson || \"[]\") : (listaMedicosJson || []));\n        \n        if (resp.formattedText && typeof resp.formattedText === 'string' && resp.formattedText.length > 10) {\n            return resp.formattedText;\n        }\n\n        var total = doctors.length > 10 ? 10 : doctors.length;\n        if (total === 0) {\n            return \"Com qual médico ou especialidade você gostaria de agendar? 🩺\\n\\n(Por favor, digite o nome do médico desejado):\";\n        }\n\n        var sb = \"Encontramos os seguintes especialistas para o seu agendamento:\\n\\n\";\n        for (var i = 0; i < total; i++) {\n            var d = doctors[i];\n            var name = d.doctorName || d.name || \"Especialista\";\n            var spec = d.specialty || d.description || \"\";\n            sb += (i + 1) + \"️⃣ *\" + name + \"* (\" + spec + \")\\n\";\n        }\n        sb += \"\\n👉 *Digite o número (1 a \" + total + \") ou o nome do médico desejado:*\";\n        return sb;\n    } catch (e) {\n        return \"Encontramos mais de um especialista disponível.\\n\\n👉 *Por favor, digite o nome do médico desejado:*\";\n    }\n}",
+            "inputVariables": [
+              "nlpResponse",
+              "listaMedicosJson"
+            ],
+            "outputVariable": "textoEspecialistas"
+          },
+          "conditions": [],
+          "$invalid": false
+        }
+      ],
+      "$contentActions": [
+        {
+          "action": {
+            "$id": "card_texto_especialistas",
+            "type": "SendMessage",
+            "settings": {
+              "type": "text/plain",
+              "content": "{{textoEspecialistas}}"
+            },
+            "$cardContent": {
+              "document": {
+                "id": "doc_texto_especialistas",
+                "type": "text/plain",
+                "content": "{{textoEspecialistas}}"
+              },
+              "editable": true,
+              "deletable": true,
+              "position": "left"
+            },
+            "$invalid": false
+          },
+          "$invalid": false
+        },
+        {
+          "input": {
+            "bypass": false,
+            "expiration": "0:5",
+            "variable": "medicoSelecionadoRaw",
+            "$cardContent": {
+              "document": {
+                "id": "c533cccb-3203-4cd6-9aa4-c1baffb312bc",
+                "type": "text/plain",
+                "content": "Entrada do usuário"
+              },
+              "editable": false,
+              "deletable": true,
+              "position": "right"
+            },
+            "$invalid": false
+          },
+          "$invalid": false
+        }
+      ],
+      "$leavingCustomActions": [
+        {
+          "$id": "0e5ca259-6cda-477e-91e1-7e2e2ddeeadb",
+          "type": "ExecuteScript",
+          "$title": "Processa Escolha / Paginação",
+          "settings": {
+            "function": "run",
+            "source": "function run(medicoSelecionadoRaw, listaMedicosJson) {\n    var result = {\n        acaoSeguinte: \"PEDIR_CPF\",\n        nextPage: \"1\",\n        doctorId: \"\",\n        doctorName: \"\",\n        isInternal: \"false\",\n        externalLink: \"\",\n        externalPhone: \"\",\n        queueName: \"Recepção Central / Suporte\"\n    };\n    try {\n        var rawText = \"\";\n        if (typeof medicoSelecionadoRaw === \"string\") {\n            var trimmed = medicoSelecionadoRaw.trim();\n            if (trimmed.indexOf(\"{\") === 0) {\n                try {\n                    var parsed = JSON.parse(trimmed);\n                    if (parsed.list_reply) {\n                        rawText = parsed.list_reply.title || parsed.list_reply.id || \"\";\n                    } else if (parsed.text) {\n                        rawText = parsed.text;\n                    } else {\n                        rawText = trimmed;\n                    }\n                } catch(e) {\n                    rawText = trimmed;\n                }\n            } else {\n                rawText = trimmed;\n            }\n        } else if (medicoSelecionadoRaw && typeof medicoSelecionadoRaw === \"object\") {\n            if (medicoSelecionadoRaw.list_reply) {\n                rawText = medicoSelecionadoRaw.list_reply.title || medicoSelecionadoRaw.list_reply.id || \"\";\n            } else if (medicoSelecionadoRaw.text) {\n                rawText = medicoSelecionadoRaw.text;\n            } else {\n                rawText = JSON.stringify(medicoSelecionadoRaw);\n            }\n        } else {\n            rawText = (medicoSelecionadoRaw || \"\").toString().trim();\n        }\n\n        var doctors = [];\n        try {\n            doctors = JSON.parse(listaMedicosJson || \"[]\");\n        } catch(e) {\n            doctors = [];\n        }\n\n        var selectedDoc = null;\n\n        // 1. Checa se o usuário digitou o número da opção (ex: \"1\", \"2\", \"3\", \"4\", \"1.\", \"2 -\")\n        var numMatch = rawText.match(/^(\\d+)/);\n        if (numMatch) {\n            var idx = parseInt(numMatch[1], 10) - 1;\n            if (idx >= 0 && idx < doctors.length) {\n                selectedDoc = doctors[idx];\n            }\n        }\n\n        // 2. Se não achou por número, busca por correspondência de texto (nome do médico ou especialidade)\n        if (!selectedDoc && doctors.length > 0 && rawText.length > 0) {\n            var searchTerms = rawText.toLowerCase().replace(/[^a-z0-9 ]/g, \" \").split(/\\s+/);\n            var bestScore = 0;\n\n            for (var i = 0; i < doctors.length; i++) {\n                var d = doctors[i];\n                var dName = (d.doctorName || d.name || \"\").toLowerCase();\n                var dSpec = (d.specialty || d.description || \"\").toLowerCase();\n                var combined = dName + \" \" + dSpec;\n\n                var score = 0;\n                for (var t = 0; t < searchTerms.length; t++) {\n                    var term = searchTerms[t];\n                    if (term.length > 1 && combined.indexOf(term) !== -1) {\n                        score += 1;\n                    }\n                }\n\n                if (score > bestScore) {\n                    bestScore = score;\n                    selectedDoc = d;\n                }\n            }\n        }\n\n        if (selectedDoc) {\n            result.doctorName = selectedDoc.doctorName || selectedDoc.name || selectedDoc.medico || rawText;\n            result.doctorId = (selectedDoc.id || \"\").toString();\n            result.isInternal = (selectedDoc.isInternal === true || selectedDoc.isInternal === \"true\" || selectedDoc.isInternal === \"TRUE\") ? \"true\" : \"false\";\n            result.externalLink = selectedDoc.externalLink || selectedDoc.linkWa || \"\";\n            result.externalPhone = selectedDoc.externalPhone || \"\";\n            result.queueName = selectedDoc.queue || selectedDoc.queueName || selectedDoc.fila || \"Recepção Central / Suporte\";\n        } else {\n            result.doctorName = rawText;\n        }\n        result.acaoSeguinte = \"PEDIR_CPF\";\n    } catch (e) {\n        result.acaoSeguinte = \"PEDIR_CPF\";\n    }\n    return JSON.stringify(result);\n}",
+            "inputVariables": [
+              "medicoSelecionadoRaw",
+              "listaMedicosJson"
+            ],
+            "outputVariable": "resultadoMenuEspecialista"
+          },
+          "conditions": [],
+          "$invalid": false
+        },
+        {
+          "$id": "89028fe1-56fd-4472-928f-a2f9e96aa954",
+          "type": "ExecuteScript",
+          "$title": "Extrai acaoMenuEspecialista",
+          "settings": {
+            "function": "run",
+            "source": "function run(resultadoMenuEspecialista) {\n    try {\n        var res = JSON.parse(resultadoMenuEspecialista);\n        return res.acaoSeguinte || \"PEDIR_CPF\";\n    } catch(e) { return \"PEDIR_CPF\"; }\n}",
+            "inputVariables": [
+              "resultadoMenuEspecialista"
+            ],
+            "outputVariable": "acaoMenuEspecialista"
+          },
+          "conditions": [],
+          "$invalid": false
+        },
+        {
+          "$id": "4fdc4bce-d25d-4365-a33f-4a4c9df953d4",
+          "type": "ExecuteScript",
+          "$title": "Extrai nextPage",
+          "settings": {
+            "function": "run",
+            "source": "function run(resultadoMenuEspecialista) {\n    try {\n        var res = JSON.parse(resultadoMenuEspecialista);\n        return res.nextPage || \"1\";\n    } catch(e) { return \"1\"; }\n}",
+            "inputVariables": [
+              "resultadoMenuEspecialista"
+            ],
+            "outputVariable": "nextPage"
+          },
+          "conditions": [],
+          "$invalid": false
+        },
+        {
+          "$id": "ext_isInternal_mstb879g",
+          "type": "ExecuteScript",
+          "$title": "Extrai isInternal Especialista",
+          "settings": {
+            "function": "run",
+            "source": "function run(resultadoMenuEspecialista) {\n    try { return JSON.parse(resultadoMenuEspecialista).isInternal || \"false\"; } catch(e) { return \"false\"; }\n}",
+            "inputVariables": [
+              "resultadoMenuEspecialista"
+            ],
+            "outputVariable": "isInternal"
+          },
+          "conditions": [],
+          "$invalid": false
+        },
+        {
+          "$id": "ext_externalLink_mstb879g",
+          "type": "ExecuteScript",
+          "$title": "Extrai externalLink Especialista",
+          "settings": {
+            "function": "run",
+            "source": "function run(resultadoMenuEspecialista) {\n    try { return JSON.parse(resultadoMenuEspecialista).externalLink || \"\"; } catch(e) { return \"\"; }\n}",
+            "inputVariables": [
+              "resultadoMenuEspecialista"
+            ],
+            "outputVariable": "externalLink"
+          },
+          "conditions": [],
+          "$invalid": false
+        },
+        {
+          "$id": "ext_externalPhone_mstb879g",
+          "type": "ExecuteScript",
+          "$title": "Extrai externalPhone Especialista",
+          "settings": {
+            "function": "run",
+            "source": "function run(resultadoMenuEspecialista) {\n    try { return JSON.parse(resultadoMenuEspecialista).externalPhone || \"\"; } catch(e) { return \"\"; }\n}",
+            "inputVariables": [
+              "resultadoMenuEspecialista"
+            ],
+            "outputVariable": "externalPhone"
+          },
+          "conditions": [],
+          "$invalid": false
+        },
+        {
+          "$id": "ext_queueName_mstb879g",
+          "type": "ExecuteScript",
+          "$title": "Extrai queueName Especialista",
+          "settings": {
+            "function": "run",
+            "source": "function run(resultadoMenuEspecialista) {\n    try { return JSON.parse(resultadoMenuEspecialista).queueName || \"Recepção Central / Suporte\"; } catch(e) { return \"Recepção Central / Suporte\"; }\n}",
+            "inputVariables": [
+              "resultadoMenuEspecialista"
+            ],
+            "outputVariable": "queueName"
+          },
+          "conditions": [],
+          "$invalid": false
+        }
+      ],
+      "$conditionOutputs": [
+        {
+          "id": "cond_sm_finalizar_1",
+          "stateId": "end-session",
+          "typeOfStateId": "state",
+          "$connId": "con_sm_finalizar",
+          "conditions": [
+            {
+              "source": "input",
+              "comparison": "contains",
+              "values": [
+                "finalizar",
+                "Finalizar",
+                "sair",
+                "Sair",
+                "encerrar",
+                "Encerrar",
+                "cancelar",
+                "Cancelar"
+              ]
+            }
+          ],
+          "$invalid": false
+        },
+        {
+          "id": "15441e24-9704-42f2-a146-93ad2ed4f666",
+          "stateId": "sys-inactivity",
+          "typeOfStateId": "state",
+          "$connId": "con_13",
+          "conditions": [
+            {
+              "source": "input",
+              "comparison": "notExists",
+              "values": []
+            }
+          ],
+          "$id": "d8c834b1-3a22-4f8a-955a-30197d0e515c",
+          "$invalid": false
+        },
+        {
+          "id": "75fa78e9-1e5d-41fc-af7f-8c91c74a6d08",
+          "stateId": "nlp-analysis",
+          "typeOfStateId": "state",
+          "$connId": "con_18",
+          "conditions": [
+            {
+              "source": "context",
+              "variable": "acaoMenuEspecialista",
+              "comparison": "equals",
+              "values": [
+                "PAGINAR"
+              ]
+            }
+          ],
+          "$id": "aea906ae-5c7c-45f0-bbe8-528aff405875",
+          "$invalid": false
+        },
+        {
+          "id": "5819283a-4910-4102-bc91-294810294812",
+          "stateId": "smart-router",
+          "typeOfStateId": "state",
+          "$connId": "con_spec_to_router",
+          "conditions": [
+            {
+              "source": "context",
+              "variable": "acaoCadastro",
+              "comparison": "equals",
+              "values": [
+                "EXISTENTE"
+              ]
+            }
+          ],
+          "$invalid": false,
+          "$id": "f9182390-4912-4019-8192-294810294819"
+        }
+      ],
+      "$defaultOutput": {
+        "stateId": "cpf-request",
+        "$invalid": false
+      },
+      "isAiGenerated": false,
+      "$tags": [
+        {
+          "id": "blip-tag-f78173a1-6a5e-49c5-a97b-592445cefcaa",
+          "label": "Interactive List",
+          "background": "#FF1E90",
+          "canChangeBackground": false
+        }
+      ],
+      "$invalid": false,
+      "$inputSuggestions": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "Finalizar"
+      ],
+      "$invalidContentActions": false,
+      "$invalidOutputs": false,
+      "$invalidCustomActions": false
+    },
+    "cpf-request": {
+      "id": "cpf-request",
+      "root": false,
+      "$title": "[4. Solicitação de CPF]",
+      "$position": {
+        "top": "100px",
+        "left": "1150px"
+      },
+      "$contentActions": [
+        {
+          "action": {
+            "$id": "d795a338-84ae-49a2-b9cf-5cab4dafd329",
+            "type": "SendMessage",
+            "settings": {
+              "type": "text/plain",
+              "content": "Para localizarmos seu cadastro e dar andamento ao seu atendimento, por favor, *digite seu CPF* (apenas os 11 números):"
+            },
+            "$invalid": false
+          },
+          "$invalid": false
+        },
+        {
+          "input": {
+            "bypass": false,
+            "expiration": "0:5",
+            "variable": "userCpfRaw",
+            "$cardContent": {
+              "document": {
+                "id": "9126b1c2-3d4c-43d7-b9da-3662d4db319e",
+                "type": "text/plain",
+                "content": "Entrada do usuário"
+              },
+              "editable": false,
+              "deletable": true,
+              "position": "right"
+            },
+            "$invalid": false
+          },
+          "$invalid": false
+        }
+      ],
+      "$enteringCustomActions": [],
+      "$leavingCustomActions": [
+        {
+          "$id": "94707c72-ae91-4a55-8b97-c2cfb7035ebc",
+          "type": "ExecuteScript",
+          "$title": "Validação de CPF ES5",
+          "settings": {
+            "function": "run",
+            "source": "function run(userCpfRaw) {\n    try {\n        if (!userCpfRaw) return JSON.stringify({ cpfValido: \"INVALID\", cleanCpf: \"\" });\n        var cleanCpf = userCpfRaw.toString().replace(/\\D/g, \"\");\n        if (cleanCpf.length !== 11) return JSON.stringify({ cpfValido: \"INVALID\", cleanCpf: \"\" });\n        if (/^(\\d)\\1{10}$/.test(cleanCpf)) return JSON.stringify({ cpfValido: \"INVALID\", cleanCpf: \"\" });\n        var sum = 0, remainder = 0;\n        for (var i = 1; i <= 9; i++) sum += parseInt(cleanCpf.substring(i - 1, i), 10) * (11 - i);\n        remainder = (sum * 10) % 11;\n        if (remainder === 10 || remainder === 11) remainder = 0;\n        if (remainder !== parseInt(cleanCpf.substring(9, 10), 10)) return JSON.stringify({ cpfValido: \"INVALID\", cleanCpf: \"\" });\n        sum = 0;\n        for (var j = 1; j <= 10; j++) sum += parseInt(cleanCpf.substring(j - 1, j), 10) * (12 - j);\n        remainder = (sum * 10) % 11;\n        if (remainder === 10 || remainder === 11) remainder = 0;\n        if (remainder !== parseInt(cleanCpf.substring(10, 11), 10)) return JSON.stringify({ cpfValido: \"INVALID\", cleanCpf: \"\" });\n        return JSON.stringify({ cpfValido: \"VALID\", cleanCpf: cleanCpf });\n    } catch (e) {\n        return JSON.stringify({ cpfValido: \"INVALID\", cleanCpf: \"\" });\n    }\n}",
+            "inputVariables": [
+              "userCpfRaw"
+            ],
+            "outputVariable": "cpfValidationResult"
+          },
+          "conditions": [],
+          "$invalid": false
+        },
+        {
+          "$id": "bfc1d215-358a-4efe-b532-d1a05a9b0181",
+          "type": "ExecuteScript",
+          "$title": "Extrai cpfValido",
+          "settings": {
+            "function": "run",
+            "source": "function run(cpfValidationResult) {\n    try {\n        var res = JSON.parse(cpfValidationResult);\n        return res.cpfValido || \"INVALID\";\n    } catch(e) { return \"INVALID\"; }\n}",
+            "inputVariables": [
+              "cpfValidationResult"
+            ],
+            "outputVariable": "cpfValido"
+          },
+          "conditions": [],
+          "$invalid": false
+        },
+        {
+          "$id": "1b574744-509d-48b0-88e1-281ad4953690",
+          "type": "ExecuteScript",
+          "$title": "Extrai userCpf",
+          "settings": {
+            "function": "run",
+            "source": "function run(cpfValidationResult) {\n    try {\n        var res = JSON.parse(cpfValidationResult);\n        return res.cleanCpf || \"\";\n    } catch(e) { return \"\"; }\n}",
+            "inputVariables": [
+              "cpfValidationResult"
+            ],
+            "outputVariable": "userCpf"
+          },
+          "conditions": [],
+          "$invalid": false
+        }
+      ],
+      "$conditionOutputs": [
+        {
+          "id": "4e20e6cb-b16d-4e70-95a9-6203a222be26",
+          "stateId": "sys-inactivity",
+          "typeOfStateId": "state",
+          "$connId": "con_23",
+          "conditions": [
+            {
+              "source": "input",
+              "comparison": "notExists",
+              "values": []
+            }
+          ],
+          "$id": "f3b5d88d-1e6c-4137-950e-c96922175257",
+          "$invalid": false
+        },
+        {
+          "id": "84df2f2d-4c7f-4201-bd80-fa45eaa53aac",
+          "stateId": "cpf-request",
+          "typeOfStateId": "state",
+          "$connId": "con_28",
+          "conditions": [
+            {
+              "source": "context",
+              "variable": "cpfValido",
+              "comparison": "equals",
+              "values": [
+                "INVALID"
+              ]
+            }
+          ],
+          "$id": "3d531447-5249-4f95-a946-3f2fb55c0bd4",
+          "$invalid": false
+        }
+      ],
+      "$defaultOutput": {
+        "stateId": "patient-search",
+        "$invalid": false
+      },
+      "isAiGenerated": false,
+      "$tags": [
+        {
+          "id": "blip-tag-83f20556-df78-4db7-aaa7-ae2a71a3bb73",
+          "label": "CPF",
+          "background": "#FF4A1E",
+          "canChangeBackground": false
+        }
+      ],
+      "$invalid": false,
+      "$inputSuggestions": [],
+      "$invalidContentActions": false,
+      "$invalidOutputs": false,
+      "$invalidCustomActions": false
+    },
+    "patient-search": {
+      "id": "patient-search",
+      "root": false,
+      "$title": "[5. Busca Paciente API]",
+      "$position": {
+        "top": "100px",
+        "left": "1500px"
+      },
+      "$contentActions": [
+        {
+          "input": {
+            "bypass": true,
+            "$cardContent": {
+              "document": {
+                "id": "429fa474-2c4f-4c69-acc4-6873215fb3ec",
+                "type": "text/plain",
+                "content": "Buscando dados no Feegow..."
+              },
+              "editable": false,
+              "deletable": true,
+              "position": "right"
+            },
+            "$invalid": false
+          },
+          "$invalid": false
+        }
+      ],
+      "$enteringCustomActions": [
+        {
+          "$id": "http_feegow_patient_search_direct",
+          "type": "ProcessHttp",
+          "$title": "HTTP GET Feegow Cloud Search",
+          "settings": {
+            "headers": {
+              "x-access-token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJmZWVnb3ciLCJhdWQiOiJwdWJsaWNhcGkiLCJpYXQiOjE3NzYxMTA2MzcsImxpY2Vuc2VJRCI6MTE5NDl9.zjrp9y0vAG80b69aAofJu5Lpi2tjNdUNTc9QZNfGtGU",
+              "Content-Type": "application/json"
+            },
+            "method": "GET",
+            "uri": "https://api.feegow.com/v1/api/patient/search?paciente_cpf={{cleanCpf}}",
+            "responseStatusVariable": "patientSearchStatus",
+            "responseBodyVariable": "patientSearchResponse"
+          },
+          "conditions": [],
+          "$invalid": false
+        }
+      ],
+      "$leavingCustomActions": [
+        {
+          "$id": "8f1f3948-e3ea-40a9-b8ce-906aaf8a30d2",
+          "type": "ExecuteScript",
+          "$title": "Parse Busca Feegow",
+          "settings": {
+            "function": "run",
+            "source": "function run(patientSearchStatus, patientSearchResponse) {\n    var result = { acaoCadastro: \"NOVO\", feegowId: \"\", pacienteNome: \"\" };\n    try {\n        var status = parseInt(patientSearchStatus, 10);\n        if (status === 200 && patientSearchResponse) {\n            var body = typeof patientSearchResponse === 'string' ? JSON.parse(patientSearchResponse) : patientSearchResponse;\n            if (body.content && Array.isArray(body.content) && body.content.length > 0) {\n                var p = body.content[0];\n                result.acaoCadastro = \"EXISTENTE\";\n                result.feegowId = (p.id || \"\").toString();\n                result.pacienteNome = p.nome || \"\";\n            } else if (body.content && typeof body.content === \"object\" && body.content.id) {\n                result.acaoCadastro = \"EXISTENTE\";\n                result.feegowId = (body.content.id || \"\").toString();\n                result.pacienteNome = body.content.nome || \"\";\n            } else if (body.found && body.patient) {\n                result.acaoCadastro = \"EXISTENTE\";\n                result.feegowId = (body.patient.id || \"\").toString();\n                result.pacienteNome = body.patient.name || \"\";\n            } else {\n                result.acaoCadastro = \"NOVO\";\n            }\n        } else {\n            result.acaoCadastro = \"NOVO\";\n        }\n    } catch (e) {\n        result.acaoCadastro = \"NOVO\";\n    }\n    return JSON.stringify(result);\n}",
+            "inputVariables": [
+              "patientSearchStatus",
+              "patientSearchResponse"
+            ],
+            "outputVariable": "searchResultData"
+          },
+          "conditions": [],
+          "$invalid": false
+        },
+        {
+          "$id": "d788befb-34b9-48b8-b9a7-a9d0666c4242",
+          "type": "ExecuteScript",
+          "$title": "Extrai acaoCadastro",
+          "settings": {
+            "function": "run",
+            "source": "function run(searchResultData) {\n    try { return JSON.parse(searchResultData).acaoCadastro || \"NOVO\"; } catch(e) { return \"NOVO\"; }\n}",
+            "inputVariables": [
+              "searchResultData"
+            ],
+            "outputVariable": "acaoCadastro"
+          },
+          "conditions": [],
+          "$invalid": false
+        },
+        {
+          "$id": "8bfa831b-56ca-4c27-8adf-d48e2b895fb2",
+          "type": "ExecuteScript",
+          "$title": "Extrai feegowId",
+          "settings": {
+            "function": "run",
+            "source": "function run(searchResultData) {\n    try { return JSON.parse(searchResultData).feegowId || \"\"; } catch(e) { return \"\"; }\n}",
+            "inputVariables": [
+              "searchResultData"
+            ],
+            "outputVariable": "feegowId"
+          },
+          "conditions": [],
+          "$invalid": false
+        },
+        {
+          "$id": "4bdea86b-8211-49aa-bd54-1267fa6b52f9",
+          "type": "ExecuteScript",
+          "$title": "Extrai pacienteNome",
+          "settings": {
+            "function": "run",
+            "source": "function run(searchResultData) {\n    try { return JSON.parse(searchResultData).pacienteNome || \"\"; } catch(e) { return \"\"; }\n}",
+            "inputVariables": [
+              "searchResultData"
+            ],
+            "outputVariable": "pacienteNome"
+          },
+          "conditions": [],
+          "$invalid": false
+        },
+        {
+          "$id": "c194a022-771a-4d2b-9801-1b059f131a99",
+          "type": "ExecuteScript",
+          "$title": "Decisão Destino Pós-Busca ES5",
+          "settings": {
+            "function": "run",
+            "source": "function run(acaoCadastro, isInternal, externalLink) {\n    try {\n        if (acaoCadastro !== \"EXISTENTE\") {\n            return \"NOVO\";\n        }\n        var internal = (isInternal === true || isInternal === \"true\" || isInternal === \"TRUE\");\n        var link = (externalLink || \"\").toString().trim();\n        if (internal === true || link.length > 5) {\n            return \"SMART_ROUTER\";\n        }\n        return \"MENU_POS_CPF\";\n    } catch (e) {\n        return \"MENU_POS_CPF\";\n    }\n}",
+            "inputVariables": [
+              "acaoCadastro",
+              "isInternal",
+              "externalLink"
+            ],
+            "outputVariable": "destinoPosBusca"
+          },
+          "conditions": [],
+          "$invalid": false
+        }
+      ],
+      "$conditionOutputs": [
+        {
+          "id": "7a5d5022-f925-4168-8360-c341ffa69179",
+          "stateId": "smart-router",
+          "typeOfStateId": "state",
+          "$connId": "con_ps_smart_internal",
+          "conditions": [
+            {
+              "source": "context",
+              "variable": "acaoCadastro",
+              "comparison": "equals",
+              "values": [
+                "EXISTENTE"
+              ]
+            },
+            {
+              "source": "context",
+              "variable": "isInternal",
+              "comparison": "equals",
+              "values": [
+                "true",
+                "TRUE"
+              ]
+            }
+          ],
+          "$invalid": false,
+          "$id": "d3e4862d-b7c0-4dc6-b39a-f79dfa716639"
+        },
+        {
+          "id": "8b6e6133-e134-4a77-9471-d452ffb70281",
+          "stateId": "smart-router",
+          "typeOfStateId": "state",
+          "$connId": "con_ps_smart_external",
+          "conditions": [
+            {
+              "source": "context",
+              "variable": "acaoCadastro",
+              "comparison": "equals",
+              "values": [
+                "EXISTENTE"
+              ]
+            },
+            {
+              "source": "context",
+              "variable": "externalLink",
+              "comparison": "matches",
+              "values": [
+                ".{5,}"
+              ]
+            }
+          ],
+          "$invalid": false,
+          "$id": "e45f973e-c8d1-4ed7-a41b-80efba827741"
+        },
+        {
+          "id": "f56a831b-21da-45c1-8409-b1d2ef938472",
+          "stateId": "smart-router",
+          "typeOfStateId": "state",
+          "$connId": "con_ps_smart_destino",
+          "conditions": [
+            {
+              "source": "context",
+              "variable": "destinoPosBusca",
+              "comparison": "equals",
+              "values": [
+                "SMART_ROUTER"
+              ]
+            }
+          ],
+          "$invalid": false,
+          "$id": "a16b924c-35fd-48a2-9b51-7c9efb829143"
+        },
+        {
+          "id": "925db760-d208-4bfc-959c-6087ff6e05b3",
+          "stateId": "node_menu_pos_cpf",
+          "typeOfStateId": "state",
+          "$connId": "con_ps_menu_pos_cpf",
+          "conditions": [
+            {
+              "source": "context",
+              "variable": "acaoCadastro",
+              "comparison": "equals",
+              "values": [
+                "EXISTENTE"
+              ]
+            }
+          ],
+          "$invalid": false,
+          "$id": "15d6126d-b41f-4c77-93a0-1a0fb2e535d4"
+        },
+        {
+          "id": "b72c914e-48a2-4cb1-9730-e852ca719482",
+          "stateId": "node_menu_pos_cpf",
+          "typeOfStateId": "state",
+          "$connId": "con_ps_menu_destino",
+          "conditions": [
+            {
+              "source": "context",
+              "variable": "destinoPosBusca",
+              "comparison": "equals",
+              "values": [
+                "MENU_POS_CPF"
+              ]
+            }
+          ],
+          "$invalid": false,
+          "$id": "c83da25f-59b3-49b3-ac62-8e0fca938251"
+        },
+        {
+          "id": "f8174201-9a3b-4817-8e6d-9c3214da8991",
+          "stateId": "name-request",
+          "typeOfStateId": "state",
+          "$connId": "con_ps_novo_nome",
+          "conditions": [
+            {
+              "source": "context",
+              "variable": "acaoCadastro",
+              "comparison": "equals",
+              "values": [
+                "NOVO"
+              ]
+            }
+          ],
+          "$invalid": false,
+          "$id": "c71a483e-0012-4ebc-81b4-219f8a002bc1"
+        },
+        {
+          "id": "e94da36a-6ac4-4bd2-9741-d851fb839402",
+          "stateId": "name-request",
+          "typeOfStateId": "state",
+          "$connId": "con_ps_novo_destino",
+          "conditions": [
+            {
+              "source": "context",
+              "variable": "destinoPosBusca",
+              "comparison": "equals",
+              "values": [
+                "NOVO"
+              ]
+            }
+          ],
+          "$invalid": false,
+          "$id": "d94ec36a-7bd5-4ce3-a852-e962fc940362"
+        }
+      ],
+      "$defaultOutput": {
+        "stateId": "node_menu_pos_cpf",
+        "$invalid": false
+      },
+      "isAiGenerated": false,
+      "$tags": [
+        {
+          "id": "blip-tag-f5ed3001-6209-4d9b-b4ba-c4b95c298063",
+          "label": "Busca Feegow",
+          "background": "#1EA1FF",
+          "canChangeBackground": false
+        }
+      ],
+      "$invalid": false,
+      "$inputSuggestions": [],
+      "$invalidContentActions": false,
+      "$invalidOutputs": false,
+      "$invalidCustomActions": false
+    },
+    "name-request": {
+      "id": "name-request",
+      "root": false,
+      "$title": "[6. Solicitação de Nome]",
+      "$position": {
+        "top": "350px",
+        "left": "1150px"
+      },
+      "$contentActions": [
+        {
+          "action": {
+            "$id": "9a1fd48d-3d6c-4dd1-9e82-dbd438094a5a",
+            "type": "SendMessage",
+            "settings": {
+              "type": "text/plain",
+              "content": "Não encontramos um cadastro com o CPF informado. Vamos criar o seu registro rápido!\n\nPor favor, digite o seu *Nome Completo*:"
+            },
+            "$invalid": false
+          },
+          "$invalid": false
+        },
+        {
+          "input": {
+            "bypass": false,
+            "expiration": "0:5",
+            "variable": "cadastroNomeRaw",
+            "$cardContent": {
+              "document": {
+                "id": "498f7f07-3217-4d43-b215-0f76d9686230",
+                "type": "text/plain",
+                "content": "Entrada do usuário"
+              },
+              "editable": false,
+              "deletable": true,
+              "position": "right"
+            },
+            "$invalid": false
+          },
+          "$invalid": false
+        }
+      ],
+      "$enteringCustomActions": [],
+      "$leavingCustomActions": [
+        {
+          "$id": "5a9c5897-d072-4141-b687-24844fc9e6ad",
+          "type": "ExecuteScript",
+          "$title": "Sanitização de Nome ES5",
+          "settings": {
+            "function": "run",
+            "source": "function run(cadastroNomeRaw) {\n    try {\n        if (!cadastroNomeRaw) return JSON.stringify({ nomeValido: \"INVALID\", cleanNome: \"\" });\n        var cleanNome = cadastroNomeRaw.trim().replace(/\\s+/g, \" \");\n        var parts = cleanNome.split(\" \");\n        if (parts.length < 2 || cleanNome.length < 5) {\n            return JSON.stringify({ nomeValido: \"INVALID\", cleanNome: \"\" });\n        }\n        return JSON.stringify({ nomeValido: \"VALID\", cleanNome: cleanNome });\n    } catch (e) {\n        return JSON.stringify({ nomeValido: \"INVALID\", cleanNome: \"\" });\n    }\n}",
+            "inputVariables": [
+              "cadastroNomeRaw"
+            ],
+            "outputVariable": "nameValidationResult"
+          },
+          "conditions": [],
+          "$invalid": false
+        },
+        {
+          "$id": "fc84f416-f5d7-45ba-a65e-552fc1a2da58",
+          "type": "ExecuteScript",
+          "$title": "Extrai nomeValido",
+          "settings": {
+            "function": "run",
+            "source": "function run(nameValidationResult) {\n    try { return JSON.parse(nameValidationResult).nomeValido || \"INVALID\"; } catch(e) { return \"INVALID\"; }\n}",
+            "inputVariables": [
+              "nameValidationResult"
+            ],
+            "outputVariable": "nomeValido"
+          },
+          "conditions": [],
+          "$invalid": false
+        },
+        {
+          "$id": "25b09252-ae42-4cfd-a7fe-7b89a2c3b03c",
+          "type": "ExecuteScript",
+          "$title": "Extrai cadastroNome",
+          "settings": {
+            "function": "run",
+            "source": "function run(nameValidationResult) {\n    try { return JSON.parse(nameValidationResult).cleanNome || \"\"; } catch(e) { return \"\"; }\n}",
+            "inputVariables": [
+              "nameValidationResult"
+            ],
+            "outputVariable": "cadastroNome"
+          },
+          "conditions": [],
+          "$invalid": false
+        }
+      ],
+      "$conditionOutputs": [
+        {
+          "id": "48c89499-8d26-4a49-be36-5ec3d60db2ab",
+          "stateId": "sys-inactivity",
+          "typeOfStateId": "state",
+          "$connId": "con_48",
+          "conditions": [
+            {
+              "source": "input",
+              "comparison": "notExists",
+              "values": []
+            }
+          ],
+          "$id": "90d5e9fb-bdf3-4268-9f82-857f1e1583e5",
+          "$invalid": false
+        },
+        {
+          "id": "061060fa-e6a8-4a42-813f-302caf43a03e",
+          "stateId": "name-request",
+          "typeOfStateId": "state",
+          "$connId": "con_53",
+          "conditions": [
+            {
+              "source": "context",
+              "variable": "nomeValido",
+              "comparison": "equals",
+              "values": [
+                "INVALID"
+              ]
+            }
+          ],
+          "$id": "95782b73-bfd6-4c7a-a270-dccf2d73d96c",
+          "$invalid": false
+        }
+      ],
+      "$defaultOutput": {
+        "stateId": "dob-request",
+        "$invalid": false
+      },
+      "isAiGenerated": false,
+      "$tags": [
+        {
+          "id": "blip-tag-6b4a6c65-b3bb-4c94-93ff-04ec0647e858",
+          "label": "Nome",
+          "background": "#FF4A1E",
+          "canChangeBackground": false
+        }
+      ],
+      "$invalid": false,
+      "$inputSuggestions": [],
+      "$invalidContentActions": false,
+      "$invalidOutputs": false,
+      "$invalidCustomActions": false
+    },
+    "dob-request": {
+      "id": "dob-request",
+      "root": false,
+      "$title": "[7. Solicitação Data Nascimento]",
+      "$position": {
+        "top": "350px",
+        "left": "1500px"
+      },
+      "$contentActions": [
+        {
+          "action": {
+            "$id": "1c4f3da0-0ec4-4e22-aef4-d8c96fb49123",
+            "type": "SendMessage",
+            "settings": {
+              "type": "text/plain",
+              "content": "Obrigado, {{cadastroNome}}!\n\nAgora, informe sua *Data de Nascimento* (formato: DD/MM/AAAA):"
+            },
+            "$invalid": false
+          },
+          "$invalid": false
+        },
+        {
+          "input": {
+            "bypass": false,
+            "expiration": "0:5",
+            "variable": "cadastroNascimentoRaw",
+            "$cardContent": {
+              "document": {
+                "id": "ccc592b5-5875-4122-89ae-de4193151ec0",
+                "type": "text/plain",
+                "content": "Entrada do usuário"
+              },
+              "editable": false,
+              "deletable": true,
+              "position": "right"
+            },
+            "$invalid": false
+          },
+          "$invalid": false
+        }
+      ],
+      "$enteringCustomActions": [],
+      "$leavingCustomActions": [
+        {
+          "$id": "e82b74bd-eead-48ca-8f27-24aed1669dff",
+          "type": "ExecuteScript",
+          "$title": "Validação Data Nascimento ES5",
+          "settings": {
+            "function": "run",
+            "source": "function run(cadastroNascimentoRaw) {\n    try {\n        if (!cadastroNascimentoRaw) return JSON.stringify({ dataValida: \"INVALID\", cleanDate: \"\" });\n        var digits = cadastroNascimentoRaw.toString().replace(/\\D/g, \"\");\n        if (digits.length !== 8) return JSON.stringify({ dataValida: \"INVALID\", cleanDate: \"\" });\n        var day = parseInt(digits.substring(0, 2), 10);\n        var month = parseInt(digits.substring(2, 4), 10);\n        var year = parseInt(digits.substring(4, 8), 10);\n        if (month < 1 || month > 12 || day < 1 || day > 31 || year < 1910 || year > 2026) {\n            return JSON.stringify({ dataValida: \"INVALID\", cleanDate: \"\" });\n        }\n        var formattedMonth = month < 10 ? \"0\" + month : \"\" + month;\n        var formattedDay = day < 10 ? \"0\" + day : \"\" + day;\n        return JSON.stringify({ dataValida: \"VALID\", cleanDate: year + \"-\" + formattedMonth + \"-\" + formattedDay });\n    } catch (e) {\n        return JSON.stringify({ dataValida: \"INVALID\", cleanDate: \"\" });\n    }\n}",
+            "inputVariables": [
+              "cadastroNascimentoRaw"
+            ],
+            "outputVariable": "dobValidationResult"
+          },
+          "conditions": [],
+          "$invalid": false
+        },
+        {
+          "$id": "cedf8eee-56e5-4e10-b9d5-27fbc399cc4a",
+          "type": "ExecuteScript",
+          "$title": "Extrai dataValida",
+          "settings": {
+            "function": "run",
+            "source": "function run(dobValidationResult) {\n    try { return JSON.parse(dobValidationResult).dataValida || \"INVALID\"; } catch(e) { return \"INVALID\"; }\n}",
+            "inputVariables": [
+              "dobValidationResult"
+            ],
+            "outputVariable": "dataValida"
+          },
+          "conditions": [],
+          "$invalid": false
+        },
+        {
+          "$id": "d365cf25-b415-4943-a6a5-32387d8ddd9f",
+          "type": "ExecuteScript",
+          "$title": "Extrai cadastroNascimento",
+          "settings": {
+            "function": "run",
+            "source": "function run(dobValidationResult) {\n    try { return JSON.parse(dobValidationResult).cleanDate || \"\"; } catch(e) { return \"\"; }\n}",
+            "inputVariables": [
+              "dobValidationResult"
+            ],
+            "outputVariable": "cadastroNascimento"
+          },
+          "conditions": [],
+          "$invalid": false
+        }
+      ],
+      "$conditionOutputs": [
+        {
+          "id": "0442e5dc-ea2c-4591-9f58-d2c8596ce60e",
+          "stateId": "sys-inactivity",
+          "typeOfStateId": "state",
+          "$connId": "con_58",
+          "conditions": [
+            {
+              "source": "input",
+              "comparison": "notExists",
+              "values": []
+            }
+          ],
+          "$id": "ba2bad9b-df4c-4e00-84d0-4463f14e634d",
+          "$invalid": false
+        },
+        {
+          "id": "812d44e9-ff7b-4de0-98f9-1bd9986ea20e",
+          "stateId": "dob-request",
+          "typeOfStateId": "state",
+          "$connId": "con_63",
+          "conditions": [
+            {
+              "source": "context",
+              "variable": "dataValida",
+              "comparison": "equals",
+              "values": [
+                "INVALID"
+              ]
+            }
+          ],
+          "$id": "a625ef23-4f7a-4d18-a9ad-92318dadf795",
+          "$invalid": false
+        }
+      ],
+      "$defaultOutput": {
+        "stateId": "patient-create",
+        "$invalid": false
+      },
+      "isAiGenerated": false,
+      "$tags": [
+        {
+          "id": "blip-tag-5851b451-8e73-4b6a-a257-78588a83c2d6",
+          "label": "Nascimento",
+          "background": "#FF4A1E",
+          "canChangeBackground": false
+        }
+      ],
+      "$invalid": false,
+      "$inputSuggestions": [],
+      "$invalidContentActions": false,
+      "$invalidOutputs": false,
+      "$invalidCustomActions": false
+    },
+    "patient-create": {
+      "id": "patient-create",
+      "root": false,
+      "$title": "[8. Efetivar Cadastro API]",
+      "$position": {
+        "top": "350px",
+        "left": "1850px"
+      },
+      "$contentActions": [
+        {
+          "input": {
+            "bypass": true,
+            "$cardContent": {
+              "document": {
+                "id": "64e4761a-708b-4ecc-add6-7c0cc43939ac",
+                "type": "text/plain",
+                "content": "Cadastrando paciente no Feegow..."
+              },
+              "editable": false,
+              "deletable": true,
+              "position": "right"
+            },
+            "$invalid": false
+          },
+          "$invalid": false
+        }
+      ],
+      "$enteringCustomActions": [
+        {
+          "$id": "http_feegow_patient_create_direct",
+          "type": "ProcessHttp",
+          "$title": "HTTP POST Feegow Cloud Create",
+          "settings": {
+            "headers": {
+              "x-access-token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJmZWVnb3ciLCJhdWQiOiJwdWJsaWNhcGkiLCJpYXQiOjE3NzYxMTA2MzcsImxpY2Vuc2VJRCI6MTE5NDl9.zjrp9y0vAG80b69aAofJu5Lpi2tjNdUNTc9QZNfGtGU",
+              "Content-Type": "application/json"
+            },
+            "method": "POST",
+            "uri": "https://api.feegow.com/v1/api/patient/create",
+            "body": "{\n  \"nome\": \"{{cadastroNome}}\",\n  \"cpf\": \"{{userCpf}}\",\n  \"nascimento\": \"{{cadastroNascimento}}\",\n  \"celular\": \"{{contact.phoneNumber}}\"\n}",
+            "responseStatusVariable": "patientCreateStatus",
+            "responseBodyVariable": "patientCreateResponse"
+          },
+          "conditions": [],
+          "$invalid": false
+        }
+      ],
+      "$leavingCustomActions": [
+        {
+          "$id": "2216d0ad-8250-4d44-a2cd-4fd886b4a01a",
+          "type": "ExecuteScript",
+          "$title": "Parse Cadastro API",
+          "settings": {
+            "function": "run",
+            "source": "function run(patientCreateStatus, patientCreateResponse) {\n    var result = { feegowId: \"\", pacienteNome: \"\", cadastroStatus: \"SUCCESS\" };\n    try {\n        var status = parseInt(patientCreateStatus, 10);\n        if ((status === 200 || status === 201) && patientCreateResponse) {\n            var body = typeof patientCreateResponse === 'string' ? JSON.parse(patientCreateResponse) : patientCreateResponse;\n            if (body.content && body.content.id) {\n                result.feegowId = body.content.id.toString();\n            } else if (body.patientId || body.id) {\n                result.feegowId = (body.patientId || body.id).toString();\n            }\n            result.pacienteNome = (body.name || body.nome || \"\").toString();\n            result.cadastroStatus = \"SUCCESS\";\n        } else {\n            result.cadastroStatus = \"SUCCESS\";\n        }\n    } catch (e) {\n        result.cadastroStatus = \"SUCCESS\";\n    }\n    return JSON.stringify(result);\n}",
+            "inputVariables": [
+              "patientCreateStatus",
+              "patientCreateResponse"
+            ],
+            "outputVariable": "createResultData"
+          },
+          "conditions": [],
+          "$invalid": false
+        },
+        {
+          "$id": "ee217d7c-d1a0-45dc-a204-3090a6f05780",
+          "type": "ExecuteScript",
+          "$title": "Extrai feegowId",
+          "settings": {
+            "function": "run",
+            "source": "function run(createResultData) {\n    try { return JSON.parse(createResultData).feegowId || \"\"; } catch(e) { return \"\"; }\n}",
+            "inputVariables": [
+              "createResultData"
+            ],
+            "outputVariable": "feegowId"
+          },
+          "conditions": [],
+          "$invalid": false
+        },
+        {
+          "$id": "c62b4df7-eadc-4a5f-8407-d2242beed7eb",
+          "type": "ExecuteScript",
+          "$title": "Extrai cadastroStatus",
+          "settings": {
+            "function": "run",
+            "source": "function run(createResultData) {\n    try { return JSON.parse(createResultData).cadastroStatus || \"SUCCESS\"; } catch(e) { return \"SUCCESS\"; }\n}",
+            "inputVariables": [
+              "createResultData"
+            ],
+            "outputVariable": "cadastroStatus"
+          },
+          "conditions": [],
+          "$invalid": false
+        },
+        {
+          "$id": "e47b9101-381a-412e-990a-f02781cb9219",
+          "type": "ExecuteScript",
+          "$title": "Decisão Destino Pós-Cadastro ES5",
+          "settings": {
+            "function": "run",
+            "source": "function run(cadastroStatus, isInternal, externalLink) {\n    try {\n        if (cadastroStatus !== \"SUCCESS\") {\n            return \"MENU_POS_CPF\";\n        }\n        var internal = (isInternal === true || isInternal === \"true\" || isInternal === \"TRUE\");\n        var link = (externalLink || \"\").toString().trim();\n        if (internal === true || link.length > 5) {\n            return \"SMART_ROUTER\";\n        }\n        return \"MENU_POS_CPF\";\n    } catch (e) {\n        return \"MENU_POS_CPF\";\n    }\n}",
+            "inputVariables": [
+              "cadastroStatus",
+              "isInternal",
+              "externalLink"
+            ],
+            "outputVariable": "destinoPosCadastro"
+          },
+          "conditions": [],
+          "$invalid": false
+        }
+      ],
+      "$conditionOutputs": [
+        {
+          "id": "264b4926-ee17-47ef-a807-839e29e3faa3",
+          "stateId": "smart-router",
+          "typeOfStateId": "state",
+          "$connId": "con_68",
+          "conditions": [
+            {
+              "source": "context",
+              "variable": "destinoPosCadastro",
+              "comparison": "equals",
+              "values": [
+                "SMART_ROUTER"
+              ]
+            }
+          ],
+          "$invalid": false,
+          "$id": "ba2851d1-cb5c-4985-bb06-f308ac566b98"
+        },
+        {
+          "id": "e2f6ff60-1e15-4f1b-97b7-cd55da77b602",
+          "stateId": "node_menu_pos_cpf",
+          "typeOfStateId": "state",
+          "$connId": "con_78",
+          "conditions": [
+            {
+              "source": "context",
+              "variable": "destinoPosCadastro",
+              "comparison": "equals",
+              "values": [
+                "MENU_POS_CPF"
+              ]
+            }
+          ],
+          "$invalid": false,
+          "$id": "95e9be9c-7f1c-4f22-9f9f-bc2a9dad14c6"
+        }
+      ],
+      "$defaultOutput": {
+        "stateId": "node_menu_pos_cpf",
+        "$invalid": false
+      },
+      "isAiGenerated": false,
+      "$tags": [
+        {
+          "id": "blip-tag-0d332164-5c35-4b25-a147-d36ebbabf26e",
+          "label": "Cria Paciente",
+          "background": "#1EA1FF",
+          "canChangeBackground": false
+        }
+      ],
+      "$invalid": false,
+      "$inputSuggestions": [],
+      "$invalidContentActions": false,
+      "$invalidOutputs": false,
+      "$invalidCustomActions": false
+    },
+    "smart-router": {
+      "id": "smart-router",
+      "root": false,
+      "$title": "[Roteador Inteligente]",
+      "$position": {
+        "top": "850px",
+        "left": "1150px"
+      },
+      "$contentActions": [
+        {
+          "input": {
+            "bypass": true,
+            "$cardContent": {
+              "document": {
+                "id": "1037796c-af02-44e3-992c-885385c6e8fa",
+                "type": "text/plain",
+                "content": "Roteando atendimento..."
+              },
+              "editable": false,
+              "deletable": true,
+              "position": "right"
+            },
+            "$invalid": false
+          },
+          "$invalid": false
+        }
+      ],
+      "$enteringCustomActions": [
+        {
+          "$id": "b0944bbf-04d8-4e6f-ac48-54030054fef3",
+          "type": "ExecuteScript",
+          "$title": "Decisão Roteamento ES5",
+          "settings": {
+            "function": "run",
+            "source": "function run(isInternal, externalLink, queueName) {\n    try {\n        var link = (externalLink || \"\").toString().trim();\n        var internal = (isInternal === true || isInternal === \"true\" || isInternal === \"TRUE\");\n        var defaultQueue = \"Recepção Central / Suporte\";\n        var queue = (queueName && queueName.toString().trim().length > 0) ? queueName.toString().trim() : defaultQueue;\n        \n        if (!internal && link.length > 5) {\n            return JSON.stringify({ routeType: \"EXTERNAL\", selectedQueue: queue });\n        } else if (internal) {\n            return JSON.stringify({ routeType: \"INTERNAL\", selectedQueue: queue });\n        } else {\n            return JSON.stringify({ routeType: \"MENU_POS_CPF\", selectedQueue: queue });\n        }\n    } catch (e) {\n        return JSON.stringify({ routeType: \"MENU_POS_CPF\", selectedQueue: \"Recepção Central / Suporte\" });\n    }\n}",
+            "inputVariables": [
+              "isInternal",
+              "externalLink",
+              "queueName"
+            ],
+            "outputVariable": "routerDecision"
+          },
+          "conditions": [],
+          "$invalid": false
+        },
+        {
+          "$id": "51315b8b-caa2-4a65-b9ce-5ce57e92017e",
+          "type": "ExecuteScript",
+          "$title": "Extrai routeType",
+          "settings": {
+            "function": "run",
+            "source": "function run(routerDecision) {\n    try { return JSON.parse(routerDecision).routeType || \"INTERNAL\"; } catch(e) { return \"INTERNAL\"; }\n}",
+            "inputVariables": [
+              "routerDecision"
+            ],
+            "outputVariable": "routeType"
+          },
+          "conditions": [],
+          "$invalid": false
+        },
+        {
+          "$id": "1d08b389-1c7c-4994-99ce-03776c9a2897",
+          "type": "ExecuteScript",
+          "$title": "Extrai selectedQueue",
+          "settings": {
+            "function": "run",
+            "source": "function run(routerDecision) {\n    try { return JSON.parse(routerDecision).selectedQueue || \"Recepção Central / Suporte\"; } catch(e) { return \"Recepção Central / Suporte\"; }\n}",
+            "inputVariables": [
+              "routerDecision"
+            ],
+            "outputVariable": "selectedQueue"
+          },
+          "conditions": [],
+          "$invalid": false
+        }
+      ],
+      "$leavingCustomActions": [
+        {
+          "$id": "a16f3969-7aa6-4d53-92ce-1c939c756abd",
+          "type": "MergeContact",
+          "$title": "Define Fila no Contato",
+          "settings": {
+            "extras": {
+              "fila": "{{selectedQueue}}",
+              "FeegowID": "{{feegowId}}",
+              "CPF": "{{userCpf}}"
+            }
+          },
+          "conditions": [],
+          "$invalid": false
+        }
+      ],
+      "$conditionOutputs": [
+        {
+          "id": "3cc664b8-ec67-4a5c-b5a0-69eb75545823",
+          "stateId": "node_menu_pos_cpf",
+          "typeOfStateId": "state",
+          "$connId": "con_83",
+          "conditions": [
+            {
+              "source": "context",
+              "variable": "routeType",
+              "comparison": "equals",
+              "values": [
+                "MENU_POS_CPF"
+              ]
+            }
+          ],
+          "$invalid": false,
+          "$id": "5db0db24-2890-49c3-a23f-dc3b5c08ab58"
+        },
+        {
+          "id": "64a2fd16-1f13-47fa-807a-2fc2521d1b33",
+          "stateId": "node_menu_pos_cpf",
+          "typeOfStateId": "state",
+          "$connId": "con_88",
+          "conditions": [
+            {
+              "source": "context",
+              "variable": "routerdecision@routeType",
+              "comparison": "equals",
+              "values": [
+                "MENU_POS_CPF"
+              ]
+            }
+          ],
+          "$invalid": false,
+          "$id": "830bbb07-f2a0-4d0c-acb0-6219229f1189"
+        },
+        {
+          "id": "c601e846-77fb-41ed-84df-03cd9c1e7c50",
+          "stateId": "desk-pre",
+          "typeOfStateId": "state",
+          "$connId": "con_93",
+          "conditions": [
+            {
+              "source": "context",
+              "variable": "routeType",
+              "comparison": "equals",
+              "values": [
+                "INTERNAL"
+              ]
+            }
+          ],
+          "$invalid": false,
+          "$id": "f0790d09-c717-4743-8290-6d6541d9d356"
+        },
+        {
+          "id": "6b830375-5994-4d51-aeed-4280aa719323",
+          "stateId": "desk-pre",
+          "typeOfStateId": "state",
+          "$connId": "con_98",
+          "conditions": [
+            {
+              "source": "context",
+              "variable": "routerdecision@routeType",
+              "comparison": "equals",
+              "values": [
+                "INTERNAL"
+              ]
+            }
+          ],
+          "$invalid": false,
+          "$id": "922ef52f-e5e5-4209-87fb-f387a28a5e81"
+        },
+        {
+          "id": "dc0b520d-76bc-45b0-a3e6-495262793eaf",
+          "stateId": "external-redirect",
+          "typeOfStateId": "state",
+          "$connId": "con_103",
+          "conditions": [
+            {
+              "source": "context",
+              "variable": "routeType",
+              "comparison": "equals",
+              "values": [
+                "EXTERNAL"
+              ]
+            }
+          ],
+          "$invalid": false,
+          "$id": "26037b15-b67d-424a-8e5e-3c244375ec0a"
+        },
+        {
+          "id": "0e880d4b-4bd3-4cff-ad72-f39c63d3b6e2",
+          "stateId": "external-redirect",
+          "typeOfStateId": "state",
+          "$connId": "con_108",
+          "conditions": [
+            {
+              "source": "context",
+              "variable": "routerdecision@routeType",
+              "comparison": "equals",
+              "values": [
+                "EXTERNAL"
+              ]
+            }
+          ],
+          "$invalid": false,
+          "$id": "eec694c1-9694-466c-a3ca-760bb9c606b4"
+        }
+      ],
+      "$defaultOutput": {
+        "stateId": "desk-pre",
+        "$invalid": false
+      },
+      "isAiGenerated": false,
+      "$tags": [
+        {
+          "id": "blip-tag-fc780382-9d5a-445e-9a9b-cb53bf8e26c9",
+          "label": "Roteador",
+          "background": "#FF4A1E",
+          "canChangeBackground": false
+        }
+      ],
+      "$invalid": false,
+      "$inputSuggestions": [],
+      "$invalidContentActions": false,
+      "$invalidOutputs": false,
+      "$invalidCustomActions": false
+    },
+    "external-redirect": {
+      "id": "external-redirect",
+      "root": false,
+      "$title": "[Redirecionamento Externo]",
+      "$position": {
+        "top": "850px",
+        "left": "2200px"
+      },
+      "$enteringCustomActions": [
+        {
+          "$id": "ext_canal_extract_89ab",
+          "type": "ExecuteScript",
+          "$title": "Identifica Canal de Atendimento ES5",
+          "settings": {
+            "function": "run",
+            "source": "function run(contactSource, contactIdentity) {\n    try {\n        var src = (contactSource || \"\").toString().toLowerCase();\n        var id = (contactIdentity || \"\").toString().toLowerCase();\n        if (src.indexOf(\"whatsapp\") !== -1 || id.indexOf(\"@wa.gw.msging.net\") !== -1) {\n            return \"WhatsApp\";\n        }\n        return \"Outros\";\n    } catch(e) {\n        return \"WhatsApp\";\n    }\n}",
+            "inputVariables": [
+              "contact.source",
+              "contact.identity"
+            ],
+            "outputVariable": "canal"
+          },
+          "conditions": [],
+          "$invalid": false
+        },
+        {
+          "$id": "83240e7c-95ba-4b34-b057-0fb4f40844cd",
+          "type": "ExecuteScript",
+          "$title": "Monta Payload CTA URL ES5",
+          "settings": {
+            "function": "run",
+            "source": "function run(externalLink, externalPhone) {\n    try {\n        var link = (externalLink || \"\").toString().trim();\n        var phone = (externalPhone || \"\").toString().trim();\n        var payload = {\n            \"recipient_type\": \"individual\",\n            \"type\": \"interactive\",\n            \"interactive\": {\n                \"type\": \"cta_url\",\n                \"header\": { \"type\": \"text\", \"text\": \"Atendimento Direto\" },\n                \"body\": { \"text\": \"Para iniciar a conversa no WhatsApp do especialista, toque no botão abaixo:\" },\n                \"footer\": { \"text\": phone ? \"Telefone: \" + phone : \"Clínica Inovare\" },\n                \"action\": {\n                    \"name\": \"cta_url\",\n                    \"parameters\": {\n                        \"display_text\": \"Abrir WhatsApp\",\n                        \"url\": link\n                    }\n                }\n            }\n        };\n        return JSON.stringify(payload);\n    } catch (e) {\n        return \"{}\";\n    }\n}",
+            "inputVariables": [
+              "externalLink",
+              "externalPhone"
+            ],
+            "outputVariable": "externalRedirectPayload"
+          },
+          "conditions": [],
+          "$invalid": false
+        }
+      ],
+      "$contentActions": [
+        {
+          "action": {
+            "$id": "card_text_link_direto_ext",
+            "type": "SendMessage",
+            "settings": {
+              "type": "text/plain",
+              "content": "Para agendar com o especialista, clique no link abaixo para falar diretamente no WhatsApp:\n\n👉 {{externalLink}}"
+            },
+            "$cardContent": {
+              "document": {
+                "id": "doc_text_link_direto_ext",
+                "type": "text/plain",
+                "content": "Para agendar com o especialista, clique no link abaixo para falar diretamente no WhatsApp:\n\n👉 {{externalLink}}"
+              },
+              "editable": true,
+              "deletable": true,
+              "position": "left"
+            },
+            "conditions": [],
+            "$invalid": false
+          },
+          "$invalid": false
+        },
+        {
+          "input": {
+            "bypass": true,
+            "$cardContent": {
+              "document": {
+                "id": "doc_input_bypass_ext",
+                "type": "text/plain",
+                "content": "Redirecionamento enviado."
+              },
+              "editable": false,
+              "deletable": true,
+              "position": "right"
+            },
+            "$invalid": false
+          },
+          "$invalid": false
+        }
+      ],
+      "$leavingCustomActions": [],
+      "$conditionOutputs": [],
+      "$defaultOutput": {
+        "stateId": "end-session",
+        "$invalid": false
+      },
+      "isAiGenerated": false,
+      "$tags": [
+        {
+          "id": "blip-tag-a6e967b8-a99b-4e55-9931-447b2a7dd766",
+          "label": "Externo CTA",
+          "background": "#000000",
+          "canChangeBackground": false
+        }
+      ],
+      "$invalid": false,
+      "$inputSuggestions": [],
+      "$invalidContentActions": false,
+      "$invalidOutputs": false,
+      "$invalidCustomActions": false
+    },
+    "desk-pre": {
+      "id": "desk-pre",
+      "root": false,
+      "$title": "[Pré-Atendimento Desk]",
+      "$position": {
+        "top": "850px",
+        "left": "1500px"
+      },
+      "$contentActions": [
+        {
+          "action": {
+            "$id": "b99ee7f6-abdc-4b07-b469-1d8dc906de7a",
+            "type": "SendMessage",
+            "settings": {
+              "type": "text/plain",
+              "content": "Obrigado por aguardar! Estamos te conectando com a nossa equipe de atendimento na fila *{{selectedQueue}}*."
+            },
+            "$invalid": false
+          },
+          "$invalid": false
+        },
+        {
+          "input": {
+            "bypass": true,
+            "$cardContent": {
+              "document": {
+                "id": "44f2d1cf-2d26-4138-8c60-a364f8367fb8",
+                "type": "text/plain",
+                "content": "Entrada do usuário"
+              },
+              "editable": false,
+              "deletable": true,
+              "position": "right"
+            },
+            "$invalid": false
+          },
+          "$invalid": false
+        }
+      ],
+      "$enteringCustomActions": [],
+      "$leavingCustomActions": [],
+      "$conditionOutputs": [],
+      "$defaultOutput": {
+        "stateId": "desk-ticket",
+        "$invalid": false
+      },
+      "isAiGenerated": false,
+      "$tags": [
+        {
+          "id": "blip-tag-eb970c9b-4951-45be-afb7-508f8022423d",
+          "label": "Desk Handoff",
+          "background": "#EE82EE",
+          "canChangeBackground": false
+        }
+      ],
+      "$invalid": false,
+      "$inputSuggestions": [],
+      "$invalidContentActions": false,
+      "$invalidOutputs": false,
+      "$invalidCustomActions": false
+    },
+    "desk-ticket": {
+      "id": "desk-ticket",
+      "root": false,
+      "$title": "[Atendimento Desk]",
+      "$position": {
+        "top": "850px",
+        "left": "1850px"
+      },
+      "$contentActions": [
+        {
+          "input": {
+            "bypass": false,
+            "$cardContent": {
+              "document": {
+                "id": "abee8dbf-78d6-43ec-bf9f-941c38006548",
+                "type": "text/plain",
+                "content": "Em atendimento humano..."
+              },
+              "editable": false,
+              "deletable": false,
+              "position": "right"
+            },
+            "$invalid": false
+          },
+          "$invalid": false
+        }
+      ],
+      "$enteringCustomActions": [
+        {
+          "$id": "7e182688-627f-45f5-90bd-e8fcf599382b",
+          "type": "ForwardToDesk",
+          "settings": {
+            "deskQueue": "{{selectedQueue}}"
+          },
+          "conditions": [],
+          "$invalid": false,
+          "$title": "Transbordo para Fila do Especialista"
+        }
+      ],
+      "$leavingCustomActions": [],
+      "$conditionOutputs": [
+        {
+          "$isDeskOutput": true,
+          "conditions": [
+            {
+              "source": "context",
+              "variable": "input.type",
+              "comparison": "equals",
+              "values": [
+                "application/vnd.iris.ticket+json"
+              ]
+            },
+            {
+              "source": "context",
+              "variable": "input.content@status",
+              "comparison": "equals",
+              "values": [
+                "ClosedAttendant"
+              ]
+            }
+          ],
+          "stateId": "csat-survey",
+          "$connId": "con_113",
+          "$id": "d2fde178-fed7-4095-9048-da383eb8114c",
+          "$invalid": false
+        }
+      ],
+      "$defaultOutput": {
+        "stateId": "end-session",
+        "$invalid": false
+      },
+      "isAiGenerated": false,
+      "$tags": [
+        {
+          "id": "blip-tag-1646af1f-3641-42aa-9734-402d16fed6fc",
+          "label": "Desk Ticket",
+          "background": "#EE82EE",
+          "canChangeBackground": false
+        }
+      ],
+      "$invalid": false,
+      "$inputSuggestions": [],
+      "$invalidContentActions": false,
+      "$invalidOutputs": false,
+      "$invalidCustomActions": false
+    },
+    "appointments-itsm": {
+      "id": "appointments-itsm",
+      "root": false,
+      "$title": "[Meus Agendamentos ITSM]",
+      "$position": {
+        "top": "600px",
+        "left": "1850px"
+      },
+      "$contentActions": [
+        {
+          "input": {
+            "bypass": true,
+            "$cardContent": {
+              "document": {
+                "id": "a70e77ba-2c40-438d-97cc-8d90ae1cee55",
+                "type": "text/plain",
+                "content": "Consultando agendamentos..."
+              },
+              "editable": false,
+              "deletable": true,
+              "position": "right"
+            },
+            "$invalid": false
+          },
+          "$invalid": false
+        }
+      ],
+      "$enteringCustomActions": [
+        {
+          "$id": "2a67f69c-0a53-4b89-bee1-be2d5f6b99a4",
+          "type": "ProcessHttp",
+          "$title": "HTTP GET /api/v1/feegow/patients/{id}/appointments",
+          "settings": {
+            "headers": {
+              "Authorization": "Bearer {{config.apiToken}}",
+              "X-Inovare-Token": "Wm2p9n6PlsaLvNuHWncxFlEXbknBB6XG"
+            },
+            "method": "GET",
+            "uri": "https://itsm-inovare.ctrls.dev.br/api/v1/feegow/patients/{{feegowId}}/appointments",
+            "responseStatusVariable": "appointmentsStatus",
+            "responseBodyVariable": "appointmentsResponse"
+          },
+          "conditions": [],
+          "$invalid": false
+        }
+      ],
+      "$leavingCustomActions": [
+        {
+          "$id": "4d11eaf1-2055-42be-83dc-2116e01d7bac",
+          "type": "ExecuteScript",
+          "$title": "Formatador Agendamentos ES5",
+          "settings": {
+            "function": "run",
+            "source": "function run(appointmentsStatus, appointmentsResponse) {\n    try {\n        var status = parseInt(appointmentsStatus, 10);\n        if (status !== 200 || !appointmentsResponse) {\n            return \"Não encontramos agendamentos futuros para o seu cadastro.\";\n        }\n        var data = JSON.parse(appointmentsResponse);\n        if (!data.items || data.items.length === 0) {\n            return \"Você não possui agendamentos futuros marcados.\";\n        }\n        var message = \"📅 *Seus Próximos Agendamentos:*\\n\\n\";\n        for (var i = 0; i < data.items.length; i++) {\n            var item = data.items[i];\n            message += \"• *Data:* \" + item.date + \" às \" + item.time + \"\\n\";\n            message += \"  *Médico:* \" + item.doctorName + \"\\n\";\n            message += \"  *Especialidade:* \" + item.specialty + \"\\n\\n\";\n        }\n        return message;\n    } catch (e) {\n        return \"Desculpe, ocorreu uma falha ao consultar seus agendamentos.\";\n    }\n}",
+            "inputVariables": [
+              "appointmentsStatus",
+              "appointmentsResponse"
+            ],
+            "outputVariable": "agendamentosFormatados"
+          },
+          "conditions": [],
+          "$invalid": false
+        }
+      ],
+      "$conditionOutputs": [],
+      "$defaultOutput": {
+        "stateId": "smart-router",
+        "$invalid": false
+      },
+      "isAiGenerated": false,
+      "$tags": [
+        {
+          "id": "blip-tag-a770841d-de39-4578-a0f5-da0b0b43751e",
+          "label": "Agendamentos",
+          "background": "#1EA1FF",
+          "canChangeBackground": false
+        }
+      ],
+      "$invalid": false,
+      "$inputSuggestions": [],
+      "$invalidContentActions": false,
+      "$invalidOutputs": false,
+      "$invalidCustomActions": false
+    },
+    "csat-survey": {
+      "id": "csat-survey",
+      "root": false,
+      "$title": "[Pesquisa de Satisfação CSAT]",
+      "$position": {
+        "top": "1100px",
+        "left": "1500px"
+      },
+      "$contentActions": [
+        {
+          "action": {
+            "$id": "4f4dd8cf-95ec-4d34-bad6-b6a51634fbaa",
+            "type": "SendMessage",
+            "settings": {
+              "type": "application/json",
+              "content": "{\n  \"recipient_type\": \"individual\",\n  \"type\": \"list\",\n  \"header\": { \"type\": \"text\", \"text\": \"Pesquisa de Satisfação\" },\n  \"body\": { \"text\": \"Como você avalia o seu atendimento hoje na nossa clínica? Por favor, selecione uma nota de 1 a 5:\" },\n  \"footer\": { \"text\": \"Sua opinião é muito importante para nós!\" },\n  \"action\": {\n    \"button\": \"Avaliar Atendimento\",\n    \"sections\": [{\n      \"title\": \"Selecione a sua nota\",\n      \"rows\": [\n        { \"id\": \"csat_5\", \"title\": \"⭐ 5 - Excelente\", \"description\": \"Atendimento perfeito\" },\n        { \"id\": \"csat_4\", \"title\": \"⭐ 4 - Bom\", \"description\": \"Atendeu expectativas\" },\n        { \"id\": \"csat_3\", \"title\": \"⭐ 3 - Regular\", \"description\": \"Pode melhorar\" },\n        { \"id\": \"csat_2\", \"title\": \"⭐ 2 - Ruim\", \"description\": \"Abaixo do esperado\" },\n        { \"id\": \"csat_1\", \"title\": \"⭐ 1 - Péssimo\", \"description\": \"Insatisfeito\" }\n      ]\n    }]\n  }\n}"
+            },
+            "$invalid": false
+          },
+          "$invalid": false
+        },
+        {
+          "input": {
+            "bypass": false,
+            "expiration": "0:5",
+            "variable": "csatInputRaw",
+            "$cardContent": {
+              "document": {
+                "id": "bc20153f-1607-439c-94ad-a944c8f52ad2",
+                "type": "text/plain",
+                "content": "Entrada do usuário"
+              },
+              "editable": false,
+              "deletable": true,
+              "position": "right"
+            },
+            "$invalid": false
+          },
+          "$invalid": false
+        }
+      ],
+      "$enteringCustomActions": [],
+      "$leavingCustomActions": [
+        {
+          "$id": "c3dac948-2ee8-4843-8637-54858e92cb0d",
+          "type": "ExecuteScript",
+          "$title": "Parse Nota CSAT ES5",
+          "settings": {
+            "function": "run",
+            "source": "function run(csatInputRaw) {\n    try {\n        var input = typeof csatInputRaw === 'string' ? JSON.parse(csatInputRaw) : csatInputRaw;\n        var selectedId = \"\";\n        if (input && input.list_reply && input.list_reply.id) selectedId = input.list_reply.id;\n        else selectedId = (csatInputRaw || \"\").toString();\n        if (selectedId.indexOf(\"5\") !== -1) return \"5\";\n        if (selectedId.indexOf(\"4\") !== -1) return \"4\";\n        if (selectedId.indexOf(\"3\") !== -1) return \"3\";\n        if (selectedId.indexOf(\"2\") !== -1) return \"2\";\n        if (selectedId.indexOf(\"1\") !== -1) return \"1\";\n        return \"5\";\n    } catch (e) { return \"5\"; }\n}",
+            "inputVariables": [
+              "csatInputRaw"
+            ],
+            "outputVariable": "csatRating"
+          },
+          "conditions": [],
+          "$invalid": false
+        },
+        {
+          "$id": "1690e722-4f91-4267-87af-f149842ad85b",
+          "type": "ProcessHttp",
+          "$title": "HTTP POST /api/v1/atendimento/csat",
+          "settings": {
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer {{config.apiToken}}",
+              "X-Inovare-Token": "Wm2p9n6PlsaLvNuHWncxFlEXbknBB6XG"
+            },
+            "method": "POST",
+            "uri": "https://itsm-inovare.ctrls.dev.br/api/v1/atendimento/csat",
+            "body": "{\n  \"cpf\": \"{{userCpf}}\",\n  \"feegowId\": \"{{feegowId}}\",\n  \"rating\": {{csatRating}},\n  \"ticketId\": \"{{input.message.ticketId}}\"\n}",
+            "responseStatusVariable": "csatPostStatus",
+            "responseBodyVariable": "csatPostResponse"
+          },
+          "conditions": [],
+          "$invalid": false
+        }
+      ],
+      "$conditionOutputs": [
+        {
+          "id": "01e347db-7df7-4ffd-86c9-43242c983b84",
+          "stateId": "sys-inactivity",
+          "typeOfStateId": "state",
+          "$connId": "con_118",
+          "conditions": [
+            {
+              "source": "input",
+              "comparison": "notExists",
+              "values": []
+            }
+          ],
+          "$id": "07bfd3c2-d1dd-4ebb-834a-6046c2d83616",
+          "$invalid": false
+        }
+      ],
+      "$defaultOutput": {
+        "stateId": "end-session",
+        "$invalid": false
+      },
+      "isAiGenerated": false,
+      "$tags": [
+        {
+          "id": "blip-tag-5f48f16d-9528-476d-b77a-95ef5f3cc990",
+          "label": "CSAT",
+          "background": "#2CC3D5",
+          "canChangeBackground": false
+        }
+      ],
+      "$invalid": false,
+      "$inputSuggestions": [],
+      "$invalidContentActions": false,
+      "$invalidOutputs": false,
+      "$invalidCustomActions": false
+    },
+    "sys-inactivity": {
+      "id": "sys-inactivity",
+      "root": false,
+      "$title": "[SYS - Encerramento por Inatividade]",
+      "$position": {
+        "top": "1100px",
+        "left": "1850px"
+      },
+      "$contentActions": [
+        {
+          "action": {
+            "$id": "f98f4a2f-c4a1-4ad9-91d2-e1a3e7807559",
+            "type": "SendMessage",
+            "settings": {
+              "type": "text/plain",
+              "content": "Seu atendimento foi encerrado por *inatividade*. ⏱️\n\nCaso ainda precise de ajuda, basta nos enviar uma nova mensagem quando quiser. Tenha um ótimo dia!"
+            },
+            "$invalid": false
+          },
+          "$invalid": false
+        },
+        {
+          "input": {
+            "bypass": true,
+            "$cardContent": {
+              "document": {
+                "id": "407638e5-d42b-4cdf-881d-59256a8e75e3",
+                "type": "text/plain",
+                "content": "Encerramento por inatividade"
+              },
+              "editable": false,
+              "deletable": true,
+              "position": "right"
+            },
+            "$invalid": false
+          },
+          "$invalid": false
+        }
+      ],
+      "$enteringCustomActions": [],
+      "$leavingCustomActions": [],
+      "$conditionOutputs": [],
+      "$defaultOutput": {
+        "stateId": "end-session",
+        "$invalid": false
+      },
+      "isAiGenerated": false,
+      "$tags": [
+        {
+          "id": "blip-tag-4c791a3a-cf41-49e2-a8d4-dce725a2a7f9",
+          "label": "Timeout SYS",
+          "background": "#000000",
+          "canChangeBackground": false
+        }
+      ],
+      "$invalid": false,
+      "$inputSuggestions": [],
+      "$invalidContentActions": false,
+      "$invalidOutputs": false,
+      "$invalidCustomActions": false
+    },
+    "end-session": {
+      "id": "end-session",
+      "root": false,
+      "$title": "[Fim de Sessão]",
+      "$position": {
+        "top": "1100px",
+        "left": "2200px"
+      },
+      "$contentActions": [
+        {
+          "input": {
+            "bypass": true,
+            "$cardContent": {
+              "document": {
+                "id": "ea8a83e1-e022-46b1-86e8-73cfb1ad311a",
+                "type": "text/plain",
+                "content": "Sessão encerrada"
+              },
+              "editable": false,
+              "deletable": true,
+              "position": "right"
+            },
+            "$invalid": false
+          },
+          "$invalid": false
+        }
+      ],
+      "$enteringCustomActions": [],
+      "$leavingCustomActions": [],
+      "$defaultOutput": {
+        "stateId": "onboarding",
+        "$invalid": false
+      },
+      "isAiGenerated": false,
+      "$tags": [
+        {
+          "id": "blip-tag-7799d469-7b6d-4ceb-a2a1-b36075cff3ff",
+          "label": "Fim",
+          "background": "#000000",
+          "canChangeBackground": false
+        }
+      ],
+      "$invalid": false,
+      "$conditionOutputs": [],
+      "$inputSuggestions": [],
+      "$invalidContentActions": false,
+      "$invalidOutputs": false,
+      "$invalidCustomActions": false
+    },
+    "fallback": {
+      "id": "fallback",
+      "root": false,
+      "$title": "Exceções",
+      "$position": {
+        "top": "1100px",
+        "left": "1150px"
+      },
+      "$contentActions": [
+        {
+          "action": {
+            "$id": "df69ded9-9ba9-4697-af8f-4e19f9194acf",
+            "type": "SendMessage",
+            "settings": {
+              "type": "text/plain",
+              "content": "Desculpe, ocorreu uma falha inesperada. Vamos te direcionar para nossa equipe de atendimento."
+            },
+            "$invalid": false
+          },
+          "$invalid": false
+        },
+        {
+          "input": {
+            "bypass": true,
+            "$cardContent": {
+              "document": {
+                "id": "c6cdd200-1bf6-4bbc-988e-2afd53e76993",
+                "type": "text/plain",
+                "content": "Fallback ativado"
+              },
+              "editable": false,
+              "deletable": true,
+              "position": "right"
+            },
+            "$invalid": false
+          },
+          "$invalid": false
+        }
+      ],
+      "$enteringCustomActions": [],
+      "$leavingCustomActions": [],
+      "$defaultOutput": {
+        "stateId": "desk-pre",
+        "$invalid": false
+      },
+      "isAiGenerated": false,
+      "$tags": [
+        {
+          "id": "blip-tag-5324086b-5202-4538-baa7-60cf39e4ea8d",
+          "label": "Fallback",
+          "background": "#000000",
+          "canChangeBackground": false
+        }
+      ],
+      "$invalid": false,
+      "$conditionOutputs": [],
+      "$inputSuggestions": [],
+      "$invalidContentActions": false,
+      "$invalidOutputs": false,
+      "$invalidCustomActions": false
+    },
+    "node_menu_pos_cpf": {
+      "id": "node_menu_pos_cpf",
+      "root": false,
+      "$title": "Menu de Autosserviço Pós-CPF",
+      "$position": {
+        "top": "600px",
+        "left": "1150px"
+      },
+      "$contentActions": [
+        {
+          "action": {
+            "$id": "cs_menu_pos_cpf",
+            "$typeOfContent": "chat-state",
+            "type": "SendMessage",
+            "settings": {
+              "id": "cs_doc_menu_pos_cpf",
+              "type": "application/vnd.lime.chatstate+json",
+              "content": {
+                "state": "composing",
+                "interval": 1000
+              }
+            },
+            "$cardContent": {
+              "document": {
+                "id": "cs_doc_menu_pos_cpf",
+                "type": "application/vnd.lime.chatstate+json",
+                "content": {
+                  "state": "composing",
+                  "interval": 1000
+                }
+              },
+              "editable": true,
+              "deletable": true,
+              "position": "left"
+            },
+            "$invalid": false
+          },
+          "$invalid": false
+        },
+        {
+          "action": {
+            "$id": "select_menu_pos_cpf",
+            "$typeOfContent": "select-immediate",
+            "type": "SendMessage",
+            "settings": {
+              "id": "doc_select_menu_pos_cpf",
+              "type": "application/vnd.lime.select+json",
+              "content": {
+                "text": "Cadastro localizado, {{pacienteNome}}! 😊\n\nComo podemos te ajudar hoje?",
+                "scope": "immediate",
+                "options": [
+                  {
+                    "text": "🩺 Buscar Médico",
+                    "previewText": "🩺 Buscar Médico",
+                    "value": null,
+                    "index": 0,
+                    "type": null
+                  },
+                  {
+                    "text": "📋 Minhas Consultas",
+                    "previewText": "📋 Minhas Consultas",
+                    "value": null,
+                    "index": 1,
+                    "type": null
+                  },
+                  {
+                    "text": "ℹ️ Informações",
+                    "previewText": "ℹ️ Informações",
+                    "value": null,
+                    "index": 2,
+                    "type": null
+                  }
+                ],
+                "quikReply": false
+              },
+              "metadata": {}
+            },
+            "$cardContent": {
+              "document": {
+                "id": "doc_select_menu_pos_cpf",
+                "type": "application/vnd.lime.select+json",
+                "content": {
+                  "text": "Cadastro localizado, {{pacienteNome}}! 😊\n\nComo podemos te ajudar hoje?",
+                  "scope": "immediate",
+                  "options": [
+                    {
+                      "text": "🩺 Buscar Médico",
+                      "previewText": "🩺 Buscar Médico",
+                      "value": null,
+                      "index": 0,
+                      "type": null
+                    },
+                    {
+                      "text": "📋 Minhas Consultas",
+                      "previewText": "📋 Minhas Consultas",
+                      "value": null,
+                      "index": 1,
+                      "type": null
+                    },
+                    {
+                      "text": "ℹ️ Informações",
+                      "previewText": "ℹ️ Informações",
+                      "value": null,
+                      "index": 2,
+                      "type": null
+                    }
+                  ],
+                  "quikReply": false
+                }
+              },
+              "editable": true,
+              "deletable": true,
+              "position": "left"
+            },
+            "$invalid": false
+          },
+          "$invalid": false
+        },
+        {
+          "input": {
+            "bypass": false,
+            "expiration": "0:5",
+            "variable": "opcaoMenu",
+            "$cardContent": {
+              "document": {
+                "id": "inp_doc_menu_pos_cpf",
+                "type": "text/plain",
+                "textContent": "Entrada do usuário",
+                "content": "opcaoMenu"
+              },
+              "editable": false,
+              "deletable": true,
+              "position": "right",
+              "editing": false
+            },
+            "$invalid": false
+          },
+          "$invalid": false
+        }
+      ],
+      "$conditionOutputs": [
+        {
+          "stateId": "end-session",
+          "typeOfStateId": "state",
+          "$connId": "con_menu_finalizar",
+          "$id": "cond_menu_finalizar_1",
+          "conditions": [
+            {
+              "source": "input",
+              "comparison": "contains",
+              "values": [
+                "finalizar",
+                "Finalizar",
+                "sair",
+                "Sair",
+                "encerrar",
+                "Encerrar",
+                "cancelar",
+                "Cancelar",
+                "fim",
+                "Fim",
+                "tchau",
+                "Tchau"
+              ]
+            }
+          ],
+          "$invalid": false
+        },
+        {
+          "stateId": "311b3d95-da26-426f-a231-01f91cf38af1",
+          "typeOfStateId": "state",
+          "$connId": "con_menu_1",
+          "$id": "cond_menu_opt_1",
+          "conditions": [
+            {
+              "source": "input",
+              "comparison": "contains",
+              "values": [
+                "1",
+                "Buscar Médico",
+                "Buscar",
+                "Médico",
+                "Medico",
+                "médico",
+                "medico",
+                "🩺"
+              ]
+            }
+          ],
+          "$invalid": false
+        },
+        {
+          "stateId": "node_minhas_consultas",
+          "typeOfStateId": "state",
+          "$connId": "con_menu_2",
+          "$id": "cond_menu_opt_2",
+          "conditions": [
+            {
+              "source": "input",
+              "comparison": "contains",
+              "values": [
+                "2",
+                "Minhas Consultas",
+                "Consultas",
+                "Minhas",
+                "consultas",
+                "minhas",
+                "📋"
+              ]
+            }
+          ],
+          "$invalid": false
+        },
+        {
+          "stateId": "desk-pre",
+          "typeOfStateId": "state",
+          "$connId": "con_menu_3",
+          "$id": "cond_menu_opt_3",
+          "conditions": [
+            {
+              "source": "input",
+              "comparison": "contains",
+              "values": [
+                "3",
+                "Informações",
+                "Informacoes",
+                "informações",
+                "informacoes",
+                "Setor de Informações",
+                "Setor",
+                "setor",
+                "ℹ️",
+                "👤",
+                "Atendente",
+                "atendente",
+                "Exames",
+                "exames",
+                "Falar",
+                "falar",
+                "Info",
+                "info"
+              ]
+            }
+          ],
+          "$invalid": false
+        }
+      ],
+      "$enteringCustomActions": [],
+      "$leavingCustomActions": [],
+      "$inputSuggestions": [
+        "🩺 Buscar Médico",
+        "📋 Minhas Consultas",
+        "ℹ️ Informações"
+      ],
+      "$defaultOutput": {
+        "stateId": "node_menu_pos_cpf",
+        "$invalid": false
+      },
+      "isAiGenerated": false,
+      "$tags": [
+        {
+          "id": "blip-tag-c0ee9171-cd6e-429c-8fbf-267e9a23ebec",
+          "label": "Menu Pós-CPF",
+          "background": "#FF961E",
+          "canChangeBackground": false
+        }
+      ],
+      "$invalidContentActions": false,
+      "$invalidOutputs": false,
+      "$invalidCustomActions": false,
+      "$invalid": false
+    },
+    "node_confirma_dados": {
+      "id": "node_confirma_dados",
+      "root": false,
+      "$title": "Confirmação de Dados Feegow",
+      "$position": {
+        "top": "350px",
+        "left": "800px"
+      },
+      "$contentActions": [
+        {
+          "action": {
+            "$id": "8bc3f05e-8f0a-4c70-ae85-45140bbb3357",
+            "$typeOfContent": "select-immediate",
+            "type": "SendMessage",
+            "settings": {
+              "id": "694a4e1d-d9bf-43b4-aa7e-d584079a20f9",
+              "type": "application/vnd.lime.select+json",
+              "content": {
+                "text": "Localizamos seu cadastro em nossa clínica:\n\n👤 *Nome:* {{dadosPacienteFeegow.nome}}\n📅 *Nascimento:* {{dadosPacienteFeegow.dataNascimento}}\n\nOs dados acima estão corretos?",
+                "scope": "immediate",
+                "options": [
+                  {
+                    "index": 0,
+                    "text": "Sim, confirmar",
+                    "previewText": "Sim, confirmar",
+                    "type": null,
+                    "value": null
+                  },
+                  {
+                    "index": -1,
+                    "text": "Não, é outra pessoa",
+                    "previewText": "Outra pessoa",
+                    "type": null,
+                    "value": null
+                  }
+                ],
+                "quikReply": false
+              },
+              "metadata": {}
+            },
+            "$cardContent": {
+              "document": {
+                "id": "19fecffa-77ee-4e4d-ad20-e38216293297",
+                "type": "application/vnd.lime.select+json",
+                "content": {
+                  "text": "Localizamos seu cadastro em nossa clínica:\n\n👤 *Nome:* {{dadosPacienteFeegow.nome}}\n📅 *Nascimento:* {{dadosPacienteFeegow.dataNascimento}}\n\nOs dados acima estão corretos?",
+                  "scope": "immediate",
+                  "options": [
+                    {
+                      "index": 0,
+                      "text": "Sim, confirmar",
+                      "previewText": "Sim, confirmar",
+                      "type": null,
+                      "value": null
+                    },
+                    {
+                      "index": -1,
+                      "text": "Não, é outra pessoa",
+                      "previewText": "Outra pessoa",
+                      "type": null,
+                      "value": null
+                    }
+                  ],
+                  "quikReply": false
+                }
+              },
+              "editable": true,
+              "deletable": true,
+              "position": "left"
+            },
+            "$invalid": false
+          },
+          "$invalid": false
+        },
+        {
+          "input": {
+            "bypass": false,
+            "expiration": "0:5",
+            "variable": "confirmacaoDados",
+            "$cardContent": {
+              "document": {
+                "id": "a935b4ec-17a6-4037-b51f-b21b3c64d50a",
+                "type": "text/plain",
+                "textContent": "Entrada do usuário",
+                "content": "Entrada do usuário"
+              },
+              "editable": false,
+              "deletable": true,
+              "position": "right",
+              "editing": false
+            },
+            "$invalid": false
+          },
+          "$invalid": false
+        }
+      ],
+      "$conditionOutputs": [
+        {
+          "stateId": "c34a6d0b-b51a-4a7c-9a0b-a0f303761480",
+          "typeOfStateId": "state",
+          "$connId": "con_007f5c06",
+          "$contentId": "8bc3f05e-8f0a-4c70-ae85-45140bbb3357",
+          "$id": "5703570b-e14d-4d98-8237-b05b58e284a1",
+          "conditions": [
+            {
+              "source": "input",
+              "comparison": "contains",
+              "values": [
+                "Sim, confirmar",
+                "Sim",
+                "sim",
+                "1"
+              ]
+            },
+            {
+              "source": "context",
+              "variable": "resultadoIntencao",
+              "comparison": "contains",
+              "values": [
+                "RESULTADO_UNICO",
+                "MULTIPLOS_RESULTADOS",
+                "EXTERNAL_WA"
+              ]
+            }
+          ],
+          "$invalid": false
+        },
+        {
+          "stateId": "node_menu_pos_cpf",
+          "typeOfStateId": "state",
+          "$connId": "con_cf35efee",
+          "$contentId": "8bc3f05e-8f0a-4c70-ae85-45140bbb3357",
+          "$id": "f4995159-bbbf-47d3-a426-ffd19971ce2b",
+          "conditions": [
+            {
+              "source": "input",
+              "comparison": "contains",
+              "values": [
+                "Sim, confirmar",
+                "Sim",
+                "sim",
+                "1"
+              ]
+            }
+          ],
+          "$invalid": false
+        }
+      ],
+      "$enteringCustomActions": [],
+      "$leavingCustomActions": [],
+      "$inputSuggestions": [
+        "Sim, confirmar",
+        "Não, é outra pessoa"
+      ],
+      "$defaultOutput": {
+        "stateId": "node_menu_pos_cpf",
+        "$invalid": false
+      },
+      "isAiGenerated": false,
+      "$tags": [
+        {
+          "id": "blip-tag-f146e8f9-9785-4355-862c-5b1835a04827",
+          "label": "Confirmação Feegow",
+          "background": "#1EA1FF",
+          "canChangeBackground": false
+        }
+      ],
+      "$invalidContentActions": false,
+      "$invalidOutputs": false,
+      "$invalidCustomActions": false,
+      "$invalid": false
+    },
+    "node_minhas_consultas": {
+      "id": "node_minhas_consultas",
+      "root": false,
+      "$title": "Ver Minhas Consultas API",
+      "$position": {
+        "top": "600px",
+        "left": "1500px"
+      },
+      "$contentActions": [
+        {
+          "action": {
+            "$id": "c1092834-4910-4102-bc91-294810294812",
+            "type": "SendMessage",
+            "settings": {
+              "type": "text/plain",
+              "content": "{{agendamentosFormatados}}"
+            },
+            "$invalid": false
+          },
+          "$invalid": false
+        },
+        {
+          "input": {
+            "bypass": true,
+            "$cardContent": {
+              "document": {
+                "id": "b651c346-3cb5-4081-8078-8de6ee579831",
+                "type": "text/plain",
+                "textContent": "Consultas enviadas",
+                "content": "Consultas enviadas"
+              },
+              "editable": false,
+              "deletable": true,
+              "position": "right",
+              "editing": false
+            },
+            "$invalid": false
+          },
+          "$invalid": false
+        }
+      ],
+      "$enteringCustomActions": [
+        {
+          "$id": "8a94dae2-9908-4dcc-9073-9e005788d7ac",
+          "type": "ProcessHttp",
+          "$title": "HTTP GET /api/v1/feegow/patients/{feegowId}/appointments",
+          "settings": {
+            "headers": {
+              "Authorization": "Bearer {{config.apiToken}}",
+              "X-Inovare-Token": "Wm2p9n6PlsaLvNuHWncxFlEXbknBB6XG"
+            },
+            "method": "GET",
+            "uri": "https://itsm-inovare.ctrls.dev.br/api/v1/feegow/patients/{{feegowId}}/appointments",
+            "responseStatusVariable": "agendamentosStatus",
+            "responseBodyVariable": "agendamentosResponse"
+          },
+          "conditions": [],
+          "$invalid": false
+        },
+        {
+          "$id": "d117f618-e2e7-47f3-93ea-702824a6e34f",
+          "type": "ExecuteScript",
+          "$title": "Formatador Agendamentos ES5",
+          "settings": {
+            "function": "run",
+            "source": "function run(agendamentosStatus, agendamentosResponse) {\n    try {\n        var status = parseInt(agendamentosStatus, 10);\n        if (status !== 200 || !agendamentosResponse) {\n            return \"Não encontramos consultas agendadas para o seu cadastro.\";\n        }\n        var data = JSON.parse(agendamentosResponse);\n        if (data.formattedText) {\n            return data.formattedText;\n        }\n        return \"Você não possui consultas futuras agendadas.\";\n    } catch (e) {\n        return \"Não encontramos consultas agendadas para o seu cadastro.\";\n    }\n}",
+            "inputVariables": [
+              "agendamentosStatus",
+              "agendamentosResponse"
+            ],
+            "outputVariable": "agendamentosFormatados"
+          },
+          "conditions": [],
+          "$invalid": false
+        }
+      ],
+      "$leavingCustomActions": [],
+      "$conditionOutputs": [],
+      "$defaultOutput": {
+        "stateId": "node_menu_pos_cpf",
+        "$invalid": false
+      },
+      "isAiGenerated": false,
+      "$tags": [
+        {
+          "id": "blip-tag-9d01f5bc-60f0-4b6e-ad5e-12509db3e19d",
+          "label": "Agendamentos API",
+          "background": "#1EA1FF",
+          "canChangeBackground": false
+        }
+      ],
+      "$invalidContentActions": false,
+      "$invalidOutputs": false,
+      "$invalidCustomActions": false,
+      "$invalid": false,
+      "$inputSuggestions": []
+    },
+    "311b3d95-da26-426f-a231-01f91cf38af1": {
+      "id": "311b3d95-da26-426f-a231-01f91cf38af1",
+      "root": false,
+      "$title": "Buscar Médico / Especialidade",
+      "$position": {
+        "top": "1100px",
+        "left": "450px"
+      },
+      "$contentActions": [
+        {
+          "action": {
+            "$id": "6a8f8910-1a2b-4c3d-8e9f-0a1b2c3d4e5f",
+            "type": "SendMessage",
+            "settings": {
+              "type": "text/plain",
+              "content": "Com qual *médico* ou *especialidade* você gostaria de agendar? 🩺\n\n(Por favor, digite o nome do médico ou especialidade desejada):"
+            },
+            "$invalid": false
+          },
+          "$invalid": false
+        },
+        {
+          "input": {
+            "bypass": false,
+            "expiration": "0:5",
+            "variable": "input",
+            "$cardContent": {
+              "document": {
+                "id": "ec4d5e71-cefc-44c0-956b-4a64a8c67932",
+                "type": "text/plain",
+                "textContent": "Entrada do usuário",
+                "content": "Entrada do usuário"
+              },
+              "editable": false,
+              "deletable": true,
+              "position": "right",
+              "editing": false
+            },
+            "$invalid": false
+          },
+          "$invalid": false
+        }
+      ],
+      "$enteringCustomActions": [],
+      "$leavingCustomActions": [],
+      "$conditionOutputs": [
+        {
+          "$id": "cond_search_valid_input_9988",
+          "stateId": "nlp-analysis",
+          "typeOfStateId": "state",
+          "$connId": "con_search_to_nlp",
+          "conditions": [
+            {
+              "source": "input",
+              "comparison": "matches",
+              "values": [
+                "\\S+"
+              ]
+            }
+          ],
+          "$invalid": false
+        }
+      ],
+      "$defaultOutput": {
+        "stateId": "311b3d95-da26-426f-a231-01f91cf38af1",
+        "$invalid": false
+      },
+      "isAiGenerated": false,
+      "$tags": [],
+      "$invalidContentActions": false,
+      "$invalidOutputs": false,
+      "$invalidCustomActions": false,
+      "$invalid": false,
+      "$inputSuggestions": []
+    },
+    "793586bb-3469-45f6-ab94-d034d7e235b2": {
+      "id": "793586bb-3469-45f6-ab94-d034d7e235b2",
+      "root": false,
+      "$title": "Pré-atendimento",
+      "$position": {
+        "top": "1100px",
+        "left": "800px"
+      },
+      "$contentActions": [
+        {
+          "input": {
+            "bypass": true,
+            "$cardContent": {
+              "document": {
+                "id": "c92cc167-a7cf-479a-a4da-450a20e879dd",
+                "type": "text/plain",
+                "textContent": "Redirecionando...",
+                "content": "Redirecionando..."
+              },
+              "editable": false,
+              "deletable": true,
+              "position": "right",
+              "editing": false
+            },
+            "$invalid": false
+          },
+          "$invalid": false
+        }
+      ],
+      "$enteringCustomActions": [],
+      "$leavingCustomActions": [],
+      "$conditionOutputs": [],
+      "$defaultOutput": {
+        "stateId": "desk-pre",
+        "$invalid": false
+      },
+      "isAiGenerated": false,
+      "$tags": [],
+      "$invalidContentActions": false,
+      "$invalidOutputs": false,
+      "$invalidCustomActions": false,
+      "$invalid": false,
+      "$inputSuggestions": []
+    },
+    "c34a6d0b-b51a-4a7c-9a0b-a0f303761480": {
+      "id": "c34a6d0b-b51a-4a7c-9a0b-a0f303761480",
+      "root": false,
+      "$title": "Direciona para AH ou WA Business",
+      "$position": {
+        "top": "850px",
+        "left": "800px"
+      },
+      "$contentActions": [
+        {
+          "input": {
+            "bypass": true,
+            "$cardContent": {
+              "document": {
+                "id": "2223f9cd-93e8-42c7-b43a-9f47c4dc11ba",
+                "type": "text/plain",
+                "textContent": "Redirecionando...",
+                "content": "Redirecionando..."
+              },
+              "editable": false,
+              "deletable": true,
+              "position": "right",
+              "editing": false
+            },
+            "$invalid": false
+          },
+          "$invalid": false
+        }
+      ],
+      "$enteringCustomActions": [],
+      "$leavingCustomActions": [],
+      "$conditionOutputs": [],
+      "$defaultOutput": {
+        "stateId": "smart-router",
+        "$invalid": false
+      },
+      "isAiGenerated": false,
+      "$tags": [],
+      "$invalidContentActions": false,
+      "$invalidOutputs": false,
+      "$invalidCustomActions": false,
+      "$invalid": false,
+      "$inputSuggestions": []
+    }
+  }
+}
