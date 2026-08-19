@@ -1985,7 +1985,7 @@
     "appointments-itsm": {
       "id": "appointments-itsm",
       "root": false,
-      "$title": "[Meus Agendamentos ITSM]",
+      "$title": "[Meus Agendamentos Feegow]",
       "$position": {
         "top": "600px",
         "left": "1850px"
@@ -2011,16 +2011,16 @@
       ],
       "$enteringCustomActions": [
         {
-          "$id": "2a67f69c-0a53-4b89-bee1-be2d5f6b99a4",
+          "$id": "http_feegow_appointments_direct",
           "type": "ProcessHttp",
-          "$title": "HTTP GET /api/v1/feegow/patients/{id}/appointments",
+          "$title": "HTTP GET Feegow Appoints Search",
           "settings": {
             "headers": {
-              "Authorization": "Bearer {{config.apiToken}}",
-              "X-Inovare-Token": "Wm2p9n6PlsaLvNuHWncxFlEXbknBB6XG"
+              "x-access-token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJmZWVnb3ciLCJhdWQiOiJwdWJsaWNhcGkiLCJpYXQiOjE3NzYxMTA2MzcsImxpY2Vuc2VJRCI6MTE5NDl9.zjrp9y0vAG80b69aAofJu5Lpi2tjNdUNTc9QZNfGtGU",
+              "Content-Type": "application/json"
             },
             "method": "GET",
-            "uri": "https://itsm-inovare.ctrls.dev.br/api/v1/feegow/patients/{{feegowId}}/appointments",
+            "uri": "https://api.feegow.com/v1/api/appoints/search?paciente_id={{feegowId}}",
             "responseStatusVariable": "appointmentsStatus",
             "responseBodyVariable": "appointmentsResponse"
           },
@@ -2035,7 +2035,7 @@
           "$title": "Formatador Agendamentos ES5",
           "settings": {
             "function": "run",
-            "source": "function run(appointmentsStatus, appointmentsResponse) {\n    try {\n        var status = parseInt(appointmentsStatus, 10);\n        if (status !== 200 || !appointmentsResponse) {\n            return \"Não encontramos agendamentos futuros para o seu cadastro.\";\n        }\n        var data = JSON.parse(appointmentsResponse);\n        if (!data.items || data.items.length === 0) {\n            return \"Você não possui agendamentos futuros marcados.\";\n        }\n        var message = \"📅 *Seus Próximos Agendamentos:*\\n\\n\";\n        for (var i = 0; i < data.items.length; i++) {\n            var item = data.items[i];\n            message += \"• *Data:* \" + item.date + \" às \" + item.time + \"\\n\";\n            message += \"  *Médico:* \" + item.doctorName + \"\\n\";\n            message += \"  *Especialidade:* \" + item.specialty + \"\\n\\n\";\n        }\n        return message;\n    } catch (e) {\n        return \"Desculpe, ocorreu uma falha ao consultar seus agendamentos.\";\n    }\n}",
+            "source": "function run(appointmentsStatus, appointmentsResponse) {\n    try {\n        var status = parseInt(appointmentsStatus, 10);\n        if (status !== 200 || !appointmentsResponse) {\n            return \"Não encontramos agendamentos futuros para o seu cadastro.\";\n        }\n        var data = typeof appointmentsResponse === 'string' ? JSON.parse(appointmentsResponse) : appointmentsResponse;\n        var items = data.content || data.items || [];\n        if (!Array.isArray(items) || items.length === 0) {\n            return \"Você não possui agendamentos futuros marcados no momento.\";\n        }\n        var message = \"📅 *Seus Próximos Agendamentos:*\\n\\n\";\n        for (var i = 0; i < Math.min(items.length, 5); i++) {\n            var item = items[i];\n            var dataHora = (item.data || item.date || \"\") + \" às \" + (item.horario || item.time || \"\");\n            var prof = item.nome_profissional || item.profissional || item.doctorName || \"Especialista\";\n            var esp = item.nome_especialidade || item.especialidade || item.specialty || \"\";\n            message += \"• *Data:* \" + dataHora + \"\\n\";\n            message += \"  *Profissional:* \" + prof + \"\\n\";\n            if (esp) {\n                message += \"  *Especialidade:* \" + esp + \"\\n\";\n            }\n            message += \"\\n\";\n        }\n        return message;\n    } catch (e) {\n        return \"Não encontramos agendamentos futuros para o seu cadastro.\";\n    }\n}",
             "inputVariables": [
               "appointmentsStatus",
               "appointmentsResponse"
@@ -2125,20 +2125,13 @@
           "$invalid": false
         },
         {
-          "$id": "1690e722-4f91-4267-87af-f149842ad85b",
-          "type": "ProcessHttp",
-          "$title": "HTTP POST /api/v1/atendimento/csat",
+          "$id": "track_csat_event_native",
+          "type": "TrackEvent",
+          "$title": "Registra CSAT Nativo Blip",
           "settings": {
-            "headers": {
-              "Content-Type": "application/json",
-              "Authorization": "Bearer {{config.apiToken}}",
-              "X-Inovare-Token": "Wm2p9n6PlsaLvNuHWncxFlEXbknBB6XG"
-            },
-            "method": "POST",
-            "uri": "https://itsm-inovare.ctrls.dev.br/api/v1/atendimento/csat",
-            "body": "{\n  \"cpf\": \"{{userCpf}}\",\n  \"feegowId\": \"{{feegowId}}\",\n  \"rating\": {{csatRating}},\n  \"ticketId\": \"{{input.message.ticketId}}\"\n}",
-            "responseStatusVariable": "csatPostStatus",
-            "responseBodyVariable": "csatPostResponse"
+            "category": "Pesquisa de Satisfação",
+            "action": "CSAT Rating",
+            "value": "{{csatRating}}"
           },
           "conditions": [],
           "$invalid": false
@@ -2798,7 +2791,7 @@
     "node_minhas_consultas": {
       "id": "node_minhas_consultas",
       "root": false,
-      "$title": "Ver Minhas Consultas API",
+      "$title": "Ver Minhas Consultas Feegow",
       "$position": {
         "top": "600px",
         "left": "1500px"
@@ -2838,16 +2831,16 @@
       ],
       "$enteringCustomActions": [
         {
-          "$id": "8a94dae2-9908-4dcc-9073-9e005788d7ac",
+          "$id": "http_feegow_minhas_consultas_direct",
           "type": "ProcessHttp",
-          "$title": "HTTP GET /api/v1/feegow/patients/{feegowId}/appointments",
+          "$title": "HTTP GET Feegow Appoints Search",
           "settings": {
             "headers": {
-              "Authorization": "Bearer {{config.apiToken}}",
-              "X-Inovare-Token": "Wm2p9n6PlsaLvNuHWncxFlEXbknBB6XG"
+              "x-access-token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJmZWVnb3ciLCJhdWQiOiJwdWJsaWNhcGkiLCJpYXQiOjE3NzYxMTA2MzcsImxpY2Vuc2VJRCI6MTE5NDl9.zjrp9y0vAG80b69aAofJu5Lpi2tjNdUNTc9QZNfGtGU",
+              "Content-Type": "application/json"
             },
             "method": "GET",
-            "uri": "https://itsm-inovare.ctrls.dev.br/api/v1/feegow/patients/{{feegowId}}/appointments",
+            "uri": "https://api.feegow.com/v1/api/appoints/search?paciente_id={{feegowId}}",
             "responseStatusVariable": "agendamentosStatus",
             "responseBodyVariable": "agendamentosResponse"
           },
@@ -2860,7 +2853,7 @@
           "$title": "Formatador Agendamentos ES5",
           "settings": {
             "function": "run",
-            "source": "function run(agendamentosStatus, agendamentosResponse) {\n    try {\n        var status = parseInt(agendamentosStatus, 10);\n        if (status !== 200 || !agendamentosResponse) {\n            return \"Não encontramos consultas agendadas para o seu cadastro.\";\n        }\n        var data = JSON.parse(agendamentosResponse);\n        if (data.formattedText) {\n            return data.formattedText;\n        }\n        return \"Você não possui consultas futuras agendadas.\";\n    } catch (e) {\n        return \"Não encontramos consultas agendadas para o seu cadastro.\";\n    }\n}",
+            "source": "function run(appointmentsStatus, appointmentsResponse) {\n    try {\n        var status = parseInt(appointmentsStatus, 10);\n        if (status !== 200 || !appointmentsResponse) {\n            return \"Não encontramos agendamentos futuros para o seu cadastro.\";\n        }\n        var data = typeof appointmentsResponse === 'string' ? JSON.parse(appointmentsResponse) : appointmentsResponse;\n        var items = data.content || data.items || [];\n        if (!Array.isArray(items) || items.length === 0) {\n            return \"Você não possui agendamentos futuros marcados no momento.\";\n        }\n        var message = \"📅 *Seus Próximos Agendamentos:*\\n\\n\";\n        for (var i = 0; i < Math.min(items.length, 5); i++) {\n            var item = items[i];\n            var dataHora = (item.data || item.date || \"\") + \" às \" + (item.horario || item.time || \"\");\n            var prof = item.nome_profissional || item.profissional || item.doctorName || \"Especialista\";\n            var esp = item.nome_especialidade || item.especialidade || item.specialty || \"\";\n            message += \"• *Data:* \" + dataHora + \"\\n\";\n            message += \"  *Profissional:* \" + prof + \"\\n\";\n            if (esp) {\n                message += \"  *Especialidade:* \" + esp + \"\\n\";\n            }\n            message += \"\\n\";\n        }\n        return message;\n    } catch (e) {\n        return \"Não encontramos agendamentos futuros para o seu cadastro.\";\n    }\n}",
             "inputVariables": [
               "agendamentosStatus",
               "agendamentosResponse"
