@@ -130,6 +130,10 @@ public class BlipGroupActionHandler {
         }
 
         if (groups == null || groups.isEmpty()) {
+            if ("group_view".equalsIgnoreCase(actionType) && parseUuid(action.trim()) != null && !lowerAction.startsWith("group_view_")) {
+                // É um UUID avulso (ação interna de fluxo do Blip), não um grupo de notificação
+                return null;
+            }
             log.info("[WEBHOOK] Grupo {} não encontrado no banco. Tentando recuperação defensiva por busca de grupo/sessão por telefone...", groupId);
             if (fromPhone != null && !fromPhone.isBlank()) {
                 try {
