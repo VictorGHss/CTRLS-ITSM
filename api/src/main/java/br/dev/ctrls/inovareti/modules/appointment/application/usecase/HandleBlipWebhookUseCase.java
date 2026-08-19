@@ -435,13 +435,17 @@ public class HandleBlipWebhookUseCase {
                         return new WebhookResult("", "", catracaAppId, "", "Integrar_GerAcesso", "");
                     }
 
-                    var doctorConfigOpt = doctorConfigurationRepository.findById(feegowProfissionalId);
-                    if (doctorConfigOpt.isEmpty()) {
-                        log.warn("[CATRACA-ALERTA] Agendamento confirmado para o profissional ID={}, mas ele não possui metadados GerAcesso configurados no painel. Ignorando sincronização da catraca.", feegowProfissionalId);
-                        return new WebhookResult("", "", catracaAppId, "", "Integrar_GerAcesso", "");
-                    }
-
-                    var doctorConfig = doctorConfigOpt.get();
+                    var doctorConfigOpt = (feegowProfissionalId != null)
+                            ? doctorConfigurationRepository.findById(feegowProfissionalId)
+                            : java.util.Optional.<br.dev.ctrls.inovareti.modules.appointment.domain.model.DoctorConfiguration>empty();
+                    String matriculaVisitado = doctorConfigOpt
+                            .map(br.dev.ctrls.inovareti.modules.appointment.domain.model.DoctorConfiguration::getGerAcessoMatricula)
+                            .filter(s -> !s.isBlank())
+                            .orElse("");
+                    String cpfVisitado = doctorConfigOpt
+                            .map(br.dev.ctrls.inovareti.modules.appointment.domain.model.DoctorConfiguration::getGerAcessoCpf)
+                            .filter(s -> !s.isBlank())
+                            .orElse("");
 
                     try {
                         br.dev.ctrls.inovareti.modules.appointment.domain.port.output.FeegowPatient patient = 
@@ -465,8 +469,8 @@ public class HandleBlipWebhookUseCase {
                                 .telefone(patientPhone)
                                 .email(patientEmail)
                                 .tipovisista(1)
-                                .matricula_visitado(doctorConfig.getGerAcessoMatricula())
-                                .cpf_visitado(doctorConfig.getGerAcessoCpf())
+                                .matricula_visitado(matriculaVisitado)
+                                .cpf_visitado(cpfVisitado)
                                 .inicio_visita(inicioVisita)
                                 .fim_visita(fimVisita)
                                 .build();
