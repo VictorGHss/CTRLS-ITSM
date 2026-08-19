@@ -335,9 +335,17 @@ public class BlipWebhookController {
                 || rawActionTextLower.contains("ver_agenda")
                 || rawActionTextLower.contains("confirm_group_")
                 || rawActionTextLower.contains("confirmar_tudo")
+                || rawActionTextLower.contains("confirmar presença")
+                || rawActionTextLower.contains("confirmar presenca")
+                || rawActionTextLower.contains("confirmar")
+                || rawActionTextLower.contains("confirmo")
                 || rawActionTextLower.contains("alter_group_")
                 || rawActionTextLower.contains("preciso_alterar")
+                || rawActionTextLower.contains("solicitar alteração")
+                || rawActionTextLower.contains("solicitar alteracao")
+                || rawActionTextLower.contains("alterar")
                 || isHumanAttendantRequest
+                || isConfirmationOrAlterationIntentText(actionValue)
                 || isConfirmationOrAlterationIntentText(rawText);
 
             boolean isNullOrEmpty = action == null || action.isBlank() || "null".equalsIgnoreCase(action.trim());
@@ -346,6 +354,9 @@ public class BlipWebhookController {
                 action.toLowerCase().startsWith("alter_") ||
                 action.toLowerCase().startsWith("group_") ||
                 action.toLowerCase().startsWith("ver_agenda_") ||
+                action.toLowerCase().contains("confirmar") ||
+                action.toLowerCase().contains("alterar") ||
+                action.toLowerCase().contains("ver agendamento") ||
                 "group_view_fallback".equalsIgnoreCase(action) ||
                 "Verificar_Acompanhante".equalsIgnoreCase(action) ||
                 "Integrar_GerAcesso".equalsIgnoreCase(action) ||
