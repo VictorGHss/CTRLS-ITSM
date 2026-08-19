@@ -270,7 +270,9 @@ public class MonitorAppointmentNudgesUseCase {
                 String templateId = transactionTemplate.execute(status ->
                     appointmentConfigRepository.findByCategory(AppointmentCategory.GROUP_NUDGE_1)
                         .map(config -> config.getTemplateId())
-                        .orElse(appointmentMotorProperties.getBlipTemplateNudgePending())
+                        .orElse(appointmentMotorProperties.getBlipTemplateGroup() != null && !appointmentMotorProperties.getBlipTemplateGroup().isBlank()
+                                ? appointmentMotorProperties.getBlipTemplateGroup()
+                                : "aviso_agendamento_grupo")
                 );
 
                 String patientName = "Paciente";
