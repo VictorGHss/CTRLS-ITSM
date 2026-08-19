@@ -334,65 +334,27 @@
           },
           "conditions": [],
           "$invalid": false
+        },
+        {
+          "$id": "http_post_interactive_list_wa",
+          "type": "ProcessHttp",
+          "$title": "HTTP POST Envia Lista Interativa WhatsApp",
+          "settings": {
+            "headers": {
+              "Authorization": "Key Zmx1eG92MTo3b242Mnlibm1naU9pSTNVcEtVVw==",
+              "Content-Type": "application/json"
+            },
+            "method": "POST",
+            "uri": "https://inovaremed.http.msging.net/messages",
+            "body": "{\n  \"id\": \"{{$guid}}\",\n  \"to\": \"{{contact.identity}}\",\n  \"type\": \"application/json\",\n  \"content\": {{menuEspecialistasSelect}}\n}",
+            "responseStatusVariable": "sendListStatus",
+            "responseBodyVariable": "sendListResponse"
+          },
+          "conditions": [],
+          "$invalid": false
         }
       ],
       "$contentActions": [
-        {
-          "action": {
-            "$id": "cs_spec_menu_chatstate",
-            "$typeOfContent": "chat-state",
-            "type": "SendMessage",
-            "settings": {
-              "id": "cs_spec_menu_doc",
-              "type": "application/vnd.lime.chatstate+json",
-              "content": {
-                "state": "composing",
-                "interval": 1000
-              }
-            },
-            "$cardContent": {
-              "document": {
-                "id": "cs_spec_menu_doc",
-                "type": "application/vnd.lime.chatstate+json",
-                "content": {
-                  "state": "composing",
-                  "interval": 1000
-                }
-              },
-              "editable": true,
-              "deletable": true,
-              "position": "left"
-            },
-            "conditions": [],
-            "$invalid": false
-          },
-          "$invalid": false
-        },
-        {
-          "action": {
-            "$id": "card_dynamic_list_especialistas",
-            "$typeOfContent": "dynamic",
-            "type": "SendMessage",
-            "settings": {
-              "id": "doc_dynamic_list_especialistas",
-              "type": "application/json",
-              "content": "{{menuEspecialistasSelect}}"
-            },
-            "$cardContent": {
-              "document": {
-                "id": "doc_dynamic_list_especialistas",
-                "type": "application/json",
-                "content": "{{menuEspecialistasSelect}}"
-              },
-              "editable": true,
-              "deletable": true,
-              "position": "left"
-            },
-            "conditions": [],
-            "$invalid": false
-          },
-          "$invalid": false
-        },
         {
           "input": {
             "bypass": false,
@@ -402,7 +364,7 @@
               "document": {
                 "id": "c533cccb-3203-4cd6-9aa4-c1baffb312bc",
                 "type": "text/plain",
-                "content": "Entrada do usuário"
+                "content": "Aguardando seleção do médico..."
               },
               "editable": false,
               "deletable": true,
