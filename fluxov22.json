@@ -325,27 +325,11 @@
           "$title": "Monta Menu Interativo Especialistas",
           "settings": {
             "function": "run",
-            "source": "function run(listaMedicosJson) {\n    try {\n        var doctors = JSON.parse(listaMedicosJson || \"[]\");\n        var total = doctors.length > 10 ? 10 : doctors.length;\n        if (total === 0) {\n            return JSON.stringify({\n                text: \"Com qual médico ou especialidade você gostaria de agendar? 🩺\\n\\n(Por favor, digite o nome do médico desejado):\",\n                scope: \"immediate\",\n                options: []\n            });\n        }\n\n        var options = [];\n        for (var i = 0; i < total; i++) {\n            var d = doctors[i];\n            var name = d.doctorName || d.name || \"Especialista\";\n            var spec = d.specialty || d.spec || \"\";\n            var optText = (i + 1) + \". \" + name + (spec ? \" (\" + spec + \")\" : \"\");\n            if (optText.length > 24) {\n                optText = (i + 1) + \". \" + name;\n            }\n            if (optText.length > 24) {\n                optText = optText.substring(0, 24);\n            }\n            options.push({\n                text: optText,\n                previewText: optText,\n                value: (i + 1).toString(),\n                index: i,\n                type: null\n            });\n        }\n\n        var payload = {\n            text: \"Encontramos os seguintes especialistas para o seu agendamento:\\n\\n👉 *Toque em uma das opções abaixo para escolher:*\",\n            scope: \"immediate\",\n            options: options,\n            quikReply: false\n        };\n\n        return JSON.stringify(payload);\n    } catch(e) {\n        return JSON.stringify({\n            text: \"Encontramos mais de um especialista disponível.\\n\\n👉 *Por favor, digite o nome do médico desejado:*\",\n            scope: \"immediate\",\n            options: [],\n            quikReply: false\n        });\n    }\n}",
+            "source": "function run(listaMedicosJson) {\n    try {\n        var doctors = JSON.parse(listaMedicosJson || \"[]\");\n        var total = doctors.length > 10 ? 10 : doctors.length;\n        if (total === 0) {\n            return JSON.stringify({\n                \"recipient_type\": \"individual\",\n                \"type\": \"text\",\n                \"text\": { \"body\": \"Com qual médico ou especialidade você gostaria de agendar? 🩺\\n\\n(Por favor, digite o nome do médico desejado):\" }\n            });\n        }\n\n        var rows = [];\n        for (var i = 0; i < total; i++) {\n            var d = doctors[i];\n            var name = d.doctorName || d.name || \"Especialista\";\n            var spec = d.specialty || d.spec || \"\";\n            var title = name;\n            if (title.length > 24) title = title.substring(0, 24);\n\n            var desc = spec;\n            if (desc.length > 72) desc = desc.substring(0, 72);\n\n            rows.push({\n                \"id\": (i + 1).toString(),\n                \"title\": title,\n                \"description\": desc\n            });\n        }\n\n        var payload = {\n            \"recipient_type\": \"individual\",\n            \"type\": \"interactive\",\n            \"interactive\": {\n                \"type\": \"list\",\n                \"header\": { \"type\": \"text\", \"text\": \"Especialistas\" },\n                \"body\": { \"text\": \"Encontramos os seguintes especialistas para o seu agendamento.\\n\\n👉 *Toque no botão abaixo para selecionar:* \" },\n                \"footer\": { \"text\": \"Clínica Inovare\" },\n                \"action\": {\n                    \"button\": \"Ver Especialistas\",\n                    \"sections\": [\n                        {\n                            \"title\": \"Médicos Disponíveis\",\n                            \"rows\": rows\n                        }\n                    ]\n                }\n            }\n        };\n\n        return JSON.stringify(payload);\n    } catch (e) {\n        return JSON.stringify({\n            \"recipient_type\": \"individual\",\n            \"type\": \"text\",\n            \"text\": { \"body\": \"Por favor, digite o nome do médico desejado:\" }\n        });\n    }\n}",
             "inputVariables": [
               "listaMedicosJson"
             ],
             "outputVariable": "menuEspecialistasSelect",
-            "LocalTimeZoneEnabled": false
-          },
-          "conditions": [],
-          "$invalid": false
-        },
-        {
-          "$id": "gen_text_fallback_spec_menu",
-          "type": "ExecuteScript",
-          "$title": "Monta Texto Formatado Especialistas",
-          "settings": {
-            "function": "run",
-            "source": "function run(listaMedicosJson) {\n    try {\n        var doctors = JSON.parse(listaMedicosJson || \"[]\");\n        var total = doctors.length > 10 ? 10 : doctors.length;\n        if (total === 0) return \"Com qual médico você gostaria de agendar?\";\n        var sb = \"Encontramos os seguintes especialistas para o seu agendamento:\\n\\n\";\n        for (var i = 0; i < total; i++) {\n            var d = doctors[i];\n            sb += (i + 1) + \". *\" + (d.doctorName || d.name) + \"* (\" + (d.specialty || d.spec) + \")\\n\";\n        }\n        sb += \"\\n👉 *Digite o número (1 a \" + total + \") ou o nome do médico:*\";\n        return sb;\n    } catch(e) { return \"Por favor, digite o nome do médico desejado:\"; }\n}",
-            "inputVariables": [
-              "listaMedicosJson"
-            ],
-            "outputVariable": "textoEspecialistas",
             "LocalTimeZoneEnabled": false
           },
           "conditions": [],
@@ -355,73 +339,12 @@
       "$contentActions": [
         {
           "action": {
-            "$id": "cs_spec_menu_chatstate",
-            "type": "SendMessage",
-            "settings": {
-              "id": "cs_spec_menu_doc",
-              "type": "application/vnd.lime.chatstate+json",
-              "content": {
-                "state": "composing",
-                "interval": 1000
-              }
-            },
-            "$cardContent": {
-              "document": {
-                "id": "cs_spec_menu_doc",
-                "type": "application/vnd.lime.chatstate+json",
-                "content": {
-                  "state": "composing",
-                  "interval": 1000
-                }
-              },
-              "editable": true,
-              "deletable": true,
-              "position": "left"
-            },
-            "conditions": [],
-            "$invalid": false
-          },
-          "$invalid": false
-        },
-        {
-          "action": {
             "$id": "card_interactive_select_especialistas",
             "type": "SendMessage",
             "settings": {
               "id": "doc_select_especialistas",
-              "type": "application/vnd.lime.select+json",
+              "type": "application/json",
               "content": "{{menuEspecialistasSelect}}"
-            },
-            "$cardContent": {
-              "document": {
-                "id": "doc_select_especialistas",
-                "type": "application/vnd.lime.select+json",
-                "content": {
-                  "text": "{{textoEspecialistas}}",
-                  "scope": "immediate",
-                  "options": [
-                    {
-                      "text": "Opção 1",
-                      "previewText": "Opção 1",
-                      "value": "1"
-                    },
-                    {
-                      "text": "Opção 2",
-                      "previewText": "Opção 2",
-                      "value": "2"
-                    },
-                    {
-                      "text": "Opção 3",
-                      "previewText": "Opção 3",
-                      "value": "3"
-                    }
-                  ],
-                  "quikReply": false
-                }
-              },
-              "editable": true,
-              "deletable": true,
-              "position": "left"
             },
             "conditions": [],
             "$invalid": false
