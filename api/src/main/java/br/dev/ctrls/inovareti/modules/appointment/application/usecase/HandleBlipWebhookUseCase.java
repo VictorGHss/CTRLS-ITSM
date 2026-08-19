@@ -778,15 +778,18 @@ public class HandleBlipWebhookUseCase {
                         log.debug("[DESK-ROUTING] Erro ao consultar paciente para {}: {}", session.getPatientId(), ex.getMessage());
                     }
                 }
+
+                // Sincroniza redirecionamento de fila para contatos vinculados a um agendamento ativo
+                try {
+                    blipContextService.setQueueRedirect(fromPhone, resolvedQueue);
+                } catch (Exception ex) {
+                    log.warn("[DESK-ROUTING] Falha ao configurar redirecionamento de fila para {}: {}", fromPhone, ex.getMessage());
+                }
+            } else {
+                log.info("[DESK-ROUTING] Contato {} sem sessão de agendamento ativa. Mantendo pauta/fila definida pelo fluxo do bot ou contato existente.", fromPhone);
             }
         } catch (Exception ex) {
             log.warn("[DESK-ROUTING] Falha defensiva ao carregar dados do agendamento para Desk: {}", ex.getMessage());
-        }
-
-        try {
-            blipContextService.setQueueRedirect(fromPhone, resolvedQueue);
-        } catch (Exception ex) {
-            log.warn("[DESK-ROUTING] Falha ao configurar redirecionamento de fila para {}: {}", fromPhone, ex.getMessage());
         }
 
         return new WebhookResult(resolvedQueue, resolvedPatientName, resolvedCpf, resolvedBirthdate, "Atendimento humano", resolvedDoctorName);
