@@ -18,7 +18,7 @@ public class AppointmentReviewScheduler {
 
     private final SendPostAppointmentReviewUseCase sendPostAppointmentReviewUseCase;
 
-    @Scheduled(cron = "${inovareti.review.cron:0 0/30 8-20 * * *}")
+    @Scheduled(cron = "${inovareti.review.cron:0 0/30 8-18 * * MON-SAT}", zone = "America/Sao_Paulo")
     public void runPostAppointmentReviewJob() {
         log.info("[SCHEDULER] Disparando rotina periódica de envio de avaliações Google Review...");
         try {
