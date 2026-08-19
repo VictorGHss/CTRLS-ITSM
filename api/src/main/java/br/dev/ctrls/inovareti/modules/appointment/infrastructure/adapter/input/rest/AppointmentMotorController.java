@@ -85,15 +85,25 @@ public class AppointmentMotorController {
     public ResponseEntity<Map<String, Object>> triggerManual(
             @RequestParam(value = "production", required = false) Boolean production,
             @RequestParam(value = "exclude", required = false) String excludeRaw,
+            @RequestParam(value = "doctorId", required = false) String doctorId,
+            @RequestParam(value = "doctorIds", required = false) String doctorIds,
             @RequestParam(value = "forceSend", required = false, defaultValue = "false") boolean forceSend,
             @RequestParam(value = "testPhone", required = false) String testPhone) {
         
-        log.info("[TRIGGER-MANUAL] Recebida solicitação de disparo manual em segundo plano (production={}, forceSend={}, testPhone={}). Respondendo HTTP 202 Accepted...",
-                production, forceSend, testPhone);
+        log.info("[TRIGGER-MANUAL] Recebida solicitação de disparo manual em segundo plano (production={}, doctorId={}, doctorIds={}, forceSend={}, testPhone={}). Respondendo HTTP 202 Accepted...",
+                production, doctorId, doctorIds, forceSend, testPhone);
 
         applicationTaskExecutor.execute(() -> {
             try {
-                if (Boolean.TRUE.equals(production)) {
+                String targetDocRaw = (doctorId != null && !doctorId.isBlank()) ? doctorId : doctorIds;
+                if (targetDocRaw != null && !targetDocRaw.isBlank()) {
+                    java.util.List<String> specificDocs = java.util.Arrays.stream(targetDocRaw.split(","))
+                            .map(id -> id != null ? id.trim() : "")
+                            .filter(id -> !id.isEmpty())
+                            .toList();
+                    log.info("[TRIGGER-MANUAL] Iniciando execução para médicos específicos: {} (forceSend={}, testPhone={})", specificDocs, forceSend, testPhone);
+                    ingestAppointmentsUseCase.execute(specificDocs, forceSend, testPhone);
+                } else if (Boolean.TRUE.equals(production)) {
                     java.util.List<String> activeDoctorIds = new java.util.ArrayList<>(appointmentMotorProperties.getActiveDoctorIds());
                     
                     if (excludeRaw != null && !excludeRaw.isBlank()) {
