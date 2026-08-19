@@ -439,12 +439,12 @@ public class HandleBlipWebhookUseCase {
                             ? doctorConfigurationRepository.findById(feegowProfissionalId)
                             : java.util.Optional.<br.dev.ctrls.inovareti.modules.appointment.domain.model.DoctorConfiguration>empty();
                     String matriculaVisitado = doctorConfigOpt
-                            .map(br.dev.ctrls.inovareti.modules.appointment.domain.model.DoctorConfiguration::getGerAcessoMatricula)
-                            .filter(s -> !s.isBlank())
+                            .map(config -> config.getGerAcessoMatricula())
+                            .filter(s -> s != null && !s.isBlank())
                             .orElse("");
                     String cpfVisitado = doctorConfigOpt
-                            .map(br.dev.ctrls.inovareti.modules.appointment.domain.model.DoctorConfiguration::getGerAcessoCpf)
-                            .filter(s -> !s.isBlank())
+                            .map(config -> config.getGerAcessoCpf())
+                            .filter(s -> s != null && !s.isBlank())
                             .orElse("");
 
                     try {
