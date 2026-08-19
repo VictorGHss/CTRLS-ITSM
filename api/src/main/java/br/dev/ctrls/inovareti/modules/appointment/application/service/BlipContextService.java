@@ -341,14 +341,6 @@ public class BlipContextService {
     }
 
     private void sendSingleMasterState(String normalizedIdentity, String targetBot, String operation) {
-        if (normalizedIdentity == null || normalizedIdentity.isBlank() || targetBot == null || targetBot.isBlank()) return;
-
-        // SALVAGUARDA TOTAL FLUXOV1: NUNCA redirecionar pacientes reais para fluxov1 (fluxo de testes/desenvolvimento)
-        if (targetBot.toLowerCase().contains("fluxov1")) {
-            log.warn("[BLIP-CONTEXT-GUARD] BLOQUEADO: Tentativa de definir Master-State para o subbot de teste '{}' na identidade '{}'. Operacao cancelada.", targetBot, normalizedIdentity);
-            return;
-        }
-
         // SALVAGUARDA DESK: NUNCA enviar Master-State para desk@msging.net em identidades de túnel (@tunnel.msging.net).
         // Isso evita a abertura de tickets duplicados/fantasmas com UUID na fila Default do Blip Desk!
         if ("desk@msging.net".equalsIgnoreCase(targetBot) && normalizedIdentity.contains("@tunnel.msging.net")) {
