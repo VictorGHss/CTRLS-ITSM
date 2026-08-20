@@ -40,10 +40,15 @@ out/
 Thumbs.db
 
 # ========================
-# Logs
+# ========================
+# Logs e Arquivos Temporários
 # ========================
 *.log
 logs/
+log_atual.txt
+log_*.txt
+*.txt.log
+build_output.txt
 
 # ========================
 # Spring Boot
@@ -77,11 +82,16 @@ brain/
 *.sql.gz
 *.backup
 *.dump
+dump_*.json
+*.dump.json
 
 # ========================
 # Fluxos do Blip e Exportações Locais
 # ========================
 fluxo*.json
 *fluxo*.json
+fluxov*.json
+*fluxov*.json
 procedimentos_feegow.*
+
 
