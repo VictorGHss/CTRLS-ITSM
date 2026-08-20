@@ -1580,10 +1580,11 @@
           "$title": "Parse Cadastro API",
           "settings": {
             "function": "run",
-            "source": "function run(patientCreateStatus, patientCreateResponse) {\n    var result = { feegowId: \"\", pacienteNome: \"\", cadastroStatus: \"SUCCESS\" };\n    try {\n        var status = parseInt(patientCreateStatus, 10);\n        if ((status === 200 || status === 201) && patientCreateResponse) {\n            var body = typeof patientCreateResponse === 'string' ? JSON.parse(patientCreateResponse) : patientCreateResponse;\n            if (body.content && body.content.id) {\n                result.feegowId = body.content.id.toString();\n            } else if (body.patientId || body.id) {\n                result.feegowId = (body.patientId || body.id).toString();\n            }\n            result.pacienteNome = (body.name || body.nome || \"\").toString();\n            result.cadastroStatus = \"SUCCESS\";\n        } else {\n            result.cadastroStatus = \"SUCCESS\";\n        }\n    } catch (e) {\n        result.cadastroStatus = \"SUCCESS\";\n    }\n    return JSON.stringify(result);\n}",
+            "source": "function run(patientCreateStatus, patientCreateResponse, cadastroNome) {\n    var result = { feegowId: \"\", pacienteNome: cadastroNome || \"\", cadastroStatus: \"SUCCESS\", acaoCadastro: \"EXISTENTE\" };\n    try {\n        var status = parseInt(patientCreateStatus, 10);\n        if ((status === 200 || status === 201) && patientCreateResponse) {\n            var body = typeof patientCreateResponse === 'string' ? JSON.parse(patientCreateResponse) : patientCreateResponse;\n            if (body.content && body.content.id) {\n                result.feegowId = body.content.id.toString();\n            } else if (body.patientId || body.id) {\n                result.feegowId = (body.patientId || body.id).toString();\n            }\n            if (body.name || body.nome) {\n                result.pacienteNome = (body.name || body.nome).toString();\n            }\n        }\n    } catch (e) {}\n    return JSON.stringify(result);\n}",
             "inputVariables": [
               "patientCreateStatus",
-              "patientCreateResponse"
+              "patientCreateResponse",
+              "cadastroNome"
             ],
             "outputVariable": "createResultData"
           },
@@ -1633,6 +1634,36 @@
               "externalLink"
             ],
             "outputVariable": "destinoPosCadastro"
+          },
+          "conditions": [],
+          "$invalid": false
+        },
+        {
+          "$id": "ext_nome_create",
+          "type": "ExecuteScript",
+          "$title": "Extrai pacienteNome Criado",
+          "settings": {
+            "function": "run",
+            "source": "function run(createResultData) { try { return JSON.parse(createResultData).pacienteNome || ''; } catch(e) { return ''; } }",
+            "inputVariables": [
+              "createResultData"
+            ],
+            "outputVariable": "pacienteNome"
+          },
+          "conditions": [],
+          "$invalid": false
+        },
+        {
+          "$id": "ext_acao_create",
+          "type": "ExecuteScript",
+          "$title": "Define acaoCadastro EXISTENTE",
+          "settings": {
+            "function": "run",
+            "source": "function run(createResultData) { return 'EXISTENTE'; }",
+            "inputVariables": [
+              "createResultData"
+            ],
+            "outputVariable": "acaoCadastro"
           },
           "conditions": [],
           "$invalid": false
@@ -5749,6 +5780,22 @@
       ],
       "$conditionOutputs": [
         {
+          "id": "cond_cpf_exist_menu_ortopedia",
+          "stateId": "smart-router",
+          "typeOfStateId": "state",
+          "$connId": "con_cpf_smart_menu_ortopedia",
+          "conditions": [
+            {
+              "source": "context",
+              "variable": "userCpf",
+              "comparison": "exists",
+              "values": []
+            }
+          ],
+          "$invalid": false,
+          "$id": "cid_cpf_smart_menu_ortopedia"
+        },
+        {
           "id": "cond_exist_menu_ortopedia",
           "stateId": "smart-router",
           "typeOfStateId": "state",
@@ -6064,6 +6111,22 @@
         }
       ],
       "$conditionOutputs": [
+        {
+          "id": "cond_cpf_exist_menu_cardio",
+          "stateId": "smart-router",
+          "typeOfStateId": "state",
+          "$connId": "con_cpf_smart_menu_cardio",
+          "conditions": [
+            {
+              "source": "context",
+              "variable": "userCpf",
+              "comparison": "exists",
+              "values": []
+            }
+          ],
+          "$invalid": false,
+          "$id": "cid_cpf_smart_menu_cardio"
+        },
         {
           "id": "cond_exist_menu_cardio",
           "stateId": "smart-router",
@@ -6416,6 +6479,22 @@
       ],
       "$conditionOutputs": [
         {
+          "id": "cond_cpf_exist_menu_gineco",
+          "stateId": "smart-router",
+          "typeOfStateId": "state",
+          "$connId": "con_cpf_smart_menu_gineco",
+          "conditions": [
+            {
+              "source": "context",
+              "variable": "userCpf",
+              "comparison": "exists",
+              "values": []
+            }
+          ],
+          "$invalid": false,
+          "$id": "cid_cpf_smart_menu_gineco"
+        },
+        {
           "id": "cond_exist_menu_gineco",
           "stateId": "smart-router",
           "typeOfStateId": "state",
@@ -6730,6 +6809,22 @@
         }
       ],
       "$conditionOutputs": [
+        {
+          "id": "cond_cpf_exist_menu_oftalmo",
+          "stateId": "smart-router",
+          "typeOfStateId": "state",
+          "$connId": "con_cpf_smart_menu_oftalmo",
+          "conditions": [
+            {
+              "source": "context",
+              "variable": "userCpf",
+              "comparison": "exists",
+              "values": []
+            }
+          ],
+          "$invalid": false,
+          "$id": "cid_cpf_smart_menu_oftalmo"
+        },
         {
           "id": "cond_exist_menu_oftalmo",
           "stateId": "smart-router",
@@ -7052,6 +7147,22 @@
       ],
       "$conditionOutputs": [
         {
+          "id": "cond_cpf_exist_menu_uro",
+          "stateId": "smart-router",
+          "typeOfStateId": "state",
+          "$connId": "con_cpf_smart_menu_uro",
+          "conditions": [
+            {
+              "source": "context",
+              "variable": "userCpf",
+              "comparison": "exists",
+              "values": []
+            }
+          ],
+          "$invalid": false,
+          "$id": "cid_cpf_smart_menu_uro"
+        },
+        {
           "id": "cond_exist_menu_uro",
           "stateId": "smart-router",
           "typeOfStateId": "state",
@@ -7364,6 +7475,22 @@
       ],
       "$conditionOutputs": [
         {
+          "id": "cond_cpf_exist_menu_vascular",
+          "stateId": "smart-router",
+          "typeOfStateId": "state",
+          "$connId": "con_cpf_smart_menu_vascular",
+          "conditions": [
+            {
+              "source": "context",
+              "variable": "userCpf",
+              "comparison": "exists",
+              "values": []
+            }
+          ],
+          "$invalid": false,
+          "$id": "cid_cpf_smart_menu_vascular"
+        },
+        {
           "id": "cond_exist_menu_vascular",
           "stateId": "smart-router",
           "typeOfStateId": "state",
@@ -7675,6 +7802,22 @@
       ],
       "$conditionOutputs": [
         {
+          "id": "cond_cpf_exist_menu_gastro",
+          "stateId": "smart-router",
+          "typeOfStateId": "state",
+          "$connId": "con_cpf_smart_menu_gastro",
+          "conditions": [
+            {
+              "source": "context",
+              "variable": "userCpf",
+              "comparison": "exists",
+              "values": []
+            }
+          ],
+          "$invalid": false,
+          "$id": "cid_cpf_smart_menu_gastro"
+        },
+        {
           "id": "cond_exist_menu_gastro",
           "stateId": "smart-router",
           "typeOfStateId": "state",
@@ -7976,6 +8119,22 @@
       ],
       "$conditionOutputs": [
         {
+          "id": "cond_cpf_exist_menu_neuro",
+          "stateId": "smart-router",
+          "typeOfStateId": "state",
+          "$connId": "con_cpf_smart_menu_neuro",
+          "conditions": [
+            {
+              "source": "context",
+              "variable": "userCpf",
+              "comparison": "exists",
+              "values": []
+            }
+          ],
+          "$invalid": false,
+          "$id": "cid_cpf_smart_menu_neuro"
+        },
+        {
           "id": "cond_exist_menu_neuro",
           "stateId": "smart-router",
           "typeOfStateId": "state",
@@ -8276,6 +8435,22 @@
       ],
       "$conditionOutputs": [
         {
+          "id": "cond_cpf_exist_menu_digestivo",
+          "stateId": "smart-router",
+          "typeOfStateId": "state",
+          "$connId": "con_cpf_smart_menu_digestivo",
+          "conditions": [
+            {
+              "source": "context",
+              "variable": "userCpf",
+              "comparison": "exists",
+              "values": []
+            }
+          ],
+          "$invalid": false,
+          "$id": "cid_cpf_smart_menu_digestivo"
+        },
+        {
           "id": "cond_exist_menu_digestivo",
           "stateId": "smart-router",
           "typeOfStateId": "state",
@@ -8575,6 +8750,22 @@
         }
       ],
       "$conditionOutputs": [
+        {
+          "id": "cond_cpf_exist_menu_clinicageral",
+          "stateId": "smart-router",
+          "typeOfStateId": "state",
+          "$connId": "con_cpf_smart_menu_clinicageral",
+          "conditions": [
+            {
+              "source": "context",
+              "variable": "userCpf",
+              "comparison": "exists",
+              "values": []
+            }
+          ],
+          "$invalid": false,
+          "$id": "cid_cpf_smart_menu_clinicageral"
+        },
         {
           "id": "cond_exist_menu_clinicageral",
           "stateId": "smart-router",
@@ -8895,6 +9086,22 @@
         }
       ],
       "$conditionOutputs": [
+        {
+          "id": "cond_cpf_exist_menu_carlos",
+          "stateId": "smart-router",
+          "typeOfStateId": "state",
+          "$connId": "con_cpf_smart_menu_carlos",
+          "conditions": [
+            {
+              "source": "context",
+              "variable": "userCpf",
+              "comparison": "exists",
+              "values": []
+            }
+          ],
+          "$invalid": false,
+          "$id": "cid_cpf_smart_menu_carlos"
+        },
         {
           "id": "cond_exist_menu_carlos",
           "stateId": "smart-router",
