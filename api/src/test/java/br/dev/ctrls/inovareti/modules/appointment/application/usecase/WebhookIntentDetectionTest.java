@@ -22,9 +22,9 @@ class WebhookIntentDetectionTest {
     // =========================================================================
     @ParameterizedTest
     @ValueSource(strings = {
-        "1", "1️⃣", "sim", "SIM", "confirmar", "CONFIRMAR", "confirmo", "confirmado", "confirma",
-        "presença", "presenca", "confirmar presença", "confirmar presenca", "opção 1", "opcao 1",
-        "1 - confirmar", "1.", "1 ", "confirmar!", "Sim."
+        "sim", "SIM", "confirmar", "CONFIRMAR", "confirmo", "confirmado", "confirma",
+        "presença", "presenca", "confirmar presença", "confirmar presenca",
+        "confirmar!", "Sim."
     })
     void testValidConfirmations(String text) {
         assertEquals(WebhookIntent.CONFIRM, HandleBlipWebhookUseCase.detectIntent(text), "Falha ao classificar como CONFIRM: " + text);
@@ -36,13 +36,25 @@ class WebhookIntentDetectionTest {
     // =========================================================================
     @ParameterizedTest
     @ValueSource(strings = {
-        "2", "2️⃣", "alterar", "ALTERAR", "remarcar", "trocar",
-        "solicitar alteração", "solicitar alteracao", "preciso alterar", "opção 2", "opcao 2",
-        "2 - alterar", "2.", "2 ", "alterar!"
+        "alterar", "ALTERAR", "remarcar", "trocar",
+        "solicitar alteração", "solicitar alteracao", "preciso alterar", "quero remarcar", "quero alterar",
+        "alterar!"
     })
     void testValidAlterations(String text) {
         assertEquals(WebhookIntent.ALTER, HandleBlipWebhookUseCase.detectIntent(text), "Falha ao classificar como ALTER: " + text);
         assertTrue(BlipWebhookController.isConfirmationOrAlterationIntentText(text), "Falha no bypass do Controller para: " + text);
+    }
+
+    // =========================================================================
+    // B2. Proteção de Menus Numéricos (Deve retornar UNKNOWN / false para não quebrar fluxo do bot)
+    // =========================================================================
+    @ParameterizedTest
+    @ValueSource(strings = {
+        "1", "1️⃣", "2", "2️⃣", "opcao 1", "opção 1", "opcao 2", "opção 2", "1.", "2.", "1 ", "2 "
+    })
+    void testNumericMenuProtection(String text) {
+        assertEquals(WebhookIntent.UNKNOWN, HandleBlipWebhookUseCase.detectIntent(text), "Número isolado não deve disparar webhook: " + text);
+        assertFalse(BlipWebhookController.isConfirmationOrAlterationIntentText(text), "Controller não deve interceptar número isolado: " + text);
     }
 
     // =========================================================================
