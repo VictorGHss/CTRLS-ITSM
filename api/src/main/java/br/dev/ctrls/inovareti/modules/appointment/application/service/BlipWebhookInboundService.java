@@ -61,12 +61,13 @@ public class BlipWebhookInboundService {
                 asText(getNested(payload, "message", "type")));
 
         String from = extractFrom(payload);
-        String action = extractActionText(payload, messageType);
+        String rawAction = extractActionText(payload, messageType);
+        String action = extractCleanActionText(rawAction);
         String messageId = extractMessageId(payload);
         String appointmentId = extractAppointmentId(payload);
         String bsuid = extractBsuid(payload);
 
-        if (!org.springframework.util.StringUtils.hasText(action) || "Ver Agendamentos".equals(action.trim())) {
+        if (!org.springframework.util.StringUtils.hasText(action) || "Ver Agendamentos".equalsIgnoreCase(action.trim()) || "Ver Agenda".equalsIgnoreCase(action.trim())) {
             String messageText = firstNonBlank(
                     asText(getNested(payload, "content", "text")),
                     asText(getNested(payload, "content")),
@@ -75,7 +76,8 @@ public class BlipWebhookInboundService {
                     asText(getNested(payload, "message", "content", "text")),
                     asText(getNested(payload, "message", "content"))
             );
-            if (messageText != null && "Ver Agendamentos".equals(messageText.trim())) {
+            messageText = extractCleanActionText(messageText);
+            if (messageText != null && ("Ver Agendamentos".equalsIgnoreCase(messageText.trim()) || "Ver Agenda".equalsIgnoreCase(messageText.trim()))) {
                 action = "group_view_fallback";
             }
         }
@@ -371,17 +373,57 @@ public class BlipWebhookInboundService {
         return action;
     }
 
+    public String extractCleanActionText(String action) {
+        if (!StringUtils.hasText(action)) return action;
+        String trimmed = action.trim();
+        String[] lines = trimmed.split("\\r?\\n");
+        if (lines.length > 1) {
+            for (int i = lines.length - 1; i >= 0; i--) {
+                String line = lines[i].trim();
+                if (!line.isBlank()) {
+                    String lineLower = line.toLowerCase();
+                    if (lineLower.equals("confirmar")
+                            || lineLower.equals("confirmar presença")
+                            || lineLower.equals("confirmar presenca")
+                            || lineLower.equals("confirmo")
+                            || lineLower.equals("alterar")
+                            || lineLower.equals("solicitar alteração")
+                            || lineLower.equals("solicitar alteracao")
+                            || lineLower.equals("remarcar")
+                            || lineLower.equals("ver agendamentos")
+                            || lineLower.equals("ver agenda")) {
+                        return line;
+                    }
+                }
+            }
+        }
+        return trimmed;
+    }
+
     private boolean isBreadcrumbAction(String action) {
         return isConfirmAction(action) || isAlterAction(action);
     }
 
     private boolean isConfirmAction(String action) {
-        return "Confirmar Presença".equalsIgnoreCase(action);
+        if (!StringUtils.hasText(action)) return false;
+        String clean = extractCleanActionText(action).toLowerCase();
+        return clean.equals("confirmar presença")
+                || clean.equals("confirmar presenca")
+                || clean.equals("confirmar")
+                || clean.equals("confirmo")
+                || clean.equals("sim")
+                || clean.equals("1");
     }
 
     private boolean isAlterAction(String action) {
-        return "Solicitar Alteração".equalsIgnoreCase(action)
-                || "Solicitar Alteracao".equalsIgnoreCase(action);
+        if (!StringUtils.hasText(action)) return false;
+        String clean = extractCleanActionText(action).toLowerCase();
+        return clean.equals("solicitar alteração")
+                || clean.equals("solicitar alteracao")
+                || clean.equals("alterar")
+                || clean.equals("remarcar")
+                || clean.equals("trocar")
+                || clean.equals("2");
     }
 
     private String firstNonBlank(String... values) {
