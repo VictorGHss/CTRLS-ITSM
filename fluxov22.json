@@ -9144,6 +9144,285 @@
       "$invalidContentActions": false,
       "$invalidOutputs": false,
       "$invalidCustomActions": false
+    },
+    "b3461299-9500-46b1-b423-12ffef3e1aba": {
+      "$contentActions": [
+        {
+          "input": {
+            "bypass": true,
+            "$cardContent": {
+              "document": {
+                "id": "b6ee3c8f-1e4b-4446-85c1-f68a69f1dbe5",
+                "type": "text/plain",
+                "textContent": "Entrada do usuário",
+                "content": "Entrada do usuário"
+              },
+              "editable": false,
+              "deletable": true,
+              "position": "right",
+              "editing": false
+            },
+            "$invalid": false
+          },
+          "$invalid": false
+        },
+        {
+          "action": {
+            "$id": "c6d3285e-c15f-4ee3-ab52-ca76ded86fab",
+            "$typeOfContent": "chat-state",
+            "$description": "",
+            "$inputSchema": {
+              "type": "object",
+              "properties": {},
+              "required": []
+            },
+            "type": "SendMessage",
+            "settings": {
+              "id": "df2de605-9e0a-46af-b61b-e6bfc5f10ea9",
+              "type": "application/vnd.lime.chatstate+json",
+              "content": {
+                "state": "composing",
+                "interval": 1000
+              },
+              "metadata": {
+                "#stateName": "{{state.name}}",
+                "#stateId": "{{state.id}}",
+                "#messageId": "{{input.message@id}}",
+                "#previousStateId": "{{state.previous.id}}",
+                "#previousStateName": "{{state.previous.name}}"
+              }
+            },
+            "$cardContent": {
+              "document": {
+                "id": "df2de605-9e0a-46af-b61b-e6bfc5f10ea9",
+                "type": "application/vnd.lime.chatstate+json",
+                "content": {
+                  "state": "composing",
+                  "interval": 1000
+                }
+              },
+              "editable": true,
+              "deletable": true,
+              "position": "left"
+            }
+          },
+          "$invalid": false
+        },
+        {
+          "action": {
+            "$id": "d2332833-f57f-4767-8fd9-d2e29d811d56",
+            "$typeOfContent": "send-location",
+            "$description": "",
+            "$inputSchema": {
+              "type": "object",
+              "properties": {},
+              "required": []
+            },
+            "type": "SendMessage",
+            "settings": {
+              "id": "08d782d2-1b2c-4c11-b1fb-afefd43a6c73",
+              "type": "application/vnd.lime.location+json",
+              "content": {
+                "latitude": "-25.102557",
+                "longitude": "-50.159539",
+                "altitude": 853,
+                "text": "R. Carlos Osternack, 111 - Estrela, Ponta Grossa - PR, 84040-120"
+              },
+              "metadata": {
+                "#stateName": "{{state.name}}",
+                "#stateId": "{{state.id}}",
+                "#messageId": "{{input.message@id}}",
+                "#previousStateId": "{{state.previous.id}}",
+                "#previousStateName": "{{state.previous.name}}"
+              }
+            },
+            "$cardContent": {
+              "document": {
+                "id": "08d782d2-1b2c-4c11-b1fb-afefd43a6c73",
+                "type": "application/vnd.lime.location+json",
+                "content": {
+                  "latitude": "-25.102557",
+                  "longitude": "-50.159539",
+                  "altitude": 853,
+                  "text": "R. Carlos Osternack, 111 - Estrela, Ponta Grossa - PR, 84040-120"
+                }
+              },
+              "editable": true,
+              "deletable": true,
+              "position": "left"
+            }
+          },
+          "$invalid": false
+        },
+        {
+          "action": {
+            "$id": "e6f23e74-f2af-493f-a63b-d9887192f966",
+            "$typeOfContent": "text",
+            "$description": "",
+            "$inputSchema": {
+              "type": "object",
+              "properties": {},
+              "required": []
+            },
+            "type": "SendMessage",
+            "settings": {
+              "id": "ec620520-c760-4399-a2eb-17f915164dd7",
+              "type": "text/plain",
+              "content": "*AGENDAMENTO CONFIRMADO!* ✅\n\nSua consulta na Clínica Inovare está confirmada. Para garantir um atendimento ágil e pontual:\n\n🚨 *INFORMAÇÕES DE ACESSO:*\n• *Documentos:* É obrigatória a apresentação de *RG e CPF* (paciente e acompanhante) na recepção do prédio.\n• *Pontualidade:* Chegue com *10 minutos de antecedência*. Nossos médicos não realizam atendimentos com atrasos; caso ultrapasse o tempo de tolerância, a consulta será reagendada.\n\nAté logo! 😊",
+              "metadata": {
+                "#stateName": "{{state.name}}",
+                "#stateId": "{{state.id}}",
+                "#messageId": "{{input.message@id}}",
+                "#previousStateId": "{{state.previous.id}}",
+                "#previousStateName": "{{state.previous.name}}"
+              }
+            },
+            "$cardContent": {
+              "document": {
+                "id": "ec620520-c760-4399-a2eb-17f915164dd7",
+                "type": "text/plain",
+                "content": "*AGENDAMENTO CONFIRMADO!* ✅\n\nSua consulta na Clínica Inovare está confirmada. Para garantir um atendimento ágil e pontual:\n\n🚨 *INFORMAÇÕES DE ACESSO:*\n• *Documentos:* É obrigatória a apresentação de *RG e CPF* (paciente e acompanhante) na recepção do prédio.\n• *Pontualidade:* Chegue com *10 minutos de antecedência*. Nossos médicos não realizam atendimentos com atrasos; caso ultrapasse o tempo de tolerância, a consulta será reagendada.\n\nAté logo! 😊"
+              },
+              "editable": true,
+              "deletable": true,
+              "position": "left"
+            }
+          },
+          "$invalid": false
+        },
+        {
+          "action": {
+            "$id": "f0b9a1eb-3d70-4281-a3b0-a42f876fa8e7",
+            "$typeOfContent": "chat-state",
+            "$description": "",
+            "$inputSchema": {
+              "type": "object",
+              "properties": {},
+              "required": []
+            },
+            "type": "SendMessage",
+            "settings": {
+              "id": "52bb927c-5611-4f4b-a7d8-4bf5fc8cbd06",
+              "type": "application/vnd.lime.chatstate+json",
+              "content": {
+                "state": "composing",
+                "interval": 1000
+              },
+              "metadata": {
+                "#stateName": "{{state.name}}",
+                "#stateId": "{{state.id}}",
+                "#messageId": "{{input.message@id}}",
+                "#previousStateId": "{{state.previous.id}}",
+                "#previousStateName": "{{state.previous.name}}"
+              }
+            },
+            "$cardContent": {
+              "document": {
+                "id": "52bb927c-5611-4f4b-a7d8-4bf5fc8cbd06",
+                "type": "application/vnd.lime.chatstate+json",
+                "content": {
+                  "state": "composing",
+                  "interval": 1000
+                }
+              },
+              "editable": true,
+              "deletable": true,
+              "position": "left"
+            }
+          },
+          "$invalid": false
+        }
+      ],
+      "$conditionOutputs": [
+        {
+          "stateId": "2f2a77dd-f2c7-428f-bc1d-683a1ce22ca3",
+          "typeOfStateId": "state",
+          "$connId": "con_573",
+          "$id": "f943e2c4-fb53-4151-b1a9-7b097a8563e1",
+          "conditions": [
+            {
+              "source": "context",
+              "comparison": "contains",
+              "values": [
+                "42991617187",
+                "42988113109",
+                "42984270489",
+                "42984348220",
+                "42988253100",
+                "42991336618",
+                "42998289100"
+              ],
+              "variable": "contact.phoneNumber"
+            }
+          ],
+          "$isBuilderDefaultOutput": true,
+          "$invalid": false
+        }
+      ],
+      "$enteringCustomActions": [
+        {
+          "$id": "http-confirm-group-webhook",
+          "$typeOfContent": "",
+          "$description": "",
+          "$inputSchema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+          },
+          "type": "ProcessHttp",
+          "$title": "Notificar Confirmacao ao Java ITSM",
+          "$invalid": false,
+          "settings": {
+            "headers": {
+              "Content-Type": "application/json",
+              "X-Inovare-Token": "aW5vdmFyZV9hZ2VuZGFtZW50b19zZWNyZXQ="
+            },
+            "method": "POST",
+            "body": "{\n  \"action\": \"CONFIRMAR_AGENDAMENTO\",\n  \"from\": \"{{contact.identity}}\",\n  \"phoneNumber\": \"{{contact.phoneNumber}}\",\n  \"groupId\": \"{{context.groupId}}\",\n  \"category\": \"group_confirmation\"\n}",
+            "uri": "https://itsm-inovare.ctrls.dev.br/api/webhooks/blip"
+          },
+          "conditions": []
+        },
+        {
+          "$id": "e3b8be42-5621-4317-9165-06eeaaadbb47",
+          "$typeOfContent": "",
+          "$description": "",
+          "$inputSchema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+          },
+          "type": "SetVariable",
+          "$title": "Definir variável isConfirmingAgenda",
+          "$invalid": false,
+          "settings": {
+            "variable": "isConfirmingAgenda",
+            "value": "false"
+          },
+          "conditions": []
+        }
+      ],
+      "$leavingCustomActions": [],
+      "$inputSuggestions": [],
+      "$defaultOutput": {
+        "stateId": "onboarding",
+        "$invalid": false,
+        "typeOfStateId": "state"
+      },
+      "$localCustomActions": [],
+      "isAiGenerated": false,
+      "$tags": [],
+      "id": "b3461299-9500-46b1-b423-12ffef3e1aba",
+      "root": false,
+      "$title": "Sucesso_Confirmacao",
+      "$position": {
+        "top": "1585px",
+        "left": "358px"
+      },
+      "$invalidContentActions": false,
+      "$invalidOutputs": false,
+      "$invalidCustomActions": false,
+      "$invalid": false
     }
   }
 }

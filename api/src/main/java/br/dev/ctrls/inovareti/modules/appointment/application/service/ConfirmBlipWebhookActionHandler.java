@@ -44,6 +44,15 @@ public class ConfirmBlipWebhookActionHandler implements BlipWebhookActionHandler
     private final BlipProperties blipProperties;
     private final PatientExternalPort patientExternalPort;
     private final br.dev.ctrls.inovareti.modules.appointment.domain.port.output.DoctorConfigurationRepository doctorConfigurationRepository;
+    private final BlipNotificationService blipNotificationService;
+
+    public static final String CONFIRMATION_SUCCESS_MESSAGE = "*AGENDAMENTO CONFIRMADO!* ✅\n\n"
+            + "Sua consulta na Clínica Inovare está confirmada. Para garantir um atendimento ágil e pontual:\n\n"
+            + "🚨 *INFORMAÇÕES DE ACESSO:*\n"
+            + "• *Documentos:* É obrigatória a apresentação de *RG e CPF* (paciente e acompanhante) na recepção do prédio.\n"
+            + "• *Pontualidade:* Chegue com *10 minutos de antecedência*. Nossos médicos não realizam atendimentos com atrasos; caso ultrapasse o tempo de tolerância, a consulta será reagendada.\n\n"
+            + "📍 *Endereço:* R. Carlos Osternack, 111 - Estrela, Ponta Grossa - PR, 84040-120\n\n"
+            + "Até logo! 😊";
 
     @Override
     public boolean supports(String actionType) {
@@ -385,6 +394,26 @@ public class ConfirmBlipWebhookActionHandler implements BlipWebhookActionHandler
                     }
                 }
                 log.info("[CONFIRM-BATCH] Sessões do grupo {} / telefone {} atualizadas para CONFIRMED no banco local. Total: {}", groupId, userPhone, sessoesUnicas.size());
+
+                // Entrega direta e garantida da mensagem oficial de confirmação via WhatsApp para o grupo
+                try {
+                    String targetPhone = (fromIdentity != null && !fromIdentity.isBlank()) ? fromIdentity : userPhone;
+                    blipNotificationService.sendPlainTextMessage(targetPhone, CONFIRMATION_SUCCESS_MESSAGE);
+                    log.info("[CONFIRM-BATCH] Mensagem de confirmação de agendamento em lote entregue com sucesso via WhatsApp para {}", targetPhone);
+                } catch (Exception msgEx) {
+                    log.warn("[CONFIRM-BATCH] Falha ao enviar mensagem de confirmação via WhatsApp para {}: {}", userPhone, msgEx.getMessage());
+                }
+
+                try {
+                    blipContextService.setUserContextForUser(userPhone, "isConfirmingAgenda", "false");
+                    blipContextService.setUserContextForUser(userPhone, "hasActiveAppointment", "false");
+                    if (fromIdentity != null && !fromIdentity.isBlank() && !fromIdentity.equalsIgnoreCase(userPhone)) {
+                        blipContextService.setUserContextForUser(fromIdentity, "isConfirmingAgenda", "false");
+                        blipContextService.setUserContextForUser(fromIdentity, "hasActiveAppointment", "false");
+                    }
+                } catch (Exception ctxEx) {
+                    log.debug("[CONFIRM-BATCH] Falha ao limpar variáveis de contexto pós-confirmação: {}", ctxEx.getMessage());
+                }
             } catch (Exception e) {
                 log.error("[CONFIRM-BATCH] Erro ao atualizar estados do grupo de sessões no banco local. grupo={}", groupIdStr, e);
             }
@@ -639,6 +668,27 @@ public class ConfirmBlipWebhookActionHandler implements BlipWebhookActionHandler
                 throw new RuntimeException("Falha na atualização do Feegow para o agendamento " + session.getFeegowAppointmentId() + ". Cancelando confirmação local (rollback).", ex);
             }
             confirmationStateMachineService.markConfirmed(session);
+
+            // Entrega direta e garantida da mensagem oficial de confirmação via WhatsApp
+            try {
+                String targetPhone = (fromIdentity != null && !fromIdentity.isBlank()) ? fromIdentity : userPhone;
+                blipNotificationService.sendPlainTextMessage(targetPhone, CONFIRMATION_SUCCESS_MESSAGE);
+                log.info("[CONFIRM] Mensagem de confirmação de agendamento entregue com sucesso via WhatsApp para {}", targetPhone);
+            } catch (Exception msgEx) {
+                log.warn("[CONFIRM] Falha ao enviar mensagem de confirmação via WhatsApp para {}: {}", userPhone, msgEx.getMessage());
+            }
+
+            // Libera o estado do paciente no Blip para que não fique travado aguardando interação
+            try {
+                blipContextService.setUserContextForUser(userPhone, "isConfirmingAgenda", "false");
+                blipContextService.setUserContextForUser(userPhone, "hasActiveAppointment", "false");
+                if (fromIdentity != null && !fromIdentity.isBlank() && !fromIdentity.equalsIgnoreCase(userPhone)) {
+                    blipContextService.setUserContextForUser(fromIdentity, "isConfirmingAgenda", "false");
+                    blipContextService.setUserContextForUser(fromIdentity, "hasActiveAppointment", "false");
+                }
+            } catch (Exception ctxEx) {
+                log.debug("[CONFIRM] Falha ao limpar variáveis de contexto pós-confirmação: {}", ctxEx.getMessage());
+            }
         }
     }
 
