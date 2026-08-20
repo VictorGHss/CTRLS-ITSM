@@ -284,18 +284,11 @@ public class IngestAppointmentsUseCase {
                     String procId = a.procedureId();
                     String procName = a.procedureName();
 
-                    // Se o nome do procedimento for "Consulta" ou começar com "Consulta", é SEMPRE elegível
-                    if (procName != null && (procName.trim().equalsIgnoreCase("Consulta") || procName.trim().toLowerCase().startsWith("consulta"))) {
-                        return true;
+                    boolean eligible = isProcedureEligible(procId, procName, eligibleProcedureIdsList);
+                    if (!eligible) {
+                        log.info("[FILTRO-PROCEDIMENTO] Agendamento ID={} ignorado porque o procedimento_id '{}' (nome: '{}') não é elegível para confirmação.", a.id(), procId, procName);
                     }
-
-                    // Se o ID do procedimento estiver na lista explícita de procedimentos elegíveis
-                    if (procId != null && !procId.isBlank() && eligibleProcedureIdsList.contains(procId.trim())) {
-                        return true;
-                    }
-
-                    log.info("[FILTRO-PROCEDIMENTO] Agendamento ID={} ignorado porque o procedimento_id '{}' (nome: '{}') não está na lista de procedimentos elegíveis e não é uma consulta.", a.id(), procId, procName);
-                    return false;
+                    return eligible;
                 })
                 .collect(Collectors.toList());
         int aposProcedimentos = appointments.size();
@@ -1224,6 +1217,69 @@ public class IngestAppointmentsUseCase {
             digitsOnly = digitsOnly.substring(1);
         }
         return digitsOnly;
+    }
+
+    private static final java.util.List<String> ALLOWED_PROCEDURE_KEYWORDS = java.util.List.of(
+        "mano", "phmetria", "impedancia", "teste de contato", "teste cutaneo",
+        "leitura de teste", "mostra de exames", "telemedicina", "consulta", "antecipar",
+        "emergencia", "dilatacao pre refrativa", "pontos", "aplicacao", "pintar",
+        "exame", "curativo", "avaliacao", "retirada do dreno", "botox", "conversar cirurgia",
+        "retirada de pontos", "acertar cirurgia", "lobuloplastia", "laser co2", "infiltracao",
+        "pulsao", "puncao", "viscossuplementacao", "toc", "primeira consulta", "guiados por usg",
+        "skin booster", "intradermoterapia", "preenchimento", "microagulhamento", "excisao e sutura",
+        "retorno", "bioestimulador", "electroagulacao", "eletrocoagulacao", "exerese e sutura",
+        "biopsia", "intradermo capilar", "peeling"
+    );
+
+    public static boolean isProcedureEligible(String procId, String procName, java.util.List<String> eligibleProcedureIdsList) {
+        if (procName != null) {
+            String norm = java.text.Normalizer.normalize(procName, java.text.Normalizer.Form.NFD)
+                    .replaceAll("\\p{M}", "")
+                    .toLowerCase()
+                    .trim();
+
+            // BLOQUEIO ESTRITO DE CIRURGIAS (ex: CIRURGIAS MU, CIRURGIAS MAR, CIRURGIA DR. MURILO, etc.)
+            // Exceto especificamente "conversar cirurgia", "acertar cirurgia" e retornos pós-cirúrgicos
+            if (norm.contains("cirurg")) {
+                boolean isExemption = norm.contains("conversar cirurgia")
+                        || norm.contains("acertar cirurgia")
+                        || norm.contains("retorno");
+                if (!isExemption) {
+                    return false;
+                }
+            }
+
+            // Exclusões explícitas de agendas cirúrgicas de médicos
+            if (norm.contains("cirurgias mu") || norm.contains("cirurgias mar") || norm.contains("cirurgia dr") || norm.contains("cirurgias dr")) {
+                return false;
+            }
+
+            // Se for consulta ou retorno padrão, é elegível
+            if (norm.startsWith("consulta") || norm.equals("consulta") || norm.startsWith("retorno") || norm.equals("retorno")) {
+                return true;
+            }
+        }
+
+        // Se o ID estiver na lista de IDs elegíveis
+        if (procId != null && !procId.isBlank() && eligibleProcedureIdsList != null && eligibleProcedureIdsList.contains(procId.trim())) {
+            return true;
+        }
+
+        // Se o nome corresponder a qualquer termo da lista permitida
+        if (procName != null) {
+            String norm = java.text.Normalizer.normalize(procName, java.text.Normalizer.Form.NFD)
+                    .replaceAll("\\p{M}", "")
+                    .toLowerCase()
+                    .trim();
+
+            for (String allowed : ALLOWED_PROCEDURE_KEYWORDS) {
+                if (norm.contains(allowed)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     public record IngestionSummary(int totalReceived, int filteredReceived, int sessionsCreated, int messagesSent, String mode) {

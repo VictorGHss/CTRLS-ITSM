@@ -722,11 +722,26 @@ public class HandleBlipWebhookUseCase {
         );
     }
 
+    public static boolean isWithinBusinessHours() {
+        java.time.ZonedDateTime now = java.time.ZonedDateTime.now(java.time.ZoneId.of("America/Sao_Paulo"));
+        java.time.DayOfWeek day = now.getDayOfWeek();
+        if (day == java.time.DayOfWeek.SATURDAY || day == java.time.DayOfWeek.SUNDAY) {
+            return false;
+        }
+        java.time.LocalTime time = now.toLocalTime();
+        return !time.isBefore(java.time.LocalTime.of(7, 0)) && !time.isAfter(java.time.LocalTime.of(18, 30));
+    }
+
     public WebhookResult applySilentDeskRouting(String fromPhone) {
         return applySilentDeskRouting(fromPhone, null);
     }
 
     public WebhookResult applySilentDeskRouting(String fromPhone, BlipWebhookPayload payload) {
+        if (!isWithinBusinessHours()) {
+            log.info("[DESK-ROUTING] Solicitação de transbordo recebida fora do expediente (07:00 às 18:30). Não criando ticket no Desk para o contato: {}", fromPhone);
+            return new WebhookResult("", "", "", "", "out_of_hours_ignored", "");
+        }
+
         log.info("[DESK-ROUTING] Processando transbordo para Desk/Atendimento Humano para o contato: {}", fromPhone);
         
         // 1. Limpa sincronamente variáveis de contexto de confirmação em ambos os escopos (Master e Túnel)
@@ -1103,25 +1118,19 @@ public class HandleBlipWebhookUseCase {
             }
         }
 
-        // 3. Casamento Estrito (Exact Match)
+        // 3. Casamento Estrito por Palavras-Chave de Intenção Inequívoca
+        // ATENÇÃO: Dígitos isolados ("1", "2") e opções numéricas NÃO são interceptados aqui para evitar falsos positivos
+        // em menus interativos e navegação do robô (onde o paciente digita números para escolher especialidades/serviços).
         return switch (cleaned) {
-            case "1", "1️⃣", "sim", "confirmar", "confirmo", "confirmado", "confirma",
-                 "presença", "presenca", "confirmar presença", "confirmar presenca", "opcao 1", "opção 1" -> WebhookIntent.CONFIRM;
+            case "sim", "confirmar", "confirmo", "confirmado", "confirma",
+                 "presença", "presenca", "confirmar presença", "confirmar presenca", "sim confirmo" -> WebhookIntent.CONFIRM;
 
             case "cancelar", "cancel" -> WebhookIntent.CANCEL;
 
-            case "2", "2️⃣", "alterar", "remarcar", "trocar",
-                 "solicitar alteração", "solicitar alteracao", "preciso alterar", "opcao 2", "opção 2" -> WebhookIntent.ALTER;
+            case "alterar", "remarcar", "trocar",
+                 "solicitar alteração", "solicitar alteracao", "preciso alterar", "quero remarcar", "quero alterar" -> WebhookIntent.ALTER;
 
-            default -> {
-                if (cleaned.startsWith("1 ") || cleaned.startsWith("1-") || cleaned.startsWith("1.")) {
-                    yield WebhookIntent.CONFIRM;
-                }
-                if (cleaned.startsWith("2 ") || cleaned.startsWith("2-") || cleaned.startsWith("2.")) {
-                    yield WebhookIntent.ALTER;
-                }
-                yield WebhookIntent.UNKNOWN;
-            }
+            default -> WebhookIntent.UNKNOWN;
         };
     }
 

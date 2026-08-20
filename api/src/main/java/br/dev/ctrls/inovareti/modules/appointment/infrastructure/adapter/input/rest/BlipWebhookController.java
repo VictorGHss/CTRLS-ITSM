@@ -676,18 +676,12 @@ public class BlipWebhookController {
 
         // 3. Casamento Estrito (Exact Match)
         return switch (cleaned) {
-            case "1", "1️⃣", "sim", "confirmar", "confirmo", "confirmado", "confirma",
-                 "presença", "presenca", "confirmar presença", "confirmar presenca", "opcao 1", "opção 1",
-                 "2", "2️⃣", "alterar", "remarcar", "trocar",
-                 "solicitar alteração", "solicitar alteracao", "preciso alterar", "opcao 2", "opção 2",
+            case "sim", "confirmar", "confirmo", "confirmado", "confirma",
+                 "presença", "presenca", "confirmar presença", "confirmar presenca", "sim confirmo",
+                 "alterar", "remarcar", "trocar",
+                 "solicitar alteração", "solicitar alteracao", "preciso alterar", "quero remarcar", "quero alterar",
                  "cancelar", "cancel" -> true;
-            default -> {
-                if (cleaned.startsWith("1 ") || cleaned.startsWith("1-") || cleaned.startsWith("1.") ||
-                    cleaned.startsWith("2 ") || cleaned.startsWith("2-") || cleaned.startsWith("2.")) {
-                    yield true;
-                }
-                yield false;
-            }
+            default -> false;
         };
     }
 

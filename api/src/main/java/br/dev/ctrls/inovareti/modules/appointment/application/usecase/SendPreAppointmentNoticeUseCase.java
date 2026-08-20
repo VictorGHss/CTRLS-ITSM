@@ -108,12 +108,14 @@ public class SendPreAppointmentNoticeUseCase {
                                 log.info("[LEMBRETE-ANTECEDENCIA] Abortando envio para sessão ID={} (Feegow ID={}) pois é um ENCAIXE.", session.getId(), session.getFeegowAppointmentId());
                                 continue;
                             }
-                            boolean isConsulta = feegowAppt.procedureName() != null && 
-                                    (feegowAppt.procedureName().trim().equalsIgnoreCase("Consulta") || feegowAppt.procedureName().trim().toLowerCase().startsWith("consulta"));
-                            boolean isEligibleId = feegowAppt.procedureId() != null && eligibleProcedureIds.contains(feegowAppt.procedureId().trim());
+                            boolean isEligible = IngestAppointmentsUseCase.isProcedureEligible(
+                                    feegowAppt.procedureId(),
+                                    feegowAppt.procedureName(),
+                                    eligibleProcedureIds
+                            );
                             
-                            if (!isConsulta && !isEligibleId && !eligibleProcedureIds.isEmpty()) {
-                                log.info("[LEMBRETE-ANTECEDENCIA] Abortando envio para sessão ID={} (Feegow ID={}) pois o procedimento '{}' ({}) não é elegível para lembrete e não é consulta.",
+                            if (!isEligible) {
+                                log.info("[LEMBRETE-ANTECEDENCIA] Abortando envio para sessão ID={} (Feegow ID={}) pois o procedimento '{}' ({}) não é elegível para lembrete.",
                                         session.getId(), session.getFeegowAppointmentId(), feegowAppt.procedureId(), feegowAppt.procedureName());
                                 continue;
                             }
