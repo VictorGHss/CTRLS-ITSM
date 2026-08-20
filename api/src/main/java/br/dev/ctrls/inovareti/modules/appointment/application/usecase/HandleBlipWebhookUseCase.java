@@ -1102,13 +1102,25 @@ public class HandleBlipWebhookUseCase {
     public static WebhookIntent detectIntent(String text) {
         if (text == null || text.isBlank()) return WebhookIntent.UNKNOWN;
         
-        String rawTrimmed = text.trim().toLowerCase();
-        String cleaned = rawTrimmed.replaceAll("[^a-z0-9áàâãéèêíïóôõöúçñ\\s]", " ").replaceAll("\\s+", " ").trim();
+        String rawTrimmed = text.trim();
+        // Se for resposta encapsulada de template com múltiplas linhas, extrai a última linha não vazia
+        String[] lines = rawTrimmed.split("\\r?\\n");
+        if (lines.length > 1) {
+            for (int i = lines.length - 1; i >= 0; i--) {
+                String l = lines[i].trim();
+                if (!l.isBlank()) {
+                    rawTrimmed = l;
+                    break;
+                }
+            }
+        }
 
-        // 1. Regra de Tamanho: Se o texto tiver mais de 25 caracteres ou mais de 3 palavras, trate como UNKNOWN
-        if (cleaned.length() > 25) return WebhookIntent.UNKNOWN;
+        String cleaned = rawTrimmed.toLowerCase().replaceAll("[^a-z0-9áàâãéèêíïóôõöúçñ\\s]", " ").replaceAll("\\s+", " ").trim();
+
+        // 1. Regra de Tamanho: Se a linha tiver mais de 35 caracteres ou mais de 4 palavras, trate como UNKNOWN
+        if (cleaned.length() > 35) return WebhookIntent.UNKNOWN;
         String[] words = cleaned.split(" ");
-        if (words.length > 3) return WebhookIntent.UNKNOWN;
+        if (words.length > 4) return WebhookIntent.UNKNOWN;
 
         // 2. Guarda de Negação/Condicional: Se o texto contiver palavras de negação ou condição, retorne UNKNOWN
         for (String w : words) {
@@ -1119,8 +1131,6 @@ public class HandleBlipWebhookUseCase {
         }
 
         // 3. Casamento Estrito por Palavras-Chave de Intenção Inequívoca
-        // ATENÇÃO: Dígitos isolados ("1", "2") e opções numéricas NÃO são interceptados aqui para evitar falsos positivos
-        // em menus interativos e navegação do robô (onde o paciente digita números para escolher especialidades/serviços).
         return switch (cleaned) {
             case "sim", "confirmar", "confirmo", "confirmado", "confirma",
                  "presença", "presenca", "confirmar presença", "confirmar presenca", "sim confirmo" -> WebhookIntent.CONFIRM;

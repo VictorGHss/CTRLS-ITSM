@@ -284,13 +284,23 @@ public class BlipWebhookController {
         }
         // -----------------------------------------------------------------------------------------------
 
+        String category = null;
+        if (payload.get("category") != null) {
+            category = payload.get("category").toString();
+        } else if (payload.get("resource") instanceof Map<?, ?> resMap && resMap.get("category") != null) {
+            category = resMap.get("category").toString();
+        }
+        boolean isInternalFlow = "flow".equalsIgnoreCase(category);
+
         // Lock de estado: se o paciente estiver no fluxo de confirmacao e digitar texto livre, ignoramos e orientamos
         boolean isConfirming = false;
-        try {
-            String isConfirmingStr = blipContextService.getUserContext(from, "isConfirmingAgenda");
-            isConfirming = "true".equalsIgnoreCase(isConfirmingStr);
-        } catch (Exception e) {
-            log.warn("Erro ao buscar isConfirmingAgenda no contexto para {}: {}", from, e.getMessage());
+        if (!isInternalFlow) {
+            try {
+                String isConfirmingStr = blipContextService.getUserContext(from, "isConfirmingAgenda");
+                isConfirming = "true".equalsIgnoreCase(isConfirmingStr);
+            } catch (Exception e) {
+                log.warn("Erro ao buscar isConfirmingAgenda no contexto para {}: {}", from, e.getMessage());
+            }
         }
 
         if (isConfirming) {
@@ -314,6 +324,29 @@ public class BlipWebhookController {
             String actionValue = action != null ? action.trim() : "";
             String rawText = actionValue + " " + (content != null ? content.toString() : "");
             String rawActionTextLower = rawText.toLowerCase();
+
+            // Bloqueio de falsos positivos: Ações disparadas internamente por blocos do Builder nunca acionam State-Lock
+            boolean isInternalBotBlockAction = rawActionTextLower.contains("exceç")
+                || rawActionTextLower.contains("excec")
+                || rawActionTextLower.contains("erro padrão")
+                || rawActionTextLower.contains("erro padrao")
+                || rawActionTextLower.contains("contador de erros")
+                || rawActionTextLower.contains("cutucada")
+                || rawActionTextLower.contains("menu de setores")
+                || rawActionTextLower.contains("pré-atendimento")
+                || rawActionTextLower.contains("pre-atendimento")
+                || rawActionTextLower.contains("aviso para usuário em erros")
+                || rawActionTextLower.contains("menu decisão")
+                || rawActionTextLower.contains("menu decisao")
+                || rawActionTextLower.contains("voltar ao menu");
+
+            if (isInternalBotBlockAction) {
+                log.debug("[STATE-LOCK-SKIP] Ação interna de bloco do Builder '{}' ignorada para {}.", actionValue, from);
+                return ResponseEntity.ok(Map.of(
+                    "status", "processed",
+                    "reason", "internal-block-action-ignored"
+                ));
+            }
 
             String prepararUuid = blipProperties.getBlocks().getPrepararAtendimento();
             String exibirUuid = blipProperties.getBlocks().getExibirAgenda();
