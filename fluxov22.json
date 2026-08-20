@@ -5484,143 +5484,144 @@
         },
         {
           "action": {
-            "$id": "select_menu_ortopedia",
-            "$typeOfContent": "select-immediate",
+            "$id": "card_dynamic_menu_ortopedia",
+            "$typeOfContent": "dynamic",
             "type": "SendMessage",
             "settings": {
-              "id": "doc_select_menu_ortopedia",
-              "type": "application/vnd.lime.select+json",
+              "id": "doc_dynamic_menu_ortopedia",
+              "type": "application/json",
               "content": {
-                "text": "Encontramos os seguintes ortopedistas na Inovare. Toque na opção desejada:",
-                "scope": "immediate",
-                "options": [
-                  {
-                    "text": "Dr. Carlos Miers",
-                    "previewText": "Dr. Carlos Miers",
-                    "value": null,
-                    "index": 0,
-                    "type": null
+                "recipient_type": "individual",
+                "type": "interactive",
+                "interactive": {
+                  "type": "list",
+                  "header": {
+                    "type": "text",
+                    "text": "Ortopedia"
                   },
-                  {
-                    "text": "Dr. Cristiano Gatelli",
-                    "previewText": "Dr. Cristiano Gatelli",
-                    "value": null,
-                    "index": 1,
-                    "type": null
+                  "body": {
+                    "text": "Encontramos os seguintes ortopedistas na Inovare. Toque no botão abaixo para escolher o especialista:"
                   },
-                  {
-                    "text": "Dr. Daniel Cartelli",
-                    "previewText": "Dr. Daniel Cartelli",
-                    "value": null,
-                    "index": 2,
-                    "type": null
-                  },
-                  {
-                    "text": "Dr. Franklin Hilgemberg",
-                    "previewText": "Dr. Franklin Hilgemberg",
-                    "value": null,
-                    "index": 3,
-                    "type": null
-                  },
-                  {
-                    "text": "Dr. Luis Felipe Villas Bôas",
-                    "previewText": "Dr. Luis Felipe Villas Bôas",
-                    "value": null,
-                    "index": 4,
-                    "type": null
-                  },
-                  {
-                    "text": "Dra. Marina Polydoro",
-                    "previewText": "Dra. Marina Polydoro",
-                    "value": null,
-                    "index": 5,
-                    "type": null
-                  },
-                  {
-                    "text": "Dr. Rafael Pançan de Biaggi",
-                    "previewText": "Dr. Rafael Pançan de Biaggi",
-                    "value": null,
-                    "index": 6,
-                    "type": null
-                  },
-                  {
-                    "text": "Dr. Rodrigo Fávaro",
-                    "previewText": "Dr. Rodrigo Fávaro",
-                    "value": null,
-                    "index": 7,
-                    "type": null
+                  "action": {
+                    "button": "Ver Ortopedistas",
+                    "sections": [
+                      {
+                        "title": "Ortopedistas",
+                        "rows": [
+                          {
+                            "id": "1",
+                            "title": "Dr. Carlos Miers",
+                            "description": "Ortopedia"
+                          },
+                          {
+                            "id": "2",
+                            "title": "Dr. Cristiano Gatelli",
+                            "description": "Ortopedia"
+                          },
+                          {
+                            "id": "3",
+                            "title": "Dr. Daniel Cartelli",
+                            "description": "Ortopedia"
+                          },
+                          {
+                            "id": "4",
+                            "title": "Dr. Franklin Hilgemberg",
+                            "description": "Ortopedia"
+                          },
+                          {
+                            "id": "5",
+                            "title": "Dr. Luis Felipe Villas B",
+                            "description": "Ortopedia"
+                          },
+                          {
+                            "id": "6",
+                            "title": "Dra. Marina Polydoro",
+                            "description": "Ortopedia"
+                          },
+                          {
+                            "id": "7",
+                            "title": "Dr. Rafael Pancan de Bia",
+                            "description": "Ortopedia"
+                          },
+                          {
+                            "id": "8",
+                            "title": "Dr. Rodrigo Favaro",
+                            "description": "Ortopedia"
+                          }
+                        ]
+                      }
+                    ]
                   }
-                ],
-                "quikReply": false
-              },
-              "metadata": {}
+                }
+              }
             },
             "$cardContent": {
               "document": {
-                "id": "doc_select_menu_ortopedia",
-                "type": "application/vnd.lime.select+json",
+                "id": "doc_dynamic_menu_ortopedia",
+                "type": "application/json",
                 "content": {
-                  "text": "Encontramos os seguintes ortopedistas na Inovare. Toque na opção desejada:",
-                  "scope": "immediate",
-                  "options": [
-                    {
-                      "text": "Dr. Carlos Miers",
-                      "previewText": "Dr. Carlos Miers",
-                      "value": null,
-                      "index": 0,
-                      "type": null
+                  "recipient_type": "individual",
+                  "type": "interactive",
+                  "interactive": {
+                    "type": "list",
+                    "header": {
+                      "type": "text",
+                      "text": "Ortopedia"
                     },
-                    {
-                      "text": "Dr. Cristiano Gatelli",
-                      "previewText": "Dr. Cristiano Gatelli",
-                      "value": null,
-                      "index": 1,
-                      "type": null
+                    "body": {
+                      "text": "Encontramos os seguintes ortopedistas na Inovare. Toque no botão abaixo para escolher o especialista:"
                     },
-                    {
-                      "text": "Dr. Daniel Cartelli",
-                      "previewText": "Dr. Daniel Cartelli",
-                      "value": null,
-                      "index": 2,
-                      "type": null
-                    },
-                    {
-                      "text": "Dr. Franklin Hilgemberg",
-                      "previewText": "Dr. Franklin Hilgemberg",
-                      "value": null,
-                      "index": 3,
-                      "type": null
-                    },
-                    {
-                      "text": "Dr. Luis Felipe Villas Bôas",
-                      "previewText": "Dr. Luis Felipe Villas Bôas",
-                      "value": null,
-                      "index": 4,
-                      "type": null
-                    },
-                    {
-                      "text": "Dra. Marina Polydoro",
-                      "previewText": "Dra. Marina Polydoro",
-                      "value": null,
-                      "index": 5,
-                      "type": null
-                    },
-                    {
-                      "text": "Dr. Rafael Pançan de Biaggi",
-                      "previewText": "Dr. Rafael Pançan de Biaggi",
-                      "value": null,
-                      "index": 6,
-                      "type": null
-                    },
-                    {
-                      "text": "Dr. Rodrigo Fávaro",
-                      "previewText": "Dr. Rodrigo Fávaro",
-                      "value": null,
-                      "index": 7,
-                      "type": null
+                    "action": {
+                      "button": "Ver Ortopedistas",
+                      "sections": [
+                        {
+                          "title": "Ortopedistas",
+                          "rows": [
+                            {
+                              "id": "1",
+                              "title": "Dr. Carlos Miers",
+                              "description": "Ortopedia"
+                            },
+                            {
+                              "id": "2",
+                              "title": "Dr. Cristiano Gatelli",
+                              "description": "Ortopedia"
+                            },
+                            {
+                              "id": "3",
+                              "title": "Dr. Daniel Cartelli",
+                              "description": "Ortopedia"
+                            },
+                            {
+                              "id": "4",
+                              "title": "Dr. Franklin Hilgemberg",
+                              "description": "Ortopedia"
+                            },
+                            {
+                              "id": "5",
+                              "title": "Dr. Luis Felipe Villas B",
+                              "description": "Ortopedia"
+                            },
+                            {
+                              "id": "6",
+                              "title": "Dra. Marina Polydoro",
+                              "description": "Ortopedia"
+                            },
+                            {
+                              "id": "7",
+                              "title": "Dr. Rafael Pancan de Bia",
+                              "description": "Ortopedia"
+                            },
+                            {
+                              "id": "8",
+                              "title": "Dr. Rodrigo Favaro",
+                              "description": "Ortopedia"
+                            }
+                          ]
+                        }
+                      ]
                     }
-                  ],
-                  "quikReply": false
+                  }
                 }
               },
               "editable": true,
@@ -5641,8 +5642,8 @@
               "document": {
                 "id": "inp_doc_menu_ortopedia",
                 "type": "text/plain",
-                "textContent": "Entrada do usuário",
-                "content": "Entrada do usuário"
+                "textContent": "Aguardando clique do usuário...",
+                "content": "Aguardando clique do usuário..."
               },
               "editable": false,
               "deletable": true,
@@ -5660,7 +5661,7 @@
           "$title": "Processa Escolha [Menu] Ortopedia",
           "settings": {
             "function": "run",
-            "source": "function run(inputChoice) {\n    var raw = (inputChoice || '').toLowerCase();\n    var docs = [{\"text\": \"Dr. Carlos Miers\", \"queue\": \"Ortopedia - Dr. Carlos Miers\", \"isInternal\": \"true\", \"link\": \"\"}, {\"text\": \"Dr. Cristiano Gatelli\", \"queue\": \"Ortopedia - Dr. Cristiano Gatelli\", \"isInternal\": \"true\", \"link\": \"\"}, {\"text\": \"Dr. Daniel Cartelli\", \"queue\": \"Ortopedia - Dr. Daniel Cartelli\", \"isInternal\": \"true\", \"link\": \"\"}, {\"text\": \"Dr. Franklin Hilgemberg\", \"queue\": \"Ortopedia - Dr. Franklin Roberto Hilgemberg\", \"isInternal\": \"true\", \"link\": \"\"}, {\"text\": \"Dr. Luis Felipe Villas Bôas\", \"queue\": \"Ortopedia - Dr. Luis Felipe Villas Bôas\", \"isInternal\": \"true\", \"link\": \"\"}, {\"text\": \"Dra. Marina Polydoro\", \"queue\": \"Ortopedia - Dra. Marina Polydoro\", \"isInternal\": \"true\", \"link\": \"\"}, {\"text\": \"Dr. Rafael Pançan de Biaggi\", \"queue\": \"Ortopedia - Dr. Rafael Pançan de Biaggi\", \"isInternal\": \"true\", \"link\": \"\"}, {\"text\": \"Dr. Rodrigo Fávaro\", \"queue\": \"Ortopedia - Dr. Rodrigo Caldonazzo Fávaro\", \"isInternal\": \"true\", \"link\": \"\"}];\n    for (var i = 0; i < docs.length; i++) {\n        var d = docs[i];\n        if (raw.indexOf((i + 1).toString()) !== -1 || raw.indexOf(d.text.toLowerCase().replace(/dr\\.\\s*|dra\\.\\s*/g, '')) !== -1 || d.text.toLowerCase().indexOf(raw) !== -1) {\n            return JSON.stringify({\n                doctorName: d.text,\n                queueName: d.queue,\n                isInternal: d.isInternal,\n                externalLink: d.link || '',\n                externalPhone: d.isInternal === 'false' ? '(42) 3026-2600' : ''\n            });\n        }\n    }\n    var first = docs[0];\n    return JSON.stringify({ doctorName: first.text, queueName: first.queue, isInternal: first.isInternal, externalLink: first.link || '', externalPhone: '' });\n}",
+            "source": "function run(inputChoice) {\n    var raw = (inputChoice || '').toLowerCase();\n    var docs = [{\"id\": \"1\", \"title\": \"Dr. Carlos Miers\", \"desc\": \"Ortopedia\", \"queue\": \"Ortopedia - Dr. Carlos Miers\", \"isInternal\": \"true\", \"link\": \"\"}, {\"id\": \"2\", \"title\": \"Dr. Cristiano Gatelli\", \"desc\": \"Ortopedia\", \"queue\": \"Ortopedia - Dr. Cristiano Gatelli\", \"isInternal\": \"true\", \"link\": \"\"}, {\"id\": \"3\", \"title\": \"Dr. Daniel Cartelli\", \"desc\": \"Ortopedia\", \"queue\": \"Ortopedia - Dr. Daniel Cartelli\", \"isInternal\": \"true\", \"link\": \"\"}, {\"id\": \"4\", \"title\": \"Dr. Franklin Hilgemberg\", \"desc\": \"Ortopedia\", \"queue\": \"Ortopedia - Dr. Franklin Roberto Hilgemberg\", \"isInternal\": \"true\", \"link\": \"\"}, {\"id\": \"5\", \"title\": \"Dr. Luis Felipe Villas B\", \"desc\": \"Ortopedia\", \"queue\": \"Ortopedia - Dr. Luis Felipe Villas Bôas\", \"isInternal\": \"true\", \"link\": \"\"}, {\"id\": \"6\", \"title\": \"Dra. Marina Polydoro\", \"desc\": \"Ortopedia\", \"queue\": \"Ortopedia - Dra. Marina Polydoro\", \"isInternal\": \"true\", \"link\": \"\"}, {\"id\": \"7\", \"title\": \"Dr. Rafael Pancan de Bia\", \"desc\": \"Ortopedia\", \"queue\": \"Ortopedia - Dr. Rafael Pançan de Biaggi\", \"isInternal\": \"true\", \"link\": \"\"}, {\"id\": \"8\", \"title\": \"Dr. Rodrigo Favaro\", \"desc\": \"Ortopedia\", \"queue\": \"Ortopedia - Dr. Rodrigo Caldonazzo Fávaro\", \"isInternal\": \"true\", \"link\": \"\"}];\n    for (var i = 0; i < docs.length; i++) {\n        var d = docs[i];\n        if (raw.indexOf(d.id) !== -1 || raw.indexOf(d.title.toLowerCase().replace(/dr\\.\\s*|dra\\.\\s*/g, '').trim()) !== -1 || d.title.toLowerCase().indexOf(raw) !== -1) {\n            return JSON.stringify({\n                doctorName: d.title,\n                queueName: d.queue,\n                isInternal: d.isInternal,\n                externalLink: d.link || '',\n                externalPhone: d.isInternal === 'false' ? '(42) 3026-2600' : ''\n            });\n        }\n    }\n    var first = docs[0];\n    return JSON.stringify({ doctorName: first.title, queueName: first.queue, isInternal: first.isInternal, externalLink: first.link || '', externalPhone: '' });\n}",
             "inputVariables": [
               "medicoSelecionadoRaw"
             ],
@@ -5775,7 +5776,7 @@
         {
           "id": "tag_menu_ortopedia",
           "label": "[Menu] Ortopedia",
-          "background": "#00A86B",
+          "background": "#FF1E90",
           "canChangeBackground": false
         }
       ],
@@ -5785,10 +5786,10 @@
         "Dr. Cristiano Gatelli",
         "Dr. Daniel Cartelli",
         "Dr. Franklin Hilgemberg",
-        "Dr. Luis Felipe Villas Bôas",
+        "Dr. Luis Felipe Villas B",
         "Dra. Marina Polydoro",
-        "Dr. Rafael Pançan de Biaggi",
-        "Dr. Rodrigo Fávaro"
+        "Dr. Rafael Pancan de Bia",
+        "Dr. Rodrigo Favaro"
       ],
       "$invalidContentActions": false,
       "$invalidOutputs": false,
@@ -5849,73 +5850,94 @@
         },
         {
           "action": {
-            "$id": "select_menu_cardio",
-            "$typeOfContent": "select-immediate",
+            "$id": "card_dynamic_menu_cardio",
+            "$typeOfContent": "dynamic",
             "type": "SendMessage",
             "settings": {
-              "id": "doc_select_menu_cardio",
-              "type": "application/vnd.lime.select+json",
+              "id": "doc_dynamic_menu_cardio",
+              "type": "application/json",
               "content": {
-                "text": "Encontramos os seguintes cardiologistas na Inovare. Toque na opção desejada:",
-                "scope": "immediate",
-                "options": [
-                  {
-                    "text": "Dra. Liliana Elias Pena",
-                    "previewText": "Dra. Liliana Elias Pena",
-                    "value": null,
-                    "index": 0,
-                    "type": null
+                "recipient_type": "individual",
+                "type": "interactive",
+                "interactive": {
+                  "type": "list",
+                  "header": {
+                    "type": "text",
+                    "text": "Cardiologia"
                   },
-                  {
-                    "text": "Dr. Marcelo Valladao",
-                    "previewText": "Dr. Marcelo Valladao",
-                    "value": null,
-                    "index": 1,
-                    "type": null
+                  "body": {
+                    "text": "Encontramos os seguintes cardiologistas na Inovare. Toque no botão abaixo para escolher o especialista:"
                   },
-                  {
-                    "text": "Dr. Rubens Sirtoli",
-                    "previewText": "Dr. Rubens Sirtoli",
-                    "value": null,
-                    "index": 2,
-                    "type": null
+                  "action": {
+                    "button": "Ver Cardiologistas",
+                    "sections": [
+                      {
+                        "title": "Cardiologistas",
+                        "rows": [
+                          {
+                            "id": "1",
+                            "title": "Dra. Liliana Elias Pena",
+                            "description": "Cardiologia"
+                          },
+                          {
+                            "id": "2",
+                            "title": "Dr. Marcelo Valladao",
+                            "description": "Cardiologia"
+                          },
+                          {
+                            "id": "3",
+                            "title": "Dr. Rubens Sirtoli",
+                            "description": "Cardiologia"
+                          }
+                        ]
+                      }
+                    ]
                   }
-                ],
-                "quikReply": false
-              },
-              "metadata": {}
+                }
+              }
             },
             "$cardContent": {
               "document": {
-                "id": "doc_select_menu_cardio",
-                "type": "application/vnd.lime.select+json",
+                "id": "doc_dynamic_menu_cardio",
+                "type": "application/json",
                 "content": {
-                  "text": "Encontramos os seguintes cardiologistas na Inovare. Toque na opção desejada:",
-                  "scope": "immediate",
-                  "options": [
-                    {
-                      "text": "Dra. Liliana Elias Pena",
-                      "previewText": "Dra. Liliana Elias Pena",
-                      "value": null,
-                      "index": 0,
-                      "type": null
+                  "recipient_type": "individual",
+                  "type": "interactive",
+                  "interactive": {
+                    "type": "list",
+                    "header": {
+                      "type": "text",
+                      "text": "Cardiologia"
                     },
-                    {
-                      "text": "Dr. Marcelo Valladao",
-                      "previewText": "Dr. Marcelo Valladao",
-                      "value": null,
-                      "index": 1,
-                      "type": null
+                    "body": {
+                      "text": "Encontramos os seguintes cardiologistas na Inovare. Toque no botão abaixo para escolher o especialista:"
                     },
-                    {
-                      "text": "Dr. Rubens Sirtoli",
-                      "previewText": "Dr. Rubens Sirtoli",
-                      "value": null,
-                      "index": 2,
-                      "type": null
+                    "action": {
+                      "button": "Ver Cardiologistas",
+                      "sections": [
+                        {
+                          "title": "Cardiologistas",
+                          "rows": [
+                            {
+                              "id": "1",
+                              "title": "Dra. Liliana Elias Pena",
+                              "description": "Cardiologia"
+                            },
+                            {
+                              "id": "2",
+                              "title": "Dr. Marcelo Valladao",
+                              "description": "Cardiologia"
+                            },
+                            {
+                              "id": "3",
+                              "title": "Dr. Rubens Sirtoli",
+                              "description": "Cardiologia"
+                            }
+                          ]
+                        }
+                      ]
                     }
-                  ],
-                  "quikReply": false
+                  }
                 }
               },
               "editable": true,
@@ -5936,8 +5958,8 @@
               "document": {
                 "id": "inp_doc_menu_cardio",
                 "type": "text/plain",
-                "textContent": "Entrada do usuário",
-                "content": "Entrada do usuário"
+                "textContent": "Aguardando clique do usuário...",
+                "content": "Aguardando clique do usuário..."
               },
               "editable": false,
               "deletable": true,
@@ -5955,7 +5977,7 @@
           "$title": "Processa Escolha [Menu] Cardiologia",
           "settings": {
             "function": "run",
-            "source": "function run(inputChoice) {\n    var raw = (inputChoice || '').toLowerCase();\n    var docs = [{\"text\": \"Dra. Liliana Elias Pena\", \"queue\": \"Cardiologia - Dra. Liliana Elias Pena Pilatti\", \"isInternal\": \"true\", \"link\": \"\"}, {\"text\": \"Dr. Marcelo Valladao\", \"queue\": \"Cardiologia - Dr. Marcelo Valladao Ferreira\", \"isInternal\": \"true\", \"link\": \"\"}, {\"text\": \"Dr. Rubens Sirtoli\", \"queue\": \"Cardiologia - Dr. Rubens Sirtoli Filho\", \"isInternal\": \"true\", \"link\": \"\"}];\n    for (var i = 0; i < docs.length; i++) {\n        var d = docs[i];\n        if (raw.indexOf((i + 1).toString()) !== -1 || raw.indexOf(d.text.toLowerCase().replace(/dr\\.\\s*|dra\\.\\s*/g, '')) !== -1 || d.text.toLowerCase().indexOf(raw) !== -1) {\n            return JSON.stringify({\n                doctorName: d.text,\n                queueName: d.queue,\n                isInternal: d.isInternal,\n                externalLink: d.link || '',\n                externalPhone: d.isInternal === 'false' ? '(42) 3026-2600' : ''\n            });\n        }\n    }\n    var first = docs[0];\n    return JSON.stringify({ doctorName: first.text, queueName: first.queue, isInternal: first.isInternal, externalLink: first.link || '', externalPhone: '' });\n}",
+            "source": "function run(inputChoice) {\n    var raw = (inputChoice || '').toLowerCase();\n    var docs = [{\"id\": \"1\", \"title\": \"Dra. Liliana Elias Pena\", \"desc\": \"Cardiologia\", \"queue\": \"Cardiologia - Dra. Liliana Elias Pena Pilatti\", \"isInternal\": \"true\", \"link\": \"\"}, {\"id\": \"2\", \"title\": \"Dr. Marcelo Valladao\", \"desc\": \"Cardiologia\", \"queue\": \"Cardiologia - Dr. Marcelo Valladao Ferreira\", \"isInternal\": \"true\", \"link\": \"\"}, {\"id\": \"3\", \"title\": \"Dr. Rubens Sirtoli\", \"desc\": \"Cardiologia\", \"queue\": \"Cardiologia - Dr. Rubens Sirtoli Filho\", \"isInternal\": \"true\", \"link\": \"\"}];\n    for (var i = 0; i < docs.length; i++) {\n        var d = docs[i];\n        if (raw.indexOf(d.id) !== -1 || raw.indexOf(d.title.toLowerCase().replace(/dr\\.\\s*|dra\\.\\s*/g, '').trim()) !== -1 || d.title.toLowerCase().indexOf(raw) !== -1) {\n            return JSON.stringify({\n                doctorName: d.title,\n                queueName: d.queue,\n                isInternal: d.isInternal,\n                externalLink: d.link || '',\n                externalPhone: d.isInternal === 'false' ? '(42) 3026-2600' : ''\n            });\n        }\n    }\n    var first = docs[0];\n    return JSON.stringify({ doctorName: first.title, queueName: first.queue, isInternal: first.isInternal, externalLink: first.link || '', externalPhone: '' });\n}",
             "inputVariables": [
               "medicoSelecionadoRaw"
             ],
@@ -6070,7 +6092,7 @@
         {
           "id": "tag_menu_cardio",
           "label": "[Menu] Cardiologia",
-          "background": "#00A86B",
+          "background": "#FF1E90",
           "canChangeBackground": false
         }
       ],
@@ -6139,129 +6161,134 @@
         },
         {
           "action": {
-            "$id": "select_menu_gineco",
-            "$typeOfContent": "select-immediate",
+            "$id": "card_dynamic_menu_gineco",
+            "$typeOfContent": "dynamic",
             "type": "SendMessage",
             "settings": {
-              "id": "doc_select_menu_gineco",
-              "type": "application/vnd.lime.select+json",
+              "id": "doc_dynamic_menu_gineco",
+              "type": "application/json",
               "content": {
-                "text": "Encontramos as seguintes ginecologistas / obstetras. Toque na opção desejada:",
-                "scope": "immediate",
-                "options": [
-                  {
-                    "text": "Dra. Brenda de Almeida",
-                    "previewText": "Dra. Brenda de Almeida",
-                    "value": null,
-                    "index": 0,
-                    "type": null
+                "recipient_type": "individual",
+                "type": "interactive",
+                "interactive": {
+                  "type": "list",
+                  "header": {
+                    "type": "text",
+                    "text": "Ginecologia"
                   },
-                  {
-                    "text": "Dr. Carlos Alberto Batista",
-                    "previewText": "Dr. Carlos Alberto Batista",
-                    "value": null,
-                    "index": 1,
-                    "type": null
+                  "body": {
+                    "text": "Encontramos as seguintes ginecologistas na Inovare. Toque no botão abaixo para escolher a especialista:"
                   },
-                  {
-                    "text": "Dr. Edson Delfrate",
-                    "previewText": "Dr. Edson Delfrate",
-                    "value": null,
-                    "index": 2,
-                    "type": null
-                  },
-                  {
-                    "text": "Dr. Eduardo Serman",
-                    "previewText": "Dr. Eduardo Serman",
-                    "value": null,
-                    "index": 3,
-                    "type": null
-                  },
-                  {
-                    "text": "Dra. Isabela Baumel",
-                    "previewText": "Dra. Isabela Baumel",
-                    "value": null,
-                    "index": 4,
-                    "type": null
-                  },
-                  {
-                    "text": "Dra. Lisa Paula Teixeira",
-                    "previewText": "Dra. Lisa Paula Teixeira",
-                    "value": null,
-                    "index": 5,
-                    "type": null
-                  },
-                  {
-                    "text": "Dra. Tatyellen Dalzotto",
-                    "previewText": "Dra. Tatyellen Dalzotto",
-                    "value": null,
-                    "index": 6,
-                    "type": null
+                  "action": {
+                    "button": "Ver Ginecologistas",
+                    "sections": [
+                      {
+                        "title": "Ginecologia",
+                        "rows": [
+                          {
+                            "id": "1",
+                            "title": "Dra. Brenda de Almeida",
+                            "description": "Ginecologia"
+                          },
+                          {
+                            "id": "2",
+                            "title": "Dr. Carlos Alberto Batis",
+                            "description": "Ginecologia"
+                          },
+                          {
+                            "id": "3",
+                            "title": "Dr. Edson Delfrate",
+                            "description": "Ginecologia"
+                          },
+                          {
+                            "id": "4",
+                            "title": "Dr. Eduardo Serman",
+                            "description": "Ginecologia"
+                          },
+                          {
+                            "id": "5",
+                            "title": "Dra. Isabela Baumel",
+                            "description": "Ginecologia"
+                          },
+                          {
+                            "id": "6",
+                            "title": "Dra. Lisa Paula Teixeira",
+                            "description": "Ginecologia"
+                          },
+                          {
+                            "id": "7",
+                            "title": "Dra. Tatyellen Dalzotto",
+                            "description": "Ginecologia"
+                          }
+                        ]
+                      }
+                    ]
                   }
-                ],
-                "quikReply": false
-              },
-              "metadata": {}
+                }
+              }
             },
             "$cardContent": {
               "document": {
-                "id": "doc_select_menu_gineco",
-                "type": "application/vnd.lime.select+json",
+                "id": "doc_dynamic_menu_gineco",
+                "type": "application/json",
                 "content": {
-                  "text": "Encontramos as seguintes ginecologistas / obstetras. Toque na opção desejada:",
-                  "scope": "immediate",
-                  "options": [
-                    {
-                      "text": "Dra. Brenda de Almeida",
-                      "previewText": "Dra. Brenda de Almeida",
-                      "value": null,
-                      "index": 0,
-                      "type": null
+                  "recipient_type": "individual",
+                  "type": "interactive",
+                  "interactive": {
+                    "type": "list",
+                    "header": {
+                      "type": "text",
+                      "text": "Ginecologia"
                     },
-                    {
-                      "text": "Dr. Carlos Alberto Batista",
-                      "previewText": "Dr. Carlos Alberto Batista",
-                      "value": null,
-                      "index": 1,
-                      "type": null
+                    "body": {
+                      "text": "Encontramos as seguintes ginecologistas na Inovare. Toque no botão abaixo para escolher a especialista:"
                     },
-                    {
-                      "text": "Dr. Edson Delfrate",
-                      "previewText": "Dr. Edson Delfrate",
-                      "value": null,
-                      "index": 2,
-                      "type": null
-                    },
-                    {
-                      "text": "Dr. Eduardo Serman",
-                      "previewText": "Dr. Eduardo Serman",
-                      "value": null,
-                      "index": 3,
-                      "type": null
-                    },
-                    {
-                      "text": "Dra. Isabela Baumel",
-                      "previewText": "Dra. Isabela Baumel",
-                      "value": null,
-                      "index": 4,
-                      "type": null
-                    },
-                    {
-                      "text": "Dra. Lisa Paula Teixeira",
-                      "previewText": "Dra. Lisa Paula Teixeira",
-                      "value": null,
-                      "index": 5,
-                      "type": null
-                    },
-                    {
-                      "text": "Dra. Tatyellen Dalzotto",
-                      "previewText": "Dra. Tatyellen Dalzotto",
-                      "value": null,
-                      "index": 6,
-                      "type": null
+                    "action": {
+                      "button": "Ver Ginecologistas",
+                      "sections": [
+                        {
+                          "title": "Ginecologia",
+                          "rows": [
+                            {
+                              "id": "1",
+                              "title": "Dra. Brenda de Almeida",
+                              "description": "Ginecologia"
+                            },
+                            {
+                              "id": "2",
+                              "title": "Dr. Carlos Alberto Batis",
+                              "description": "Ginecologia"
+                            },
+                            {
+                              "id": "3",
+                              "title": "Dr. Edson Delfrate",
+                              "description": "Ginecologia"
+                            },
+                            {
+                              "id": "4",
+                              "title": "Dr. Eduardo Serman",
+                              "description": "Ginecologia"
+                            },
+                            {
+                              "id": "5",
+                              "title": "Dra. Isabela Baumel",
+                              "description": "Ginecologia"
+                            },
+                            {
+                              "id": "6",
+                              "title": "Dra. Lisa Paula Teixeira",
+                              "description": "Ginecologia"
+                            },
+                            {
+                              "id": "7",
+                              "title": "Dra. Tatyellen Dalzotto",
+                              "description": "Ginecologia"
+                            }
+                          ]
+                        }
+                      ]
                     }
-                  ],
-                  "quikReply": false
+                  }
                 }
               },
               "editable": true,
@@ -6282,8 +6309,8 @@
               "document": {
                 "id": "inp_doc_menu_gineco",
                 "type": "text/plain",
-                "textContent": "Entrada do usuário",
-                "content": "Entrada do usuário"
+                "textContent": "Aguardando clique do usuário...",
+                "content": "Aguardando clique do usuário..."
               },
               "editable": false,
               "deletable": true,
@@ -6301,7 +6328,7 @@
           "$title": "Processa Escolha [Menu] Ginecologia",
           "settings": {
             "function": "run",
-            "source": "function run(inputChoice) {\n    var raw = (inputChoice || '').toLowerCase();\n    var docs = [{\"text\": \"Dra. Brenda de Almeida\", \"queue\": \"Ginecologia - Dra. Brenda de Almeida Aguiar\", \"isInternal\": \"false\", \"link\": \"https://wa.me/554230262600\"}, {\"text\": \"Dr. Carlos Alberto Batista\", \"queue\": \"Ginecologia - Dr. Carlos Alberto Batista da Silva\", \"isInternal\": \"false\", \"link\": \"https://wa.me/554230262600\"}, {\"text\": \"Dr. Edson Delfrate\", \"queue\": \"Ginecologia - Dr. Edson Delfrate\", \"isInternal\": \"false\", \"link\": \"https://wa.me/554230262600\"}, {\"text\": \"Dr. Eduardo Serman\", \"queue\": \"Ginecologia - Dr. Eduardo Serman\", \"isInternal\": \"false\", \"link\": \"https://wa.me/554230262600\"}, {\"text\": \"Dra. Isabela Baumel\", \"queue\": \"Ginecologia - Dra. Isabela Baumel Mongruel\", \"isInternal\": \"false\", \"link\": \"https://wa.me/554230262600\"}, {\"text\": \"Dra. Lisa Paula Teixeira\", \"queue\": \"Ginecologia - Dra. Lisa Paula Fernandes Teixeira\", \"isInternal\": \"false\", \"link\": \"https://wa.me/554230262600\"}, {\"text\": \"Dra. Tatyellen Dalzotto\", \"queue\": \"Ginecologia - Dra. Tatyellen Dalzotto\", \"isInternal\": \"false\", \"link\": \"https://wa.me/554230262600\"}];\n    for (var i = 0; i < docs.length; i++) {\n        var d = docs[i];\n        if (raw.indexOf((i + 1).toString()) !== -1 || raw.indexOf(d.text.toLowerCase().replace(/dr\\.\\s*|dra\\.\\s*/g, '')) !== -1 || d.text.toLowerCase().indexOf(raw) !== -1) {\n            return JSON.stringify({\n                doctorName: d.text,\n                queueName: d.queue,\n                isInternal: d.isInternal,\n                externalLink: d.link || '',\n                externalPhone: d.isInternal === 'false' ? '(42) 3026-2600' : ''\n            });\n        }\n    }\n    var first = docs[0];\n    return JSON.stringify({ doctorName: first.text, queueName: first.queue, isInternal: first.isInternal, externalLink: first.link || '', externalPhone: '' });\n}",
+            "source": "function run(inputChoice) {\n    var raw = (inputChoice || '').toLowerCase();\n    var docs = [{\"id\": \"1\", \"title\": \"Dra. Brenda de Almeida\", \"desc\": \"Ginecologia\", \"queue\": \"Ginecologia - Dra. Brenda de Almeida Aguiar\", \"isInternal\": \"false\", \"link\": \"https://wa.me/554230262600\"}, {\"id\": \"2\", \"title\": \"Dr. Carlos Alberto Batis\", \"desc\": \"Ginecologia\", \"queue\": \"Ginecologia - Dr. Carlos Alberto Batista da Silva\", \"isInternal\": \"false\", \"link\": \"https://wa.me/554230262600\"}, {\"id\": \"3\", \"title\": \"Dr. Edson Delfrate\", \"desc\": \"Ginecologia\", \"queue\": \"Ginecologia - Dr. Edson Delfrate\", \"isInternal\": \"false\", \"link\": \"https://wa.me/554230262600\"}, {\"id\": \"4\", \"title\": \"Dr. Eduardo Serman\", \"desc\": \"Ginecologia\", \"queue\": \"Ginecologia - Dr. Eduardo Serman\", \"isInternal\": \"false\", \"link\": \"https://wa.me/554230262600\"}, {\"id\": \"5\", \"title\": \"Dra. Isabela Baumel\", \"desc\": \"Ginecologia\", \"queue\": \"Ginecologia - Dra. Isabela Baumel Mongruel\", \"isInternal\": \"false\", \"link\": \"https://wa.me/554230262600\"}, {\"id\": \"6\", \"title\": \"Dra. Lisa Paula Teixeira\", \"desc\": \"Ginecologia\", \"queue\": \"Ginecologia - Dra. Lisa Paula Fernandes Teixeira\", \"isInternal\": \"false\", \"link\": \"https://wa.me/554230262600\"}, {\"id\": \"7\", \"title\": \"Dra. Tatyellen Dalzotto\", \"desc\": \"Ginecologia\", \"queue\": \"Ginecologia - Dra. Tatyellen Dalzotto\", \"isInternal\": \"false\", \"link\": \"https://wa.me/554230262600\"}];\n    for (var i = 0; i < docs.length; i++) {\n        var d = docs[i];\n        if (raw.indexOf(d.id) !== -1 || raw.indexOf(d.title.toLowerCase().replace(/dr\\.\\s*|dra\\.\\s*/g, '').trim()) !== -1 || d.title.toLowerCase().indexOf(raw) !== -1) {\n            return JSON.stringify({\n                doctorName: d.title,\n                queueName: d.queue,\n                isInternal: d.isInternal,\n                externalLink: d.link || '',\n                externalPhone: d.isInternal === 'false' ? '(42) 3026-2600' : ''\n            });\n        }\n    }\n    var first = docs[0];\n    return JSON.stringify({ doctorName: first.title, queueName: first.queue, isInternal: first.isInternal, externalLink: first.link || '', externalPhone: '' });\n}",
             "inputVariables": [
               "medicoSelecionadoRaw"
             ],
@@ -6416,14 +6443,14 @@
         {
           "id": "tag_menu_gineco",
           "label": "[Menu] Ginecologia",
-          "background": "#00A86B",
+          "background": "#FF1E90",
           "canChangeBackground": false
         }
       ],
       "$invalid": false,
       "$inputSuggestions": [
         "Dra. Brenda de Almeida",
-        "Dr. Carlos Alberto Batista",
+        "Dr. Carlos Alberto Batis",
         "Dr. Edson Delfrate",
         "Dr. Eduardo Serman",
         "Dra. Isabela Baumel",
@@ -6489,73 +6516,94 @@
         },
         {
           "action": {
-            "$id": "select_menu_oftalmo",
-            "$typeOfContent": "select-immediate",
+            "$id": "card_dynamic_menu_oftalmo",
+            "$typeOfContent": "dynamic",
             "type": "SendMessage",
             "settings": {
-              "id": "doc_select_menu_oftalmo",
-              "type": "application/vnd.lime.select+json",
+              "id": "doc_dynamic_menu_oftalmo",
+              "type": "application/json",
               "content": {
-                "text": "Encontramos os seguintes oftalmologistas na Inovare. Toque na opção desejada:",
-                "scope": "immediate",
-                "options": [
-                  {
-                    "text": "Dra. Fernanda Cenovicz",
-                    "previewText": "Dra. Fernanda Cenovicz",
-                    "value": null,
-                    "index": 0,
-                    "type": null
+                "recipient_type": "individual",
+                "type": "interactive",
+                "interactive": {
+                  "type": "list",
+                  "header": {
+                    "type": "text",
+                    "text": "Oftalmologia"
                   },
-                  {
-                    "text": "Dr. Marcelo Cenovicz",
-                    "previewText": "Dr. Marcelo Cenovicz",
-                    "value": null,
-                    "index": 1,
-                    "type": null
+                  "body": {
+                    "text": "Encontramos os seguintes oftalmologistas na Inovare. Toque no botão abaixo para escolher o especialista:"
                   },
-                  {
-                    "text": "Dr. Murilo Cenovicz",
-                    "previewText": "Dr. Murilo Cenovicz",
-                    "value": null,
-                    "index": 2,
-                    "type": null
+                  "action": {
+                    "button": "Ver Oftalmos",
+                    "sections": [
+                      {
+                        "title": "Oftalmologistas",
+                        "rows": [
+                          {
+                            "id": "1",
+                            "title": "Dra. Fernanda Cenovicz",
+                            "description": "Oftalmologia"
+                          },
+                          {
+                            "id": "2",
+                            "title": "Dr. Marcelo Cenovicz",
+                            "description": "Oftalmologia"
+                          },
+                          {
+                            "id": "3",
+                            "title": "Dr. Murilo Cenovicz",
+                            "description": "Oftalmologia"
+                          }
+                        ]
+                      }
+                    ]
                   }
-                ],
-                "quikReply": false
-              },
-              "metadata": {}
+                }
+              }
             },
             "$cardContent": {
               "document": {
-                "id": "doc_select_menu_oftalmo",
-                "type": "application/vnd.lime.select+json",
+                "id": "doc_dynamic_menu_oftalmo",
+                "type": "application/json",
                 "content": {
-                  "text": "Encontramos os seguintes oftalmologistas na Inovare. Toque na opção desejada:",
-                  "scope": "immediate",
-                  "options": [
-                    {
-                      "text": "Dra. Fernanda Cenovicz",
-                      "previewText": "Dra. Fernanda Cenovicz",
-                      "value": null,
-                      "index": 0,
-                      "type": null
+                  "recipient_type": "individual",
+                  "type": "interactive",
+                  "interactive": {
+                    "type": "list",
+                    "header": {
+                      "type": "text",
+                      "text": "Oftalmologia"
                     },
-                    {
-                      "text": "Dr. Marcelo Cenovicz",
-                      "previewText": "Dr. Marcelo Cenovicz",
-                      "value": null,
-                      "index": 1,
-                      "type": null
+                    "body": {
+                      "text": "Encontramos os seguintes oftalmologistas na Inovare. Toque no botão abaixo para escolher o especialista:"
                     },
-                    {
-                      "text": "Dr. Murilo Cenovicz",
-                      "previewText": "Dr. Murilo Cenovicz",
-                      "value": null,
-                      "index": 2,
-                      "type": null
+                    "action": {
+                      "button": "Ver Oftalmos",
+                      "sections": [
+                        {
+                          "title": "Oftalmologistas",
+                          "rows": [
+                            {
+                              "id": "1",
+                              "title": "Dra. Fernanda Cenovicz",
+                              "description": "Oftalmologia"
+                            },
+                            {
+                              "id": "2",
+                              "title": "Dr. Marcelo Cenovicz",
+                              "description": "Oftalmologia"
+                            },
+                            {
+                              "id": "3",
+                              "title": "Dr. Murilo Cenovicz",
+                              "description": "Oftalmologia"
+                            }
+                          ]
+                        }
+                      ]
                     }
-                  ],
-                  "quikReply": false
+                  }
                 }
               },
               "editable": true,
@@ -6576,8 +6624,8 @@
               "document": {
                 "id": "inp_doc_menu_oftalmo",
                 "type": "text/plain",
-                "textContent": "Entrada do usuário",
-                "content": "Entrada do usuário"
+                "textContent": "Aguardando clique do usuário...",
+                "content": "Aguardando clique do usuário..."
               },
               "editable": false,
               "deletable": true,
@@ -6595,7 +6643,7 @@
           "$title": "Processa Escolha [Menu] Oftalmologia",
           "settings": {
             "function": "run",
-            "source": "function run(inputChoice) {\n    var raw = (inputChoice || '').toLowerCase();\n    var docs = [{\"text\": \"Dra. Fernanda Cenovicz\", \"queue\": \"Oftalmologia - Dra. Fernanda Cenovicz\", \"isInternal\": \"false\", \"link\": \"https://wa.me/554230262600\"}, {\"text\": \"Dr. Marcelo Cenovicz\", \"queue\": \"Oftalmologia - Dr. Marcelo Cenovicz\", \"isInternal\": \"false\", \"link\": \"https://wa.me/554230262600\"}, {\"text\": \"Dr. Murilo Cenovicz\", \"queue\": \"Oftalmologia - Dr. Murilo Cenovicz\", \"isInternal\": \"false\", \"link\": \"https://wa.me/554230262600\"}];\n    for (var i = 0; i < docs.length; i++) {\n        var d = docs[i];\n        if (raw.indexOf((i + 1).toString()) !== -1 || raw.indexOf(d.text.toLowerCase().replace(/dr\\.\\s*|dra\\.\\s*/g, '')) !== -1 || d.text.toLowerCase().indexOf(raw) !== -1) {\n            return JSON.stringify({\n                doctorName: d.text,\n                queueName: d.queue,\n                isInternal: d.isInternal,\n                externalLink: d.link || '',\n                externalPhone: d.isInternal === 'false' ? '(42) 3026-2600' : ''\n            });\n        }\n    }\n    var first = docs[0];\n    return JSON.stringify({ doctorName: first.text, queueName: first.queue, isInternal: first.isInternal, externalLink: first.link || '', externalPhone: '' });\n}",
+            "source": "function run(inputChoice) {\n    var raw = (inputChoice || '').toLowerCase();\n    var docs = [{\"id\": \"1\", \"title\": \"Dra. Fernanda Cenovicz\", \"desc\": \"Oftalmologia\", \"queue\": \"Oftalmologia - Dra. Fernanda Cenovicz\", \"isInternal\": \"false\", \"link\": \"https://wa.me/554230262600\"}, {\"id\": \"2\", \"title\": \"Dr. Marcelo Cenovicz\", \"desc\": \"Oftalmologia\", \"queue\": \"Oftalmologia - Dr. Marcelo Cenovicz\", \"isInternal\": \"false\", \"link\": \"https://wa.me/554230262600\"}, {\"id\": \"3\", \"title\": \"Dr. Murilo Cenovicz\", \"desc\": \"Oftalmologia\", \"queue\": \"Oftalmologia - Dr. Murilo Cenovicz\", \"isInternal\": \"false\", \"link\": \"https://wa.me/554230262600\"}];\n    for (var i = 0; i < docs.length; i++) {\n        var d = docs[i];\n        if (raw.indexOf(d.id) !== -1 || raw.indexOf(d.title.toLowerCase().replace(/dr\\.\\s*|dra\\.\\s*/g, '').trim()) !== -1 || d.title.toLowerCase().indexOf(raw) !== -1) {\n            return JSON.stringify({\n                doctorName: d.title,\n                queueName: d.queue,\n                isInternal: d.isInternal,\n                externalLink: d.link || '',\n                externalPhone: d.isInternal === 'false' ? '(42) 3026-2600' : ''\n            });\n        }\n    }\n    var first = docs[0];\n    return JSON.stringify({ doctorName: first.title, queueName: first.queue, isInternal: first.isInternal, externalLink: first.link || '', externalPhone: '' });\n}",
             "inputVariables": [
               "medicoSelecionadoRaw"
             ],
@@ -6710,7 +6758,7 @@
         {
           "id": "tag_menu_oftalmo",
           "label": "[Menu] Oftalmologia",
-          "background": "#00A86B",
+          "background": "#FF1E90",
           "canChangeBackground": false
         }
       ],
@@ -6779,87 +6827,104 @@
         },
         {
           "action": {
-            "$id": "select_menu_uro",
-            "$typeOfContent": "select-immediate",
+            "$id": "card_dynamic_menu_uro",
+            "$typeOfContent": "dynamic",
             "type": "SendMessage",
             "settings": {
-              "id": "doc_select_menu_uro",
-              "type": "application/vnd.lime.select+json",
+              "id": "doc_dynamic_menu_uro",
+              "type": "application/json",
               "content": {
-                "text": "Encontramos os seguintes urologistas na Inovare. Toque na opção desejada:",
-                "scope": "immediate",
-                "options": [
-                  {
-                    "text": "Dr. Alisson Vinicius Fucio",
-                    "previewText": "Dr. Alisson Vinicius Fucio",
-                    "value": null,
-                    "index": 0,
-                    "type": null
+                "recipient_type": "individual",
+                "type": "interactive",
+                "interactive": {
+                  "type": "list",
+                  "header": {
+                    "type": "text",
+                    "text": "Urologia"
                   },
-                  {
-                    "text": "Dr. Carlos Heidi Koga",
-                    "previewText": "Dr. Carlos Heidi Koga",
-                    "value": null,
-                    "index": 1,
-                    "type": null
+                  "body": {
+                    "text": "Encontramos os seguintes urologistas na Inovare. Toque no botão abaixo para escolher o especialista:"
                   },
-                  {
-                    "text": "Dr. Eduardo Bisinella",
-                    "previewText": "Dr. Eduardo Bisinella",
-                    "value": null,
-                    "index": 2,
-                    "type": null
-                  },
-                  {
-                    "text": "Dr. Ricardo Angelo Jeczmionski",
-                    "previewText": "Dr. Ricardo Angelo Jeczmionski",
-                    "value": null,
-                    "index": 3,
-                    "type": null
+                  "action": {
+                    "button": "Ver Urologistas",
+                    "sections": [
+                      {
+                        "title": "Urologistas",
+                        "rows": [
+                          {
+                            "id": "1",
+                            "title": "Dr. Alisson Vinicius",
+                            "description": "Urologia"
+                          },
+                          {
+                            "id": "2",
+                            "title": "Dr. Carlos Heidi Koga",
+                            "description": "Urologia"
+                          },
+                          {
+                            "id": "3",
+                            "title": "Dr. Eduardo Bisinella",
+                            "description": "Urologia"
+                          },
+                          {
+                            "id": "4",
+                            "title": "Dr. Ricardo Angelo",
+                            "description": "Urologia"
+                          }
+                        ]
+                      }
+                    ]
                   }
-                ],
-                "quikReply": false
-              },
-              "metadata": {}
+                }
+              }
             },
             "$cardContent": {
               "document": {
-                "id": "doc_select_menu_uro",
-                "type": "application/vnd.lime.select+json",
+                "id": "doc_dynamic_menu_uro",
+                "type": "application/json",
                 "content": {
-                  "text": "Encontramos os seguintes urologistas na Inovare. Toque na opção desejada:",
-                  "scope": "immediate",
-                  "options": [
-                    {
-                      "text": "Dr. Alisson Vinicius Fucio",
-                      "previewText": "Dr. Alisson Vinicius Fucio",
-                      "value": null,
-                      "index": 0,
-                      "type": null
+                  "recipient_type": "individual",
+                  "type": "interactive",
+                  "interactive": {
+                    "type": "list",
+                    "header": {
+                      "type": "text",
+                      "text": "Urologia"
                     },
-                    {
-                      "text": "Dr. Carlos Heidi Koga",
-                      "previewText": "Dr. Carlos Heidi Koga",
-                      "value": null,
-                      "index": 1,
-                      "type": null
+                    "body": {
+                      "text": "Encontramos os seguintes urologistas na Inovare. Toque no botão abaixo para escolher o especialista:"
                     },
-                    {
-                      "text": "Dr. Eduardo Bisinella",
-                      "previewText": "Dr. Eduardo Bisinella",
-                      "value": null,
-                      "index": 2,
-                      "type": null
-                    },
-                    {
-                      "text": "Dr. Ricardo Angelo Jeczmionski",
-                      "previewText": "Dr. Ricardo Angelo Jeczmionski",
-                      "value": null,
-                      "index": 3,
-                      "type": null
+                    "action": {
+                      "button": "Ver Urologistas",
+                      "sections": [
+                        {
+                          "title": "Urologistas",
+                          "rows": [
+                            {
+                              "id": "1",
+                              "title": "Dr. Alisson Vinicius",
+                              "description": "Urologia"
+                            },
+                            {
+                              "id": "2",
+                              "title": "Dr. Carlos Heidi Koga",
+                              "description": "Urologia"
+                            },
+                            {
+                              "id": "3",
+                              "title": "Dr. Eduardo Bisinella",
+                              "description": "Urologia"
+                            },
+                            {
+                              "id": "4",
+                              "title": "Dr. Ricardo Angelo",
+                              "description": "Urologia"
+                            }
+                          ]
+                        }
+                      ]
                     }
-                  ],
-                  "quikReply": false
+                  }
                 }
               },
               "editable": true,
@@ -6880,8 +6945,8 @@
               "document": {
                 "id": "inp_doc_menu_uro",
                 "type": "text/plain",
-                "textContent": "Entrada do usuário",
-                "content": "Entrada do usuário"
+                "textContent": "Aguardando clique do usuário...",
+                "content": "Aguardando clique do usuário..."
               },
               "editable": false,
               "deletable": true,
@@ -6899,7 +6964,7 @@
           "$title": "Processa Escolha [Menu] Urologia",
           "settings": {
             "function": "run",
-            "source": "function run(inputChoice) {\n    var raw = (inputChoice || '').toLowerCase();\n    var docs = [{\"text\": \"Dr. Alisson Vinicius Fucio\", \"queue\": \"Urologia - Dr. Alisson Vinicius Emerique Fucio\", \"isInternal\": \"true\", \"link\": \"\"}, {\"text\": \"Dr. Carlos Heidi Koga\", \"queue\": \"Urologia - Dr. Carlos Heidi Koga\", \"isInternal\": \"true\", \"link\": \"\"}, {\"text\": \"Dr. Eduardo Bisinella\", \"queue\": \"Urologia - Dr. Eduardo Bisinella\", \"isInternal\": \"true\", \"link\": \"\"}, {\"text\": \"Dr. Ricardo Angelo Jeczmionski\", \"queue\": \"Urologia - Dr. Ricardo Angelo Jeczmionski\", \"isInternal\": \"true\", \"link\": \"\"}];\n    for (var i = 0; i < docs.length; i++) {\n        var d = docs[i];\n        if (raw.indexOf((i + 1).toString()) !== -1 || raw.indexOf(d.text.toLowerCase().replace(/dr\\.\\s*|dra\\.\\s*/g, '')) !== -1 || d.text.toLowerCase().indexOf(raw) !== -1) {\n            return JSON.stringify({\n                doctorName: d.text,\n                queueName: d.queue,\n                isInternal: d.isInternal,\n                externalLink: d.link || '',\n                externalPhone: d.isInternal === 'false' ? '(42) 3026-2600' : ''\n            });\n        }\n    }\n    var first = docs[0];\n    return JSON.stringify({ doctorName: first.text, queueName: first.queue, isInternal: first.isInternal, externalLink: first.link || '', externalPhone: '' });\n}",
+            "source": "function run(inputChoice) {\n    var raw = (inputChoice || '').toLowerCase();\n    var docs = [{\"id\": \"1\", \"title\": \"Dr. Alisson Vinicius\", \"desc\": \"Urologia\", \"queue\": \"Urologia - Dr. Alisson Vinicius Emerique Fucio\", \"isInternal\": \"true\", \"link\": \"\"}, {\"id\": \"2\", \"title\": \"Dr. Carlos Heidi Koga\", \"desc\": \"Urologia\", \"queue\": \"Urologia - Dr. Carlos Heidi Koga\", \"isInternal\": \"true\", \"link\": \"\"}, {\"id\": \"3\", \"title\": \"Dr. Eduardo Bisinella\", \"desc\": \"Urologia\", \"queue\": \"Urologia - Dr. Eduardo Bisinella\", \"isInternal\": \"true\", \"link\": \"\"}, {\"id\": \"4\", \"title\": \"Dr. Ricardo Angelo\", \"desc\": \"Urologia\", \"queue\": \"Urologia - Dr. Ricardo Angelo Jeczmionski\", \"isInternal\": \"true\", \"link\": \"\"}];\n    for (var i = 0; i < docs.length; i++) {\n        var d = docs[i];\n        if (raw.indexOf(d.id) !== -1 || raw.indexOf(d.title.toLowerCase().replace(/dr\\.\\s*|dra\\.\\s*/g, '').trim()) !== -1 || d.title.toLowerCase().indexOf(raw) !== -1) {\n            return JSON.stringify({\n                doctorName: d.title,\n                queueName: d.queue,\n                isInternal: d.isInternal,\n                externalLink: d.link || '',\n                externalPhone: d.isInternal === 'false' ? '(42) 3026-2600' : ''\n            });\n        }\n    }\n    var first = docs[0];\n    return JSON.stringify({ doctorName: first.title, queueName: first.queue, isInternal: first.isInternal, externalLink: first.link || '', externalPhone: '' });\n}",
             "inputVariables": [
               "medicoSelecionadoRaw"
             ],
@@ -7014,16 +7079,16 @@
         {
           "id": "tag_menu_uro",
           "label": "[Menu] Urologia",
-          "background": "#00A86B",
+          "background": "#FF1E90",
           "canChangeBackground": false
         }
       ],
       "$invalid": false,
       "$inputSuggestions": [
-        "Dr. Alisson Vinicius Fucio",
+        "Dr. Alisson Vinicius",
         "Dr. Carlos Heidi Koga",
         "Dr. Eduardo Bisinella",
-        "Dr. Ricardo Angelo Jeczmionski"
+        "Dr. Ricardo Angelo"
       ],
       "$invalidContentActions": false,
       "$invalidOutputs": false,
@@ -7084,73 +7149,94 @@
         },
         {
           "action": {
-            "$id": "select_menu_vascular",
-            "$typeOfContent": "select-immediate",
+            "$id": "card_dynamic_menu_vascular",
+            "$typeOfContent": "dynamic",
             "type": "SendMessage",
             "settings": {
-              "id": "doc_select_menu_vascular",
-              "type": "application/vnd.lime.select+json",
+              "id": "doc_dynamic_menu_vascular",
+              "type": "application/json",
               "content": {
-                "text": "Encontramos os seguintes cirurgiões vasculares. Toque na opção desejada:",
-                "scope": "immediate",
-                "options": [
-                  {
-                    "text": "Dr. Bruno Pançan",
-                    "previewText": "Dr. Bruno Pançan",
-                    "value": null,
-                    "index": 0,
-                    "type": null
+                "recipient_type": "individual",
+                "type": "interactive",
+                "interactive": {
+                  "type": "list",
+                  "header": {
+                    "type": "text",
+                    "text": "Cirurgia Vascular"
                   },
-                  {
-                    "text": "Dra. Karen Miyabukuro",
-                    "previewText": "Dra. Karen Miyabukuro",
-                    "value": null,
-                    "index": 1,
-                    "type": null
+                  "body": {
+                    "text": "Encontramos os seguintes cirurgiões vasculares. Toque no botão abaixo para escolher:"
                   },
-                  {
-                    "text": "Dr. Ricardo Zanetti Gomes",
-                    "previewText": "Dr. Ricardo Zanetti Gomes",
-                    "value": null,
-                    "index": 2,
-                    "type": null
+                  "action": {
+                    "button": "Ver Cirurgiões",
+                    "sections": [
+                      {
+                        "title": "Cirurgia Vascular",
+                        "rows": [
+                          {
+                            "id": "1",
+                            "title": "Dr. Bruno Pancan",
+                            "description": "Cirurgia Vascular"
+                          },
+                          {
+                            "id": "2",
+                            "title": "Dra. Karen Miyabukuro",
+                            "description": "Cirurgia Vascular"
+                          },
+                          {
+                            "id": "3",
+                            "title": "Dr. Ricardo Zanetti",
+                            "description": "Cirurgia Vascular"
+                          }
+                        ]
+                      }
+                    ]
                   }
-                ],
-                "quikReply": false
-              },
-              "metadata": {}
+                }
+              }
             },
             "$cardContent": {
               "document": {
-                "id": "doc_select_menu_vascular",
-                "type": "application/vnd.lime.select+json",
+                "id": "doc_dynamic_menu_vascular",
+                "type": "application/json",
                 "content": {
-                  "text": "Encontramos os seguintes cirurgiões vasculares. Toque na opção desejada:",
-                  "scope": "immediate",
-                  "options": [
-                    {
-                      "text": "Dr. Bruno Pançan",
-                      "previewText": "Dr. Bruno Pançan",
-                      "value": null,
-                      "index": 0,
-                      "type": null
+                  "recipient_type": "individual",
+                  "type": "interactive",
+                  "interactive": {
+                    "type": "list",
+                    "header": {
+                      "type": "text",
+                      "text": "Cirurgia Vascular"
                     },
-                    {
-                      "text": "Dra. Karen Miyabukuro",
-                      "previewText": "Dra. Karen Miyabukuro",
-                      "value": null,
-                      "index": 1,
-                      "type": null
+                    "body": {
+                      "text": "Encontramos os seguintes cirurgiões vasculares. Toque no botão abaixo para escolher:"
                     },
-                    {
-                      "text": "Dr. Ricardo Zanetti Gomes",
-                      "previewText": "Dr. Ricardo Zanetti Gomes",
-                      "value": null,
-                      "index": 2,
-                      "type": null
+                    "action": {
+                      "button": "Ver Cirurgiões",
+                      "sections": [
+                        {
+                          "title": "Cirurgia Vascular",
+                          "rows": [
+                            {
+                              "id": "1",
+                              "title": "Dr. Bruno Pancan",
+                              "description": "Cirurgia Vascular"
+                            },
+                            {
+                              "id": "2",
+                              "title": "Dra. Karen Miyabukuro",
+                              "description": "Cirurgia Vascular"
+                            },
+                            {
+                              "id": "3",
+                              "title": "Dr. Ricardo Zanetti",
+                              "description": "Cirurgia Vascular"
+                            }
+                          ]
+                        }
+                      ]
                     }
-                  ],
-                  "quikReply": false
+                  }
                 }
               },
               "editable": true,
@@ -7171,8 +7257,8 @@
               "document": {
                 "id": "inp_doc_menu_vascular",
                 "type": "text/plain",
-                "textContent": "Entrada do usuário",
-                "content": "Entrada do usuário"
+                "textContent": "Aguardando clique do usuário...",
+                "content": "Aguardando clique do usuário..."
               },
               "editable": false,
               "deletable": true,
@@ -7190,7 +7276,7 @@
           "$title": "Processa Escolha [Menu] Cirurgia Vascular",
           "settings": {
             "function": "run",
-            "source": "function run(inputChoice) {\n    var raw = (inputChoice || '').toLowerCase();\n    var docs = [{\"text\": \"Dr. Bruno Pançan\", \"queue\": \"Cirurgia Vascular - Dr. Bruno Figueiredo Pançan\", \"isInternal\": \"true\", \"link\": \"\"}, {\"text\": \"Dra. Karen Miyabukuro\", \"queue\": \"Cirurgia Vascular - Dra. Karen Kono Miyabukuro\", \"isInternal\": \"true\", \"link\": \"\"}, {\"text\": \"Dr. Ricardo Zanetti Gomes\", \"queue\": \"Cirurgia Vascular - Dr. Ricardo Zanetti Gomes\", \"isInternal\": \"true\", \"link\": \"\"}];\n    for (var i = 0; i < docs.length; i++) {\n        var d = docs[i];\n        if (raw.indexOf((i + 1).toString()) !== -1 || raw.indexOf(d.text.toLowerCase().replace(/dr\\.\\s*|dra\\.\\s*/g, '')) !== -1 || d.text.toLowerCase().indexOf(raw) !== -1) {\n            return JSON.stringify({\n                doctorName: d.text,\n                queueName: d.queue,\n                isInternal: d.isInternal,\n                externalLink: d.link || '',\n                externalPhone: d.isInternal === 'false' ? '(42) 3026-2600' : ''\n            });\n        }\n    }\n    var first = docs[0];\n    return JSON.stringify({ doctorName: first.text, queueName: first.queue, isInternal: first.isInternal, externalLink: first.link || '', externalPhone: '' });\n}",
+            "source": "function run(inputChoice) {\n    var raw = (inputChoice || '').toLowerCase();\n    var docs = [{\"id\": \"1\", \"title\": \"Dr. Bruno Pancan\", \"desc\": \"Cirurgia Vascular\", \"queue\": \"Cirurgia Vascular - Dr. Bruno Figueiredo Pançan\", \"isInternal\": \"true\", \"link\": \"\"}, {\"id\": \"2\", \"title\": \"Dra. Karen Miyabukuro\", \"desc\": \"Cirurgia Vascular\", \"queue\": \"Cirurgia Vascular - Dra. Karen Kono Miyabukuro\", \"isInternal\": \"true\", \"link\": \"\"}, {\"id\": \"3\", \"title\": \"Dr. Ricardo Zanetti\", \"desc\": \"Cirurgia Vascular\", \"queue\": \"Cirurgia Vascular - Dr. Ricardo Zanetti Gomes\", \"isInternal\": \"true\", \"link\": \"\"}];\n    for (var i = 0; i < docs.length; i++) {\n        var d = docs[i];\n        if (raw.indexOf(d.id) !== -1 || raw.indexOf(d.title.toLowerCase().replace(/dr\\.\\s*|dra\\.\\s*/g, '').trim()) !== -1 || d.title.toLowerCase().indexOf(raw) !== -1) {\n            return JSON.stringify({\n                doctorName: d.title,\n                queueName: d.queue,\n                isInternal: d.isInternal,\n                externalLink: d.link || '',\n                externalPhone: d.isInternal === 'false' ? '(42) 3026-2600' : ''\n            });\n        }\n    }\n    var first = docs[0];\n    return JSON.stringify({ doctorName: first.title, queueName: first.queue, isInternal: first.isInternal, externalLink: first.link || '', externalPhone: '' });\n}",
             "inputVariables": [
               "medicoSelecionadoRaw"
             ],
@@ -7305,15 +7391,15 @@
         {
           "id": "tag_menu_vascular",
           "label": "[Menu] Cirurgia Vascular",
-          "background": "#00A86B",
+          "background": "#FF1E90",
           "canChangeBackground": false
         }
       ],
       "$invalid": false,
       "$inputSuggestions": [
-        "Dr. Bruno Pançan",
+        "Dr. Bruno Pancan",
         "Dra. Karen Miyabukuro",
-        "Dr. Ricardo Zanetti Gomes"
+        "Dr. Ricardo Zanetti"
       ],
       "$invalidContentActions": false,
       "$invalidOutputs": false,
@@ -7374,73 +7460,94 @@
         },
         {
           "action": {
-            "$id": "select_menu_gastro",
-            "$typeOfContent": "select-immediate",
+            "$id": "card_dynamic_menu_gastro",
+            "$typeOfContent": "dynamic",
             "type": "SendMessage",
             "settings": {
-              "id": "doc_select_menu_gastro",
-              "type": "application/vnd.lime.select+json",
+              "id": "doc_dynamic_menu_gastro",
+              "type": "application/json",
               "content": {
-                "text": "Encontramos os seguintes gastroenterologistas. Toque na opção desejada:",
-                "scope": "immediate",
-                "options": [
-                  {
-                    "text": "Dra. Caroline Tatim Saad",
-                    "previewText": "Dra. Caroline Tatim Saad",
-                    "value": null,
-                    "index": 0,
-                    "type": null
+                "recipient_type": "individual",
+                "type": "interactive",
+                "interactive": {
+                  "type": "list",
+                  "header": {
+                    "type": "text",
+                    "text": "Gastroenterologia"
                   },
-                  {
-                    "text": "Dr. Claudio Solak",
-                    "previewText": "Dr. Claudio Solak",
-                    "value": null,
-                    "index": 1,
-                    "type": null
+                  "body": {
+                    "text": "Encontramos os seguintes gastroenterologistas. Toque no botão abaixo para escolher:"
                   },
-                  {
-                    "text": "Dr. Danilo Saad",
-                    "previewText": "Dr. Danilo Saad",
-                    "value": null,
-                    "index": 2,
-                    "type": null
+                  "action": {
+                    "button": "Ver Especialistas",
+                    "sections": [
+                      {
+                        "title": "Gastroenterologia",
+                        "rows": [
+                          {
+                            "id": "1",
+                            "title": "Dra. Caroline Tatim",
+                            "description": "Gastroenterologia"
+                          },
+                          {
+                            "id": "2",
+                            "title": "Dr. Claudio Solak",
+                            "description": "Gastroenterologia"
+                          },
+                          {
+                            "id": "3",
+                            "title": "Dr. Danilo Saad",
+                            "description": "Gastroenterologia"
+                          }
+                        ]
+                      }
+                    ]
                   }
-                ],
-                "quikReply": false
-              },
-              "metadata": {}
+                }
+              }
             },
             "$cardContent": {
               "document": {
-                "id": "doc_select_menu_gastro",
-                "type": "application/vnd.lime.select+json",
+                "id": "doc_dynamic_menu_gastro",
+                "type": "application/json",
                 "content": {
-                  "text": "Encontramos os seguintes gastroenterologistas. Toque na opção desejada:",
-                  "scope": "immediate",
-                  "options": [
-                    {
-                      "text": "Dra. Caroline Tatim Saad",
-                      "previewText": "Dra. Caroline Tatim Saad",
-                      "value": null,
-                      "index": 0,
-                      "type": null
+                  "recipient_type": "individual",
+                  "type": "interactive",
+                  "interactive": {
+                    "type": "list",
+                    "header": {
+                      "type": "text",
+                      "text": "Gastroenterologia"
                     },
-                    {
-                      "text": "Dr. Claudio Solak",
-                      "previewText": "Dr. Claudio Solak",
-                      "value": null,
-                      "index": 1,
-                      "type": null
+                    "body": {
+                      "text": "Encontramos os seguintes gastroenterologistas. Toque no botão abaixo para escolher:"
                     },
-                    {
-                      "text": "Dr. Danilo Saad",
-                      "previewText": "Dr. Danilo Saad",
-                      "value": null,
-                      "index": 2,
-                      "type": null
+                    "action": {
+                      "button": "Ver Especialistas",
+                      "sections": [
+                        {
+                          "title": "Gastroenterologia",
+                          "rows": [
+                            {
+                              "id": "1",
+                              "title": "Dra. Caroline Tatim",
+                              "description": "Gastroenterologia"
+                            },
+                            {
+                              "id": "2",
+                              "title": "Dr. Claudio Solak",
+                              "description": "Gastroenterologia"
+                            },
+                            {
+                              "id": "3",
+                              "title": "Dr. Danilo Saad",
+                              "description": "Gastroenterologia"
+                            }
+                          ]
+                        }
+                      ]
                     }
-                  ],
-                  "quikReply": false
+                  }
                 }
               },
               "editable": true,
@@ -7461,8 +7568,8 @@
               "document": {
                 "id": "inp_doc_menu_gastro",
                 "type": "text/plain",
-                "textContent": "Entrada do usuário",
-                "content": "Entrada do usuário"
+                "textContent": "Aguardando clique do usuário...",
+                "content": "Aguardando clique do usuário..."
               },
               "editable": false,
               "deletable": true,
@@ -7480,7 +7587,7 @@
           "$title": "Processa Escolha [Menu] Gastroenterologia",
           "settings": {
             "function": "run",
-            "source": "function run(inputChoice) {\n    var raw = (inputChoice || '').toLowerCase();\n    var docs = [{\"text\": \"Dra. Caroline Tatim Saad\", \"queue\": \"Gastroenterologia - Dra. Caroline Tatim Saad\", \"isInternal\": \"false\", \"link\": \"https://wa.me/554230262600\"}, {\"text\": \"Dr. Claudio Solak\", \"queue\": \"Gastroenterologia - Dr. Claudio Solak\", \"isInternal\": \"false\", \"link\": \"https://wa.me/554230262600\"}, {\"text\": \"Dr. Danilo Saad\", \"queue\": \"Gastroenterologia - Dr. Danilo Saad\", \"isInternal\": \"false\", \"link\": \"https://wa.me/554230262600\"}];\n    for (var i = 0; i < docs.length; i++) {\n        var d = docs[i];\n        if (raw.indexOf((i + 1).toString()) !== -1 || raw.indexOf(d.text.toLowerCase().replace(/dr\\.\\s*|dra\\.\\s*/g, '')) !== -1 || d.text.toLowerCase().indexOf(raw) !== -1) {\n            return JSON.stringify({\n                doctorName: d.text,\n                queueName: d.queue,\n                isInternal: d.isInternal,\n                externalLink: d.link || '',\n                externalPhone: d.isInternal === 'false' ? '(42) 3026-2600' : ''\n            });\n        }\n    }\n    var first = docs[0];\n    return JSON.stringify({ doctorName: first.text, queueName: first.queue, isInternal: first.isInternal, externalLink: first.link || '', externalPhone: '' });\n}",
+            "source": "function run(inputChoice) {\n    var raw = (inputChoice || '').toLowerCase();\n    var docs = [{\"id\": \"1\", \"title\": \"Dra. Caroline Tatim\", \"desc\": \"Gastroenterologia\", \"queue\": \"Gastroenterologia - Dra. Caroline Tatim Saad\", \"isInternal\": \"false\", \"link\": \"https://wa.me/554230262600\"}, {\"id\": \"2\", \"title\": \"Dr. Claudio Solak\", \"desc\": \"Gastroenterologia\", \"queue\": \"Gastroenterologia - Dr. Claudio Solak\", \"isInternal\": \"false\", \"link\": \"https://wa.me/554230262600\"}, {\"id\": \"3\", \"title\": \"Dr. Danilo Saad\", \"desc\": \"Gastroenterologia\", \"queue\": \"Gastroenterologia - Dr. Danilo Saad\", \"isInternal\": \"false\", \"link\": \"https://wa.me/554230262600\"}];\n    for (var i = 0; i < docs.length; i++) {\n        var d = docs[i];\n        if (raw.indexOf(d.id) !== -1 || raw.indexOf(d.title.toLowerCase().replace(/dr\\.\\s*|dra\\.\\s*/g, '').trim()) !== -1 || d.title.toLowerCase().indexOf(raw) !== -1) {\n            return JSON.stringify({\n                doctorName: d.title,\n                queueName: d.queue,\n                isInternal: d.isInternal,\n                externalLink: d.link || '',\n                externalPhone: d.isInternal === 'false' ? '(42) 3026-2600' : ''\n            });\n        }\n    }\n    var first = docs[0];\n    return JSON.stringify({ doctorName: first.title, queueName: first.queue, isInternal: first.isInternal, externalLink: first.link || '', externalPhone: '' });\n}",
             "inputVariables": [
               "medicoSelecionadoRaw"
             ],
@@ -7595,13 +7702,13 @@
         {
           "id": "tag_menu_gastro",
           "label": "[Menu] Gastroenterologia",
-          "background": "#00A86B",
+          "background": "#FF1E90",
           "canChangeBackground": false
         }
       ],
       "$invalid": false,
       "$inputSuggestions": [
-        "Dra. Caroline Tatim Saad",
+        "Dra. Caroline Tatim",
         "Dr. Claudio Solak",
         "Dr. Danilo Saad"
       ],
@@ -7664,59 +7771,84 @@
         },
         {
           "action": {
-            "$id": "select_menu_neuro",
-            "$typeOfContent": "select-immediate",
+            "$id": "card_dynamic_menu_neuro",
+            "$typeOfContent": "dynamic",
             "type": "SendMessage",
             "settings": {
-              "id": "doc_select_menu_neuro",
-              "type": "application/vnd.lime.select+json",
+              "id": "doc_dynamic_menu_neuro",
+              "type": "application/json",
               "content": {
-                "text": "Encontramos os seguintes neurologistas. Toque na opção desejada:",
-                "scope": "immediate",
-                "options": [
-                  {
-                    "text": "Dr. Carlos Henrique Camargo",
-                    "previewText": "Dr. Carlos Henrique Camargo",
-                    "value": null,
-                    "index": 0,
-                    "type": null
+                "recipient_type": "individual",
+                "type": "interactive",
+                "interactive": {
+                  "type": "list",
+                  "header": {
+                    "type": "text",
+                    "text": "Neurologia"
                   },
-                  {
-                    "text": "Dr. Marcelo Tessari",
-                    "previewText": "Dr. Marcelo Tessari",
-                    "value": null,
-                    "index": 1,
-                    "type": null
+                  "body": {
+                    "text": "Encontramos os seguintes neurologistas. Toque no botão abaixo para escolher:"
+                  },
+                  "action": {
+                    "button": "Ver Neurologistas",
+                    "sections": [
+                      {
+                        "title": "Neurologia",
+                        "rows": [
+                          {
+                            "id": "1",
+                            "title": "Dr. Carlos Henrique Cama",
+                            "description": "Neurologia"
+                          },
+                          {
+                            "id": "2",
+                            "title": "Dr. Marcelo Tessari",
+                            "description": "Neurologia"
+                          }
+                        ]
+                      }
+                    ]
                   }
-                ],
-                "quikReply": false
-              },
-              "metadata": {}
+                }
+              }
             },
             "$cardContent": {
               "document": {
-                "id": "doc_select_menu_neuro",
-                "type": "application/vnd.lime.select+json",
+                "id": "doc_dynamic_menu_neuro",
+                "type": "application/json",
                 "content": {
-                  "text": "Encontramos os seguintes neurologistas. Toque na opção desejada:",
-                  "scope": "immediate",
-                  "options": [
-                    {
-                      "text": "Dr. Carlos Henrique Camargo",
-                      "previewText": "Dr. Carlos Henrique Camargo",
-                      "value": null,
-                      "index": 0,
-                      "type": null
+                  "recipient_type": "individual",
+                  "type": "interactive",
+                  "interactive": {
+                    "type": "list",
+                    "header": {
+                      "type": "text",
+                      "text": "Neurologia"
                     },
-                    {
-                      "text": "Dr. Marcelo Tessari",
-                      "previewText": "Dr. Marcelo Tessari",
-                      "value": null,
-                      "index": 1,
-                      "type": null
+                    "body": {
+                      "text": "Encontramos os seguintes neurologistas. Toque no botão abaixo para escolher:"
+                    },
+                    "action": {
+                      "button": "Ver Neurologistas",
+                      "sections": [
+                        {
+                          "title": "Neurologia",
+                          "rows": [
+                            {
+                              "id": "1",
+                              "title": "Dr. Carlos Henrique Cama",
+                              "description": "Neurologia"
+                            },
+                            {
+                              "id": "2",
+                              "title": "Dr. Marcelo Tessari",
+                              "description": "Neurologia"
+                            }
+                          ]
+                        }
+                      ]
                     }
-                  ],
-                  "quikReply": false
+                  }
                 }
               },
               "editable": true,
@@ -7737,8 +7869,8 @@
               "document": {
                 "id": "inp_doc_menu_neuro",
                 "type": "text/plain",
-                "textContent": "Entrada do usuário",
-                "content": "Entrada do usuário"
+                "textContent": "Aguardando clique do usuário...",
+                "content": "Aguardando clique do usuário..."
               },
               "editable": false,
               "deletable": true,
@@ -7756,7 +7888,7 @@
           "$title": "Processa Escolha [Menu] Neurologia",
           "settings": {
             "function": "run",
-            "source": "function run(inputChoice) {\n    var raw = (inputChoice || '').toLowerCase();\n    var docs = [{\"text\": \"Dr. Carlos Henrique Camargo\", \"queue\": \"Neurologia - Dr. Carlos Henrique Ferreira Camargo\", \"isInternal\": \"true\", \"link\": \"\"}, {\"text\": \"Dr. Marcelo Tessari\", \"queue\": \"Neurologia - Dr. Marcelo Tessari\", \"isInternal\": \"true\", \"link\": \"\"}];\n    for (var i = 0; i < docs.length; i++) {\n        var d = docs[i];\n        if (raw.indexOf((i + 1).toString()) !== -1 || raw.indexOf(d.text.toLowerCase().replace(/dr\\.\\s*|dra\\.\\s*/g, '')) !== -1 || d.text.toLowerCase().indexOf(raw) !== -1) {\n            return JSON.stringify({\n                doctorName: d.text,\n                queueName: d.queue,\n                isInternal: d.isInternal,\n                externalLink: d.link || '',\n                externalPhone: d.isInternal === 'false' ? '(42) 3026-2600' : ''\n            });\n        }\n    }\n    var first = docs[0];\n    return JSON.stringify({ doctorName: first.text, queueName: first.queue, isInternal: first.isInternal, externalLink: first.link || '', externalPhone: '' });\n}",
+            "source": "function run(inputChoice) {\n    var raw = (inputChoice || '').toLowerCase();\n    var docs = [{\"id\": \"1\", \"title\": \"Dr. Carlos Henrique Cama\", \"desc\": \"Neurologia\", \"queue\": \"Neurologia - Dr. Carlos Henrique Ferreira Camargo\", \"isInternal\": \"true\", \"link\": \"\"}, {\"id\": \"2\", \"title\": \"Dr. Marcelo Tessari\", \"desc\": \"Neurologia\", \"queue\": \"Neurologia - Dr. Marcelo Tessari\", \"isInternal\": \"true\", \"link\": \"\"}];\n    for (var i = 0; i < docs.length; i++) {\n        var d = docs[i];\n        if (raw.indexOf(d.id) !== -1 || raw.indexOf(d.title.toLowerCase().replace(/dr\\.\\s*|dra\\.\\s*/g, '').trim()) !== -1 || d.title.toLowerCase().indexOf(raw) !== -1) {\n            return JSON.stringify({\n                doctorName: d.title,\n                queueName: d.queue,\n                isInternal: d.isInternal,\n                externalLink: d.link || '',\n                externalPhone: d.isInternal === 'false' ? '(42) 3026-2600' : ''\n            });\n        }\n    }\n    var first = docs[0];\n    return JSON.stringify({ doctorName: first.title, queueName: first.queue, isInternal: first.isInternal, externalLink: first.link || '', externalPhone: '' });\n}",
             "inputVariables": [
               "medicoSelecionadoRaw"
             ],
@@ -7871,13 +8003,13 @@
         {
           "id": "tag_menu_neuro",
           "label": "[Menu] Neurologia",
-          "background": "#00A86B",
+          "background": "#FF1E90",
           "canChangeBackground": false
         }
       ],
       "$invalid": false,
       "$inputSuggestions": [
-        "Dr. Carlos Henrique Camargo",
+        "Dr. Carlos Henrique Cama",
         "Dr. Marcelo Tessari"
       ],
       "$invalidContentActions": false,
@@ -7887,7 +8019,7 @@
     "menu_digestivo": {
       "id": "menu_digestivo",
       "root": false,
-      "$title": "[Menu] Cirurgia do Aparelho Digestivo",
+      "$title": "[Menu] Aparelho Digestivo",
       "$position": {
         "top": "300px",
         "left": "800px"
@@ -7899,7 +8031,7 @@
           "$title": "TrackContactsJourney",
           "settings": {
             "stateId": "menu_digestivo",
-            "stateName": "[Menu] Cirurgia do Aparelho Digestivo"
+            "stateName": "[Menu] Aparelho Digestivo"
           },
           "conditions": [],
           "$invalid": false
@@ -7939,59 +8071,84 @@
         },
         {
           "action": {
-            "$id": "select_menu_digestivo",
-            "$typeOfContent": "select-immediate",
+            "$id": "card_dynamic_menu_digestivo",
+            "$typeOfContent": "dynamic",
             "type": "SendMessage",
             "settings": {
-              "id": "doc_select_menu_digestivo",
-              "type": "application/vnd.lime.select+json",
+              "id": "doc_dynamic_menu_digestivo",
+              "type": "application/json",
               "content": {
-                "text": "Encontramos os seguintes cirurgiões digestivos. Toque na opção desejada:",
-                "scope": "immediate",
-                "options": [
-                  {
-                    "text": "Dr. Cesar Toshio Oda",
-                    "previewText": "Dr. Cesar Toshio Oda",
-                    "value": null,
-                    "index": 0,
-                    "type": null
+                "recipient_type": "individual",
+                "type": "interactive",
+                "interactive": {
+                  "type": "list",
+                  "header": {
+                    "type": "text",
+                    "text": "Aparelho Digestivo"
                   },
-                  {
-                    "text": "Dr. Joelson José Gulin",
-                    "previewText": "Dr. Joelson José Gulin",
-                    "value": null,
-                    "index": 1,
-                    "type": null
+                  "body": {
+                    "text": "Encontramos os seguintes cirurgiões digestivos. Toque no botão abaixo para escolher:"
+                  },
+                  "action": {
+                    "button": "Ver Cirurgiões",
+                    "sections": [
+                      {
+                        "title": "Cirurgia Digestiva",
+                        "rows": [
+                          {
+                            "id": "1",
+                            "title": "Dr. Cesar Toshio Oda",
+                            "description": "Cirurgia Digestiva"
+                          },
+                          {
+                            "id": "2",
+                            "title": "Dr. Joelson Jose Gulin",
+                            "description": "Cirurgia Digestiva"
+                          }
+                        ]
+                      }
+                    ]
                   }
-                ],
-                "quikReply": false
-              },
-              "metadata": {}
+                }
+              }
             },
             "$cardContent": {
               "document": {
-                "id": "doc_select_menu_digestivo",
-                "type": "application/vnd.lime.select+json",
+                "id": "doc_dynamic_menu_digestivo",
+                "type": "application/json",
                 "content": {
-                  "text": "Encontramos os seguintes cirurgiões digestivos. Toque na opção desejada:",
-                  "scope": "immediate",
-                  "options": [
-                    {
-                      "text": "Dr. Cesar Toshio Oda",
-                      "previewText": "Dr. Cesar Toshio Oda",
-                      "value": null,
-                      "index": 0,
-                      "type": null
+                  "recipient_type": "individual",
+                  "type": "interactive",
+                  "interactive": {
+                    "type": "list",
+                    "header": {
+                      "type": "text",
+                      "text": "Aparelho Digestivo"
                     },
-                    {
-                      "text": "Dr. Joelson José Gulin",
-                      "previewText": "Dr. Joelson José Gulin",
-                      "value": null,
-                      "index": 1,
-                      "type": null
+                    "body": {
+                      "text": "Encontramos os seguintes cirurgiões digestivos. Toque no botão abaixo para escolher:"
+                    },
+                    "action": {
+                      "button": "Ver Cirurgiões",
+                      "sections": [
+                        {
+                          "title": "Cirurgia Digestiva",
+                          "rows": [
+                            {
+                              "id": "1",
+                              "title": "Dr. Cesar Toshio Oda",
+                              "description": "Cirurgia Digestiva"
+                            },
+                            {
+                              "id": "2",
+                              "title": "Dr. Joelson Jose Gulin",
+                              "description": "Cirurgia Digestiva"
+                            }
+                          ]
+                        }
+                      ]
                     }
-                  ],
-                  "quikReply": false
+                  }
                 }
               },
               "editable": true,
@@ -8012,8 +8169,8 @@
               "document": {
                 "id": "inp_doc_menu_digestivo",
                 "type": "text/plain",
-                "textContent": "Entrada do usuário",
-                "content": "Entrada do usuário"
+                "textContent": "Aguardando clique do usuário...",
+                "content": "Aguardando clique do usuário..."
               },
               "editable": false,
               "deletable": true,
@@ -8028,10 +8185,10 @@
         {
           "$id": "proc_menu_digestivo",
           "type": "ExecuteScript",
-          "$title": "Processa Escolha [Menu] Cirurgia do Aparelho Digestivo",
+          "$title": "Processa Escolha [Menu] Aparelho Digestivo",
           "settings": {
             "function": "run",
-            "source": "function run(inputChoice) {\n    var raw = (inputChoice || '').toLowerCase();\n    var docs = [{\"text\": \"Dr. Cesar Toshio Oda\", \"queue\": \"Cirurgia do Aparelho Digestivo - Dr. Cesar Toshio Oda\", \"isInternal\": \"true\", \"link\": \"\"}, {\"text\": \"Dr. Joelson José Gulin\", \"queue\": \"Cirurgia do Aparelho Digestivo - Dr. Joelson José Gulin\", \"isInternal\": \"true\", \"link\": \"\"}];\n    for (var i = 0; i < docs.length; i++) {\n        var d = docs[i];\n        if (raw.indexOf((i + 1).toString()) !== -1 || raw.indexOf(d.text.toLowerCase().replace(/dr\\.\\s*|dra\\.\\s*/g, '')) !== -1 || d.text.toLowerCase().indexOf(raw) !== -1) {\n            return JSON.stringify({\n                doctorName: d.text,\n                queueName: d.queue,\n                isInternal: d.isInternal,\n                externalLink: d.link || '',\n                externalPhone: d.isInternal === 'false' ? '(42) 3026-2600' : ''\n            });\n        }\n    }\n    var first = docs[0];\n    return JSON.stringify({ doctorName: first.text, queueName: first.queue, isInternal: first.isInternal, externalLink: first.link || '', externalPhone: '' });\n}",
+            "source": "function run(inputChoice) {\n    var raw = (inputChoice || '').toLowerCase();\n    var docs = [{\"id\": \"1\", \"title\": \"Dr. Cesar Toshio Oda\", \"desc\": \"Cirurgia Digestiva\", \"queue\": \"Cirurgia do Aparelho Digestivo - Dr. Cesar Toshio Oda\", \"isInternal\": \"true\", \"link\": \"\"}, {\"id\": \"2\", \"title\": \"Dr. Joelson Jose Gulin\", \"desc\": \"Cirurgia Digestiva\", \"queue\": \"Cirurgia do Aparelho Digestivo - Dr. Joelson José Gulin\", \"isInternal\": \"true\", \"link\": \"\"}];\n    for (var i = 0; i < docs.length; i++) {\n        var d = docs[i];\n        if (raw.indexOf(d.id) !== -1 || raw.indexOf(d.title.toLowerCase().replace(/dr\\.\\s*|dra\\.\\s*/g, '').trim()) !== -1 || d.title.toLowerCase().indexOf(raw) !== -1) {\n            return JSON.stringify({\n                doctorName: d.title,\n                queueName: d.queue,\n                isInternal: d.isInternal,\n                externalLink: d.link || '',\n                externalPhone: d.isInternal === 'false' ? '(42) 3026-2600' : ''\n            });\n        }\n    }\n    var first = docs[0];\n    return JSON.stringify({ doctorName: first.title, queueName: first.queue, isInternal: first.isInternal, externalLink: first.link || '', externalPhone: '' });\n}",
             "inputVariables": [
               "medicoSelecionadoRaw"
             ],
@@ -8145,15 +8302,15 @@
       "$tags": [
         {
           "id": "tag_menu_digestivo",
-          "label": "[Menu] Cirurgia do Aparelho Digestivo",
-          "background": "#00A86B",
+          "label": "[Menu] Aparelho Digestivo",
+          "background": "#FF1E90",
           "canChangeBackground": false
         }
       ],
       "$invalid": false,
       "$inputSuggestions": [
         "Dr. Cesar Toshio Oda",
-        "Dr. Joelson José Gulin"
+        "Dr. Joelson Jose Gulin"
       ],
       "$invalidContentActions": false,
       "$invalidOutputs": false,
@@ -8214,59 +8371,84 @@
         },
         {
           "action": {
-            "$id": "select_menu_clinicageral",
-            "$typeOfContent": "select-immediate",
+            "$id": "card_dynamic_menu_clinicageral",
+            "$typeOfContent": "dynamic",
             "type": "SendMessage",
             "settings": {
-              "id": "doc_select_menu_clinicageral",
-              "type": "application/vnd.lime.select+json",
+              "id": "doc_dynamic_menu_clinicageral",
+              "type": "application/json",
               "content": {
-                "text": "Encontramos os seguintes clínicos gerais. Toque na opção desejada:",
-                "scope": "immediate",
-                "options": [
-                  {
-                    "text": "Dra. Ana Paula Carvalho",
-                    "previewText": "Dra. Ana Paula Carvalho",
-                    "value": null,
-                    "index": 0,
-                    "type": null
+                "recipient_type": "individual",
+                "type": "interactive",
+                "interactive": {
+                  "type": "list",
+                  "header": {
+                    "type": "text",
+                    "text": "Clínica Geral"
                   },
-                  {
-                    "text": "Dr. Luiz Henrique Strack",
-                    "previewText": "Dr. Luiz Henrique Strack",
-                    "value": null,
-                    "index": 1,
-                    "type": null
+                  "body": {
+                    "text": "Encontramos os seguintes clínicos gerais. Toque no botão abaixo para escolher:"
+                  },
+                  "action": {
+                    "button": "Ver Médicos",
+                    "sections": [
+                      {
+                        "title": "Clínica Geral",
+                        "rows": [
+                          {
+                            "id": "1",
+                            "title": "Dra. Ana Paula Carvalho",
+                            "description": "Clínica Geral"
+                          },
+                          {
+                            "id": "2",
+                            "title": "Dr. Luiz Henrique Strack",
+                            "description": "Clínica Geral"
+                          }
+                        ]
+                      }
+                    ]
                   }
-                ],
-                "quikReply": false
-              },
-              "metadata": {}
+                }
+              }
             },
             "$cardContent": {
               "document": {
-                "id": "doc_select_menu_clinicageral",
-                "type": "application/vnd.lime.select+json",
+                "id": "doc_dynamic_menu_clinicageral",
+                "type": "application/json",
                 "content": {
-                  "text": "Encontramos os seguintes clínicos gerais. Toque na opção desejada:",
-                  "scope": "immediate",
-                  "options": [
-                    {
-                      "text": "Dra. Ana Paula Carvalho",
-                      "previewText": "Dra. Ana Paula Carvalho",
-                      "value": null,
-                      "index": 0,
-                      "type": null
+                  "recipient_type": "individual",
+                  "type": "interactive",
+                  "interactive": {
+                    "type": "list",
+                    "header": {
+                      "type": "text",
+                      "text": "Clínica Geral"
                     },
-                    {
-                      "text": "Dr. Luiz Henrique Strack",
-                      "previewText": "Dr. Luiz Henrique Strack",
-                      "value": null,
-                      "index": 1,
-                      "type": null
+                    "body": {
+                      "text": "Encontramos os seguintes clínicos gerais. Toque no botão abaixo para escolher:"
+                    },
+                    "action": {
+                      "button": "Ver Médicos",
+                      "sections": [
+                        {
+                          "title": "Clínica Geral",
+                          "rows": [
+                            {
+                              "id": "1",
+                              "title": "Dra. Ana Paula Carvalho",
+                              "description": "Clínica Geral"
+                            },
+                            {
+                              "id": "2",
+                              "title": "Dr. Luiz Henrique Strack",
+                              "description": "Clínica Geral"
+                            }
+                          ]
+                        }
+                      ]
                     }
-                  ],
-                  "quikReply": false
+                  }
                 }
               },
               "editable": true,
@@ -8287,8 +8469,8 @@
               "document": {
                 "id": "inp_doc_menu_clinicageral",
                 "type": "text/plain",
-                "textContent": "Entrada do usuário",
-                "content": "Entrada do usuário"
+                "textContent": "Aguardando clique do usuário...",
+                "content": "Aguardando clique do usuário..."
               },
               "editable": false,
               "deletable": true,
@@ -8306,7 +8488,7 @@
           "$title": "Processa Escolha [Menu] Clínica Geral",
           "settings": {
             "function": "run",
-            "source": "function run(inputChoice) {\n    var raw = (inputChoice || '').toLowerCase();\n    var docs = [{\"text\": \"Dra. Ana Paula Carvalho\", \"queue\": \"Clínica Geral - Dra. Ana Paula Costa Pádua de Carvalho\", \"isInternal\": \"true\", \"link\": \"\"}, {\"text\": \"Dr. Luiz Henrique Strack\", \"queue\": \"Clínica Geral - Dr. Luiz Henrique Strack\", \"isInternal\": \"true\", \"link\": \"\"}];\n    for (var i = 0; i < docs.length; i++) {\n        var d = docs[i];\n        if (raw.indexOf((i + 1).toString()) !== -1 || raw.indexOf(d.text.toLowerCase().replace(/dr\\.\\s*|dra\\.\\s*/g, '')) !== -1 || d.text.toLowerCase().indexOf(raw) !== -1) {\n            return JSON.stringify({\n                doctorName: d.text,\n                queueName: d.queue,\n                isInternal: d.isInternal,\n                externalLink: d.link || '',\n                externalPhone: d.isInternal === 'false' ? '(42) 3026-2600' : ''\n            });\n        }\n    }\n    var first = docs[0];\n    return JSON.stringify({ doctorName: first.text, queueName: first.queue, isInternal: first.isInternal, externalLink: first.link || '', externalPhone: '' });\n}",
+            "source": "function run(inputChoice) {\n    var raw = (inputChoice || '').toLowerCase();\n    var docs = [{\"id\": \"1\", \"title\": \"Dra. Ana Paula Carvalho\", \"desc\": \"Clínica Geral\", \"queue\": \"Clínica Geral - Dra. Ana Paula Costa Pádua de Carvalho\", \"isInternal\": \"true\", \"link\": \"\"}, {\"id\": \"2\", \"title\": \"Dr. Luiz Henrique Strack\", \"desc\": \"Clínica Geral\", \"queue\": \"Clínica Geral - Dr. Luiz Henrique Strack\", \"isInternal\": \"true\", \"link\": \"\"}];\n    for (var i = 0; i < docs.length; i++) {\n        var d = docs[i];\n        if (raw.indexOf(d.id) !== -1 || raw.indexOf(d.title.toLowerCase().replace(/dr\\.\\s*|dra\\.\\s*/g, '').trim()) !== -1 || d.title.toLowerCase().indexOf(raw) !== -1) {\n            return JSON.stringify({\n                doctorName: d.title,\n                queueName: d.queue,\n                isInternal: d.isInternal,\n                externalLink: d.link || '',\n                externalPhone: d.isInternal === 'false' ? '(42) 3026-2600' : ''\n            });\n        }\n    }\n    var first = docs[0];\n    return JSON.stringify({ doctorName: first.title, queueName: first.queue, isInternal: first.isInternal, externalLink: first.link || '', externalPhone: '' });\n}",
             "inputVariables": [
               "medicoSelecionadoRaw"
             ],
@@ -8421,7 +8603,7 @@
         {
           "id": "tag_menu_clinicageral",
           "label": "[Menu] Clínica Geral",
-          "background": "#00A86B",
+          "background": "#FF1E90",
           "canChangeBackground": false
         }
       ],
@@ -8489,87 +8671,104 @@
         },
         {
           "action": {
-            "$id": "select_menu_carlos",
-            "$typeOfContent": "select-immediate",
+            "$id": "card_dynamic_menu_carlos",
+            "$typeOfContent": "dynamic",
             "type": "SendMessage",
             "settings": {
-              "id": "doc_select_menu_carlos",
-              "type": "application/vnd.lime.select+json",
+              "id": "doc_dynamic_menu_carlos",
+              "type": "application/json",
               "content": {
-                "text": "Encontramos mais de um especialista com este nome. Toque na opção desejada:",
-                "scope": "immediate",
-                "options": [
-                  {
-                    "text": "Dr. Carlos Alberto (Gineco)",
-                    "previewText": "Dr. Carlos Alberto (Gineco)",
-                    "value": null,
-                    "index": 0,
-                    "type": null
+                "recipient_type": "individual",
+                "type": "interactive",
+                "interactive": {
+                  "type": "list",
+                  "header": {
+                    "type": "text",
+                    "text": "Dr. Carlos"
                   },
-                  {
-                    "text": "Dr. Carlos Henrique (Neuro)",
-                    "previewText": "Dr. Carlos Henrique (Neuro)",
-                    "value": null,
-                    "index": 1,
-                    "type": null
+                  "body": {
+                    "text": "Encontramos mais de um especialista com este nome. Toque no botão abaixo para escolher:"
                   },
-                  {
-                    "text": "Dr. Carlos Miers (Orto)",
-                    "previewText": "Dr. Carlos Miers (Orto)",
-                    "value": null,
-                    "index": 2,
-                    "type": null
-                  },
-                  {
-                    "text": "Dr. Carlos Heidi (Uro)",
-                    "previewText": "Dr. Carlos Heidi (Uro)",
-                    "value": null,
-                    "index": 3,
-                    "type": null
+                  "action": {
+                    "button": "Ver Opções",
+                    "sections": [
+                      {
+                        "title": "Especialistas",
+                        "rows": [
+                          {
+                            "id": "1",
+                            "title": "Dr. Carlos A. (Gineco)",
+                            "description": "Ginecologia"
+                          },
+                          {
+                            "id": "2",
+                            "title": "Dr. Carlos H. (Neuro)",
+                            "description": "Neurologia"
+                          },
+                          {
+                            "id": "3",
+                            "title": "Dr. Carlos M. (Orto)",
+                            "description": "Ortopedia"
+                          },
+                          {
+                            "id": "4",
+                            "title": "Dr. Carlos H. (Uro)",
+                            "description": "Urologia"
+                          }
+                        ]
+                      }
+                    ]
                   }
-                ],
-                "quikReply": false
-              },
-              "metadata": {}
+                }
+              }
             },
             "$cardContent": {
               "document": {
-                "id": "doc_select_menu_carlos",
-                "type": "application/vnd.lime.select+json",
+                "id": "doc_dynamic_menu_carlos",
+                "type": "application/json",
                 "content": {
-                  "text": "Encontramos mais de um especialista com este nome. Toque na opção desejada:",
-                  "scope": "immediate",
-                  "options": [
-                    {
-                      "text": "Dr. Carlos Alberto (Gineco)",
-                      "previewText": "Dr. Carlos Alberto (Gineco)",
-                      "value": null,
-                      "index": 0,
-                      "type": null
+                  "recipient_type": "individual",
+                  "type": "interactive",
+                  "interactive": {
+                    "type": "list",
+                    "header": {
+                      "type": "text",
+                      "text": "Dr. Carlos"
                     },
-                    {
-                      "text": "Dr. Carlos Henrique (Neuro)",
-                      "previewText": "Dr. Carlos Henrique (Neuro)",
-                      "value": null,
-                      "index": 1,
-                      "type": null
+                    "body": {
+                      "text": "Encontramos mais de um especialista com este nome. Toque no botão abaixo para escolher:"
                     },
-                    {
-                      "text": "Dr. Carlos Miers (Orto)",
-                      "previewText": "Dr. Carlos Miers (Orto)",
-                      "value": null,
-                      "index": 2,
-                      "type": null
-                    },
-                    {
-                      "text": "Dr. Carlos Heidi (Uro)",
-                      "previewText": "Dr. Carlos Heidi (Uro)",
-                      "value": null,
-                      "index": 3,
-                      "type": null
+                    "action": {
+                      "button": "Ver Opções",
+                      "sections": [
+                        {
+                          "title": "Especialistas",
+                          "rows": [
+                            {
+                              "id": "1",
+                              "title": "Dr. Carlos A. (Gineco)",
+                              "description": "Ginecologia"
+                            },
+                            {
+                              "id": "2",
+                              "title": "Dr. Carlos H. (Neuro)",
+                              "description": "Neurologia"
+                            },
+                            {
+                              "id": "3",
+                              "title": "Dr. Carlos M. (Orto)",
+                              "description": "Ortopedia"
+                            },
+                            {
+                              "id": "4",
+                              "title": "Dr. Carlos H. (Uro)",
+                              "description": "Urologia"
+                            }
+                          ]
+                        }
+                      ]
                     }
-                  ],
-                  "quikReply": false
+                  }
                 }
               },
               "editable": true,
@@ -8590,8 +8789,8 @@
               "document": {
                 "id": "inp_doc_menu_carlos",
                 "type": "text/plain",
-                "textContent": "Entrada do usuário",
-                "content": "Entrada do usuário"
+                "textContent": "Aguardando clique do usuário...",
+                "content": "Aguardando clique do usuário..."
               },
               "editable": false,
               "deletable": true,
@@ -8609,7 +8808,7 @@
           "$title": "Processa Escolha [Menu] Dr. Carlos",
           "settings": {
             "function": "run",
-            "source": "function run(inputChoice) {\n    var raw = (inputChoice || '').toLowerCase();\n    var docs = [{\"text\": \"Dr. Carlos Alberto (Gineco)\", \"queue\": \"Ginecologia - Dr. Carlos Alberto Batista da Silva\", \"isInternal\": \"false\", \"link\": \"https://wa.me/554230262600\"}, {\"text\": \"Dr. Carlos Henrique (Neuro)\", \"queue\": \"Neurologia - Dr. Carlos Henrique Ferreira Camargo\", \"isInternal\": \"true\", \"link\": \"\"}, {\"text\": \"Dr. Carlos Miers (Orto)\", \"queue\": \"Ortopedia - Dr. Carlos Miers\", \"isInternal\": \"true\", \"link\": \"\"}, {\"text\": \"Dr. Carlos Heidi (Uro)\", \"queue\": \"Urologia - Dr. Carlos Heidi Koga\", \"isInternal\": \"true\", \"link\": \"\"}];\n    for (var i = 0; i < docs.length; i++) {\n        var d = docs[i];\n        if (raw.indexOf((i + 1).toString()) !== -1 || raw.indexOf(d.text.toLowerCase().replace(/dr\\.\\s*|dra\\.\\s*/g, '')) !== -1 || d.text.toLowerCase().indexOf(raw) !== -1) {\n            return JSON.stringify({\n                doctorName: d.text,\n                queueName: d.queue,\n                isInternal: d.isInternal,\n                externalLink: d.link || '',\n                externalPhone: d.isInternal === 'false' ? '(42) 3026-2600' : ''\n            });\n        }\n    }\n    var first = docs[0];\n    return JSON.stringify({ doctorName: first.text, queueName: first.queue, isInternal: first.isInternal, externalLink: first.link || '', externalPhone: '' });\n}",
+            "source": "function run(inputChoice) {\n    var raw = (inputChoice || '').toLowerCase();\n    var docs = [{\"id\": \"1\", \"title\": \"Dr. Carlos A. (Gineco)\", \"desc\": \"Ginecologia\", \"queue\": \"Ginecologia - Dr. Carlos Alberto Batista da Silva\", \"isInternal\": \"false\", \"link\": \"https://wa.me/554230262600\"}, {\"id\": \"2\", \"title\": \"Dr. Carlos H. (Neuro)\", \"desc\": \"Neurologia\", \"queue\": \"Neurologia - Dr. Carlos Henrique Ferreira Camargo\", \"isInternal\": \"true\", \"link\": \"\"}, {\"id\": \"3\", \"title\": \"Dr. Carlos M. (Orto)\", \"desc\": \"Ortopedia\", \"queue\": \"Ortopedia - Dr. Carlos Miers\", \"isInternal\": \"true\", \"link\": \"\"}, {\"id\": \"4\", \"title\": \"Dr. Carlos H. (Uro)\", \"desc\": \"Urologia\", \"queue\": \"Urologia - Dr. Carlos Heidi Koga\", \"isInternal\": \"true\", \"link\": \"\"}];\n    for (var i = 0; i < docs.length; i++) {\n        var d = docs[i];\n        if (raw.indexOf(d.id) !== -1 || raw.indexOf(d.title.toLowerCase().replace(/dr\\.\\s*|dra\\.\\s*/g, '').trim()) !== -1 || d.title.toLowerCase().indexOf(raw) !== -1) {\n            return JSON.stringify({\n                doctorName: d.title,\n                queueName: d.queue,\n                isInternal: d.isInternal,\n                externalLink: d.link || '',\n                externalPhone: d.isInternal === 'false' ? '(42) 3026-2600' : ''\n            });\n        }\n    }\n    var first = docs[0];\n    return JSON.stringify({ doctorName: first.title, queueName: first.queue, isInternal: first.isInternal, externalLink: first.link || '', externalPhone: '' });\n}",
             "inputVariables": [
               "medicoSelecionadoRaw"
             ],
@@ -8724,16 +8923,16 @@
         {
           "id": "tag_menu_carlos",
           "label": "[Menu] Dr. Carlos",
-          "background": "#00A86B",
+          "background": "#FF1E90",
           "canChangeBackground": false
         }
       ],
       "$invalid": false,
       "$inputSuggestions": [
-        "Dr. Carlos Alberto (Gineco)",
-        "Dr. Carlos Henrique (Neuro)",
-        "Dr. Carlos Miers (Orto)",
-        "Dr. Carlos Heidi (Uro)"
+        "Dr. Carlos A. (Gineco)",
+        "Dr. Carlos H. (Neuro)",
+        "Dr. Carlos M. (Orto)",
+        "Dr. Carlos H. (Uro)"
       ],
       "$invalidContentActions": false,
       "$invalidOutputs": false,
