@@ -526,7 +526,7 @@
       "root": false,
       "$title": "[3. Menu de Especialistas]",
       "$position": {
-        "top": "850px",
+        "top": "1100px",
         "left": "450px"
       },
       "$enteringCustomActions": [
@@ -1758,7 +1758,7 @@
       "root": false,
       "$title": "[Roteador Inteligente]",
       "$position": {
-        "top": "850px",
+        "top": "1100px",
         "left": "1500px"
       },
       "$contentActions": [
@@ -1979,7 +1979,7 @@
       "root": false,
       "$title": "[Redirecionamento Externo]",
       "$position": {
-        "top": "850px",
+        "top": "1100px",
         "left": "1850px"
       },
       "$enteringCustomActions": [
@@ -2084,7 +2084,7 @@
       "root": false,
       "$title": "[Pré-Atendimento Desk]",
       "$position": {
-        "top": "1600px",
+        "top": "1850px",
         "left": "1150px"
       },
       "$contentActions": [
@@ -2118,7 +2118,43 @@
           "$invalid": false
         }
       ],
-      "$enteringCustomActions": [],
+      "$enteringCustomActions": [
+        {
+          "$id": "act_build_desk_patient_summary",
+          "type": "ExecuteScript",
+          "$title": "Gera Card Resumo Atendente Desk ES5",
+          "settings": {
+            "function": "run",
+            "source": "function run(pacienteNome, userCpf, pacienteNascimento, isDependente, dependenteNome, dependenteNasc, dependenteCpf, doctorName, selectedQueue, contactIdentity) {\n    try {\n        var tel = (contactIdentity || '').split('@')[0];\n        var isDep = (isDependente === 'true' || isDependente === true);\n        var pacFinal = isDep ? (dependenteNome || 'Dependente') : (pacienteNome || 'Titular');\n        var cpfFinal = isDep ? (dependenteCpf || 'Menor sem CPF') : (userCpf || 'Não informado');\n        var nascFinal = isDep ? (dependenteNasc || '-') : (pacienteNascimento || '-');\n        var respInfo = isDep ? ('Responsável WhatsApp: ' + (pacienteNome || 'Titular') + ' (Tel: ' + tel + ')') : ('Titular WhatsApp (Tel: ' + tel + ')');\n        \n        var summary = \"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\\n\" +\n                      \"📋 FICHA DE ATENDIMENTO DIGITAL - INOVARE\\n\" +\n                      \"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\\n\" +\n                      \"👤 PACIENTE: \" + pacFinal + \"\\n\" +\n                      \"📅 NASCIMENTO: \" + nascFinal + \"\\n\" +\n                      \"🆔 CPF: \" + cpfFinal + \"\\n\" +\n                      \"📱 \" + respInfo + \"\\n\" +\n                      \"🩺 ESPECIALIDADE / FILA: \" + (selectedQueue || 'Geral') + \"\\n\" +\n                      (doctorName ? (\"👨‍⚕️ PROFISSIONAL: \" + doctorName + \"\\n\") : \"\") +\n                      \"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\";\n        return summary;\n    } catch(e) {\n        return \"Ficha de Atendimento Inovare\";\n    }\n}",
+            "inputVariables": [
+              "pacienteNome",
+              "userCpf",
+              "pacienteNascimento",
+              "isDependente",
+              "dependenteNome",
+              "dependenteNasc",
+              "dependenteCpf",
+              "doctorName",
+              "selectedQueue",
+              "contact.identity"
+            ],
+            "outputVariable": "deskPatientSummary"
+          },
+          "conditions": [],
+          "$invalid": false
+        },
+        {
+          "$id": "act_save_desk_summary_to_contact",
+          "type": "SetVariable",
+          "$title": "Salva resumo nos extras do contato",
+          "settings": {
+            "variable": "contact.extras.resumoAtendimento",
+            "value": "{{deskPatientSummary}}"
+          },
+          "conditions": [],
+          "$invalid": false
+        }
+      ],
       "$leavingCustomActions": [],
       "$conditionOutputs": [],
       "$defaultOutput": {
@@ -2145,7 +2181,7 @@
       "root": false,
       "$title": "[Atendimento Desk]",
       "$position": {
-        "top": "1600px",
+        "top": "1850px",
         "left": "1500px"
       },
       "$contentActions": [
@@ -2298,7 +2334,7 @@
       "root": false,
       "$title": "[Meus Agendamentos Feegow]",
       "$position": {
-        "top": "600px",
+        "top": "850px",
         "left": "1500px"
       },
       "$contentActions": [
@@ -2382,7 +2418,7 @@
       "root": false,
       "$title": "[Pesquisa de Satisfação CSAT]",
       "$position": {
-        "top": "1850px",
+        "top": "2100px",
         "left": "100px"
       },
       "$contentActions": [
@@ -2489,7 +2525,7 @@
       "root": false,
       "$title": "[SYS - Encerramento por Inatividade]",
       "$position": {
-        "top": "2350px",
+        "top": "2600px",
         "left": "450px"
       },
       "$contentActions": [
@@ -2550,7 +2586,7 @@
       "root": false,
       "$title": "[Fim de Sessão]",
       "$position": {
-        "top": "2350px",
+        "top": "2600px",
         "left": "800px"
       },
       "$contentActions": [
@@ -2599,7 +2635,7 @@
       "root": false,
       "$title": "Exceções",
       "$position": {
-        "top": "2350px",
+        "top": "2600px",
         "left": "100px"
       },
       "$contentActions": [
@@ -2796,6 +2832,33 @@
         }
       ],
       "$conditionOutputs": [
+        {
+          "stateId": "node_dependente_cpf",
+          "typeOfStateId": "state",
+          "$connId": "con_menu_dependente_01",
+          "$id": "cond_menu_dependente_01",
+          "conditions": [
+            {
+              "source": "input",
+              "comparison": "matches",
+              "values": [
+                "3",
+                "menu_dependente",
+                "dependente",
+                "filho",
+                "filha",
+                "familiar",
+                "parente",
+                "crianca",
+                "criança",
+                "bebe",
+                "bebê",
+                "outra pessoa"
+              ]
+            }
+          ],
+          "$invalid": false
+        },
         {
           "stateId": "end-session",
           "typeOfStateId": "state",
@@ -3104,7 +3167,7 @@
       "root": false,
       "$title": "Ver Minhas Consultas Feegow",
       "$position": {
-        "top": "600px",
+        "top": "850px",
         "left": "1150px"
       },
       "$contentActions": [
@@ -3229,7 +3292,7 @@
       "root": false,
       "$title": "Buscar Médico / Especialidade",
       "$position": {
-        "top": "850px",
+        "top": "1100px",
         "left": "100px"
       },
       "$contentActions": [
@@ -3331,7 +3394,7 @@
       "root": false,
       "$title": "Pré-atendimento",
       "$position": {
-        "top": "850px",
+        "top": "1100px",
         "left": "1150px"
       },
       "$contentActions": [
@@ -3375,7 +3438,7 @@
       "root": false,
       "$title": "Direciona para AH ou WA Business",
       "$position": {
-        "top": "850px",
+        "top": "1100px",
         "left": "800px"
       },
       "$contentActions": [
@@ -3770,7 +3833,7 @@
       "root": false,
       "$title": "Pesquisa de Satisfação",
       "$position": {
-        "top": "1850px",
+        "top": "2100px",
         "left": "450px"
       },
       "$invalidContentActions": false,
@@ -4068,7 +4131,7 @@
       "root": false,
       "$title": "Promotores",
       "$position": {
-        "top": "1750px",
+        "top": "2000px",
         "left": "800px"
       },
       "$invalidContentActions": false,
@@ -4363,7 +4426,7 @@
       "root": false,
       "$title": "Neutros",
       "$position": {
-        "top": "1900px",
+        "top": "2150px",
         "left": "800px"
       },
       "$invalidContentActions": false,
@@ -4698,7 +4761,7 @@
       "root": false,
       "$title": "Detratores",
       "$position": {
-        "top": "2050px",
+        "top": "2300px",
         "left": "800px"
       },
       "$invalidContentActions": false,
@@ -4916,7 +4979,7 @@
       "root": false,
       "$title": "Comentários",
       "$position": {
-        "top": "1900px",
+        "top": "2150px",
         "left": "1150px"
       },
       "$invalidContentActions": false,
@@ -5201,7 +5264,7 @@
       "root": false,
       "$title": "Salvar Dados da Pesquisa",
       "$position": {
-        "top": "1900px",
+        "top": "2150px",
         "left": "1500px"
       },
       "$invalidContentActions": false,
@@ -5336,7 +5399,7 @@
       "root": false,
       "$title": "Agradecimento pelo Contato",
       "$position": {
-        "top": "1900px",
+        "top": "2150px",
         "left": "1850px"
       },
       "$invalidContentActions": false,
@@ -5534,7 +5597,7 @@
       "root": false,
       "$title": "Resposta Inválida",
       "$position": {
-        "top": "2050px",
+        "top": "2300px",
         "left": "450px"
       },
       "$invalidContentActions": false,
@@ -5547,7 +5610,7 @@
       "root": false,
       "$title": "[Menu] Ortopedia",
       "$position": {
-        "top": "1100px",
+        "top": "1350px",
         "left": "100px"
       },
       "$enteringCustomActions": [
@@ -5929,7 +5992,7 @@
       "root": false,
       "$title": "[Menu] Cardiologia",
       "$position": {
-        "top": "1100px",
+        "top": "1350px",
         "left": "450px"
       },
       "$enteringCustomActions": [
@@ -6256,7 +6319,7 @@
       "root": false,
       "$title": "[Menu] Ginecologia",
       "$position": {
-        "top": "1100px",
+        "top": "1350px",
         "left": "800px"
       },
       "$enteringCustomActions": [
@@ -6627,7 +6690,7 @@
       "root": false,
       "$title": "[Menu] Oftalmologia",
       "$position": {
-        "top": "1100px",
+        "top": "1350px",
         "left": "1150px"
       },
       "$enteringCustomActions": [
@@ -6954,7 +7017,7 @@
       "root": false,
       "$title": "[Menu] Urologia",
       "$position": {
-        "top": "1100px",
+        "top": "1350px",
         "left": "1500px"
       },
       "$enteringCustomActions": [
@@ -7292,7 +7355,7 @@
       "root": false,
       "$title": "[Menu] Cirurgia Vascular",
       "$position": {
-        "top": "1100px",
+        "top": "1350px",
         "left": "1850px"
       },
       "$enteringCustomActions": [
@@ -7619,7 +7682,7 @@
       "root": false,
       "$title": "[Menu] Gastroenterologia",
       "$position": {
-        "top": "1350px",
+        "top": "1600px",
         "left": "100px"
       },
       "$enteringCustomActions": [
@@ -7946,7 +8009,7 @@
       "root": false,
       "$title": "[Menu] Neurologia",
       "$position": {
-        "top": "1350px",
+        "top": "1600px",
         "left": "450px"
       },
       "$enteringCustomActions": [
@@ -8262,7 +8325,7 @@
       "root": false,
       "$title": "[Menu] Aparelho Digestivo",
       "$position": {
-        "top": "1350px",
+        "top": "1600px",
         "left": "800px"
       },
       "$enteringCustomActions": [
@@ -8578,7 +8641,7 @@
       "root": false,
       "$title": "[Menu] Clínica Geral",
       "$position": {
-        "top": "1350px",
+        "top": "1600px",
         "left": "1150px"
       },
       "$enteringCustomActions": [
@@ -8894,7 +8957,7 @@
       "root": false,
       "$title": "[Menu] Dr. Carlos",
       "$position": {
-        "top": "1350px",
+        "top": "1600px",
         "left": "1500px"
       },
       "$enteringCustomActions": [
@@ -9473,13 +9536,859 @@
       "root": false,
       "$title": "Sucesso_Confirmacao",
       "$position": {
-        "top": "600px",
+        "top": "850px",
         "left": "1850px"
       },
       "$invalidContentActions": false,
       "$invalidOutputs": false,
       "$invalidCustomActions": false,
       "$invalid": false
+    },
+    "node_dependente_cpf": {
+      "id": "node_dependente_cpf",
+      "root": false,
+      "$title": "[Dep 1] Coleta CPF Dependente",
+      "$position": {
+        "top": "600px",
+        "left": "100px"
+      },
+      "$enteringCustomActions": [
+        {
+          "$id": "act_clean_dep_vars",
+          "type": "ExecuteScript",
+          "$title": "Limpa variáveis dependente ES5",
+          "settings": {
+            "function": "run",
+            "source": "function run() { return ''; }",
+            "inputVariables": [],
+            "outputVariable": "dependenteCpf"
+          },
+          "conditions": [],
+          "$invalid": false
+        }
+      ],
+      "$contentActions": [
+        {
+          "action": {
+            "$id": "act_msg_dep_cpf",
+            "type": "SendMessage",
+            "settings": {
+              "type": "text/plain",
+              "content": "Por favor, informe o *CPF do(a) paciente* que irá consultar (apenas números):\n\n💡 *Caso seja criança ou bebê sem CPF, basta digitar 'Sem CPF'.*"
+            },
+            "$cardContent": {
+              "document": {
+                "id": "doc_msg_dep_cpf",
+                "type": "text/plain",
+                "content": "Por favor, informe o *CPF do(a) paciente* que irá consultar (apenas números):\n\n💡 *Caso seja criança ou bebê sem CPF, basta digitar 'Sem CPF'.*"
+              },
+              "editable": true,
+              "deletable": true,
+              "position": "left"
+            },
+            "conditions": [],
+            "$invalid": false
+          },
+          "$invalid": false
+        },
+        {
+          "input": {
+            "bypass": false,
+            "$cardContent": {
+              "document": {
+                "id": "doc_input_dep_cpf",
+                "type": "text/plain",
+                "content": "Entrada do CPF do Dependente"
+              },
+              "editable": false,
+              "deletable": true,
+              "position": "right"
+            },
+            "$invalid": false
+          },
+          "$invalid": false
+        }
+      ],
+      "$leavingCustomActions": [
+        {
+          "$id": "act_parse_dep_cpf",
+          "type": "ExecuteScript",
+          "$title": "Sanitiza CPF Dependente ES5",
+          "settings": {
+            "function": "run",
+            "source": "function run(input) {\n    try {\n        var raw = (input || '').toString().trim().toLowerCase();\n        if (raw.indexOf('sem') !== -1 || raw.indexOf('nao tem') !== -1 || raw.indexOf('não tem') !== -1 || raw.indexOf('bebe') !== -1 || raw.indexOf('bebê') !== -1 || raw.indexOf('crianca') !== -1 || raw.indexOf('criança') !== -1) {\n            return '';\n        }\n        var digits = raw.replace(/\\D/g, '');\n        if (digits.length === 11) return digits;\n        return digits;\n    } catch(e) {\n        return '';\n    }\n}",
+            "inputVariables": [
+              "input.content"
+            ],
+            "outputVariable": "dependenteCpf"
+          },
+          "conditions": [],
+          "$invalid": false
+        }
+      ],
+      "$conditionOutputs": [
+        {
+          "stateId": "node_menu_pos_cpf",
+          "typeOfStateId": "state",
+          "$connId": "con_dep_cpf_voltar",
+          "$id": "cond_dep_cpf_voltar",
+          "conditions": [
+            {
+              "source": "input",
+              "comparison": "matches",
+              "values": [
+                "voltar",
+                "menu",
+                "cancelar",
+                "inicio",
+                "início"
+              ]
+            }
+          ],
+          "$invalid": false
+        },
+        {
+          "stateId": "node_dependente_nome",
+          "typeOfStateId": "state",
+          "$connId": "con_dep_cpf_sem",
+          "$id": "cond_dep_cpf_sem",
+          "conditions": [
+            {
+              "source": "context",
+              "variable": "dependenteCpf",
+              "comparison": "equals",
+              "values": [
+                "",
+                "null"
+              ]
+            }
+          ],
+          "$invalid": false
+        }
+      ],
+      "$defaultOutput": {
+        "stateId": "node_dependente_busca",
+        "$invalid": false
+      },
+      "isAiGenerated": false,
+      "$tags": [],
+      "$invalid": false,
+      "$inputSuggestions": [],
+      "$invalidContentActions": false,
+      "$invalidOutputs": false,
+      "$invalidCustomActions": false
+    },
+    "node_dependente_busca": {
+      "id": "node_dependente_busca",
+      "root": false,
+      "$title": "[Dep 2] Busca Dependente Feegow",
+      "$position": {
+        "top": "600px",
+        "left": "450px"
+      },
+      "$enteringCustomActions": [
+        {
+          "$id": "act_http_search_dep",
+          "type": "ProcessHttp",
+          "$title": "HTTP GET Feegow Search Dependente",
+          "settings": {
+            "headers": {
+              "x-access-token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJmZWVnb3ciLCJhdWQiOiJwdWJsaWNhcGkiLCJpYXQiOjE3NzYxMTA2MzcsImxpY2Vuc2VJRCI6MTE5NDl9.zjrp9y0vAG80b69aAofJu5Lpi2tjNdUNTc9QZNfGtGU",
+              "Content-Type": "application/json"
+            },
+            "method": "GET",
+            "uri": "https://api.feegow.com/v1/api/patient/search?paciente_cpf={{dependenteCpf}}",
+            "responseStatusVariable": "depSearchStatus",
+            "responseBodyVariable": "depSearchResponse"
+          },
+          "conditions": [],
+          "$invalid": false
+        },
+        {
+          "$id": "act_parse_dep_search",
+          "type": "ExecuteScript",
+          "$title": "Parse Busca Dependente ES5",
+          "settings": {
+            "function": "run",
+            "source": "function run(status, response) {\n    try {\n        if (status != 200 && status != '200') {\n            return JSON.stringify({ encontrado: 'false' });\n        }\n        var data = JSON.parse(response);\n        if (data && data.success && data.content && data.content.length > 0) {\n            var p = data.content[0];\n            return JSON.stringify({\n                encontrado: 'true',\n                nome: p.nome || p.nome_completo || '',\n                id: (p.id || p.paciente_id || '').toString(),\n                nascimento: p.data_nascimento || p.nascimento || ''\n            });\n        }\n        return JSON.stringify({ encontrado: 'false' });\n    } catch(e) {\n        return JSON.stringify({ encontrado: 'false' });\n    }\n}",
+            "inputVariables": [
+              "depSearchStatus",
+              "depSearchResponse"
+            ],
+            "outputVariable": "parsedDepResult"
+          },
+          "conditions": [],
+          "$invalid": false
+        },
+        {
+          "$id": "act_extract_dep_encontrado",
+          "type": "ExecuteScript",
+          "$title": "Extrai dependenteEncontrado",
+          "settings": {
+            "function": "run",
+            "source": "function run(res) { try { return JSON.parse(res).encontrado || 'false'; } catch(e) { return 'false'; } }",
+            "inputVariables": [
+              "parsedDepResult"
+            ],
+            "outputVariable": "dependenteEncontrado"
+          },
+          "conditions": [],
+          "$invalid": false
+        },
+        {
+          "$id": "act_extract_dep_nome",
+          "type": "ExecuteScript",
+          "$title": "Extrai dependenteNome",
+          "settings": {
+            "function": "run",
+            "source": "function run(res) { try { return JSON.parse(res).nome || ''; } catch(e) { return ''; } }",
+            "inputVariables": [
+              "parsedDepResult"
+            ],
+            "outputVariable": "dependenteNome"
+          },
+          "conditions": [],
+          "$invalid": false
+        },
+        {
+          "$id": "act_extract_dep_id",
+          "type": "ExecuteScript",
+          "$title": "Extrai dependenteId",
+          "settings": {
+            "function": "run",
+            "source": "function run(res) { try { return JSON.parse(res).id || ''; } catch(e) { return ''; } }",
+            "inputVariables": [
+              "parsedDepResult"
+            ],
+            "outputVariable": "dependenteId"
+          },
+          "conditions": [],
+          "$invalid": false
+        },
+        {
+          "$id": "act_extract_dep_nasc",
+          "type": "ExecuteScript",
+          "$title": "Extrai dependenteNasc",
+          "settings": {
+            "function": "run",
+            "source": "function run(res) { try { return JSON.parse(res).nascimento || ''; } catch(e) { return ''; } }",
+            "inputVariables": [
+              "parsedDepResult"
+            ],
+            "outputVariable": "dependenteNasc"
+          },
+          "conditions": [],
+          "$invalid": false
+        },
+        {
+          "$id": "act_set_is_dep_true",
+          "type": "ExecuteScript",
+          "$title": "Ativa modo dependente",
+          "settings": {
+            "function": "run",
+            "source": "function run() { return 'true'; }",
+            "inputVariables": [],
+            "outputVariable": "isDependente"
+          },
+          "conditions": [],
+          "$invalid": false
+        }
+      ],
+      "$contentActions": [
+        {
+          "input": {
+            "bypass": true,
+            "$cardContent": {
+              "document": {
+                "id": "doc_bypass_dep_search",
+                "type": "text/plain",
+                "content": "Busca dependente realizada."
+              },
+              "editable": false,
+              "deletable": true,
+              "position": "right"
+            },
+            "$invalid": false
+          },
+          "$invalid": false
+        }
+      ],
+      "$leavingCustomActions": [],
+      "$conditionOutputs": [
+        {
+          "stateId": "node_dependente_menu",
+          "typeOfStateId": "state",
+          "$connId": "con_dep_encontrado_sim",
+          "$id": "cond_dep_encontrado_sim",
+          "conditions": [
+            {
+              "source": "context",
+              "variable": "dependenteEncontrado",
+              "comparison": "equals",
+              "values": [
+                "true"
+              ]
+            }
+          ],
+          "$invalid": false
+        }
+      ],
+      "$defaultOutput": {
+        "stateId": "node_dependente_nome",
+        "$invalid": false
+      },
+      "isAiGenerated": false,
+      "$tags": [],
+      "$invalid": false,
+      "$inputSuggestions": [],
+      "$invalidContentActions": false,
+      "$invalidOutputs": false,
+      "$invalidCustomActions": false
+    },
+    "node_dependente_nome": {
+      "id": "node_dependente_nome",
+      "root": false,
+      "$title": "[Dep 3] Coleta Nome Dependente",
+      "$position": {
+        "top": "600px",
+        "left": "800px"
+      },
+      "$enteringCustomActions": [
+        {
+          "$id": "act_set_is_dep_name_step",
+          "type": "ExecuteScript",
+          "$title": "Ativa isDependente",
+          "settings": {
+            "function": "run",
+            "source": "function run() { return 'true'; }",
+            "inputVariables": [],
+            "outputVariable": "isDependente"
+          },
+          "conditions": [],
+          "$invalid": false
+        }
+      ],
+      "$contentActions": [
+        {
+          "action": {
+            "$id": "act_msg_dep_nome",
+            "type": "SendMessage",
+            "settings": {
+              "type": "text/plain",
+              "content": "Não localizamos o cadastro do dependente. Não se preocupe, vamos registrá-lo rapidinho! ⏱️\n\nPor favor, digite o *Nome Completo* do(a) paciente (quem irá consultar):"
+            },
+            "$cardContent": {
+              "document": {
+                "id": "doc_msg_dep_nome",
+                "type": "text/plain",
+                "content": "Não localizamos o cadastro do dependente. Não se preocupe, vamos registrá-lo rapidinho! ⏱️\n\nPor favor, digite o *Nome Completo* do(a) paciente (quem irá consultar):"
+              },
+              "editable": true,
+              "deletable": true,
+              "position": "left"
+            },
+            "conditions": [],
+            "$invalid": false
+          },
+          "$invalid": false
+        },
+        {
+          "input": {
+            "bypass": false,
+            "$cardContent": {
+              "document": {
+                "id": "doc_input_dep_nome",
+                "type": "text/plain",
+                "content": "Entrada Nome Dependente"
+              },
+              "editable": false,
+              "deletable": true,
+              "position": "right"
+            },
+            "$invalid": false
+          },
+          "$invalid": false
+        }
+      ],
+      "$leavingCustomActions": [
+        {
+          "$id": "act_save_dep_nome",
+          "type": "ExecuteScript",
+          "$title": "Salva Nome Dependente",
+          "settings": {
+            "function": "run",
+            "source": "function run(input) { return (input || '').toString().trim(); }",
+            "inputVariables": [
+              "input.content"
+            ],
+            "outputVariable": "dependenteNome"
+          },
+          "conditions": [],
+          "$invalid": false
+        }
+      ],
+      "$conditionOutputs": [
+        {
+          "stateId": "node_menu_pos_cpf",
+          "typeOfStateId": "state",
+          "$connId": "con_dep_nome_voltar",
+          "$id": "cond_dep_nome_voltar",
+          "conditions": [
+            {
+              "source": "input",
+              "comparison": "matches",
+              "values": [
+                "voltar",
+                "menu",
+                "cancelar"
+              ]
+            }
+          ],
+          "$invalid": false
+        }
+      ],
+      "$defaultOutput": {
+        "stateId": "node_dependente_nasc",
+        "$invalid": false
+      },
+      "isAiGenerated": false,
+      "$tags": [],
+      "$invalid": false,
+      "$inputSuggestions": [],
+      "$invalidContentActions": false,
+      "$invalidOutputs": false,
+      "$invalidCustomActions": false
+    },
+    "node_dependente_nasc": {
+      "id": "node_dependente_nasc",
+      "root": false,
+      "$title": "[Dep 4] Coleta Nascimento Dependente",
+      "$position": {
+        "top": "600px",
+        "left": "1150px"
+      },
+      "$enteringCustomActions": [],
+      "$contentActions": [
+        {
+          "action": {
+            "$id": "act_msg_dep_nasc",
+            "type": "SendMessage",
+            "settings": {
+              "type": "text/plain",
+              "content": "Perfeito! Agora informe a *Data de Nascimento* de *{{dependenteNome}}* (formato: *DD/MM/AAAA*, ex: 15/04/2018):"
+            },
+            "$cardContent": {
+              "document": {
+                "id": "doc_msg_dep_nasc",
+                "type": "text/plain",
+                "content": "Perfeito! Agora informe a *Data de Nascimento* de *{{dependenteNome}}* (formato: *DD/MM/AAAA*, ex: 15/04/2018):"
+              },
+              "editable": true,
+              "deletable": true,
+              "position": "left"
+            },
+            "conditions": [],
+            "$invalid": false
+          },
+          "$invalid": false
+        },
+        {
+          "input": {
+            "bypass": false,
+            "$cardContent": {
+              "document": {
+                "id": "doc_input_dep_nasc",
+                "type": "text/plain",
+                "content": "Entrada Nascimento Dependente"
+              },
+              "editable": false,
+              "deletable": true,
+              "position": "right"
+            },
+            "$invalid": false
+          },
+          "$invalid": false
+        }
+      ],
+      "$leavingCustomActions": [
+        {
+          "$id": "act_save_dep_nasc",
+          "type": "ExecuteScript",
+          "$title": "Salva Nascimento Dependente",
+          "settings": {
+            "function": "run",
+            "source": "function run(input) { return (input || '').toString().trim(); }",
+            "inputVariables": [
+              "input.content"
+            ],
+            "outputVariable": "dependenteNasc"
+          },
+          "conditions": [],
+          "$invalid": false
+        }
+      ],
+      "$conditionOutputs": [
+        {
+          "stateId": "node_menu_pos_cpf",
+          "typeOfStateId": "state",
+          "$connId": "con_dep_nasc_voltar",
+          "$id": "cond_dep_nasc_voltar",
+          "conditions": [
+            {
+              "source": "input",
+              "comparison": "matches",
+              "values": [
+                "voltar",
+                "menu",
+                "cancelar"
+              ]
+            }
+          ],
+          "$invalid": false
+        }
+      ],
+      "$defaultOutput": {
+        "stateId": "node_dependente_criar",
+        "$invalid": false
+      },
+      "isAiGenerated": false,
+      "$tags": [],
+      "$invalid": false,
+      "$inputSuggestions": [],
+      "$invalidContentActions": false,
+      "$invalidOutputs": false,
+      "$invalidCustomActions": false
+    },
+    "node_dependente_criar": {
+      "id": "node_dependente_criar",
+      "root": false,
+      "$title": "[Dep 5] Cria Dependente Feegow API",
+      "$position": {
+        "top": "600px",
+        "left": "1500px"
+      },
+      "$enteringCustomActions": [
+        {
+          "$id": "act_http_create_dep",
+          "type": "ProcessHttp",
+          "$title": "HTTP POST Feegow Create Dependente",
+          "settings": {
+            "headers": {
+              "x-access-token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJmZWVnb3ciLCJhdWQiOiJwdWJsaWNhcGkiLCJpYXQiOjE3NzYxMTA2MzcsImxpY2Vuc2VJRCI6MTE5NDl9.zjrp9y0vAG80b69aAofJu5Lpi2tjNdUNTc9QZNfGtGU",
+              "Content-Type": "application/json"
+            },
+            "method": "POST",
+            "uri": "https://api.feegow.com/v1/api/patient/create",
+            "body": "{\n  \"nome_completo\": \"{{dependenteNome}}\",\n  \"cpf\": \"{{dependenteCpf}}\",\n  \"data_nascimento\": \"{{dependenteNasc}}\",\n  \"celular\": \"{{contact.phoneNumber}}\"\n}",
+            "responseStatusVariable": "depCreateStatus",
+            "responseBodyVariable": "depCreateResponse"
+          },
+          "conditions": [],
+          "$invalid": false
+        },
+        {
+          "$id": "act_parse_dep_create",
+          "type": "ExecuteScript",
+          "$title": "Extrai dependenteId Criado ES5",
+          "settings": {
+            "function": "run",
+            "source": "function run(status, response) {\n    try {\n        var data = JSON.parse(response);\n        if (data && data.success && data.content) {\n            return (data.content.paciente_id || data.content.id || '').toString();\n        }\n        return '';\n    } catch(e) {\n        return '';\n    }\n}",
+            "inputVariables": [
+              "depCreateStatus",
+              "depCreateResponse"
+            ],
+            "outputVariable": "dependenteId"
+          },
+          "conditions": [],
+          "$invalid": false
+        }
+      ],
+      "$contentActions": [
+        {
+          "input": {
+            "bypass": true,
+            "$cardContent": {
+              "document": {
+                "id": "doc_bypass_dep_create",
+                "type": "text/plain",
+                "content": "Dependente criado com sucesso."
+              },
+              "editable": false,
+              "deletable": true,
+              "position": "right"
+            },
+            "$invalid": false
+          },
+          "$invalid": false
+        }
+      ],
+      "$leavingCustomActions": [],
+      "$conditionOutputs": [],
+      "$defaultOutput": {
+        "stateId": "node_dependente_menu",
+        "$invalid": false
+      },
+      "isAiGenerated": false,
+      "$tags": [],
+      "$invalid": false,
+      "$inputSuggestions": [],
+      "$invalidContentActions": false,
+      "$invalidOutputs": false,
+      "$invalidCustomActions": false
+    },
+    "node_dependente_menu": {
+      "id": "node_dependente_menu",
+      "root": false,
+      "$title": "[Dep 6] Menu de Autosserviço Dependente",
+      "$position": {
+        "top": "600px",
+        "left": "1850px"
+      },
+      "$enteringCustomActions": [
+        {
+          "$id": "act_set_paciente_atendimento_dep",
+          "type": "ExecuteScript",
+          "$title": "Define pacienteAtendimento como dependente",
+          "settings": {
+            "function": "run",
+            "source": "function run(depNome, depId) { return JSON.stringify({ nome: depNome, id: depId }); }",
+            "inputVariables": [
+              "dependenteNome",
+              "dependenteId"
+            ],
+            "outputVariable": "pacienteAtendimentoData"
+          },
+          "conditions": [],
+          "$invalid": false
+        }
+      ],
+      "$contentActions": [
+        {
+          "action": {
+            "$id": "act_msg_dep_menu",
+            "type": "SendMessage",
+            "settings": {
+              "type": "application/vnd.lime.select+json",
+              "content": {
+                "recipient_type": "individual",
+                "type": "list",
+                "header": {
+                  "type": "text",
+                  "text": "Atendimento para Dependente"
+                },
+                "body": {
+                  "text": "Perfil de *{{dependenteNome}}* selecionado! 👶🧒\n\nComo podemos te ajudar com o atendimento de {{dependenteNome}}?"
+                },
+                "footer": {
+                  "text": "Clínica Inovare"
+                },
+                "action": {
+                  "button": "Opções de Atendimento",
+                  "sections": [
+                    {
+                      "title": "Selecione uma opção",
+                      "rows": [
+                        {
+                          "id": "dep_agendar",
+                          "title": "🩺 Buscar Especialidade",
+                          "description": "Agendar consulta para dependente"
+                        },
+                        {
+                          "id": "dep_consultas",
+                          "title": "📋 Ver Consultas",
+                          "description": "Ver horários de dependente"
+                        },
+                        {
+                          "id": "dep_voltar_titular",
+                          "title": "🔙 Voltar para Meu Perfil",
+                          "description": "Retornar ao atendimento titular"
+                        },
+                        {
+                          "id": "dep_atendente",
+                          "title": "ℹ️ Falar com Atendente",
+                          "description": "Dúvidas com a recepção"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            },
+            "$cardContent": {
+              "document": {
+                "id": "doc_msg_dep_menu",
+                "type": "application/vnd.lime.select+json",
+                "content": {
+                  "recipient_type": "individual",
+                  "type": "list",
+                  "header": {
+                    "type": "text",
+                    "text": "Atendimento para Dependente"
+                  },
+                  "body": {
+                    "text": "Perfil de *{{dependenteNome}}* selecionado! 👶🧒\n\nComo podemos te ajudar com o atendimento de {{dependenteNome}}?"
+                  },
+                  "footer": {
+                    "text": "Clínica Inovare"
+                  },
+                  "action": {
+                    "button": "Opções de Atendimento",
+                    "sections": [
+                      {
+                        "title": "Selecione uma opção",
+                        "rows": [
+                          {
+                            "id": "dep_agendar",
+                            "title": "🩺 Buscar Especialidade",
+                            "description": "Agendar consulta para dependente"
+                          },
+                          {
+                            "id": "dep_consultas",
+                            "title": "📋 Ver Consultas",
+                            "description": "Ver horários de dependente"
+                          },
+                          {
+                            "id": "dep_voltar_titular",
+                            "title": "🔙 Voltar para Meu Perfil",
+                            "description": "Retornar ao atendimento titular"
+                          },
+                          {
+                            "id": "dep_atendente",
+                            "title": "ℹ️ Falar com Atendente",
+                            "description": "Dúvidas com a recepção"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                }
+              },
+              "editable": true,
+              "deletable": true,
+              "position": "left"
+            },
+            "conditions": [],
+            "$invalid": false
+          },
+          "$invalid": false
+        },
+        {
+          "input": {
+            "bypass": false,
+            "$cardContent": {
+              "document": {
+                "id": "doc_input_dep_menu",
+                "type": "text/plain",
+                "content": "Escolha do Menu de Dependente"
+              },
+              "editable": false,
+              "deletable": true,
+              "position": "right"
+            },
+            "$invalid": false
+          },
+          "$invalid": false
+        }
+      ],
+      "$leavingCustomActions": [],
+      "$conditionOutputs": [
+        {
+          "stateId": "311b3d95-da26-426f-a231-01f91cf38af1",
+          "typeOfStateId": "state",
+          "$connId": "con_dep_agendar",
+          "$id": "cond_dep_agendar",
+          "conditions": [
+            {
+              "source": "input",
+              "comparison": "matches",
+              "values": [
+                "1",
+                "dep_agendar",
+                "agendar",
+                "especialidade",
+                "medico",
+                "médico",
+                "buscar"
+              ]
+            }
+          ],
+          "$invalid": false
+        },
+        {
+          "stateId": "node_minhas_consultas",
+          "typeOfStateId": "state",
+          "$connId": "con_dep_consultas",
+          "$id": "cond_dep_consultas",
+          "conditions": [
+            {
+              "source": "input",
+              "comparison": "matches",
+              "values": [
+                "2",
+                "dep_consultas",
+                "consultas",
+                "agendamentos",
+                "horarios",
+                "horários"
+              ]
+            }
+          ],
+          "$invalid": false
+        },
+        {
+          "stateId": "node_menu_pos_cpf",
+          "typeOfStateId": "state",
+          "$connId": "con_dep_voltar_titular",
+          "$id": "cond_dep_voltar_titular",
+          "conditions": [
+            {
+              "source": "input",
+              "comparison": "matches",
+              "values": [
+                "3",
+                "dep_voltar_titular",
+                "voltar",
+                "meu perfil",
+                "titular"
+              ]
+            }
+          ],
+          "$invalid": false
+        },
+        {
+          "stateId": "desk-pre",
+          "typeOfStateId": "state",
+          "$connId": "con_dep_atendente",
+          "$id": "cond_dep_atendente",
+          "conditions": [
+            {
+              "source": "input",
+              "comparison": "matches",
+              "values": [
+                "4",
+                "dep_atendente",
+                "atendente",
+                "falar",
+                "humano",
+                "secretaria",
+                "secretária"
+              ]
+            }
+          ],
+          "$invalid": false
+        }
+      ],
+      "$defaultOutput": {
+        "stateId": "311b3d95-da26-426f-a231-01f91cf38af1",
+        "$invalid": false
+      },
+      "isAiGenerated": false,
+      "$tags": [],
+      "$invalid": false,
+      "$inputSuggestions": [],
+      "$invalidContentActions": false,
+      "$invalidOutputs": false,
+      "$invalidCustomActions": false
     }
   }
 }
