@@ -707,6 +707,33 @@
       ],
       "$conditionOutputs": [
         {
+          "stateId": "node_menu_pos_cpf",
+          "typeOfStateId": "state",
+          "$connId": "con_voltar_speciali",
+          "$id": "cond_voltar_speciali",
+          "conditions": [
+            {
+              "source": "input",
+              "comparison": "contains",
+              "values": [
+                "voltar",
+                "Voltar",
+                "VOLTAR",
+                "menu",
+                "Menu",
+                "MENU",
+                "inicio",
+                "Inicio",
+                "Início",
+                "início",
+                "reiniciar",
+                "Reiniciar"
+              ]
+            }
+          ],
+          "$invalid": false
+        },
+        {
           "id": "cond_sm_finalizar_1",
           "stateId": "end-session",
           "typeOfStateId": "state",
@@ -822,7 +849,7 @@
             "type": "SendMessage",
             "settings": {
               "type": "text/plain",
-              "content": "Para localizarmos seu cadastro e dar andamento ao seu atendimento, por favor, *digite seu CPF* (apenas os 11 números):"
+              "content": "Para iniciarmos com segurança, por favor, informe o seu *CPF* (apenas os 11 números, sem pontos ou traços):"
             },
             "$invalid": false
           },
@@ -1255,7 +1282,7 @@
             "type": "SendMessage",
             "settings": {
               "type": "text/plain",
-              "content": "Não encontramos um cadastro com o CPF informado. Vamos criar o seu registro rápido!\n\nPor favor, digite o seu *Nome Completo*:"
+              "content": "Não localizamos um cadastro com esse CPF. Não se preocupe, vamos criar o seu registro rápido em *menos de 1 minuto*! ⏱️\n\nPor favor, digite o seu *Nome Completo*:"
             },
             "$invalid": false
           },
@@ -1398,7 +1425,7 @@
             "type": "SendMessage",
             "settings": {
               "type": "text/plain",
-              "content": "Obrigado, {{cadastroNome}}!\n\nAgora, informe sua *Data de Nascimento* (formato: DD/MM/AAAA):"
+              "content": "Perfeito, *{{cadastroNome}}*! 👏\n\nAgora, informe sua *Data de Nascimento* (formato: *DD/MM/AAAA*, ex: 15/04/1990):"
             },
             "$invalid": false
           },
@@ -1996,13 +2023,13 @@
             "type": "SendMessage",
             "settings": {
               "type": "text/plain",
-              "content": "Para agendar com o especialista, clique no link abaixo para falar diretamente no WhatsApp:\n\n👉 {{externalLink}}"
+              "content": "Para agendar com *{{doctorName}}*, clique no link abaixo para falar diretamente no WhatsApp da secretária responsável: 👇💬\n\n👉 *{{externalLink}}*\n\n📞 Telefone de contato: *{{externalPhone}}*\n\nEstamos sempre à sua disposição! 🌟"
             },
             "$cardContent": {
               "document": {
                 "id": "doc_text_link_direto_ext",
                 "type": "text/plain",
-                "content": "Para agendar com o especialista, clique no link abaixo para falar diretamente no WhatsApp:\n\n👉 {{externalLink}}"
+                "content": "Para agendar com *{{doctorName}}*, clique no link abaixo para falar diretamente no WhatsApp da secretária responsável: 👇💬\n\n👉 *{{externalLink}}*\n\n📞 Telefone de contato: *{{externalPhone}}*\n\nEstamos sempre à sua disposição! 🌟"
               },
               "editable": true,
               "deletable": true,
@@ -2067,7 +2094,7 @@
             "type": "SendMessage",
             "settings": {
               "type": "text/plain",
-              "content": "Obrigado por aguardar! Estamos te conectando com a nossa equipe de atendimento na fila *{{selectedQueue}}*."
+              "content": "Tudo certo! Estamos transferindo você para a nossa equipe de atendimento em *{{selectedQueue}}*... ⏳\n\nUma de nossas atendentes já vai te responder. Por favor, aguarde só um instante! 😊"
             },
             "$invalid": false
           },
@@ -2472,7 +2499,7 @@
             "type": "SendMessage",
             "settings": {
               "type": "text/plain",
-              "content": "Seu atendimento foi encerrado por *inatividade*. ⏱️\n\nCaso ainda precise de ajuda, basta nos enviar uma nova mensagem quando quiser. Tenha um ótimo dia!"
+              "content": "Como não tivemos resposta nos últimos minutos, encerramos esta conversa por *inatividade*. ⏱️\n\nCaso ainda precise de atendimento, basta nos enviar uma nova mensagem a qualquer momento. Tenha um excelente dia! ☀️💙"
             },
             "$invalid": false
           },
@@ -2582,7 +2609,7 @@
             "type": "SendMessage",
             "settings": {
               "type": "text/plain",
-              "content": "Desculpe, ocorreu uma falha inesperada. Vamos te direcionar para nossa equipe de atendimento."
+              "content": "Não consegui compreender perfeitamente a sua mensagem. 🤖\n\nNão se preocupe, vou transferir você agora mesmo para uma de nossas *atendentes da recepção* te ajudar!"
             },
             "$invalid": false
           },
@@ -2676,7 +2703,7 @@
               "id": "doc_select_menu_pos_cpf",
               "type": "application/vnd.lime.select+json",
               "content": {
-                "text": "Cadastro localizado, {{pacienteNome}}! 😊\n\nComo podemos te ajudar hoje?",
+                "text": "Cadastro localizado com sucesso, *{{pacienteNome}}*! 😊💙\n\nComo a nossa equipe pode te ajudar hoje?",
                 "scope": "immediate",
                 "options": [
                   {
@@ -2710,7 +2737,7 @@
                 "id": "doc_select_menu_pos_cpf",
                 "type": "application/vnd.lime.select+json",
                 "content": {
-                  "text": "Cadastro localizado, {{pacienteNome}}! 😊\n\nComo podemos te ajudar hoje?",
+                  "text": "Cadastro localizado com sucesso, *{{pacienteNome}}*! 😊💙\n\nComo a nossa equipe pode te ajudar hoje?",
                   "scope": "immediate",
                   "options": [
                     {
@@ -3149,7 +3176,35 @@
         }
       ],
       "$leavingCustomActions": [],
-      "$conditionOutputs": [],
+      "$conditionOutputs": [
+        {
+          "stateId": "node_menu_pos_cpf",
+          "typeOfStateId": "state",
+          "$connId": "con_voltar_node_min",
+          "$id": "cond_voltar_node_min",
+          "conditions": [
+            {
+              "source": "input",
+              "comparison": "contains",
+              "values": [
+                "voltar",
+                "Voltar",
+                "VOLTAR",
+                "menu",
+                "Menu",
+                "MENU",
+                "inicio",
+                "Inicio",
+                "Início",
+                "início",
+                "reiniciar",
+                "Reiniciar"
+              ]
+            }
+          ],
+          "$invalid": false
+        }
+      ],
       "$defaultOutput": {
         "stateId": "node_menu_pos_cpf",
         "$invalid": false
@@ -3184,7 +3239,7 @@
             "type": "SendMessage",
             "settings": {
               "type": "text/plain",
-              "content": "Com qual *médico* ou *especialidade* você gostaria de agendar? 🩺\n\n(Por favor, digite o nome do médico ou especialidade desejada):"
+              "content": "Com qual *médico(a)* ou *especialidade* você gostaria de agendar? 🩺\n\n*(Por favor, digite o nome do médico ou especialidade desejada)*:"
             },
             "$invalid": false
           },
@@ -3215,6 +3270,33 @@
       "$enteringCustomActions": [],
       "$leavingCustomActions": [],
       "$conditionOutputs": [
+        {
+          "stateId": "node_menu_pos_cpf",
+          "typeOfStateId": "state",
+          "$connId": "con_voltar_311b3d95",
+          "$id": "cond_voltar_311b3d95",
+          "conditions": [
+            {
+              "source": "input",
+              "comparison": "contains",
+              "values": [
+                "voltar",
+                "Voltar",
+                "VOLTAR",
+                "menu",
+                "Menu",
+                "MENU",
+                "inicio",
+                "Inicio",
+                "Início",
+                "início",
+                "reiniciar",
+                "Reiniciar"
+              ]
+            }
+          ],
+          "$invalid": false
+        },
         {
           "$id": "cond_search_valid_input_9988",
           "stateId": "nlp-analysis",
