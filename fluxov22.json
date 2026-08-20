@@ -9333,32 +9333,7 @@
           "$invalid": false
         }
       ],
-      "$conditionOutputs": [
-        {
-          "stateId": "2f2a77dd-f2c7-428f-bc1d-683a1ce22ca3",
-          "typeOfStateId": "state",
-          "$connId": "con_573",
-          "$id": "f943e2c4-fb53-4151-b1a9-7b097a8563e1",
-          "conditions": [
-            {
-              "source": "context",
-              "comparison": "contains",
-              "values": [
-                "42991617187",
-                "42988113109",
-                "42984270489",
-                "42984348220",
-                "42988253100",
-                "42991336618",
-                "42998289100"
-              ],
-              "variable": "contact.phoneNumber"
-            }
-          ],
-          "$isBuilderDefaultOutput": true,
-          "$invalid": false
-        }
-      ],
+      "$conditionOutputs": [],
       "$enteringCustomActions": [
         {
           "$id": "http-confirm-group-webhook",
