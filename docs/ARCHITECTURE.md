@@ -1,257 +1,253 @@
 # Arquitetura do Sistema e Modelo de Dados — Inovare TI
 
-Este documento descreve o padrão hexagonal (Ports & Adapters) adotado na camada backend, a divisão de responsabilidades do frontend React e o dicionário de dados do banco PostgreSQL baseado no histórico de migrações do Flyway.
+Este documento descreve a arquitetura hexagonal (Ports & Adapters) adotada no backend Java 21 / Spring Boot 3, a modularização de serviços no frontend React e o dicionário de dados do banco de dados relacional PostgreSQL 16 com histórico completo de 49 migrações gerenciadas pelo Flyway.
 
 ---
 
 ## 1. Estrutura Arquitetural do Sistema
 
-O sistema é dividido em três camadas independentes executadas em contêineres Docker isolados:
+O ecossistema Inovare TI é estruturado sob contêineres Docker independentes e escaláveis:
 
-1. **Frontend SPA (React + Vite):** Interface responsiva estruturada em TypeScript, utilizando React Router para navegação. A camada de serviços é modularizada por domínio sobre chamadas HTTP Axios centralizadas.
-2. **Backend API (Spring Boot):** API modular em Java 21 utilizando Virtual Threads para chamadas assíncronas e concorrência leve. Adota o padrão de arquitetura hexagonal para isolar as regras de negócio de frameworks e adaptadores externos.
-3. **Banco de Dados (PostgreSQL 16):** Persistência relacional com controle de transações ACID. O ciclo de vida do schema é gerido de forma incremental via Flyway.
+1. **Frontend SPA (React + Vite + TypeScript):** Interface responsiva, com controle de estado local, navegação protegida por roles (`ADMIN`, `TECHNICIAN`, `USER`), renderização de QR Codes e dashboards executivos.
+2. **Backend API (Java 21 + Spring Boot 3):** Núcleo de alta performance utilizando **Virtual Threads (Project Loom)** para concorrência e I/O leve. Implementa o padrão de **Arquitetura Hexagonal (Ports & Adapters)** para isolar regras de negócio corporativas de dependências de frameworks.
+3. **Banco de Dados Relacional (PostgreSQL 16):** Armazenamento transacional com suporte a JSONB, integridade referencial com chaves estrangeiras e controle incremental de evolução de schema via **Flyway Migrations (V1 a V49)**.
+4. **Cache Distribuído & Rate Limiting (Redis):** Cache de tokens de alta frequência e limitador de taxa distribuído (`RedisRateLimiter`) com fallback síncrono em memória.
+5. **Observabilidade (Prometheus + Grafana):** Coleta de métricas Micrometer expostas no endpoint `/api/actuator/prometheus`.
+
+---
 
 ### 1.1 Camada Backend: Arquitetura Hexagonal (Ports & Adapters)
-O código-fonte do backend, localizado em `api/src/main/java/br/dev/ctrls/inovareti/modules/`, é dividido em pacotes por contexto delimitado (módulos). Cada módulo implementa a seguinte estrutura de pacotes:
+
+O código-fonte do backend está localizado em `api/src/main/java/br/dev/ctrls/inovareti/modules/`, dividido em 18 contextos delimitados:
 
 ```
 br.dev.ctrls.inovareti.modules.<modulo>/
-├── domain/                  <-- O Core do Hexágono (Sem dependência de frameworks)
-│   ├── model/               <-- Modelos de domínio ricos em regras de negócio puras
-│   └── port/                <-- Contratos de interface que definem as fronteiras
-│       ├── input/           <-- Portas de Entrada (Contratos dos Casos de Uso)
-│       └── output/          <-- Portas de Saída / SPI (Contratos para DB, APIs externas)
+├── domain/                      <-- Core do Domínio (Regras puras, sem frameworks)
+│   ├── model/                   <-- Entidades e Value Objects
+│   ├── exception/               <-- Exceções de domínio
+│   └── port/                    <-- Contratos de fronteira (Interfaces)
+│       ├── input/               <-- Casos de Uso (Portas de Entrada)
+│       └── output/              <-- SPI / Adaptadores Externos (Portas de Saída)
 │
-├── application/             <-- O Orquestrador
-│   ├── usecase/             <-- Implementação dos Casos de Uso (Fluxos de negócio transacionais)
-│   └── service/             <-- Serviços auxiliares do domínio
+├── application/                 <-- Camada de Aplicação e Orquestração
+│   ├── usecase/                 <-- Implementação transacional dos casos de uso
+│   └── service/                 <-- Serviços auxiliares e orquestradores de regras
 │
-└── infrastructure/          <-- Os Adaptadores Tecnológicos (Spring, Banco, APIs)
+└── infrastructure/              <-- Adaptadores Tecnológicos (Spring, DB, APIs)
     ├── adapter/
-    │   ├── input/           <-- REST Controllers (@RestController) e Listeners
-    │   └── output/          <-- Repositórios JPA (@Repository), Clientes HTTP e Integradores
-    └── config/              <-- Classes de configuração específicas do módulo (@Configuration)
+    │   ├── input/               <-- REST Controllers (@RestController) e Event Listeners
+    │   └── output/              <-- Repositórios JPA (@Repository), Clientes HTTP LIME/REST
+    ├── config/                  <-- Beans e configurações específicas (@Configuration)
+    └── utils/                   <-- Utilitários do módulo
 ```
 
-*   **Camada de Domínio (`domain`):** Perímetro isolado onde residem as entidades lógicas (ex. `Ticket`, `Item`, `Asset`) e os contratos das portas. Não possui importações de pacotes do Spring Framework. As portas de saída (`port/output`) representam SPIs (Service Provider Interfaces) a serem implementadas pela infraestrutura.
-*   **Camada de Aplicação (`application`):** Implementa os casos de uso expostos nas portas de entrada. Gerencia a coordenação lógica das transações, carregando modelos e invocando portas de saída.
-*   **Camada de Infraestrutura (`infrastructure`):** Conecta a aplicação com tecnologias externas. Os adaptadores de entrada (Driving) expõem REST APIs. Os adaptadores de saída (Driven) implementam as portas de persistência (JPA) e comunicação (HTTP clients).
+#### Mapeamento dos 18 Módulos de Domínio:
+* **`access`**: Controle de catracas físicas (GerAcesso), geração de QR Codes, credenciais e acompanhantes.
+* **`admin`**: Controles de gestão de pautas médicas, flags de ativação e auditoria administrativa.
+* **`analytics`**: Consolidação de KPIs de atendimento, taxa de presença e métricas financeiras.
+* **`appointment`**: Ingestão matinal de consultas, esteira de confirmações, nudges e Google Review.
+* **`asset`**: Inventário de hardware e equipamentos corporativos (CMDB).
+* **`audit`**: Trilha de conformidade LGPD imutável (`audit_logs`) com Correlation e Trace IDs.
+* **`auth`**: Autenticação stateless JWT, MFA/TOTP (Google Authenticator) e controle de sessões.
+* **`communication`**: Roteadores de webhooks e dispatchers de mensagens.
+* **`finance`**: Conciliação Conta Azul V2, geração e despacho de recibos e monetização.
+* **`inventory`**: Controle de insumos de TI, movimentações de estoque e dedução via FIFO.
+* **`knowledge`**: Base de conhecimento interna (FAQ TI) para autoatendimento técnico.
+* **`network`**: Probes de infraestrutura e monitoramento de conectividade de rede.
+* **`notification`**: Integração com bot do Discord (JDA 5) e alertas ricos em tempo real.
+* **`report`**: Geração de relatórios gerenciais e exportação de PDFs estruturados (OpenPDF).
+* **`settings`**: Configurações dinâmicas persistidas e parâmetros de ambiente.
+* **`ticket`**: Central de chamados (ITSM), cálculo de SLA em horas úteis e subchamados.
+* **`user`**: Cadastro de colaboradores, setores organizacionais (`sectors`) e papéis de acesso.
+* **`vault`**: Cofre de senhas e arquivos criptografado com AES-256-GCM.
 
 ---
 
-## 2. Dicionário de Dados (PostgreSQL 16)
+## 2. Histórico de Evolução do Banco de Dados (Flyway Migrations V1 a V49)
 
-O banco de dados do Inovare TI é estruturado sob o PostgreSQL 16. O controle do schema é efetuado de forma cronológica via arquivos SQL na pasta `api/src/main/resources/db/migration/`.
+O controle do schema do PostgreSQL 16 é efetuado de forma cronológica e imutável via arquivos SQL na pasta `api/src/main/resources/db/migration/`:
 
-### 2.1 Principais Marcos e Evolução do Schema
-*   **V1 (Inicialização):** Consolidação do schema inicial com tabelas base de usuários, setores, categorias, chamados, inventário (lotes e movimentos), ativos (CMDB), cofre (Vault) e auditoria.
-*   **V8 (Relacionamentos de Tickets e Tags):** Introdução da tabela autorreferencial `ticket_relations` e a primeira tabela simples de tags baseadas em strings textuais (`ticket_tags`).
-*   **V9 (Suporte Multi-usuário em Ativos):** Criação da tabela de junção `asset_users` para relacionamento Many-to-Many entre ativos e usuários, migrando a coluna `user_id` da tabela `assets` e removendo-a em seguida para permitir múltiplos usuários por equipamento.
-*   **V17 (ITSM e SLAs):** Introdução da tabela `itsm_categories` com chaves inteiras seriais e SLA configurável em horas, além da tabela de junção `ticket_additional_users` para vincular múltiplos colaboradores afetados pelo mesmo chamado.
-*   **V18 (Ativação de Setores e Defesas):** Adiciona a flag logicamente controlada `active` na tabela de setores (`sectors`) e recria defensivamente a tabela `asset_users`.
-*   **V19 (Tags Ricas e Criticidade):** Purga a antiga tabela textual de tags. Cria as tabelas `ticket_tags` (com suporte a cores em hexadecimal e macros de resolução `default_resolution`) e a tabela de junção `ticket_tag_relations`. Adiciona a flag `is_critical` na tabela de ativos (`assets`) e o relacionamento físico de ativos com chamados via coluna `asset_id` na tabela `tickets`.
-*   **V20 (Destinatários de Estoque):** Adiciona o campo `recipient_user_id` associando movimentações de inventário ao usuário que recebeu o insumo.
-*   **V34 (Controle de Estoque Crítico):** Adiciona a coluna `min_stock` na tabela de itens (`items`) para o controle e alertas de limites de estoque.
-*   **V38 (Vínculo Bidirecional ITSM/CMDB):** Adiciona a coluna `ticket_id` na tabela `asset_maintenances` (histórico de manutenções de ativos), permitindo associar as ordens de manutenção diretamente aos chamados de suporte de origem.
-
----
-
-### 2.2 Tabelas e Mapeamento Físico
-
-#### Tabela: `sectors` (Setores Corporativos)
-| Coluna | Tipo | Restrições | Descrição |
-|--------|------|------------|-----------|
-| `id` | `uuid` | PK, default `gen_random_uuid()` | Identificador único do setor |
-| `name` | `varchar(100)` | NOT NULL, UNIQUE | Nome descritivo do setor |
-| `active` | `boolean` | NOT NULL, default `true` | Indica se o setor está ativo no sistema (V18) |
-
-#### Tabela: `users` (Colaboradores e Técnicos)
-| Coluna | Tipo | Restrições | Descrição |
-|--------|------|------------|-----------|
-| `id` | `uuid` | PK, default `gen_random_uuid()` | Identificador único do usuário |
-| `name` | `varchar(150)` | NOT NULL | Nome completo |
-| `email` | `varchar(255)` | NOT NULL, UNIQUE | E-mail corporativo (login) |
-| `password_hash` | `varchar(255)` | NOT NULL | Hash BCrypt da senha do usuário |
-| `must_change_password` | `boolean` | NOT NULL, default `false` | Forçar redefinição no primeiro acesso |
-| `role` | `varchar(20)` | NOT NULL | Nível de acesso: `ADMIN`, `TECHNICIAN`, `USER` |
-| `sector_id` | `uuid` | NOT NULL, FK -> `sectors(id)` | Vínculo com o setor do colaborador |
-| `location` | `varchar(150)` | NOT NULL | Sala ou andar físico na clínica |
-| `discord_user_id` | `varchar(50)` | NULLABLE | ID da conta Discord para notificações |
-| `totp_secret` | `varchar(500)` | NULLABLE | Segredo TOTP de dois fatores criptografado |
-| `recovery_code_hash` | `varchar(255)` | NULLABLE | Hash do código de emergência do TOTP |
-| `recovery_code_expires_at`| `timestamp` | NULLABLE | Expiração da chave temporária do Discord |
-| `receives_it_notifications`| `boolean` | NOT NULL, default `true` | Define se o técnico recebe alertas de TI |
-
-#### Tabela: `itsm_categories` (Categorias de Chamados com SLA)
-| Coluna | Tipo | Restrições | Descrição |
-|--------|------|------------|-----------|
-| `id` | `serial` | PK | Identificador incremental da categoria (V17) |
-| `name` | `varchar(150)` | NOT NULL, UNIQUE | Nome descritivo do canal de atendimento |
-| `sla_hours` | `integer` | NOT NULL | Prazo máximo em horas para solução (SLA) |
-
-#### Tabela: `tickets` (Incidente e Solicitação de Suporte - ITSM)
-| Coluna | Tipo | Restrições | Descrição |
-|--------|------|------------|-----------|
-| `id` | `uuid` | PK, default `gen_random_uuid()` | Identificador único do chamado |
-| `title` | `varchar(200)` | NOT NULL | Título resumido da demanda |
-| `description` | `text` | NULLABLE | Detalhamento do problema |
-| `anydesk_code` | `varchar(500)` | NULLABLE | Identificador para acesso remoto via AnyDesk |
-| `status` | `varchar(20)` | NOT NULL | Status: `OPEN`, `IN_PROGRESS`, `RESOLVED`, `CLOSED` |
-| `priority` | `varchar(10)` | NOT NULL | Prioridade: `LOW`, `NORMAL`, `HIGH`, `URGENT` |
-| `requester_id` | `uuid` | NOT NULL, FK -> `users(id)` | Usuário solicitante |
-| `assigned_to_id` | `uuid` | NULLABLE, FK -> `users(id)` | Técnico responsável |
-| `category_id` | `uuid` | NOT NULL, FK -> `ticket_categories(id)`| Antiga categoria mestre baseada em UUID |
-| `requested_item_id` | `uuid` | NULLABLE, FK -> `items(id)` | Item de estoque solicitado para baixa |
-| `requested_quantity` | `integer` | NULLABLE | Quantidade a ser retirada |
-| `sla_deadline` | `timestamp` | NOT NULL | Limite de prazo calculado para atendimento |
-| `created_at` | `timestamp` | NOT NULL | Instante de abertura do chamado |
-| `closed_at` | `timestamp` | NULLABLE | Instante de resolução ou encerramento |
-| `solution_text` | `text` | NULLABLE | Nota explicativa da resolução (V7) |
-| `asset_id` | `uuid` | NULLABLE, FK -> `assets(id)` | Equipamento associado do CMDB (V19) |
-
-#### Tabela: `ticket_additional_users` (Vínculo de Usuários Afetados)
-| Coluna | Tipo | Restrições | Descrição |
-|--------|------|------------|-----------|
-| `ticket_id` | `uuid` | PK, FK -> `tickets(id)` ON DELETE CASCADE | Chamado de suporte de referência (V17) |
-| `user_id` | `uuid` | PK, FK -> `users(id)` ON DELETE CASCADE | Usuário adicional afetado pelo problema |
-
-#### Tabela: `ticket_tags` (Entidade Mestre de Tags Ricas)
-| Coluna | Tipo | Restrições | Descrição |
-|--------|------|------------|-----------|
-| `id` | `uuid` | PK, default `gen_random_uuid()` | Identificador da tag (V19) |
-| `name` | `varchar(100)` | NOT NULL, UNIQUE | Nome descritivo da tag (ex. `#🚨ParadaCrítica`) |
-| `color` | `varchar(20)` | NOT NULL | Cor em código hexadecimal para a UI (ex. `#FF0000`) |
-| `active` | `boolean` | NOT NULL, default `true` | Flag para soft-delete lógico |
-| `default_resolution` | `text` | NULLABLE | Resolução padrão auto-preenchida (macro de 1 clique) |
-
-#### Tabela: `ticket_tag_relations` (Junção Chamados x Tags)
-| Coluna | Tipo | Restrições | Descrição |
-|--------|------|------------|-----------|
-| `ticket_id` | `uuid` | PK, FK -> `tickets(id)` ON DELETE CASCADE | Vínculo com o chamado (V19) |
-| `tag_id` | `uuid` | PK, FK -> `ticket_tags(id)` ON DELETE CASCADE | Vínculo com a tag associada |
-
-#### Tabela: `items` (Insumos de TI)
-| Coluna | Tipo | Restrições | Descrição |
-|--------|------|------------|-----------|
-| `id` | `uuid` | PK, default `gen_random_uuid()` | Identificador único do insumo |
-| `item_category_id` | `uuid` | NOT NULL, FK -> `item_categories(id)`| Categoria de insumo (ex. Periféricos) |
-| `name` | `varchar(150)` | NOT NULL | Nome comercial do produto |
-| `current_stock` | `integer` | NOT NULL, >= 0 | Quantidade total disponível no estoque principal |
-| `specifications` | `jsonb` | NOT NULL, default `'{}'` | Detalhes técnicos e marcas em formato JSON |
-| `min_stock` | `integer` | NOT NULL, default `0` | Estoque mínimo para trigger de alertas (V34) |
-
-#### Tabela: `stock_batches` (Lotes de Inventário - Algoritmo FIFO)
-| Coluna | Tipo | Restrições | Descrição |
-|--------|------|------------|-----------|
-| `id` | `uuid` | PK, default `gen_random_uuid()` | Identificador único do lote de compra |
-| `item_id` | `uuid` | NOT NULL, FK -> `items(id)` | Item de estoque associado |
-| `original_quantity` | `integer` | NOT NULL, >= 1 | Quantidade de unidades adquirida no lote |
-| `remaining_quantity`| `integer` | NOT NULL, >= 0 | Quantidade restante no lote (deduzida via FIFO) |
-| `unit_price` | `numeric(12,2)` | NOT NULL | Preço unitário pago na aquisição |
-| `brand` | `varchar(100)` | NULLABLE | Marca informada |
-| `supplier` | `varchar(150)` | NULLABLE | Fornecedor parceiro |
-| `purchase_reason` | `varchar(200)` | NULLABLE | Nota sobre o motivo da compra |
-| `entry_date` | `timestamp` | NOT NULL | Data de recebimento e entrada física |
-| `invoice_file_path` | `varchar(500)` | NULLABLE | Caminho local do arquivo de Nota Fiscal |
-
-#### Tabela: `stock_movements` (Histórico de Movimentações de Estoque)
-| Coluna | Tipo | Restrições | Descrição |
-|--------|------|------------|-----------|
-| `id` | `uuid` | PK, default `gen_random_uuid()` | Identificador do movimento |
-| `item_id` | `uuid` | NOT NULL, FK -> `items(id)` | Item de estoque afetado |
-| `type` | `varchar(10)` | NOT NULL, check IN/OUT | Tipo da ação: `IN` (entrada) ou `OUT` (saída) |
-| `quantity` | `integer` | NOT NULL, >= 1 | Quantidade movimentada |
-| `unit_price_at_time`| `numeric(19,2)`| NULLABLE | Custo unitário praticado na movimentação |
-| `reference` | `varchar(255)` | NOT NULL | Origem (ex. `TICKET:ticket_uuid` ou `WITHDRAWAL`) |
-| `date` | `timestamp` | NOT NULL | Data do registro da movimentação |
-| `recipient_user_id` | `uuid` | NULLABLE, FK -> `users(id)` | Usuário que recebeu/retirou o insumo (V20) |
-
-#### Tabela: `assets` (Ativos Físicos e Hardware - CMDB)
-| Coluna | Tipo | Restrições | Descrição |
-|--------|------|------------|-----------|
-| `id` | `uuid` | PK, default `gen_random_uuid()` | Identificador único do ativo |
-| `name` | `varchar(150)` | NOT NULL | Nome de registro (ex. Switch Switchroom) |
-| `patrimony_code` | `varchar(80)` | NOT NULL, UNIQUE | Placa de patrimônio (ex. `INV-2026-045`) |
-| `category_id` | `uuid` | NULLABLE, FK -> `asset_categories(id)`| Categoria de ativo (ex. Redes) |
-| `specifications` | `text` | NULLABLE | Detalhes físicos estruturados do bem |
-| `acquisition_value` | `numeric(19,2)`| NULLABLE | Preço de compra |
-| `created_at` | `timestamp` | NOT NULL | Data de registro |
-| `is_critical` | `boolean` | NOT NULL, default `false` | Se crítico, dispara fluxos de SLA de 1 hora (V19) |
-
-#### Tabela: `asset_users` (Associação Multi-usuário em Ativos)
-| Coluna | Tipo | Restrições | Descrição |
-|--------|------|------------|-----------|
-| `asset_id` | `uuid` | PK, FK -> `assets(id)` ON DELETE CASCADE | Ativo compartilhado (V9/V18) |
-| `user_id` | `uuid` | PK, FK -> `users(id)` ON DELETE CASCADE | Colaborador associado que utiliza o ativo |
-
-#### Tabela: `asset_maintenances` (Histórico de Ordens de Manutenção)
-| Coluna | Tipo | Restrições | Descrição |
-|--------|------|------------|-----------|
-| `id` | `uuid` | PK, default `gen_random_uuid()` | Identificador da ordem |
-| `asset_id` | `uuid` | NOT NULL, FK -> `assets(id)` | Ativo em manutenção |
-| `maintenance_date` | `date` | NOT NULL | Data da intervenção |
-| `type` | `varchar(20)` | NOT NULL | Tipo: `PREVENTIVE`, `CORRECTIVE`, `UPGRADE`, `TRANSFER` |
-| `description` | `text` | NULLABLE | Descrição das atividades executadas |
-| `cost` | `numeric(10,2)`| NULLABLE | Custo da ordem de serviço |
-| `technician_id` | `uuid` | NOT NULL, FK -> `users(id)` | Técnico que efetuou o trabalho |
-| `ticket_id` | `uuid` | NULLABLE, FK -> `tickets(id)` ON DELETE SET NULL | Chamado ITSM originário (V38) |
-| `created_at` | `timestamp` | NOT NULL | Registro de criação |
-
-#### Tabela: `vault_items` (Cofre Eletrônico Criptografado)
-| Coluna | Tipo | Restrições | Descrição |
-|--------|------|------------|-----------|
-| `id` | `uuid` | PK, default `gen_random_uuid()` | Identificador único do segredo |
-| `title` | `varchar(150)` | NOT NULL | Título indicador da senha ou anotação |
-| `description` | `text` | NULLABLE | Descrição externa |
-| `item_type` | `varchar(20)` | NOT NULL | Tipo: `CREDENTIAL`, `DOCUMENT`, `NOTE` |
-| `secret_content` | `text` | NULLABLE | Conteúdo sigiloso criptografado com AES-256-GCM |
-| `file_path` | `varchar(500)` | NULLABLE | Caminho físico de anexo criptografado |
-| `owner_id` | `uuid` | NOT NULL, FK -> `users(id)` | Criador/Dono do registro |
-| `sharing_type` | `varchar(20)` | NOT NULL | Visibilidade: `PRIVATE`, `ALL_TECH_ADMIN`, `CUSTOM` |
-| `created_at` | `timestamp` | NOT NULL | Data de inserção |
-| `updated_at` | `timestamp` | NOT NULL | Última modificação |
-
-#### Tabela: `audit_logs` (Histórico de Compliance Imutável)
-| Coluna | Tipo | Restrições | Descrição |
-|--------|------|------------|-----------|
-| `id` | `uuid` | PK, default `gen_random_uuid()` | Identificador único do log |
-| `user_id` | `uuid` | NULLABLE | Usuário autor da ação (nulo para sistema) |
-| `action` | `varchar(60)` | NOT NULL | Ação de auditoria (ex. `VAULT_SECRET_VIEW`) |
-| `resource_type` | `varchar(60)` | NULLABLE | Entidade modificada ou visualizada |
-| `resource_id` | `uuid` | NULLABLE | ID do registro afetado |
-| `details` | `text` | NULLABLE | Dump descritivo dos parâmetros em formato JSON |
-| `ip_address` | `varchar(45)` | NULLABLE | Endereço IP do cliente requisitante |
-| `created_at` | `timestamp` | NOT NULL | Data da gravação (imutável) |
+* **V1 (Inicialização Base):** Criação das tabelas centrais: `users`, `sectors`, `ticket_categories`, `tickets`, `items`, `item_categories`, `stock_batches`, `stock_movements`, `assets`, `asset_categories`, `asset_maintenances`, `vault_items` e `audit_logs`.
+* **V2 (Setup de Produção):** Ajustes de chaves estrangeiras e índices padrão.
+* **V3 (Documento Médico):** Adição de colunas de identificação médica no mapeamento de profissionais.
+* **V4 (Setup do Motor de Agendamentos):** Criação das tabelas `appointment_sessions` e `appointment_doctor_mapping`.
+* **V5 (Consolidação do Motor):** Índices de busca rápida por status e telefone nas sessões de agendamento.
+* **V6 (Rastreabilidade de Auditoria):** Inclusão da coluna `trace_id` na tabela `audit_logs`.
+* **V7 (Resolução de Chamados):** Adição da coluna `solution_text` na tabela `tickets`.
+* **V8 (Relações e Tags de Chamados):** Tabela autorreferencial `ticket_relations` e tags iniciais.
+* **V9 (Ativos Multi-usuário):** Criação da tabela de junção `asset_users` para permitir múltiplos colaboradores por computador.
+* **V10 (Grupos de Notificação):** Criação da tabela `notification_groups` para agrupar múltiplas consultas do mesmo paciente.
+* **V11 (Controle de Nudges):** Inclusão da coluna `last_notification_sent_at` na tabela `appointment_sessions`.
+* **V12 (Bloqueio de Agenda Automática):** Flag `ignore_auto_schedule` na tabela `appointment_doctor_mapping`.
+* **V13 (Template de Notificação em Grupo):** Suporte ao template consolidado de WhatsApp.
+* **V14 (Vínculo de Grupo):** Inclusão da coluna `current_group_id` na tabela `appointment_sessions`.
+* **V15 (Base de Conhecimento):** Criação da tabela `faq_ti` para artigos de suporte.
+* **V16 (Índices de Performance):** Otimização de consultas críticas no banco.
+* **V17 (ITSM, SLA e Múltiplos Afetados):** Tabela `itsm_categories` com `sla_hours` e tabela de junção `ticket_additional_users`.
+* **V18 (Ativação de Setores):** Coluna `active` na tabela `sectors` e proteção de integridade em `asset_users`.
+* **V19 (Tags Ricas e Ativos Críticos):** Tabela `ticket_tags` (cores hexadecimais e `default_resolution`), `ticket_tag_relations`, coluna `is_critical` em `assets` e `asset_id` em `tickets`.
+* **V20 (Destinatário de Estoque):** Coluna `recipient_user_id` na tabela `stock_movements`.
+* **V21 (Reconciliação de Identidades Blip):** Ajuste no armazenamento de identificadores do WhatsApp.
+* **V22 (Telefone do Grupo):** Coluna `phone_number` na tabela `notification_groups`.
+* **V23 (Texto Pré-compilado de Grupo):** Coluna `pre_compiled_schedule_text` na tabela `notification_groups`.
+* **V24 (Mapeamento de Nudge V2):** Suporte a templates dinâmicos de lembrete.
+* **V25 (Configuração de Nudges de Grupo):** Parâmetros de disparo unificado de lembretes.
+* **V26 (Status de Recibos):** Ajuste de enum e rastreabilidade na tabela `processed_receipts`.
+* **V27 (Requisições de Itens):** Criação da tabela `ticket_item_requests`.
+* **V28 (Novas Aquisições no CMDB):** Flag `is_new_acquisition` na tabela `assets`.
+* **V29 (Falhas de Entrega Blip):** Tabela `blip_delivery_failures` para dead-letter de mensagens.
+* **V30 (Índice Composto de Tickets):** Índice em `status` + `created_at` na tabela `tickets`.
+* **V31 (Integridade de Banco):** Limpeza e consolidação de constraints.
+* **V32 (Relacionamentos de Inventário):** Vínculos entre lotes de compra e requisições de chamado.
+* **V33 (Alocações de Ativos):** Associação direta de itens a ativos específicos.
+* **V34 (Estoque Mínimo):** Coluna `min_stock` na tabela `items` para alertas automáticos de reposição.
+* **V35 (Higienização de Mapeamento Médico):** Remoção de links externos legados.
+* **V36 (Restauração de Coluna):** Restauração defensiva de `profissional_nome` em `appointment_doctor_mapping`.
+* **V37 (Faturamento de Médicos):** Colunas de comissão e cobrança na tabela `appointment_doctor_mapping`.
+* **V38 (Vínculo ITSM/CMDB):** Adição da coluna `ticket_id` na tabela `asset_maintenances`.
+* **V39 (Tuning de Autovacuum):** Otimização de parâmetros do PostgreSQL na tabela `audit_logs`.
+* **V40 (Credenciais de Catracas):** Criação da tabela `access_credentials` (QR Codes, localizadores e acompanhantes).
+* **V41 (Idempotência de Acesso):** Constraint UNIQUE em `access_credentials` (`feegow_appointment_id`, `cpf`, `user_type`).
+* **V42 (Múltiplas Atribuições de Chamados):** Criação da tabela `ticket_assignments`.
+* **V43 (Subchamados e Hierarquia ITSM):** Coluna `parent_ticket_id` na tabela `tickets`.
+* **V44 (Seed de Configurações Médicas):** Carga inicial na tabela `doctor_configurations`.
+* **V45 (Antecedência e Deslocamento):** Colunas `advance_notice_days` e `time_shift_minutes` em `doctor_configurations`.
+* **V46 (Ativação de Médicos):** Coluna `is_active` na tabela `doctor_configurations`.
+* **V47 (Constraint de Status de Agendamento):** Ajuste de constraints e suporte ao status `CONFIRMED`.
+* **V48 (Google Review URL):** Coluna `google_review_url` na tabela `doctor_configurations`.
+* **V49 (Higienização e Índices Finais):** Índices de alta performance em `appointment_sessions`, `notification_groups` e `doctor_configurations`.
 
 ---
 
-## 3. Relacionamentos Físicos no Banco de Dados
+## 3. Dicionário de Tabelas do Banco de Dados
 
-O diagrama abaixo consolida a estrutura de chaves estrangeiras (FK) do sistema:
+### 3.1 Módulo de Agendamentos & Médicos
 
-```
-sectors (1) ────< users (N)
-users (1) ──────< tickets (N) [como requester_id]
-users (1) ──────< tickets (N) [como assigned_to_id, nullable]
-users (1) ──────< vault_items (N) [como owner_id]
+#### Tabela: `appointment_sessions`
+| Coluna | Tipo | Restrições | Descrição |
+|---|---|---|---|
+| `id` | `uuid` | PK, default `gen_random_uuid()` | Identificador único da sessão |
+| `feegow_appointment_id` | `varchar(50)` | NOT NULL, INDEX | ID do agendamento no Feegow ERP |
+| `patient_id` | `varchar(50)` | NOT NULL | ID do prontuário do paciente no Feegow |
+| `phone_number` | `varchar(50)` | NOT NULL, INDEX | Telefone no formato WhatsApp (`5542...`) |
+| `doctor_profissional_id`| `varchar(50)` | NOT NULL | ID do profissional no Feegow |
+| `appointment_at` | `timestamp` | NOT NULL | Data e hora agendada para a consulta |
+| `status` | `varchar(30)` | NOT NULL | `PENDING`, `CONFIRMED`, `ALTERATION_REQUESTED`, `CANCELED`, `CANCELED_NO_RESPONSE` |
+| `status_details` | `varchar(255)` | NULLABLE | Detalhe da transição (ex: `CONFIRMED_ON_FEEGOW`) |
+| `current_group_id` | `uuid` | NULLABLE, FK -> `notification_groups(group_id)` | Vínculo com o grupo de notificações do dia (V14) |
+| `last_notification_sent_at`| `timestamp` | NULLABLE | Instante do último disparo de template ou nudge (V11) |
+| `last_interaction_at` | `timestamp` | NULLABLE | Instante da última resposta recebida do paciente |
+| `closed_at` | `timestamp` | NULLABLE | Instante do encerramento da sessão |
+| `created_at` | `timestamp` | NOT NULL, default `now()` | Data de criação do registro |
 
-itsm_categories (1) ───< tickets (N) [via category_id]
-items (1) ─────────────< tickets (N) [via requested_item_id, nullable]
-assets (1) ────────────< tickets (N) [via asset_id, nullable]
+#### Tabela: `notification_groups`
+| Coluna | Tipo | Restrições | Descrição |
+|---|---|---|---|
+| `id` | `uuid` | PK, default `gen_random_uuid()` | Identificador do registro |
+| `group_id` | `uuid` | NOT NULL, INDEX | UUID compartilhado entre consultas unificadas |
+| `session_id` | `uuid` | NOT NULL, FK -> `appointment_sessions(id)` | Sessão vinculada ao grupo |
+| `phone_number` | `varchar(50)` | NULLABLE | Telefone do paciente notificado (V22) |
+| `pre_compiled_schedule_text`| `text` | NULLABLE | Resumo textual consolidado das consultas (V23) |
+| `created_at` | `timestamp` | NOT NULL | Data de geração do grupo |
 
-items (1) ─────────────< stock_batches (N)
-items (1) ─────────────< stock_movements (N)
-users (1) ─────────────< stock_movements (N) [como recipient_user_id, nullable]
+#### Tabela: `doctor_configurations`
+| Coluna | Tipo | Restrições | Descrição |
+|---|---|---|---|
+| `id` | `uuid` | PK, default `gen_random_uuid()` | Identificador único |
+| `feegow_profissional_id`| `integer` | NOT NULL, UNIQUE | ID do profissional no Feegow ERP |
+| `doctor_name` | `varchar(150)` | NOT NULL | Nome de exibição do médico |
+| `advance_notice_days` | `integer` | NOT NULL, default `1` | Dias de antecedência para disparo (ex: 2 para D+2) |
+| `time_shift_minutes` | `integer` | NOT NULL, default `0` | Deslocamento de instrução de chegada |
+| `google_review_url` | `varchar(500)` | NULLABLE | Link direto para avaliação no Google Meu Negócio |
+| `is_active` | `boolean` | NOT NULL, default `true` | Habilita/desabilita o motor para este médico |
+| `created_at` | `timestamp` | NOT NULL | Data de cadastro |
 
-assets (1) ────────────< asset_maintenances (N)
-users (1) ─────────────< asset_maintenances (N) [como technician_id]
-tickets (1) ───────────< asset_maintenances (N) [via ticket_id, nullable]
+---
 
-vault_items (1) ───< vault_item_shares (N)
-users (1) ─────────< vault_item_shares (N) [como shared_with_user_id]
+### 3.2 Módulo de Controle de Acesso Físico (Catracas)
 
-assets (N) ──────────o asset_users (N) ──o users (N) [Tabela de junção N:N]
-tickets (N) ─────────o ticket_tag_relations (N) ──o ticket_tags (N) [Tabela de junção N:N]
-tickets (N) ─────────o ticket_additional_users (N) ──o users (N) [Tabela de junção N:N]
+#### Tabela: `access_credentials`
+| Coluna | Tipo | Restrições | Descrição |
+|---|---|---|---|
+| `id` | `uuid` | PK, default `gen_random_uuid()` | Identificador da credencial |
+| `feegow_appointment_id` | `varchar(50)` | NOT NULL, INDEX | ID da consulta associada |
+| `name` | `varchar(150)` | NOT NULL | Nome do titular ou acompanhante |
+| `cpf` | `varchar(20)` | NOT NULL | CPF cadastrado |
+| `user_type` | `varchar(20)` | NOT NULL | `PATIENT` (titular) ou `COMPANION` (acompanhante) |
+| `locator` | `varchar(50)` | NOT NULL | Localizador alfanumérico do GerAcesso |
+| `credential_code` | `varchar(50)` | NOT NULL | Código da credencial para liberação no leitor |
+| `start_validity` | `timestamp` | NOT NULL | Início da janela física de acesso (2h antes) |
+| `end_validity` | `timestamp` | NOT NULL | Fim da janela física de acesso (21:00 do dia) |
+| `created_at` | `timestamp` | NOT NULL | Data da geração da credencial |
+
+---
+
+### 3.3 Módulo de Suporte de TI & Ativos (ITSM + CMDB)
+
+#### Tabela: `tickets`
+| Coluna | Tipo | Restrições | Descrição |
+|---|---|---|---|
+| `id` | `uuid` | PK, default `gen_random_uuid()` | Identificador do chamado |
+| `title` | `varchar(200)` | NOT NULL | Título da solicitação |
+| `description` | `text` | NULLABLE | Detalhamento técnico |
+| `status` | `varchar(20)` | NOT NULL | `OPEN`, `IN_PROGRESS`, `RESOLVED`, `CLOSED` |
+| `priority` | `varchar(10)` | NOT NULL | `LOW`, `NORMAL`, `HIGH`, `URGENT` |
+| `requester_id` | `uuid` | NOT NULL, FK -> `users(id)` | Solicitante do chamado |
+| `assigned_to_id` | `uuid` | NULLABLE, FK -> `users(id)` | Técnico principal atribuído |
+| `parent_ticket_id` | `uuid` | NULLABLE, FK -> `tickets(id)` | Chamado pai para subchamados em árvore (V43) |
+| `category_id` | `integer` | NOT NULL, FK -> `itsm_categories(id)` | Categoria de atendimento com SLA |
+| `asset_id` | `uuid` | NULLABLE, FK -> `assets(id)` | Equipamento do CMDB vinculado |
+| `sla_deadline` | `timestamp` | NOT NULL | Prazo calculado em horas úteis |
+| `solution_text` | `text` | NULLABLE | Parecer técnico de conclusão |
+| `created_at` | `timestamp` | NOT NULL | Data de abertura |
+| `closed_at` | `timestamp` | NULLABLE | Data de encerramento |
+
+#### Tabela: `ticket_assignments`
+| Coluna | Tipo | Restrições | Descrição |
+|---|---|---|---|
+| `id` | `uuid` | PK, default `gen_random_uuid()` | Identificador do vínculo |
+| `ticket_id` | `uuid` | NOT NULL, FK -> `tickets(id)` | Chamado de suporte |
+| `user_id` | `uuid` | NOT NULL, FK -> `users(id)` | Técnico adicional atribuído à tarefa |
+| `assigned_at` | `timestamp` | NOT NULL | Data da atribuição |
+
+#### Tabela: `assets` (CMDB)
+| Coluna | Tipo | Restrições | Descrição |
+|---|---|---|---|
+| `id` | `uuid` | PK, default `gen_random_uuid()` | Identificador do ativo |
+| `name` | `varchar(150)` | NOT NULL | Nome do equipamento (ex: Consultório 03 - PC) |
+| `patrimony_code` | `varchar(80)` | NOT NULL, UNIQUE | Placa patrimonial (ex: `INV-2026-045`) |
+| `is_critical` | `boolean` | NOT NULL, default `false` | Se crítico, dispara regra de Parada Crítica (SLA 1h) |
+| `is_new_acquisition` | `boolean` | NOT NULL, default `false` | Indica compra recente em homologação |
+| `specifications` | `text` | NULLABLE | Configurações de hardware (CPU, RAM, SSD) |
+| `created_at` | `timestamp` | NOT NULL | Data de registro patrimonial |
+
+---
+
+## 4. Diagrama Entidade-Relacionamento Completo (Mermaid)
+
+```mermaid
+erDiagram
+    sectors ||--o{ users : "pertence a"
+    users ||--o{ tickets : "solicita (requester)"
+    users ||--o{ tickets : "atendido por (assigned_to)"
+    users ||--o{ ticket_assignments : "colabora em"
+    tickets ||--o{ ticket_assignments : "possui técnicos"
+    tickets ||--o{ tickets : "subchamado de (parent)"
+    itsm_categories ||--o{ tickets : "categoriza"
+    assets ||--o{ tickets : "associado a"
+    assets ||--o{ asset_users : "utilizado por"
+    users ||--o{ asset_users : "opera ativo"
+    assets ||--o{ asset_maintenances : "histórico de manutenção"
+    tickets ||--o{ asset_maintenances : "motivou manutenção"
+    
+    items ||--o{ stock_batches : "lotes de compra"
+    items ||--o{ stock_movements : "movimentações FIFO"
+    users ||--o{ stock_movements : "recebeu insumo"
+
+    users ||--o{ vault_items : "proprietário"
+    users ||--o{ audit_logs : "autor da ação"
+
+    appointment_sessions ||--o{ notification_groups : "consolida grupo"
+    doctor_configurations ||--o{ appointment_sessions : "parametriza médico"
+    appointment_sessions ||--o{ access_credentials : "gera credenciais de catraca"
 ```
