@@ -2,49 +2,26 @@ package br.dev.ctrls.inovareti.modules.appointment.application.usecase;
 
 import java.time.DayOfWeek;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Semaphore;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.Set;
 import java.util.stream.Collectors;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.support.TransactionTemplate;
 
-import java.util.HashMap;
-import br.dev.ctrls.inovareti.modules.access.domain.port.output.BlipContactClientPort;
-import br.dev.ctrls.inovareti.modules.appointment.domain.model.AppointmentDoctorMapping;
-import br.dev.ctrls.inovareti.modules.appointment.application.dto.AppointmentDispatchContext;
-import br.dev.ctrls.inovareti.modules.appointment.application.service.AppointmentSendIdempotencyService;
-import br.dev.ctrls.inovareti.modules.appointment.application.service.BlipAppointmentFormatter;
-import br.dev.ctrls.inovareti.modules.appointment.application.service.BlipNotificationService;
-import br.dev.ctrls.inovareti.modules.appointment.application.service.NoopAppointmentSendIdempotencyService;
-import br.dev.ctrls.inovareti.modules.appointment.application.service.FeegowAppointmentSearcher;
+import br.dev.ctrls.inovareti.modules.appointment.application.service.AppointmentBatchFilterPipeline;
+import br.dev.ctrls.inovareti.modules.appointment.application.service.AppointmentCancellationReconciler;
+import br.dev.ctrls.inovareti.modules.appointment.application.service.AppointmentGroupDispatcher;
+import br.dev.ctrls.inovareti.modules.appointment.application.service.AppointmentGroupDispatcher.DispatchResult;
+import br.dev.ctrls.inovareti.modules.appointment.application.service.AppointmentIngestionDateResolver;
+import br.dev.ctrls.inovareti.modules.appointment.application.service.AppointmentIngestionDateResolver.ResolvedDatesAndAppointments;
 import br.dev.ctrls.inovareti.modules.appointment.application.service.FeegowPatientDetailsFetcher;
-import br.dev.ctrls.inovareti.infrastructure.shared.utils.TextNormalizer;
-import br.dev.ctrls.inovareti.modules.appointment.domain.model.AppointmentCategory;
-import br.dev.ctrls.inovareti.modules.appointment.domain.model.AppointmentSession;
-import br.dev.ctrls.inovareti.modules.appointment.domain.model.AppointmentSessionStatus;
 import br.dev.ctrls.inovareti.modules.appointment.domain.model.FeegowAppointmentStatus;
-import br.dev.ctrls.inovareti.modules.appointment.infrastructure.utils.AppointmentIdNormalizer;
-import br.dev.ctrls.inovareti.modules.appointment.domain.model.NotificationGroup;
-import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentConfigRepositoryPort;
-import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentDoctorMappingRepositoryPort;
-import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentSessionRepositoryPort;
-import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.BlipUserIdentityReconciliationRepositoryPort;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.FeegowAppointment;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.FeegowPatient;
-import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.NotificationGroupRepositoryPort;
-import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.ProfessionalExternalPort;
 import br.dev.ctrls.inovareti.modules.appointment.infrastructure.config.AppointmentMotorProperties;
-import br.dev.ctrls.inovareti.modules.appointment.application.service.BlipContextService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -52,13 +29,11 @@ import lombok.extern.slf4j.Slf4j;
  * Caso de Uso responsável pela ingestão diária de agendamentos vindos do Feegow,
  * gerando sessões locais e disparando notificações individuais ou em lote.
  *
- * Performance:
- * - Grupos são processados em paralelo via Virtual Threads.
- * - Um Semaphore limita as chamadas simultâneas ao Blip para evitar HTTP 429.
- * - Toda a persistência de cada grupo (sessões + NotificationGroup) ocorre
- *   em uma única transação de banco, reduzindo o overhead do HikariCP.
- * - O contexto do Blip é configurado em fire-and-forget para não bloquear
- *   o envio imediato do template ao paciente.
+ * Arquitetura Refatorada:
+ * - Resolução de datas e busca de dados delegadas ao AppointmentIngestionDateResolver.
+ * - Invalidação de consultas canceladas/remarcadas delegada ao AppointmentCancellationReconciler.
+ * - Filtros de negócio delegados ao AppointmentBatchFilterPipeline.
+ * - Despacho de mensagens paralelo e transacional delegado ao AppointmentGroupDispatcher.
  */
 @Slf4j
 @Component
@@ -66,47 +41,27 @@ import lombok.extern.slf4j.Slf4j;
 public class IngestAppointmentsUseCase {
 
     private final AppointmentMotorProperties appointmentMotorProperties;
-    private final ProfessionalExternalPort professionalExternalPort;
-    private final AppointmentDoctorMappingRepositoryPort appointmentDoctorMappingRepository;
-    private final AppointmentSessionRepositoryPort appointmentSessionRepository;
-    private final SendAppointmentTemplateUseCase sendAppointmentTemplateUseCase;
-    @jakarta.annotation.Nullable
-    private final AppointmentSendIdempotencyService appointmentSendIdempotencyService;
-    @jakarta.annotation.Nullable
-    private final NoopAppointmentSendIdempotencyService noopAppointmentSendIdempotencyService;
-    private final TransactionTemplate transactionTemplate;
-    private final NotificationGroupRepositoryPort notificationGroupRepository;
-    private final BlipNotificationService blipNotificationService;
-    private final BlipAppointmentFormatter blipAppointmentFormatter;
-    private final AppointmentConfigRepositoryPort appointmentConfigRepository;
-    private final FeegowAppointmentSearcher feegowAppointmentSearcher;
+    private final AppointmentIngestionDateResolver dateResolver;
+    private final AppointmentCancellationReconciler cancellationReconciler;
+    private final AppointmentBatchFilterPipeline filterPipeline;
     private final FeegowPatientDetailsFetcher feegowPatientDetailsFetcher;
-    private final BlipContextService blipContextService;
-    private final BlipContactClientPort blipContactClientPort;
-    private final br.dev.ctrls.inovareti.modules.appointment.infrastructure.config.BlipProperties blipProperties;
-    private final BlipUserIdentityReconciliationRepositoryPort blipUserIdentityReconciliationRepository;
-    private final br.dev.ctrls.inovareti.modules.appointment.domain.port.output.DoctorConfigurationRepository doctorConfigurationRepository;
-    private final br.dev.ctrls.inovareti.modules.appointment.application.service.AppointmentFilterService appointmentFilterService;
-    private final br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentExternalPort appointmentExternalPort;
-    private final org.springframework.core.task.AsyncTaskExecutor applicationTaskExecutor;
+    private final AppointmentGroupDispatcher groupDispatcher;
 
-    /**
-     * Semaphore que limita a quantidade de grupos processando chamadas ao Blip simultaneamente.
-     * Evita rajadas de HTTP 429 (Too Many Requests) na API do Blip durante o lote diário.
-     * Configurável via APP_APPOINTMENT_BLIP_INGEST_CONCURRENCY (padrão: 20).
-     */
-    @Value("${APP_APPOINTMENT_BLIP_INGEST_CONCURRENCY:20}")
-    private int blipIngestConcurrency;
+    public record IngestionSummary(
+        int totalReceived,
+        int filteredReceived,
+        int sessionsCreated,
+        int messagesSent,
+        String mode
+    ) {}
 
-    private Semaphore blipSemaphore;
-
-    @jakarta.annotation.PostConstruct
-    public void init() {
-        this.blipSemaphore = new Semaphore(blipIngestConcurrency, true);
+    public static boolean isProcedureEligible(String procId, String procName, List<String> eligibleProcedureIdsList) {
+        return AppointmentBatchFilterPipeline.isProcedureEligible(procId, procName, eligibleProcedureIdsList);
     }
 
-    /** Encapsula o resultado da persistência de um grupo dentro da transação única. */
-    private record GroupPersistenceResult(List<AppointmentSession> savedSessions, String preCompiledText) {}
+    public static boolean isFeegowConfirmedStatus(String statusId) {
+        return FeegowAppointmentStatus.fromId(statusId).isConfirmedOrPresent();
+    }
 
     public IngestionSummary execute() {
         return execute(null, false, null);
@@ -121,1188 +76,98 @@ public class IngestAppointmentsUseCase {
     }
 
     public IngestionSummary execute(List<String> doctorIds, boolean forceSend, String testPhone) {
-        final String overridePhone = (testPhone != null && !testPhone.isBlank()) ? testPhone.trim().replaceAll("\\D", "") : null;
+        final String overridePhone = (testPhone != null && !testPhone.isBlank())
+                ? testPhone.trim().replaceAll("\\D", "")
+                : null;
+
         if (overridePhone != null) {
-            log.info("[BLINDAGEM-TESTE] Modo de teste ativado (testPhone={}). Limitando a no máximo 2 agendamentos e redirecionando 100% dos disparos para o telefone {}.", testPhone, overridePhone);
+            log.info("[BLINDAGEM-TESTE] Modo de teste ativado (testPhone={}). Redirecionando disparos para o telefone {}.",
+                    testPhone, overridePhone);
         }
 
         LocalDate today = LocalDate.now();
         DayOfWeek dayOfWeek = today.getDayOfWeek();
 
-        // Guard: motor must not process anything on weekends
+        // Motor não opera aos finais de semana
         if (dayOfWeek == DayOfWeek.SATURDAY || dayOfWeek == DayOfWeek.SUNDAY) {
-            log.info("[MOTOR-INGESTÃO] Dia da semana detectado: {}. Motor não opera aos finais de semana. Encerrando sem processar.", dayOfWeek);
+            log.info("[MOTOR-INGESTÃO] Dia da semana: {}. Motor não opera aos finais de semana. Encerrando sem processar.", dayOfWeek);
             return new IngestionSummary(0, 0, 0, 0, "WEEKEND_SKIP");
         }
 
-        // Calcula as datas-alvo padrão da ingestão matinal (D+0 e D+1; Sexta inclui Segunda D+3)
-        List<LocalDate> targetDates = new ArrayList<>();
+        // 1. Resolução de Datas-Alvo e Busca de Agendamentos no Feegow
+        ResolvedDatesAndAppointments resolved = dateResolver.resolveDatesAndFetchAppointments(today, dayOfWeek, doctorIds);
+        List<LocalDate> targetDates = resolved.targetDates();
+        List<FeegowAppointment> rawAppointments = resolved.appointments();
+        int totalRaw = rawAppointments.size();
 
-        switch (dayOfWeek) {
-            case FRIDAY -> {
-                // Sexta (D): Sexta (D), Sábado (D+1) e Segunda-feira (D+3)
-                targetDates.addAll(List.of(today, today.plusDays(1), today.plusDays(3)));
-            }
-            default -> {
-                // Segunda–Quinta: Hoje (D+0) e Amanhã (D+1). D+2 é exclusivo para médicos com configuração de antecedência
-                targetDates.addAll(List.of(today, today.plusDays(1)));
-            }
+        // 2. Reconciliação e Invalidação de Consultas Canceladas/Remarcadas
+        cancellationReconciler.reconcile(targetDates, rawAppointments);
+
+        // 3. Pipeline de Filtros de Elegibilidade (Encaixes, Locks, Procedimentos, Status, Médicos Ativos)
+        List<FeegowAppointment> eligibleAppointments = filterPipeline.filterEligibleAppointments(rawAppointments, doctorIds);
+        int totalFiltered = eligibleAppointments.size();
+
+        if (eligibleAppointments.isEmpty()) {
+            log.info("[MOTOR-INGESTÃO] Nenhum agendamento elegível para notificação após filtros.");
+            return new IngestionSummary(totalRaw, 0, 0, 0, "NO_ELIGIBLE_APPOINTMENTS");
         }
 
-        log.info("[INGESTÃO-DATAS-ALVO] Ingestão matinal iniciada. Dia da semana: {}. Datas-alvo globais (D+0/D+1): {}. Médicos com antecedência personalizada (>1 dia) serão consultados separadamente.",
-                dayOfWeek, targetDates);
-
-        // Busca agendamentos para cada data-alvo padrão com log explícito em PT-BR
-        List<FeegowAppointment> appointments = new ArrayList<>();
-        for (LocalDate targetDate : targetDates) {
-            long offsetDays = java.time.temporal.ChronoUnit.DAYS.between(today, targetDate);
-            log.info("[INGESTÃO-GERAL] Buscando consultas no Feegow para a data-alvo: {} (D+{} - Dia da semana: {})...",
-                    targetDate, offsetDays, targetDate.getDayOfWeek());
-            List<FeegowAppointment> dailyAppointments = feegowAppointmentSearcher.searchAppointments(targetDate, doctorIds);
-            appointments.addAll(dailyAppointments);
+        // Blindagem de Teste: Limita a 2 agendamentos em modo de teste manual
+        if (overridePhone != null && eligibleAppointments.size() > 2) {
+            log.info("[BLINDAGEM-TESTE] Limitando lote de teste de {} para 2 agendamentos.", eligibleAppointments.size());
+            eligibleAppointments = eligibleAppointments.subList(0, 2);
         }
 
-        // Verifica configurações específicas de antecedência de médicos (ex: Dr. Giuliano ID 27 com advanceNoticeDays = 2)
-        try {
-            List<br.dev.ctrls.inovareti.modules.appointment.domain.model.DoctorConfiguration> customAdvanceDoctors = doctorConfigurationRepository.findByIsActiveTrue().stream()
-                    .filter(c -> c.getResolvedAdvanceNoticeDays() > 1)
-                    .toList();
-
-            for (var docConfig : customAdvanceDoctors) {
-                int advanceDays = docConfig.getResolvedAdvanceNoticeDays();
-
-                // Regra 2A: Trava D+2 - Se advanceDays == 2, executa na QUARTA-FEIRA (para Sexta D+2) e na QUINTA-FEIRA (para Sábado D+2)
-                boolean isAllowedD2Day = today.getDayOfWeek() == java.time.DayOfWeek.WEDNESDAY || today.getDayOfWeek() == java.time.DayOfWeek.THURSDAY;
-                if (advanceDays == 2 && !isAllowedD2Day) {
-                    log.info("[INGESTÃO-ANTECEDÊNCIA] Ignorando busca D+2 para o médico {} (ID {}) pois hoje é {} (D+2 é executado exclusivamente nas quartas-feiras para sexta e nas quintas-feiras para sábado).",
-                            docConfig.getDoctorName(), docConfig.getFeegowProfissionalId(), today.getDayOfWeek());
-                    continue;
-                }
-
-                LocalDate advanceDate = today.plusDays(advanceDays);
-                String docIdStr = String.valueOf(docConfig.getFeegowProfissionalId());
-
-                if (doctorIds != null && !doctorIds.isEmpty() && !doctorIds.contains(docIdStr)) {
-                    continue;
-                }
-
-                if (!targetDates.contains(advanceDate)) {
-                    log.info("[INGESTÃO-ANTECEDÊNCIA] Médico {} (ID {}) possui antecedência configurada de {} dias. Buscando agendamentos especificamente para a data-alvo D+{}: {}",
-                            docConfig.getDoctorName(), docConfig.getFeegowProfissionalId(), advanceDays, advanceDays, advanceDate);
-                    List<FeegowAppointment> advanceAppointments = feegowAppointmentSearcher.searchAppointments(advanceDate, List.of(docIdStr));
-                    appointments.addAll(advanceAppointments);
-                }
-            }
-        } catch (Exception ex) {
-            log.warn("[MOTOR-INGESTÃO] Falha ao verificar antecedência personalizada de médicos: {}", ex.getMessage());
-        }
-
-        // --- INVALIDAÇÃO DE AGENDAMENTOS REMARCADOS/CANCELADOS NA FEEGOW ---
-        // Coleta todos os IDs de agendamentos ativos retornados pelo Feegow para as datas-alvo
-        java.util.Set<String> validFeegowAppointmentIds = appointments.stream()
-                .map(a -> AppointmentIdNormalizer.normalize(a.id()))
-                .filter(id -> !id.isBlank())
+        // 4. Busca em Lote de Detalhes dos Pacientes (Telefones, CPFs)
+        Set<String> patientIds = eligibleAppointments.stream()
+                .map(FeegowAppointment::patientId)
+                .filter(id -> id != null && !id.isBlank())
                 .collect(Collectors.toSet());
 
-        for (LocalDate targetDate : targetDates) {
-            try {
-                LocalDateTime startOfDay = targetDate.atStartOfDay();
-                LocalDateTime endOfDay = targetDate.atTime(23, 59, 59);
-                List<AppointmentSession> localSessionsForDate = appointmentSessionRepository.findByAppointmentAtBetween(startOfDay, endOfDay);
+        Map<String, FeegowPatient> patientDetailsMap = feegowPatientDetailsFetcher.fetchPatientDetailsInParallel(patientIds);
 
-                for (AppointmentSession localSession : localSessionsForDate) {
-                    String feegowId = localSession.getFeegowAppointmentId();
-                    if (feegowId == null || feegowId.isBlank()) continue;
+        // 5. Agrupamento por Telefone do Paciente
+        Map<String, List<FeegowAppointment>> groupedByPhone = new HashMap<>();
+        for (FeegowAppointment appt : eligibleAppointments) {
+            FeegowPatient patient = patientDetailsMap.get(appt.patientId());
+            String phone = (patient != null && patient.phone() != null)
+                    ? patient.phone().trim().replaceAll("\\D", "")
+                    : "";
 
-                    AppointmentSessionStatus status = localSession.getStatus();
-                    // NUNCA invalidar sessões já confirmadas (seja pelo bot ou pela clínica)
-                    if (status == AppointmentSessionStatus.CONFIRMED) {
-                        continue;
-                    }
-
-                    if (status != AppointmentSessionStatus.CANCELED && status != AppointmentSessionStatus.CANCELED_NO_RESPONSE) {
-                        if (!validFeegowAppointmentIds.contains(feegowId.trim())) {
-                            // Antes de cancelar, consulta o status real individual no Feegow
-                            boolean reconciled = false;
-                            try {
-                                FeegowAppointment feegowAppt = appointmentExternalPort.findById(feegowId.trim());
-                                if (feegowAppt != null) {
-                                    String statusId = feegowAppt.statusId() != null ? feegowAppt.statusId().trim() : "";
-                                    FeegowAppointmentStatus feegowStatus = FeegowAppointmentStatus.fromId(statusId);
-                                    if (feegowStatus.isConfirmedOrPresent()) {
-                                        log.info("[INGESTÃO-RECONCILIAÇÃO] Agendamento local ID={} (Feegow ID={}) já está confirmado/atendido no Feegow (statusId={}, {}). Atualizando para CONFIRMED.",
-                                                localSession.getId(), feegowId, statusId, feegowStatus.getDescription());
-                                        transactionTemplate.execute(txStatus -> {
-                                            localSession.setStatus(AppointmentSessionStatus.CONFIRMED);
-                                            localSession.setClosedAt(LocalDateTime.now());
-                                            localSession.setStatusDetails("CONFIRMED_ON_FEEGOW");
-                                            return appointmentSessionRepository.save(localSession);
-                                        });
-                                        reconciled = true;
-                                    } else if (feegowStatus.isEligibleForInitialDispatch()) {
-                                        // Permanece agendado no Feegow (apenas não entrou no lote de busca por procedimento ou pauta)
-                                        log.info("[INGESTÃO-RECONCILIAÇÃO] Agendamento local ID={} (Feegow ID={}) permanece ativo no Feegow (statusId={}, {}). Mantendo status local {}.",
-                                                localSession.getId(), feegowId, statusId, feegowStatus.getDescription(), status);
-                                        reconciled = true;
-                                    }
-                                }
-                            } catch (Exception ex) {
-                                log.warn("[INGESTÃO-RECONCILIAÇÃO] Falha ao consultar status individual no Feegow para ID {}: {}", feegowId, ex.getMessage());
-                            }
-
-                            if (!reconciled) {
-                                log.info("[INGESTÃO-INVALIDAÇÃO] Agendamento local ID={} (Feegow ID={}) não consta mais na lista ativa da Feegow para a data {}. Atualizando status local para CANCELED (Remarcado ou Cancelado na Feegow).",
-                                        localSession.getId(), feegowId, targetDate);
-
-                                transactionTemplate.execute(txStatus -> {
-                                    localSession.setStatus(AppointmentSessionStatus.CANCELED);
-                                    localSession.setClosedAt(LocalDateTime.now());
-                                    localSession.setStatusDetails("CANCELLED_OR_RESCHEDULED_ON_FEEGOW");
-                                    return appointmentSessionRepository.save(localSession);
-                                });
-                            }
-                        }
-                    }
-                }
-            } catch (Exception ex) {
-                log.warn("[INGESTÃO-INVALIDAÇÃO] Falha ao verificar invalidação de agendamentos locais para a data {}: {}", targetDate, ex.getMessage());
-            }
-        }
-
-        int total = appointments.size();
-
-        // Filtro de Encaixe: ignora agendamentos que possuem a flag encaixe ativa
-        appointments = appointments.stream()
-                .filter(a -> {
-                    if (a.encaixe() != null && a.encaixe()) {
-                        log.info("[FILTRO-ENCAIXE] Agendamento ID={} ignorado porque é um encaixe.", a.id());
-                        return false;
-                    }
-                    return true;
-                })
-                .collect(Collectors.toList());
-        int aposEncaixe = appointments.size();
-
-        // Filtro de Agendas Bloqueadas no Feegow (/lock/list)
-        java.util.Map<LocalDate, List<br.dev.ctrls.inovareti.modules.appointment.application.dto.FeegowLockDto>> locksCacheMap = new java.util.HashMap<>();
-        appointments = appointments.stream()
-                .filter(a -> {
-                    if (a.startAt() != null) {
-                        LocalDate apptDate = a.startAt().toLocalDate();
-                        List<br.dev.ctrls.inovareti.modules.appointment.application.dto.FeegowLockDto> activeLocks = 
-                                locksCacheMap.computeIfAbsent(apptDate, d -> appointmentExternalPort.listLocks(d, d, null));
-                        if (appointmentFilterService.isScheduleBlocked(a, activeLocks)) {
-                            return false;
-                        }
-                    }
-                    return true;
-                })
-                .collect(Collectors.toList());
-        int aposBloqueio = appointments.size();
-        log.info("[FILTRO-BLOQUEIOS] Total após filtro de agenda bloqueada: {} (Removidos por bloqueio: {})",
-                aposBloqueio, (aposEncaixe - aposBloqueio));
-        log.info("Agendamentos filtrados por encaixe. Total antes: {}, Total depois: {}", total, aposEncaixe);
-
-        // Filtro de Procedimento: apenas IDs permitidos na propriedade ELIGIBLE_PROCEDURE_IDS
-        String eligibleIdsProp = appointmentMotorProperties.getEligibleProcedureIds();
-        final java.util.List<String> eligibleProcedureIdsList;
-        if (eligibleIdsProp == null || eligibleIdsProp.isBlank()) {
-            eligibleProcedureIdsList = java.util.Collections.emptyList();
-            log.warn("[FILTRO-PROCEDIMENTO] A lista de IDs de procedimentos elegíveis (ELIGIBLE_PROCEDURE_IDS) está vazia ou nula.");
-        } else {
-            eligibleProcedureIdsList = java.util.Arrays.stream(eligibleIdsProp.split(","))
-                    .map(id -> id.trim())
-                    .filter(id -> !id.isEmpty())
-                    .toList();
-            log.info("[FILTRO-PROCEDIMENTO] IDs de procedimentos elegíveis configurados: {}", eligibleProcedureIdsList);
-        }
-
-        appointments = appointments.stream()
-                .filter(a -> {
-                    String procId = a.procedureId();
-                    String procName = a.procedureName();
-
-                    boolean eligible = isProcedureEligible(procId, procName, eligibleProcedureIdsList);
-                    if (!eligible) {
-                        log.info("[FILTRO-PROCEDIMENTO] Agendamento ID={} ignorado porque o procedimento_id '{}' (nome: '{}') não é elegível para confirmação.", a.id(), procId, procName);
-                    }
-                    return eligible;
-                })
-                .collect(Collectors.toList());
-        int aposProcedimentos = appointments.size();
-        log.info("Agendamentos filtrados por procedimento. Total antes: {}, Total depois: {}", aposEncaixe, aposProcedimentos);
-
-        appointments = appointments.stream()
-                .filter(a -> a.startAt() != null && !a.startAt().toLocalDate().isBefore(LocalDate.now()))
-                .collect(Collectors.toList());
-        int filtrados = appointments.size();
-        log.info("Filtrando agendamentos antigos. Total antes: {}, Total depois: {}", aposProcedimentos, filtrados);
-
-        if (overridePhone != null && appointments.size() > 3) {
-            log.info("[BLINDAGEM-TESTE] Limitando agendamentos de teste para no máximo 3 agendamentos (total encontrado: {}).", appointments.size());
-            appointments = appointments.subList(0, 3);
-            filtrados = appointments.size();
-        }
-
-        int totalReceived = filtrados;
-
-        java.util.Set<String> feegowIds = appointments.stream()
-                .map(a -> normalizeFeegowAppointmentId(a.id()))
-                .filter(id -> !id.isBlank())
-                .collect(Collectors.toSet());
-
-        Map<String, AppointmentSession> sessionCache = transactionTemplate.execute(status ->
-            appointmentSessionRepository.findByFeegowAppointmentIdIn(feegowIds).stream()
-                    .collect(Collectors.toMap(s -> s.getFeegowAppointmentId(), s -> s, (s1, s2) -> s1))
-        );
-
-        Map<String, br.dev.ctrls.inovareti.modules.appointment.domain.model.AppointmentDoctorMapping> doctorMappingCache = transactionTemplate.execute(status ->
-            appointmentDoctorMappingRepository.findAll().stream()
-                    .collect(Collectors.toMap(m -> m.getProfissionalId(), m -> m, (m1, m2) -> m1))
-        );
-
-        // FILTRO ESTRUTURAL DE AUDITORIA: Remove agendamentos de médicos não-assinantes ou inativos antes de buscar detalhes dos pacientes
-        int totalBeforeDoctorFilter = appointments.size();
-        boolean billingEnabled = appointmentMotorProperties.isBillingEnabled();
-        appointments = appointments.stream()
-                .filter(appointment -> {
-                    var mapping = doctorMappingCache.get(appointment.doctorId());
-                    if (mapping == null) {
-                        return false;
-                    }
-                    if ("inactive".equalsIgnoreCase(mapping.getBlipQueueId()) || mapping.isIgnoreAutoSchedule()) {
-                        return false;
-                    }
-                    if (billingEnabled) {
-                        boolean isLicensed = mapping.isActive() || (mapping.getSubscriptionEndDate() != null && mapping.getSubscriptionEndDate().isAfter(LocalDateTime.now()));
-                        if (!isLicensed) {
-                            log.info("[MONETIZATION] Acesso bloqueado para o ID={}", appointment.doctorId());
-                            return false;
-                        }
-                    }
-                    return true;
-                })
-                .collect(Collectors.toList());
-        int removedByDoctorFilter = totalBeforeDoctorFilter - appointments.size();
-        if (removedByDoctorFilter > 0) {
-            log.info("[INGESTAO-AUDITORIA] Ignorados {} agendamentos pertencentes a médicos inativos ou não-assinantes.", removedByDoctorFilter);
-        }
-
-        List<FeegowAppointment> activeAppointments = appointments.stream()
-                .filter(appointment -> {
-                    String statusId = appointment.statusId() != null ? appointment.statusId().trim() : "";
-                    FeegowAppointmentStatus feegowStatus = FeegowAppointmentStatus.fromId(statusId);
-                    if (feegowStatus.isEligibleForInitialDispatch()) {
-                        return true;
-                    }
-                    
-                    String normId = AppointmentIdNormalizer.normalize(appointment.id());
-                    sessionCache.computeIfPresent(normId, (id, session) -> {
-                        if (session.getStatus() == AppointmentSessionStatus.PENDING ||
-                            session.getStatus() == AppointmentSessionStatus.NUDGE_1_SENT ||
-                            session.getStatus() == AppointmentSessionStatus.NUDGE_FINAL_SENT) {
-                            
-                            if (feegowStatus.isConfirmedOrPresent()) {
-                                log.info("[RECONCILIAÇÃO-FEEGOW] Agendamento ID={} confirmado/atendido no Feegow (statusId={}, {}). Atualizando BD local para CONFIRMED.",
-                                        normId, statusId, feegowStatus.getDescription());
-                                session.setStatus(AppointmentSessionStatus.CONFIRMED);
-                                session.setClosedAt(LocalDateTime.now());
-                                appointmentSessionRepository.save(session);
-                            } else if (feegowStatus.isCancelledOrMissed()) {
-                                log.info("[RECONCILIAÇÃO-FEEGOW] Agendamento ID={} cancelado/desmarcado/falta no Feegow (statusId={}, {}). Atualizando BD local para CANCELED.",
-                                        normId, statusId, feegowStatus.getDescription());
-                                session.setStatus(AppointmentSessionStatus.CANCELED);
-                                session.setClosedAt(LocalDateTime.now());
-                                appointmentSessionRepository.save(session);
-                            }
-                        }
-                        return session;
-                    });
-
-                    log.info("[ELEGIBILIDADE-STATUS] Agendamento ID={} descartado sumariamente da esteira. Status ID={} ({}) não elegível. Apenas status 1 (Marcado - não confirmado) e 15 (Remarcado) são permitidos para disparo.",
-                            appointment.id(), statusId, feegowStatus.getDescription());
-                    return false;
-                })
-                .collect(Collectors.toList());
-
-        // De-duplicação baseada no ID do agendamento (feegowAppointmentId) antes do agrupamento
-        java.util.Set<String> idsProcessados = new java.util.HashSet<>();
-        List<FeegowAppointment> uniqueActiveAppointments = activeAppointments.stream()
-                .filter(a -> {
-                    String normId = normalizeFeegowAppointmentId(a.id());
-                    boolean isNew = idsProcessados.add(normId);
-                    if (!isNew) {
-                        log.info("[DE-DUPLICAÇÃO] Agendamento duplicado ID={} descartado da ingestão.", normId);
-                    }
-                    return isNew;
-                })
-                .collect(Collectors.toList());
-
-        java.util.Set<String> patientIds = uniqueActiveAppointments.stream()
-                .map(appointment -> appointment.patientId())
-                .collect(Collectors.toSet());
-
-        Map<String, FeegowPatient> rawPatientCache = feegowPatientDetailsFetcher.fetchPatientDetailsInParallel(patientIds);
-        Map<String, FeegowPatient> patientDetailsCacheMap = rawPatientCache;
-
-        if (overridePhone != null && !overridePhone.isBlank()) {
-            Map<String, FeegowPatient> overriddenCache = new java.util.HashMap<>();
-            for (Map.Entry<String, FeegowPatient> entry : rawPatientCache.entrySet()) {
-                FeegowPatient original = entry.getValue();
-                if (original != null) {
-                    FeegowPatient updated = new FeegowPatient(
-                        original.id(),
-                        original.name(),
-                        overridePhone,
-                        original.cpf(),
-                        original.birthdate()
-                    );
-                    overriddenCache.put(entry.getKey(), updated);
-                }
-            }
-            patientDetailsCacheMap = overriddenCache;
-            log.info("[BLINDAGEM-TESTE] 100% dos telefones dos pacientes em memória foram sobrescritos para {}", overridePhone);
-        }
-
-        final Map<String, FeegowPatient> patientDetailsCache = patientDetailsCacheMap;
-
-        Map<String, List<FeegowAppointment>> grouped = uniqueActiveAppointments.stream()
-                .collect(Collectors.groupingBy(appointment -> {
-                    FeegowPatient patient = patientDetailsCache.get(appointment.patientId());
-                    String phone = patient != null ? patient.phone() : null;
-                    String normalized = purificarTelefoneParaGrupo(phone);
-                    LocalDate date = appointment.startAt().toLocalDate();
-                    return normalized + "#" + date;
-                }));
-
-        return processIngestionGroups(grouped, sessionCache, doctorMappingCache, patientDetailsCache, totalReceived, forceSend);
-    }
-
-    private static final java.util.concurrent.Semaphore BLIP_DISPATCH_SEMAPHORE = new java.util.concurrent.Semaphore(3);
-
-    private IngestionSummary processIngestionGroups(Map<String, List<FeegowAppointment>> grouped, Map<String, AppointmentSession> sessionCache,
-            Map<String, br.dev.ctrls.inovareti.modules.appointment.domain.model.AppointmentDoctorMapping> doctorMappingCache,
-            Map<String, FeegowPatient> patientDetailsCache, int totalReceived, boolean forceSend) {
-
-        // Cache do nome do template buscado UMA vez antes do loop para evitar N queries idênticas ao banco.
-        // O template não muda durante a execução da ingestão.
-        String cachedGroupTemplateName = transactionTemplate.execute(status ->
-            appointmentConfigRepository.findByCategory(AppointmentCategory.GROUP_NOTIFICATION)
-                .map(config -> config.getTemplateId())
-                .orElse(appointmentMotorProperties.getBlipTemplateGroup())
-        );
-        log.info("[INGESTAO] Template de grupo resolvido antes do loop: '{}' (forceSend={})", cachedGroupTemplateName, forceSend);
-
-        AtomicInteger created = new AtomicInteger(0);
-        AtomicInteger messagesSent = new AtomicInteger(0);
-        AtomicInteger filteredReceived = new AtomicInteger(0);
-
-        // Processa todos os grupos com controle de cadência suave (Semaphore max=3 concorrência)
-        try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
-            List<CompletableFuture<Void>> futures = new ArrayList<>();
-
-            for (Map.Entry<String, List<FeegowAppointment>> entry : grouped.entrySet()) {
-                String key = entry.getKey();
-                List<FeegowAppointment> groupAppointments = entry.getValue();
-
-                // Log de auditoria dos telefones antes de submeter ao executor
-                for (FeegowAppointment appt : groupAppointments) {
-                    FeegowPatient patient = patientDetailsCache.get(appt.patientId());
-                    String patientName = patient != null ? patient.name() : "Paciente";
-                    String rawPhone = patient != null ? patient.phone() : "null";
-                    String purifiedPhone = purificarTelefoneParaGrupo(rawPhone);
-                    String appointmentTime = appt.startAt() != null ? appt.startAt().toString() : "null";
-                    log.info("[AUDITORIA-TELEFONE] paciente={}, horario={}, telefoneBruto={}, telefonePurificado={}",
-                        patientName, appointmentTime, rawPhone, purifiedPhone);
-                }
-
-                List<FeegowAppointment> eligibleAppointments = filterEligibleAppointments(groupAppointments, sessionCache, doctorMappingCache, forceSend);
-                if (eligibleAppointments.isEmpty()) continue;
-
-                filteredReceived.addAndGet(eligibleAppointments.size());
-
-                String[] keyParts = key.split("#", 2);
-                String normalizedPhone = keyParts[0];
-                if (normalizedPhone.isBlank()) continue;
-
-                if (eligibleAppointments.size() == 1) {
-                    // Agendamento individual: processa com Semaphore (max 3 paralelas) e pausa de 100ms
-                    final FeegowAppointment appt = eligibleAppointments.get(0);
-                    final FeegowPatient patientDetails = patientDetailsCache.get(appt.patientId());
-                    futures.add(CompletableFuture.runAsync(() -> {
-                        try {
-                            BLIP_DISPATCH_SEMAPHORE.acquire();
-                            if (processSingleFlow(appt, doctorMappingCache, patientDetails, forceSend)) {
-                                created.incrementAndGet();
-                                messagesSent.incrementAndGet();
-                            }
-                            Thread.sleep(100);
-                        } catch (InterruptedException ie) {
-                            Thread.currentThread().interrupt();
-                        } finally {
-                            BLIP_DISPATCH_SEMAPHORE.release();
-                        }
-                    }, executor));
-                } else {
-                    // Grupo: processa com Semaphore (max 3 paralelas) e pausa de 100ms
-                    final FeegowAppointment firstAppt = eligibleAppointments.get(0);
-                    final FeegowPatient patientDetails = patientDetailsCache.get(firstAppt.patientId());
-                    final String blipPhone = "55" + normalizedPhone;
-                    final String templateName = cachedGroupTemplateName;
-                    futures.add(CompletableFuture.runAsync(() -> {
-                        try {
-                            BLIP_DISPATCH_SEMAPHORE.acquire();
-                            int sent = processGroupFlow(eligibleAppointments, patientDetails, blipPhone, templateName, patientDetailsCache, doctorMappingCache);
-                            created.addAndGet(sent);
-                            if (sent > 0) messagesSent.incrementAndGet();
-                            Thread.sleep(100);
-                        } catch (InterruptedException ie) {
-                            Thread.currentThread().interrupt();
-                        } finally {
-                            BLIP_DISPATCH_SEMAPHORE.release();
-                        }
-                    }, executor));
-                }
+            if (phone.isBlank()) {
+                log.warn("[INGESTÃO-TELEFONE] Paciente ID={} sem telefone válido. Ignorando agendamento ID={}.",
+                        appt.patientId(), appt.id());
+                continue;
             }
 
-            // Aguarda todos os grupos terminarem antes de retornar o resumo
-            CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new)).join();
+            if (!phone.startsWith("55") && phone.length() <= 11) {
+                phone = "55" + phone;
+            }
+
+            groupedByPhone.computeIfAbsent(phone, k -> new ArrayList<>()).add(appt);
         }
+
+        log.info("[MOTOR-INGESTÃO] {} agendamentos agrupados em {} telefones únicos para processamento.",
+                eligibleAppointments.size(), groupedByPhone.size());
+
+        // 6. Despacho Concorrente via Virtual Threads
+        DispatchResult result = groupDispatcher.dispatchGroups(
+                groupedByPhone,
+                patientDetailsMap,
+                forceSend,
+                overridePhone
+        );
 
         String mode = appointmentMotorProperties.isTestMode() ? "TEST" : "PROD";
-        log.info("Ingestão executada. totalRecebido={}, totalAposFiltro={}, sessoesCriadas={}, mensagensEnviadas={}, modo={}, forceSend={}",
-                totalReceived, filteredReceived.get(), created.get(), messagesSent.get(), mode, forceSend);
+        log.info("[MOTOR-INGESTÃO] Ingestão concluída com sucesso! Modo: {}. Processados: {}, Criados: {}, Disparados: {}, Ignorados: {}",
+                mode, result.processedCount(), result.sessionsCreatedCount(), result.templatesSentCount(), result.skippedCount());
 
-        return new IngestionSummary(totalReceived, filteredReceived.get(), created.get(), messagesSent.get(), mode);
-    }
-
-    private List<FeegowAppointment> filterEligibleAppointments(List<FeegowAppointment> group, Map<String, AppointmentSession> sessionCache,
-            Map<String, br.dev.ctrls.inovareti.modules.appointment.domain.model.AppointmentDoctorMapping> doctorMappingCache, boolean forceSend) {
-        
-        List<FeegowAppointment> eligible = new ArrayList<>();
-        for (FeegowAppointment appointment : group) {
-            String feegowAppointmentId = normalizeFeegowAppointmentId(appointment.id());
-            if (feegowAppointmentId.isBlank()) continue;
-
-            var mapping = doctorMappingCache.get(appointment.doctorId());
-            if (mapping == null || "inactive".equalsIgnoreCase(mapping.getBlipQueueId()) || mapping.isIgnoreAutoSchedule()) {
-                continue;
-            }
-
-            if (appointmentMotorProperties.isBillingEnabled()) {
-                boolean isLicensed = mapping.isActive() || (mapping.getSubscriptionEndDate() != null && mapping.getSubscriptionEndDate().isAfter(LocalDateTime.now()));
-                if (!isLicensed) {
-                    log.info("[MONETIZATION] Acesso bloqueado para o ID={}", appointment.doctorId());
-                    continue;
-                }
-            }
-
-            AppointmentSession existing = sessionCache.get(feegowAppointmentId);
-            Optional<AppointmentSession> existingSessionOpt = Optional.ofNullable(existing);
-
-            String confirmedStatusId = appointmentMotorProperties.getFeegowConfirmedStatusId();
-            if (confirmedStatusId == null || confirmedStatusId.isBlank()) {
-                confirmedStatusId = "7";
-            }
-            boolean isConfirmedOnFeegow = confirmedStatusId.trim().equalsIgnoreCase(appointment.statusId());
-
-            // --- REGRA DE INVALIDAÇÃO DE REAGENDAMENTO (Reset ON Reschedule) ---
-            // Se a Feegow retornar status_id == 1 (Não confirmado) ou 15 (Remarcado) E a data/horário/médico for diferente dos gravados na sessão local,
-            // significa que o agendamento foi reagendado. Reseta o status da sessão local para PENDING e limpa timestamps de envio.
-            String apptStatus = appointment.statusId() != null ? appointment.statusId().trim() : "";
-            if (existing != null && ("1".equalsIgnoreCase(apptStatus) || "15".equalsIgnoreCase(apptStatus))) {
-                boolean dateTimeChanged = existing.getAppointmentAt() != null 
-                        && appointment.startAt() != null 
-                        && !existing.getAppointmentAt().isEqual(appointment.startAt());
-
-                boolean doctorChanged = existing.getDoctorProfissionalId() != null 
-                        && appointment.doctorId() != null 
-                        && !existing.getDoctorProfissionalId().trim().equalsIgnoreCase(appointment.doctorId().trim());
-
-                if (dateTimeChanged || doctorChanged) {
-                    log.info("[REAGENDAMENTO-DETECTADO] Agendamento ID={} foi reagendado no Feegow de {} (Dr: {}) para {} (Dr: {}). Resetando status da sessão de {} para PENDING.",
-                            feegowAppointmentId,
-                            existing.getAppointmentAt(), existing.getDoctorProfissionalId(),
-                            appointment.startAt(), appointment.doctorId(),
-                            existing.getStatus());
-
-                    transactionTemplate.execute(status -> {
-                        existing.setStatus(AppointmentSessionStatus.PENDING);
-                        existing.setAppointmentAt(appointment.startAt());
-                        existing.setDoctorProfissionalId(appointment.doctorId());
-                        existing.setLastNotificationSentAt(null);
-                        existing.setStatusDetails(null);
-                        return appointmentSessionRepository.save(existing);
-                    });
-                }
-            }
-
-            boolean isConfirmedLocally = existingSessionOpt.map(s -> s.getStatus() == AppointmentSessionStatus.CONFIRMED).orElse(false);
-
-            if (isConfirmedLocally || isConfirmedOnFeegow) {
-                log.info("[FILTRO-CONFIRMACAO] Abortando disparo para o agendamento ID={} pois o paciente já confirmou. (Confirmado no Feegow: {}, Confirmado localmente: {})",
-                        feegowAppointmentId, isConfirmedOnFeegow, isConfirmedLocally);
-                continue;
-            }
-
-            if (existing != null) {
-                if (!forceSend) {
-                    if (existing.getLastNotificationSentAt() != null) {
-                        log.info("[IDEMPOTENCIA] Disparo abortado para o agendamento ID={}. Notificação já enviada em {}.", feegowAppointmentId, existing.getLastNotificationSentAt());
-                        continue;
-                    }
-                    AppointmentSessionStatus status = existing.getStatus();
-                    if (status == AppointmentSessionStatus.CONFIRMED || status == AppointmentSessionStatus.CANCELED) {
-                        log.info("[IDEMPOTENCIA] Disparo abortado para o agendamento ID={}. Status final: {}.", feegowAppointmentId, status);
-                        continue;
-                    }
-                } else {
-                    log.info("[FORCE-SEND] Bypassing filtro de idempotência para o agendamento ID={}.", feegowAppointmentId);
-                }
-            }
-
-            boolean canSend = (appointmentSendIdempotencyService != null) 
-                    ? appointmentSendIdempotencyService.registerIfFirstSend(feegowAppointmentId)
-                    : ((noopAppointmentSendIdempotencyService != null) 
-                        ? noopAppointmentSendIdempotencyService.registerIfFirstSend(feegowAppointmentId) 
-                        : true);
-
-            if (canSend || forceSend) {
-                eligible.add(appointment);
-            }
-        }
-        return eligible;
-    }
-
-    private boolean processSingleFlow(FeegowAppointment appointment,
-            Map<String, br.dev.ctrls.inovareti.modules.appointment.domain.model.AppointmentDoctorMapping> doctorMappingCache,
-            FeegowPatient patientDetails, boolean forceSend) {
-        
-        String feegowAppointmentId = normalizeFeegowAppointmentId(appointment.id());
-        var mapping = doctorMappingCache.get(appointment.doctorId());
-        String mappingQueue = mapping != null ? mapping.getBlipQueueId() : null;
-        String mappingProfessionalName = mapping != null ? mapping.getProfissionalNome() : null;
-
-        String patientPhone = patientDetails != null ? patientDetails.phone() : null;
-        String phoneNumber = normalizePhoneNumberForBlip(patientPhone);
-        if (patientPhone == null || patientPhone.isBlank() || phoneNumber.isBlank()) {
-            return false;
-        }
-
-        if (!isDoctorAllowed(appointment.doctorId())) {
-            return false;
-        }
-
-        AppointmentSession saved = saveSingleSession(feegowAppointmentId, appointment, phoneNumber, forceSend);
-        if (saved == null) return false;
-
-        return dispatchSingleTemplate(saved, appointment, mappingQueue, mappingProfessionalName, phoneNumber, patientDetails);
-    }
-
-    private AppointmentSession saveSingleSession(String feegowAppointmentId, FeegowAppointment appointment, String phoneNumber, boolean forceSend) {
-        return transactionTemplate.execute(status -> {
-            Optional<AppointmentSession> latestSessionOpt = appointmentSessionRepository.findByFeegowAppointmentId(feegowAppointmentId);
-            if (latestSessionOpt.isPresent()) {
-                AppointmentSession existing = latestSessionOpt.get();
-
-                // Se a consulta foi reagendada no Feegow (data/horário ou médico alterados e statusId == 1 ou 15), reseta a sessão local
-                boolean dateTimeChanged = existing.getAppointmentAt() != null 
-                        && appointment.startAt() != null 
-                        && !existing.getAppointmentAt().isEqual(appointment.startAt());
-                boolean doctorChanged = existing.getDoctorProfissionalId() != null 
-                        && appointment.doctorId() != null 
-                        && !existing.getDoctorProfissionalId().trim().equalsIgnoreCase(appointment.doctorId().trim());
-
-                String sStatus = appointment.statusId() != null ? appointment.statusId().trim() : "";
-                if ((dateTimeChanged || doctorChanged) && ("1".equalsIgnoreCase(sStatus) || "15".equalsIgnoreCase(sStatus))) {
-                    log.info("[REAGENDAMENTO-SESSAO] Atualizando sessão do agendamento reagendado ID={}. Nova data: {}, Novo Dr: {}",
-                            feegowAppointmentId, appointment.startAt(), appointment.doctorId());
-                    existing.setStatus(AppointmentSessionStatus.PENDING);
-                    existing.setAppointmentAt(appointment.startAt());
-                    existing.setDoctorProfissionalId(appointment.doctorId());
-                    existing.setLastNotificationSentAt(null);
-                    existing.setStatusDetails(null);
-                } else if (!forceSend) {
-                    if (existing.getLastNotificationSentAt() != null) {
-                        return null;
-                    }
-                    AppointmentSessionStatus currentStatus = existing.getStatus();
-                    if (currentStatus == AppointmentSessionStatus.CONFIRMED || currentStatus == AppointmentSessionStatus.CANCELED) {
-                        return null;
-                    }
-                } else {
-                    log.info("[FORCE-SEND] Reutilizando sessão e forçando reenvio de template para o agendamento ID: {}", feegowAppointmentId);
-                }
-            }
-            AppointmentSession session = latestSessionOpt.orElseGet(AppointmentSession::new);
-            if (session.getCurrentGroupId() == null) {
-                session.setCurrentGroupId(UUID.randomUUID());
-            }
-            session.setFeegowAppointmentId(feegowAppointmentId);
-            session.setPatientId(appointment.patientId());
-            session.setPhoneNumber(phoneNumber);
-            session.setDoctorProfissionalId(appointment.doctorId());
-            session.setAppointmentAt(appointment.startAt());
-            session.setStatus(AppointmentSessionStatus.PENDING);
-            session.setLastInteractionAt(LocalDateTime.now());
-            session.setClosedAt(null);
-            session.setStatusDetails(null);
-
-            // Sem entityManager.flush() — o commit do transactionTemplate já faz flush automaticamente
-            return appointmentSessionRepository.save(session);
-        });
-    }
-
-    private boolean dispatchSingleTemplate(AppointmentSession saved, FeegowAppointment appointment, String mappingQueue,
-            String mappingProfessionalName, String phoneNumber, FeegowPatient patientDetails) {
-        
-        // Garante a vinculação de groupId e NotificationGroup para a sessão individual
-        if (saved.getCurrentGroupId() == null) {
-            UUID newGroupId = UUID.randomUUID();
-            transactionTemplate.executeWithoutResult(status -> {
-                saved.setCurrentGroupId(newGroupId);
-                appointmentSessionRepository.save(saved);
-            });
-        }
-
-        UUID singleGroupId = saved.getCurrentGroupId();
-        if (singleGroupId != null) {
-            transactionTemplate.executeWithoutResult(status -> {
-                try {
-                    List<NotificationGroup> existingGroups = notificationGroupRepository.findByGroupId(singleGroupId);
-                    if (existingGroups == null || existingGroups.isEmpty()) {
-                        String preCompiledText = blipAppointmentFormatter.buildListaDetalhada(List.of(saved));
-                        NotificationGroup groupEntity = NotificationGroup.builder()
-                                .groupId(singleGroupId)
-                                .sessionId(saved.getId())
-                                .phoneNumber(phoneNumber)
-                                .createdAt(LocalDateTime.now())
-                                .preCompiledScheduleText(preCompiledText)
-                                .build();
-                        notificationGroupRepository.save(groupEntity);
-                        log.info("[SINGLE-SESSION-GROUP] NotificationGroup vinculado com sucesso para sessão individual. feegowId={}, groupId={}", saved.getFeegowAppointmentId(), singleGroupId);
-                    }
-                } catch (Exception ex) {
-                    log.warn("[SINGLE-SESSION-GROUP] Falha ao criar registro NotificationGroup para sessão individual feegowId={}: {}", saved.getFeegowAppointmentId(), ex.getMessage());
-                }
-            });
-        }
-
-        String resolvedProfessionalName = resolveDoctorName(appointment.doctorId(), mappingProfessionalName, appointment.doctorName());
-        String safeFilaDestino = (mappingQueue != null && !mappingQueue.isBlank() && !"null".equalsIgnoreCase(mappingQueue.trim())) ? mappingQueue.trim() : "\u200E";
-
-        String finalPatientName = (patientDetails != null && patientDetails.name() != null) ? patientDetails.name().trim() : "Paciente";
-        String finalPatientPhone = (patientDetails != null) ? patientDetails.phone() : null;
-
-        java.time.format.DateTimeFormatter dtfDate = java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy");
-        java.time.format.DateTimeFormatter dtfShort = java.time.format.DateTimeFormatter.ofPattern("dd/MM");
-        java.time.format.DateTimeFormatter dtfTime = java.time.format.DateTimeFormatter.ofPattern("HH:mm");
-
-        LocalDateTime appointmentDateTime = saved.getAppointmentAt();
-        if (appointmentDateTime != null && appointment.doctorId() != null) {
-            try {
-                Long docId = Long.parseLong(appointment.doctorId().trim());
-                var docConfigOpt = doctorConfigurationRepository.findById(docId);
-                if (docConfigOpt.isPresent()) {
-                    int offset = docConfigOpt.get().getResolvedDisplayTimeOffsetMinutes();
-                    if (offset != 0) {
-                        LocalDateTime modifiedDateTime = appointmentDateTime.plusMinutes(offset);
-                        log.info("[TIME-SHIFT] Aplicado deslocamento de {} minutos para o médico {} (ID {}). Horário original: {}, Horário modificado para envio: {}",
-                                offset, docConfigOpt.get().getDoctorName(), docId,
-                                appointmentDateTime.toLocalTime().format(dtfTime), modifiedDateTime.toLocalTime().format(dtfTime));
-                        appointmentDateTime = modifiedDateTime;
-                    }
-                }
-            } catch (Exception ex) {
-                log.warn("[TIME-SHIFT] Falha ao verificar deslocamento de horário para doctorId={}: {}", appointment.doctorId(), ex.getMessage());
-            }
-        }
-
-        String finalDate = appointmentDateTime != null ? appointmentDateTime.toLocalDate().format(dtfDate) : "";
-        String finalDateShort = appointmentDateTime != null ? appointmentDateTime.toLocalDate().format(dtfShort) : "";
-        String finalTime = appointmentDateTime != null ? appointmentDateTime.toLocalTime().format(dtfTime) : "";
-
-        AppointmentDispatchContext ctx = new AppointmentDispatchContext(
-            saved.getId(), saved.getFeegowAppointmentId(), finalPatientName, finalPatientPhone,
-            saved.getPatientId(), appointment.doctorId(), resolvedProfessionalName, safeFilaDestino,
-            finalDate, finalDateShort, finalTime, phoneNumber
+        return new IngestionSummary(
+                totalRaw,
+                totalFiltered,
+                result.sessionsCreatedCount(),
+                result.templatesSentCount(),
+                mode
         );
-
-        return sendAppointmentTemplateUseCase.execute(ctx, AppointmentCategory.CONFIRMATION);
-    }
-
-    private String resolveDoctorName(String doctorId, String mappingName, String feegowDoctorName) {
-        if (mappingName != null && !mappingName.isBlank() && !"null".equalsIgnoreCase(mappingName.trim())) {
-            return mappingName.trim();
-        }
-        String resolved = feegowDoctorName;
-        if (resolved == null || resolved.isBlank() || "null".equalsIgnoreCase(resolved.trim())) {
-            try {
-                resolved = professionalExternalPort.getProfessionalName(doctorId);
-            } catch (Exception e) {
-                log.warn("Falha ao recuperar nome do profissional via Feegow: {}", e.getMessage());
-            }
-        }
-        return (resolved != null && !resolved.isBlank() && !"null".equalsIgnoreCase(resolved.trim())) ? resolved.trim() : "Clínica Inovare";
-    }
-
-    /**
-     * Processa o fluxo de notificação para um grupo de agendamentos do mesmo paciente/telefone.
-     *
-     * Otimizações aplicadas:
-     * 1. Toda a persistência (sessões + NotificationGroup) ocorre em UMA única transação de banco.
-     *    currentGroupId e lastNotificationSentAt já são setados na entidade antes do primeiro save,
-     *    eliminando os loops separados de populateCurrentGroupIdOnSessions e updateSessionsNotificationTimestamp.
-     * 2. O contexto do Blip é configurado em fire-and-forget (sem bloquear o template).
-     * 3. Um Semaphore global garante no máximo N chamadas simultâneas ao Blip.
-     *
-     * @param eligibleAppointments agendamentos elegíveis do grupo
-     * @param patientDetails dados do paciente (nome)
-     * @param normalizedPhone telefone no formato 55XXXXXXXXXXX
-     * @param groupTemplateName nome do template Blip (pre-cacheado antes do loop)
-     * @param patientDetailsCache cache de detalhes dos pacientes
-     * @return quantidade de sessões salvas (0 se o grupo foi descartado)
-     */
-    private int processGroupFlow(List<FeegowAppointment> eligibleAppointments, FeegowPatient patientDetails,
-            String normalizedPhone, String groupTemplateName, Map<String, FeegowPatient> patientDetailsCache,
-            Map<String, AppointmentDoctorMapping> doctorMappingCache) {
-        if (normalizedPhone == null || normalizedPhone.isBlank()) {
-            return 0;
-        }
-        
-        String doctorId = eligibleAppointments.get(0).doctorId();
-        if (!isDoctorAllowed(doctorId)) {
-            return 0;
-        }
-
-        // Prevenção de disparo duplicado de templates de grupo no dia atual (LocalDate.now())
-        boolean recentGroupSent = false;
-        try {
-            Optional<NotificationGroup> latestOpt = notificationGroupRepository.findLatestByPhone(normalizedPhone);
-            if (latestOpt.isPresent() && latestOpt.get().getCreatedAt() != null) {
-                LocalDateTime lastCreatedAt = latestOpt.get().getCreatedAt();
-                if (lastCreatedAt.toLocalDate().equals(LocalDate.now())) {
-                    recentGroupSent = true;
-                    log.info("[LEMBRETE-GRUPO] Telefone {} já recebeu aviso de agendamento de grupo hoje. Disparo duplicado ignorado.", normalizedPhone);
-                }
-            }
-        } catch (Exception ex) {
-            log.warn("[LEMBRETE-GRUPO] Falha ao verificar grupo anterior para {}: {}", normalizedPhone, ex.getMessage());
-        }
-
-        // Gera o groupId antes da transação para já associar nas sessões durante o primeiro save
-        UUID groupId = UUID.randomUUID();
-        String phoneNumber = normalizedPhone;
-
-        // OTIMIZAÇÃO: toda a persistência do grupo (sessões + NotificationGroup) em UMA transação única.
-        // currentGroupId e lastNotificationSentAt são setados ANTES do save, eliminando os loops
-        // separados de populateCurrentGroupIdOnSessions e updateSessionsNotificationTimestamp.
-        // Isso reduz o número de transações de banco de 9 (para grupo de 3 agendamentos) para 1.
-        GroupPersistenceResult result = transactionTemplate.execute(status -> {
-            List<AppointmentSession> savedSessions = new ArrayList<>();
-
-            for (FeegowAppointment appointment : eligibleAppointments) {
-                String feegowAppointmentId = normalizeFeegowAppointmentId(appointment.id());
-                if (feegowAppointmentId.isBlank()) continue;
-                try {
-                    Optional<AppointmentSession> latestOpt = appointmentSessionRepository.findByFeegowAppointmentId(feegowAppointmentId);
-                    AppointmentSession session = latestOpt.orElseGet(AppointmentSession::new);
-
-                    // Sessões existentes em estado terminal são reutilizadas sem alterar status
-                    if (latestOpt.isPresent()) {
-                        AppointmentSessionStatus st = session.getStatus();
-                        if (st == AppointmentSessionStatus.PENDING || st == AppointmentSessionStatus.NUDGE_1_SENT ||
-                                st == AppointmentSessionStatus.NUDGE_FINAL_SENT || st == AppointmentSessionStatus.CONFIRMED) {
-                            // Atualiza apenas o groupId sem alterar status ou sobrescrever lastNotificationSentAt
-                            session.setCurrentGroupId(groupId);
-                            savedSessions.add(appointmentSessionRepository.save(session));
-                            continue;
-                        }
-                    }
-
-                    // Configura todos os campos da sessão em memória — apenas um save ao banco
-                    session.setFeegowAppointmentId(feegowAppointmentId);
-                    session.setPatientId(appointment.patientId());
-                    session.setPhoneNumber(phoneNumber);
-                    session.setDoctorProfissionalId(appointment.doctorId());
-                    session.setAppointmentAt(appointment.startAt());
-                    session.setStatus(AppointmentSessionStatus.PENDING);
-                    session.setLastInteractionAt(LocalDateTime.now());
-                    session.setClosedAt(null);
-                    session.setStatusDetails(null);
-                    // Já inclui groupId; lastNotificationSentAt permanece nulo até o primeiro envio real de notificação
-                    session.setCurrentGroupId(groupId);
-                    session.setLastNotificationSentAt(null);
-
-                    savedSessions.add(appointmentSessionRepository.save(session));
-                } catch (RuntimeException ex) {
-                    log.error("[GRUPO] Falha ao persistir sessão para feegowId={}.", feegowAppointmentId, ex);
-                }
-            }
-
-            if (savedSessions.size() < 2) {
-                log.info("[GRUPO->INDIVIDUAL] Menos de 2 sessões válidas salvas para grupo (qtd={}). Abortando transação de grupo.", savedSessions.size());
-                status.setRollbackOnly();
-                return new GroupPersistenceResult(savedSessions, null);
-            }
-
-            // Pré-compila o texto da lista de agendamentos para o contexto do Blip
-            String preCompiledText;
-            try {
-                preCompiledText = blipAppointmentFormatter.buildListaDetalhada(savedSessions, patientDetailsCache);
-            } catch (Exception ex) {
-                log.error("[GRUPO] Erro ao compilar lista detalhada para groupId={}.", groupId, ex);
-                status.setRollbackOnly();
-                return new GroupPersistenceResult(List.of(), null);
-            }
-
-            // Persiste os NotificationGroup dentro da mesma transação
-            List<NotificationGroup> groupEntities = savedSessions.stream()
-                .map(s -> NotificationGroup.builder()
-                    .groupId(groupId)
-                    .sessionId(s.getId())
-                    .phoneNumber(phoneNumber)
-                    .createdAt(LocalDateTime.now())
-                    .preCompiledScheduleText(preCompiledText)
-                    .build())
-                .toList();
-            try {
-                notificationGroupRepository.saveAll(groupEntities);
-                log.info("[GRUPO] Sessões + NotificationGroup persistidos em transação única. groupId={}, qtd={}",
-                    groupId, savedSessions.size());
-            } catch (RuntimeException ex) {
-                log.error("[GRUPO] Falha ao salvar NotificationGroup para groupId={}.", groupId, ex);
-                status.setRollbackOnly();
-                return new GroupPersistenceResult(List.of(), null);
-            }
-
-            return new GroupPersistenceResult(savedSessions, preCompiledText);
-        });
-
-        if (result == null || result.savedSessions().isEmpty()) {
-            return 0;
-        }
-
-        if (result.savedSessions().size() == 1) {
-            log.info("[GRUPO->INDIVIDUAL] Apenas 1 agendamento elegível salvo para o paciente/grupo. Redirecionando para notificação individual.");
-            FeegowAppointment singleAppt = eligibleAppointments.get(0);
-            boolean sent = processSingleFlow(singleAppt, doctorMappingCache, patientDetails, true);
-            return sent ? 1 : 0;
-        }
-
-        String finalPatientName = (patientDetails != null && patientDetails.name() != null)
-            ? patientDetails.name().trim() : "Paciente";
-
-        FeegowAppointment firstAppt = eligibleAppointments.get(0);
-        String firstApptId = normalizeFeegowAppointmentId(firstAppt.id());
-        var dominantMapping = doctorMappingCache.get(firstAppt.doctorId());
-        String mappingQueue = dominantMapping != null ? dominantMapping.getBlipQueueId() : null;
-        String mappingProfessionalName = dominantMapping != null ? dominantMapping.getProfissionalNome() : null;
-
-        String doctorName = resolveDoctorName(firstAppt.doctorId(), mappingProfessionalName, firstAppt.doctorName());
-        String resolvedQueue = "Recepção Central / Suporte";
-        if (mappingQueue != null && !mappingQueue.isBlank() && !"null".equalsIgnoreCase(mappingQueue.trim())) {
-            resolvedQueue = blipContextService.resolveQueueName(mappingQueue.trim());
-        }
-
-        // Sincronização obrigatória de contato no Blip com a pauta do profissional dominante do grupo
-        String cpf = "";
-        if (patientDetails != null && patientDetails.cpf() != null) {
-            cpf = patientDetails.cpf();
-        }
-        try {
-            blipContactClientPort.syncContact(phoneNumber, finalPatientName, cpf, resolvedQueue, firstAppt.doctorId());
-            log.info("[GRUPO-CONTATO] Sincronização de contato no Blip concluída para grupo. Telefone={}, Paciente={}, Fila={}, Médico={}",
-                    phoneNumber, finalPatientName, resolvedQueue, doctorName);
-        } catch (Exception ex) {
-            log.warn("[GRUPO-CONTATO] Falha ao sincronizar contato para grupo: {}", ex.getMessage());
-        }
-
-        final String preText = result.preCompiledText();
-        final String fApptId = firstApptId;
-        final String fDocName = doctorName;
-        final String fResQueue = resolvedQueue;
-        final String fMapQueue = mappingQueue;
-        final String fDocId = firstAppt.doctorId();
-
-        CompletableFuture.runAsync(() -> {
-            try {
-                blipSemaphore.acquire();
-                try {
-                    setGroupContextDuringIngestion(phoneNumber, groupId, preText, fApptId, fDocName, fResQueue, fMapQueue, finalPatientName, fDocId);
-                } finally {
-                    blipSemaphore.release();
-                }
-            } catch (InterruptedException ie) {
-                Thread.currentThread().interrupt();
-                log.warn("[GRUPO] Interrompido aguardando semáforo para contexto Blip. groupId={}", groupId);
-            }
-        }, applicationTaskExecutor);
-
-        if (!recentGroupSent) {
-            // Envia o template imediatamente, sem esperar o contexto subir
-            try {
-                blipSemaphore.acquire();
-                try {
-                    log.info("[GRUPO] Enviando template '{}' para {}. groupId={}", groupTemplateName, phoneNumber, groupId);
-                    blipNotificationService.sendGroupTemplateMessage(phoneNumber, groupTemplateName, groupId, finalPatientName);
-                } finally {
-                    blipSemaphore.release();
-                }
-            } catch (InterruptedException ie) {
-                Thread.currentThread().interrupt();
-                log.warn("[GRUPO] Interrompido aguardando semáforo para envio de template. groupId={}", groupId);
-            } catch (Exception e) {
-                log.error("[ERRO-CRITICO-GRUPO] Falha ao enviar template para {}. groupId={}", phoneNumber, groupId, e);
-            }
-        } else {
-            log.info("[LEMBRETE-GRUPO] Telefone {} já recebeu aviso de agendamento de grupo hoje. Disparo duplicado ignorado.", phoneNumber);
-        }
-
-        return result.savedSessions().size();
-    }
-
-
-    /**
-     * Configura as variáveis de contexto no Blip para o fluxo de grupo.
-     * É chamado em fire-and-forget a partir de processGroupFlow.
-     *
-     * Injeta: lista_detalhada, groupId, isConfirmingAgenda, blipQueueId, fila, Medico, name e idAgendamentoFeegow.
-     */
-    private void setGroupContextDuringIngestion(
-            String phoneNumber,
-            UUID groupId,
-            String preCompiledText,
-            String feegowAppointmentId,
-            String doctorName,
-            String resolvedQueue,
-            String mappingQueue,
-            String patientName,
-            String doctorProfissionalId) {
-        if (phoneNumber == null || phoneNumber.isBlank()) return;
-        try {
-            String safeMappingQueue = mappingQueue != null ? mappingQueue.trim() : "";
-            Map<String, String> fields = new HashMap<>();
-            fields.put("lista_detalhada", preCompiledText);
-            fields.put("listaDetalhada", preCompiledText);
-            fields.put("groupId", groupId.toString());
-            fields.put("isConfirmingAgenda", "true");
-            fields.put("blipQueueId", safeMappingQueue);
-            fields.put("fila", resolvedQueue != null ? resolvedQueue : "Recepção Central / Suporte");
-            fields.put("Medico", doctorName != null ? doctorName : "Clínica Inovare");
-            fields.put("name", patientName != null ? patientName : "Paciente");
-            fields.put("idAgendamentoFeegow", feegowAppointmentId != null ? feegowAppointmentId : "");
-            fields.put("idAgendamento", feegowAppointmentId != null ? feegowAppointmentId : "");
-            if (doctorProfissionalId != null && !doctorProfissionalId.isBlank()) {
-                fields.put("profissionalId", doctorProfissionalId.trim());
-            }
-            log.info("[INGESTAO-GRUPO-CONTEXTO] Configurando contexto Blip para {}. groupId={}, fila={}, médico={}",
-                    phoneNumber.trim(), groupId, resolvedQueue, doctorName);
-
-            String cleanPhone = phoneNumber.trim();
-            String phoneDigits = cleanPhone;
-            if (phoneDigits.contains("@")) {
-                phoneDigits = phoneDigits.substring(0, phoneDigits.indexOf('@'));
-            }
-
-            // Busca se há reconciliação de identidade
-            List<br.dev.ctrls.inovareti.modules.appointment.domain.model.BlipUserIdentityReconciliation> reconciliations =
-                blipUserIdentityReconciliationRepository.findByPhoneNumber(phoneDigits);
-
-            List<String> targetsForContext = new ArrayList<>();
-            targetsForContext.add(cleanPhone);
-
-            List<String> tunnelIdentities = new ArrayList<>();
-
-            String subbotId = blipProperties.getSubbotId();
-            String subbotLocalPart = null;
-            if (subbotId != null && !subbotId.isBlank() && !subbotId.toLowerCase().contains("fluxov1")) {
-                subbotLocalPart = subbotId.trim();
-                if (subbotLocalPart.contains("@")) {
-                    subbotLocalPart = subbotLocalPart.substring(0, subbotLocalPart.indexOf('@'));
-                }
-            }
-
-            // 1. Túnel determinístico (fallback)
-            if (subbotLocalPart != null) {
-                String deterministicTunnel = phoneDigits + "." + subbotLocalPart + "@tunnel.msging.net";
-                tunnelIdentities.add(deterministicTunnel);
-            }
-
-            // 2. Túnel baseado na reconciliação real
-            if (reconciliations != null && !reconciliations.isEmpty()) {
-                for (var rec : reconciliations) {
-                    if (rec.getBlipGuid() != null && !rec.getBlipGuid().isBlank()) {
-                        String realTunnel = rec.getBlipGuid().trim() + "@tunnel.msging.net";
-                        if (!tunnelIdentities.contains(realTunnel) && !realTunnel.toLowerCase().contains("fluxov1")) {
-                            tunnelIdentities.add(realTunnel);
-                            log.info("[INGESTAO-GRUPO-CONTEXTO] Identidade de túnel real reconciliada encontrada: {} para o telefone: {}", realTunnel, phoneDigits);
-                        }
-                    }
-                }
-            }
-
-            // Adiciona todas as identidades de túnel para injeção de contexto também
-            for (String tunnel : tunnelIdentities) {
-                if (!targetsForContext.contains(tunnel)) {
-                    targetsForContext.add(tunnel);
-                }
-            }
-
-            // Injeta o contexto sequencialmente para todos os alvos (telefone e túneis) para evitar estouro de threads
-            for (String target : targetsForContext) {
-                try {
-                    blipContextService.setUserContextFieldsInParallel(target, fields);
-                } catch (Exception e) {
-                    log.error("[INGESTAO-GRUPO-CONTEXTO] Erro ao configurar variáveis de contexto para target {}", target, e);
-                }
-            }
-
-            String prepararAtendimentoBlockId = blipProperties.getBlocks().getPrepararAtendimento();
-
-            if (prepararAtendimentoBlockId != null && !prepararAtendimentoBlockId.isBlank() && subbotId != null && !subbotId.isBlank() && !subbotId.toLowerCase().contains("fluxov1")) {
-                // Roteador Master-State
-                try {
-                    blipContextService.setMasterState(cleanPhone, subbotId, prepararAtendimentoBlockId);
-                    log.info("[INGESTAO-GRUPO-CONTEXTO] Master-State do Roteador atualizado na ingestão para {} apontando para o subbot e bloco {}", cleanPhone, prepararAtendimentoBlockId);
-                } catch (Exception e) {
-                    log.error("[INGESTAO-GRUPO-CONTEXTO] Erro ao atualizar Master-State no Roteador na ingestão para {}", cleanPhone, e);
-                }
-
-                // Subbot Builder Master-State (para cada túnel identificado) sequencialmente
-                for (String tunnel : tunnelIdentities) {
-                    try {
-                        blipContextService.setBuilderMasterState(tunnel, prepararAtendimentoBlockId);
-                        log.info("[INGESTAO-GRUPO-CONTEXTO] Builder Master-State atualizado na ingestão para o túnel {} e bloco {}", tunnel, prepararAtendimentoBlockId);
-                    } catch (Exception e) {
-                        log.error("[INGESTAO-GRUPO-CONTEXTO] Erro ao atualizar Builder Master-State no Subbot na ingestão para {}", tunnel, e);
-                    }
-                }
-            }
-        } catch (Exception e) {
-            log.error("[INGESTAO-GRUPO-CONTEXTO] Falha ao configurar contexto/master-states na ingestão. telefone={}, groupId={}", phoneNumber, groupId, e);
-        }
-    }
-
-    private boolean isDoctorAllowed(String doctorId) {
-        String docId = doctorId != null ? doctorId.trim() : "";
-        if (docId.isBlank()) {
-            return false;
-        }
-        if (appointmentMotorProperties.getTestDoctorIds().contains(docId)) {
-            return true;
-        }
-        if (appointmentMotorProperties.getActiveDoctorIds().contains(docId)) {
-            return true;
-        }
-        try {
-            Long id = Long.parseLong(docId);
-            var configOpt = doctorConfigurationRepository.findById(id);
-            if (configOpt.isPresent() && configOpt.get().isConfigActive()) {
-                return true;
-            }
-        } catch (NumberFormatException ignored) {}
-
-        return false;
-    }
-
-    private String normalizeFeegowAppointmentId(String feegowAppointmentId) {
-        if (feegowAppointmentId == null) {
-            return "";
-        }
-        String normalized = feegowAppointmentId.trim();
-        if (normalized.matches("^\\d+\\.0+$")) {
-            return normalized.substring(0, normalized.indexOf('.'));
-        }
-        return normalized;
-    }
-
-    private String normalizePhoneNumberForBlip(String originalPhone) {
-        if (originalPhone == null || originalPhone.isBlank()) {
-            return "";
-        }
-        String purified = purificarTelefoneParaGrupo(originalPhone);
-        if (purified.isEmpty()) {
-            return "";
-        }
-        return "55" + purified;
-    }
-
-    private String purificarTelefoneParaGrupo(String originalPhone) {
-        if (originalPhone == null || originalPhone.isBlank()) {
-            return "";
-        }
-        String digitsOnly = originalPhone.replaceAll("\\D", "");
-        if (digitsOnly.startsWith("55")) {
-            digitsOnly = digitsOnly.substring(2);
-        }
-        if (digitsOnly.startsWith("0")) {
-            digitsOnly = digitsOnly.substring(1);
-        }
-        return digitsOnly;
-    }
-
-    private static final java.util.List<String> ALLOWED_PROCEDURE_KEYWORDS = java.util.List.of(
-        "mano", "phmetria", "impedancia", "teste de contato", "teste cutaneo",
-        "leitura de teste", "mostra de exames", "telemedicina", "consulta", "antecipar",
-        "emergencia", "dilatacao pre refrativa", "pontos", "aplicacao", "pintar",
-        "exame", "curativo", "avaliacao", "retirada do dreno", "botox", "conversar cirurgia",
-        "retirada de pontos", "acertar cirurgia", "lobuloplastia", "laser co2", "infiltracao",
-        "pulsao", "puncao", "viscossuplementacao", "toc", "primeira consulta", "guiados por usg",
-        "skin booster", "intradermoterapia", "preenchimento", "microagulhamento", "excisao e sutura",
-        "retorno", "bioestimulador", "electroagulacao", "eletrocoagulacao", "exerese e sutura",
-        "biopsia", "intradermo capilar", "peeling"
-    );
-
-    public static boolean isProcedureEligible(String procId, String procName, java.util.List<String> eligibleProcedureIdsList) {
-        if (procName != null) {
-            String norm = TextNormalizer.normalize(procName);
-
-            // BLOQUEIO ESTRITO DE CIRURGIAS (ex: CIRURGIAS MU, CIRURGIAS MAR, CIRURGIA DR. MURILO, etc.)
-            // Exceto especificamente "conversar cirurgia", "acertar cirurgia" e retornos pós-cirúrgicos
-            if (norm.contains("cirurg")) {
-                boolean isExemption = norm.contains("conversar cirurgia")
-                        || norm.contains("acertar cirurgia")
-                        || norm.contains("retorno");
-                if (!isExemption) {
-                    return false;
-                }
-            }
-
-            // Exclusões explícitas de agendas cirúrgicas de médicos
-            if (norm.contains("cirurgias mu") || norm.contains("cirurgias mar") || norm.contains("cirurgia dr") || norm.contains("cirurgias dr")) {
-                return false;
-            }
-
-            // Se for consulta ou retorno padrão, é elegível
-            if (norm.startsWith("consulta") || norm.equals("consulta") || norm.startsWith("retorno") || norm.equals("retorno")) {
-                return true;
-            }
-        }
-
-        // Se o ID estiver na lista de IDs elegíveis
-        if (procId != null && !procId.isBlank() && eligibleProcedureIdsList != null && eligibleProcedureIdsList.contains(procId.trim())) {
-            return true;
-        }
-
-        // Se o nome corresponder a qualquer termo da lista permitida
-        if (procName != null) {
-            String norm = TextNormalizer.normalize(procName);
-
-            for (String allowed : ALLOWED_PROCEDURE_KEYWORDS) {
-                if (norm.contains(allowed)) {
-                    return true;
-                }
-            }
-        }
-
-        return false;
-    }
-
-    public static boolean isFeegowConfirmedStatus(String statusId) {
-        return FeegowAppointmentStatus.fromId(statusId).isConfirmedOrPresent();
-    }
-
-    public record IngestionSummary(int totalReceived, int filteredReceived, int sessionsCreated, int messagesSent, String mode) {
     }
 }
