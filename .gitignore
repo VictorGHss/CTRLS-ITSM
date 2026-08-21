@@ -93,5 +93,6 @@ fluxo*.json
 fluxov*.json
 *fluxov*.json
 procedimentos_feegow.*
-
-
+log_api
+log_api.*
+*.log

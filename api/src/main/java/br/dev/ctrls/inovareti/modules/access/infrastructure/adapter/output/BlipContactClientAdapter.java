@@ -120,11 +120,6 @@ public class BlipContactClientAdapter implements BlipContactClientPort {
         }
 
         String normalizedIdentity = normalizeIdentity(phoneNumber);
-        if (properties.isTestMode(doctorId)) {
-            log.info("[BlipContact-Adapter] [TEST-MODE] Simulando sincronização com sucesso para {}: Nome={}, CPF={}, Fila={}, DoctorId={}",
-                    normalizedIdentity, name, cpf, queueName, doctorId);
-            return true;
-        }
 
         final String cleanName = resolveCleanName(phoneNumber, normalizedIdentity, name);
 
