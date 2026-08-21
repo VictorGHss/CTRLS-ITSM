@@ -2,13 +2,11 @@ package br.dev.ctrls.inovareti.modules.appointment.application.service;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -114,12 +112,12 @@ public class BlipPrepararExibirHandler {
 
             if (activeSessions != null && !activeSessions.isEmpty()) {
                 if (resolvedPatientName == null) {
-                    Set<String> patientIds = activeSessions.stream()
-                            .filter(Objects::nonNull)
-                            .map(AppointmentSession::getPatientId)
-                            .filter(Objects::nonNull)
-                            .filter(id -> !id.isBlank())
-                            .collect(Collectors.toSet());
+                    Set<String> patientIds = new java.util.HashSet<>();
+                    for (AppointmentSession s : activeSessions) {
+                        if (s != null && s.getPatientId() != null && !s.getPatientId().isBlank()) {
+                            patientIds.add(s.getPatientId().trim());
+                        }
+                    }
 
                     if (patientIds.size() == 1) {
                         String singlePatientId = patientIds.iterator().next();
