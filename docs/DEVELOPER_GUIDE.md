@@ -1,188 +1,127 @@
-# Guia do Desenvolvedor e Operações — Inovare TI
+# Guia do Desenvolvedor e Operações (SRE) — Inovare TI
 
-Este documento contém as instruções para configuração local do ambiente, execução de testes, envio de e-mails, relatórios em PDF e monitoramento de incidentes do ecossistema Inovare TI.
+Este documento orienta a configuração do ambiente de desenvolvimento, parametrização de variáveis de ambiente, execução de testes automatizados, observabilidade e runbooks de resolução de incidentes em produção.
 
 ---
 
-## 1. Configuração do Ambiente e Execução Local
+## 1. Configuração do Ambiente Local
 
 ### 1.1 Requisitos Mínimos
-*   **Java SE Development Kit (JDK) 21:** Necessário para compilação e execução do backend.
-*   **Node.js (v20 ou superior)** e **npm:** Para gerenciar dependências e rodar o frontend React.
-*   **Docker** e **Docker Compose:** Para rodar o banco de dados, cache e telemetria locais.
-*   **Apache Maven (3.9+):** Opcional (o projeto inclui o Maven Wrapper `./mvnw`).
+* **Java SE Development Kit (JDK) 21:** Necessário para compilação com suporte a Virtual Threads.
+* **Node.js (v20 ou superior)** e **npm:** Para execução do frontend React SPA.
+* **Docker** e **Docker Compose:** Para orquestração local do banco de dados, cache e telemetria.
+* **Apache Maven (3.9+):** Opcional (o wrapper `./mvnw` está incluído no diretório `api/`).
 
-### 1.2 Inicialização da Infraestrutura (Docker Compose)
-A API do backend aguarda a inicialização e o estado saudável do banco de dados PostgreSQL e do cache Redis antes de concluir seu bootstrap. 
-Suba os serviços locais a partir do diretório raiz:
-
+### 1.2 Inicialização dos Contêineres de Apoio
+Execute na raiz do projeto:
 ```bash
-docker compose up -d db redis prometheus
+docker compose up -d db redis prometheus grafana
 ```
 
-Esse comando inicializa:
-*   **PostgreSQL (`inovareti_db`):** Mapeado na porta local `5436:5432`, persistido no volume `postgres_data`.
-*   **Redis (`inovareti_redis`):** Mapeado na porta local `6380:6379`.
-*   **Prometheus (`inovareti_prometheus`):** Mapeado na porta local `9095:9090` para telemetria.
-
-### 1.3 Parametrização dos Arquivos `.env`
-As credenciais e integrações locais são geridas por variáveis de ambiente.
-1. Copie o arquivo modelo da raiz e popule as chaves no arquivo `.env`:
-   ```bash
-   cp .env.example .env
-   ```
-2. Repita o processo na subpasta `api/`, garantindo que exista um arquivo `.env` preenchido na pasta de execução do Java.
-
-*Parâmetros Críticos do `.env`:*
-*   `POSTGRES_PASSWORD`: Senha de acesso ao banco (deve corresponder à configurada no Compose).
-*   `JWT_SECRET`: Chave secreta de no mínimo 32 caracteres para assinatura dos tokens JWT.
-*   `VAULT_ENCRYPTION_KEY`: Chave simétrica Base64 para criptografia dos dados do Vault (AES-GCM).
-*   `SPRING_REDIS_HOST` e `SPRING_REDIS_PORT`: Conexão para o Redis (em ambiente local, use `localhost` e a porta mapeada `6380`).
+Portas mapeadas no ambiente local:
+* **PostgreSQL (`inovareti_db`):** `localhost:5436` (porta interna `5432`).
+* **Redis (`inovareti_redis`):** `localhost:6380` (porta interna `6379`).
+* **Prometheus (`inovareti_prometheus`):** `localhost:9095` (porta interna `9090`).
+* **Grafana (`inovareti_grafana`):** `localhost:3001` (porta interna `3000`).
 
 ---
 
-## 2. Compilação, Testes e Inicialização das Camadas
+## 2. Dicionário de Variáveis de Ambiente (`.env`)
 
-### 2.1 Backend (API Spring Boot Java 21)
-O código principal está localizado na pasta `api/`.
+Copie o modelo para os ambientes da aplicação:
+```bash
+cp .env.example .env
+cp .env.example api/.env
+```
 
-*   **Compilar o Projeto e Rodar Testes de Integração:**
-    ```bash
-    cd api
-    ./mvnw clean test
-    ```
-*   **Executar a API Localmente (Porta 8085):**
-    ```bash
-    ./mvnw spring-boot:run
-    ```
+### 2.1 Mapeamento das Principais Chaves
 
-### 2.2 Frontend (React + Vite + TypeScript)
-O código visual do sistema está na pasta `front/`.
-
-*   **Instalar Dependências:**
-    ```bash
-    cd front
-    npm install
-    ```
-*   **Iniciar o Servidor de Desenvolvimento (Porta 5173):**
-    ```bash
-    npm run dev
-    ```
-
----
-
-## 3. Configurações Globais do Backend
-
-### 3.1 Timezone e Fuso Horário (America/Sao_Paulo)
-O fuso horário padrão do sistema é definido como o de Brasília para evitar divergências na persistência e na geração de relatórios.
-1. **Configuração da JVM (`InovareTiApplication.java`):**
-   ```java
-   @PostConstruct
-   public void init() {
-       TimeZone.setDefault(TimeZone.getTimeZone("America/Sao_Paulo"));
-   }
-   ```
-2. **Propriedades casadas no `application.properties`:**
-   ```properties
-   spring.jpa.properties.hibernate.jdbc.time_zone=America/Sao_Paulo
-   spring.jackson.time-zone=America/Sao_Paulo
-   ```
-
-### 3.2 Manipulação de Erros — Padrão RFC 7807
-O backend adota o `@RestControllerAdvice` na classe `GlobalExceptionHandler` para formatar e normalizar respostas de erro seguindo a especificação **RFC 7807 (Problem Details)**:
-
-| Exceção Backend | Status HTTP | Código Recomendado | Descrição |
-|-----------------|-------------|--------------------|-----------|
-| `MethodArgumentNotValid` | `400 Bad Request` | `ERR_VALIDATION_FAILED` | Erro de validação nos campos do payload |
-| `NotFoundException` | `404 Not Found` | `ERR_RESOURCE_NOT_FOUND` | Recurso solicitado não existe no banco |
-| `ConflictException` | `409 Conflict` | `ERR_RESOURCE_CONFLICT` | Violação de unicidade ou estado concorrente |
-| `IllegalStateException`| `422 Unprocessable`| `ERR_BUSINESS_RULE` | Violação de regra de negócio da aplicação |
-| `AccessDeniedException`| `403 Forbidden` | `ERR_ACCESS_DENIED` | Usuário autenticado mas sem permissão (Role) |
-| `MaxUploadSizeExceeded`| `413 Payload Too Large`| `ERR_UPLOAD_LIMIT` | Upload excede o tamanho configurado (5MB) |
-| `SQLGrammarException` | `500 Internal Error` | `ERR_DATABASE_FAILURE` | Exceção de persistência mitigada para não vazar a DDL física |
-
-### 3.3 SMTP de Cobrança e Modo de Teste
-O envio de recibos e e-mails financeiros utiliza `spring-boot-starter-mail` (gerido pela classe `FinanceEmailService`).
-*   **Modo de Teste Financeiro:** Quando `APP_FINANCEIRO_TEST_MODE=true`, todos os e-mails disparados pelo sistema (independente do e-mail do cliente cadastrado no ERP) são redirecionados para o endereço cadastrado em `APP_FINANCEIRO_DEV_EMAIL`, contendo o marcador técnico `[TESTE]` no assunto. Isso evita disparos acidentais para e-mails reais de clientes.
-
-### 3.4 Geração e Layout de Relatórios em PDF (OpenPDF)
-Para a exportação de relatórios corporativos, utiliza-se a biblioteca OpenPDF.
-*   **Formatação:** Utiliza `PdfPTable` estruturando colunas com alinhamentos coerentes (valores financeiros e numéricos alinhados à direita, textos à esquerda).
-*   **Identidade Visual:** Adota a cor primária da marca Inovare (`#feb56c`), fontes Helvetica-Bold em branco para contraste, e renderização dinâmica do logotipo empresarial (`src/main/resources/images/logo.png`).
+| Variável | Descrição | Exemplo / Padrão |
+|---|---|---|
+| `POSTGRES_DB` | Nome do banco de dados | `inovareti` |
+| `POSTGRES_USER` | Usuário do banco | `postgres` |
+| `POSTGRES_PASSWORD` | Senha do banco | `postgres` |
+| `JWT_SECRET` | Chave HMAC de 256 bits para tokens | *(String secreta com 32+ caracteres)* |
+| `VAULT_ENCRYPTION_KEY` | Chave AES-GCM em Base64 para o cofre | *(Chave simétrica de 256 bits)* |
+| `SPRING_REDIS_HOST` | Host do Redis | `localhost` (ou `redis` no Docker) |
+| `SPRING_REDIS_PORT` | Porta do Redis | `6380` (ou `6379` no Docker) |
+| `APP_APPOINTMENT_FEEGOW_API_BASE_URL` | URL base da API do Feegow | `https://api.feegow.com` |
+| `APP_APPOINTMENT_FEEGOW_API_TOKEN` | Token de acesso à API do Feegow | *(Token x-access-token)* |
+| `APP_APPOINTMENT_BLIP_BOT_KEY` | Key do Roteador Principal Take Blip | `Key cm91dGVy...` |
+| `APP_APPOINTMENT_BLIP_DESK_KEY` | Key do Túnel do Blip Desk | `Key dHVubmVs...` |
+| `INOVARE_GERACESSO_URL` | Endpoint da controladora de catracas | `http://172.25.100.106:8082/AgendamentoVisita` |
+| `INOVARE_GERACESSO_TOKEN` | Bearer token de autorização GerAcesso | *(Token JWT GerAcesso)* |
+| `CONTAAZUL_CLIENT_ID` | Client ID da aplicação Conta Azul V2 | *(UUID Conta Azul)* |
+| `CONTAAZUL_CLIENT_SECRET` | Client Secret da Conta Azul V2 | *(String secreta)* |
+| `DISCORD_BOT_TOKEN` | Token do bot Discord (JDA 5) | *(Token de Bot Discord)* |
+| `DISCORD_OPERATIONAL_WEBHOOK_URL` | Webhook do canal de incidentes | `https://discord.com/api/webhooks/...` |
 
 ---
 
-## 4. Monitoramento e Schedulers (SRE)
+## 3. Execução das Aplicações
 
-### 4.1 Stack de Observabilidade Local
-*   **Prometheus:** Disponível em `http://localhost:9095` (porta interna `9090`).
-*   **Grafana:** Disponível em `http://localhost:3001` (porta interna `3000`). O Grafana está pré-configurado com a variável `GF_SECURITY_ALLOW_EMBEDDING=true` para permitir a exibição de gráficos e telemetria diretamente no frontend.
-*   **Endpoint de Coleta da API:** `/api/actuator/prometheus` (métricas do Micrometer).
+### 3.1 Backend (Spring Boot 3 / Java 21)
+```bash
+cd api
 
-### 4.2 Cronograma de Agendamentos e Schedulers
-*   **Automação ContaAzul:** Polling de baixas e processamento automático de recibos executado periodicamente.
-*   **Weekly Digest Scheduler (`WeeklyDigestScheduler.java`):** Configurado com `@Scheduled(cron = "0 0 17 * * FRI")` (toda sexta-feira às 17h). Consolida métricas de chamados resolvidos, conformidade de SLA e envia um resumo técnico no Discord.
+# Compilar e validar tipos
+./mvnw clean compile -DskipTests
+
+# Executar testes unitários e de integração
+./mvnw test
+
+# Iniciar o servidor local (Porta 8085)
+./mvnw spring-boot:run
+```
+
+A documentação interativa Swagger estará acessível em: `http://localhost:8085/api/swagger-ui.html`
+
+### 3.2 Frontend (React + Vite + TypeScript)
+```bash
+cd front
+
+# Instalar dependências
+npm install
+
+# Iniciar servidor de desenvolvimento (Porta 5173)
+npm run dev
+```
 
 ---
 
-## 5. Runbooks Técnicos de Operações
+## 4. Runbooks Operacionais de SRE
 
-### 5.1 Runbook: Re-autorização Manual da ContaAzul
-Se os tokens OAuth2 forem revogados ou corrompidos na tabela `contaazul_oauth_tokens`:
-1. Obtenha um token JWT de administrador:
-   ```bash
-   curl -s -X POST http://localhost:8085/api/auth/login \
-     -H "Content-Type: application/json" \
-     -d '{"email":"admin@inovare.med.br","password":"admin123"}'
-   ```
-2. Salve o token retornado na variável `$TOKEN` e consulte o status da integração:
-   ```bash
-   curl -s -H "Authorization: Bearer $TOKEN" http://localhost:8085/api/financeiro/contaazul/status
-   ```
-3. Se o retorno for `authorized: false`, acesse o painel administrativo da aplicação (Menu Financeiro -> ContaAzul -> Conectar) para conceder permissão na URL do ERP parceiro.
-4. Caso precise expurgar os tokens antigos via banco de dados para forçar nova autorização limpa:
+### 4.1 Runbook: Re-autorização Manual da Conta Azul
+Se a integração retornar `invalid_grant` por expiração ou revogação de tokens:
+1. Obtenha um token de administrador via login (`POST /api/auth/login`).
+2. Acesse o menu **Financeiro -> Conta Azul -> Conectar** no painel web para gerar nova URL de consentimento.
+3. Se necessário expurgar tokens corrompidos diretamente no banco de dados:
    ```sql
    DELETE FROM contaazul_oauth_tokens;
    ```
 
-### 5.2 Runbook: Alerta de Excesso de Tentativas de Token (`ContaAzulForceRefreshThrottled`)
-Este alerta dispara quando há tentativas consecutivas de atualização manual de tokens no banco, ultrapassando os limites do `RedisRateLimiter`.
-1. Acesse o Prometheus (`http://localhost:9095`) e avalie o volume de bloqueios:
-   ```promql
-   increase(contaazul_force_refresh_throttled_total[5m])
-   ```
-2. Analise os logs da API em busca de acessos recorrentes no endpoint:
+### 4.2 Runbook: Diagnóstico de Transbordo no Blip Desk
+Caso um atendimento não seja direcionado para a secretária correta:
+1. Verifique os logs de sincronização de contato:
    ```bash
-   docker logs inovareti_api --tail=100 | grep "ContaAzul force-refresh"
+   docker logs inovareti_api --tail=200 | grep "BlipContact-Adapter"
    ```
-3. **Mitigação:** Se for devido a cliques excessivos de usuários no frontend, oriente a equipe a aguardar o período de cooldown. Se o comportamento persistir por instabilidade na rede ou ataque, valide a regra do rate limit (`FORCE_REFRESH_COOLDOWN_MS`) ou restrinja o IP na borda do Cloudflare WAF.
+2. Confirme se os campos `fila` e `Medico` foram sincronizados no contato do paciente no Roteador e no Túnel do Desk.
+3. Certifique-se de que o nome da fila em `appointment_doctor_mapping.blip_queue_id` corresponde exatamente ao nome cadastrado no Blip Desk (ex: `Ortopedia - Dr. Rodrigo Caldonazzo Fávaro`).
 
-### 5.3 Runbook: Alerta de Falha na Captura de Recibo (20 Tentativas Excedidas)
-A captura do PDF do recibo emitido na ContaAzul ocorre de forma assíncrona. Se falhar por 20 tentativas consecutivas:
-1. Obtenha o ID da baixa/venda (`baixaId` ou `saleId`) no corpo do alerta do Discord.
-2. Acesse o ERP ContaAzul e confirme se a baixa de fato possui um arquivo anexo válido do tipo recibo.
-3. Dispare o reprocessamento histórico (Backfill) via API com credenciais de administrador para tentar reaver o anexo:
+### 4.3 Runbook: Falha de Comunicação com as Catracas (GerAcesso)
+1. Teste a conectividade com o servidor GerAcesso no IP local:
    ```bash
-   curl -X POST http://localhost:8085/api/financeiro/backfill \
-     -H "Authorization: Bearer $TOKEN" \
-     -H "Content-Type: application/json"
+   curl -I -H "Authorization: Bearer $TOKEN" http://172.25.100.106:8082/AgendamentoVisita
    ```
-4. Se o erro de captura persistir por falha na API da Conta Azul, faça o download do recibo manualmente no ERP e realize o upload direto na interface administrativa da Inovare TI para encerrar a pendência.
+2. Verifique se o agendamento possui CPF cadastrado. Se o prontuário estiver sem CPF, o sistema responderá com `"requiresCpfFallback": true` para coleta via WhatsApp.
 
-### 5.4 Validação de Alertas em Testes (Simulação Crítica)
-Para validar o fluxo de ponta a ponta de disparo de incidentes e envio de alertas formatados no Discord, dispare a rota de simulação:
+### 4.4 Runbook: Deploy e Atualização em Produção
+No servidor de hospedagem (`homeserver`):
 ```bash
-curl -X POST http://localhost:8085/api/financeiro/test/simulate-critical-alert \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json"
+cd /opt/ctrls-inovare-ti/Inovare-TI
+git pull
+docker-compose down
+docker-compose up -d --build
+docker-compose logs -f api
 ```
-
----
-
-## 6. Ferramentas Auxiliares
-
-### Execução da Interface Swagger Localmente
-```bash
-docker run --rm -p 8080:8080 -e SWAGGER_JSON=/usr/share/nginx/html/openapi.json -v "%CD%/docs":/usr/share/nginx/html:ro swaggerapi/swagger-ui
-```
-A interface Swagger estará disponível em `http://localhost:8080` com a especificação das rotas do projeto.

@@ -1,54 +1,124 @@
-# Inovare TI — Centro de Operações e Automações
+# Inovare TI — Plataforma Integrada de Operações & Automações Clínicas
 
-O ecossistema Inovare TI integra os sistemas de gestão da Clínica Inovare. Ele gerencia o agendamento de consultas, conciliação financeira de recebimentos e a infraestrutura de suporte tecnológico (ITSM/CMDB).
-
----
-
-## Escopo do Sistema
-
-A plataforma atua nas seguintes frentes operacionais:
-
-1. **Motor de Agendamentos (Feegow + Blip):** Consome os agendamentos confirmados ou pendentes do ERP Feegow. Dispara lembretes e confirmações interativas via WhatsApp pela API do Take Blip/Meta, atualizando o status de volta no ERP com base na resposta do paciente.
-2. **Automação Financeira & Payflow (Conta Azul):** Processa baixas de faturamentos quitados (`ACQUITTED`) na API Conta Azul V2. Garante o controle concorrente de faturamento e envia recibos assinados em PDF para os clientes por e-mail, utilizando mecanismos de contingência local em caso de indisponibilidade externa.
-3. **Suporte de TI e Ativos (ITSM + CMDB):** Central de abertura e triagem de incidentes de TI da clínica. Vincula chamados de suporte a ativos físicos (impressoras, servidores), calcula SLAs dinâmicos, realiza baixa automática de peças por algoritmo FIFO e notifica a equipe técnica via canais e bot interativo do Discord.
+O ecossistema **Inovare TI** é o núcleo de integração, automação e gestão tecnológica da **Clínica Inovare**. A plataforma unifica o atendimento aos pacientes via WhatsApp (Take Blip), o prontuário eletrônico e agendamento (Feegow ERP), a conciliação financeira de recebimentos (Conta Azul V2), o controle de acesso físico por catracas (GerAcesso) e a governança de suporte de TI (ITSM, CMDB, Estoque FIFO e Alertas no Discord).
 
 ---
 
-## Sumário da Documentação
+## 🏛️ Visão Geral dos 4 Pilares do Ecossistema
 
-Acesse os documentos abaixo para obter detalhes técnicos específicos de cada área do sistema:
+```mermaid
+graph TB
+    subgraph "1. Atendimento & Agendamentos"
+        FEEGOW["Feegow ERP<br/>(Prontuário & Pautas)"]
+        BLIP["Take Blip & WhatsApp<br/>(Templates, Desk & Chatbot)"]
+        MOTOR["Motor de Agendamentos<br/>(D+0 a D+3, Nudges, Google Review)"]
+        FEEGOW <--> MOTOR
+        MOTOR <--> BLIP
+    end
 
-* [**Arquitetura e Modelo de Dados**](docs/ARCHITECTURE.md)
-  Detalha o padrão Ports & Adapters (Arquitetura Hexagonal), o mapeamento de pacotes por domínio e o dicionário de banco de dados baseado nas migrações do Flyway, incluindo tabelas como `tickets`, `assets`, `asset_users` e `stock_movements`.
-* [**Guia de Integração de APIs**](docs/INTEGRATIONS.md)
-  Mapeia os fluxos e contratos de comunicação externa da plataforma com o Feegow ERP, APIs de mensageria Take Blip (comandos LIME e roteamento de triagem) e a API Conta Azul V2 (OAuth2, rate limiting com Redis e contingência de recibos).
-* [**Catálogo de Funcionalidades e Regras**](docs/FEATURES.md)
-  Documenta as regras de negócio implementadas nos Services e UseCases do backend. Explica a esteira de parada crítica para ativos sensíveis, a baixa de insumos via FIFO e os alertas de estoque mínimo (`min_stock`).
-* [**Guia de Configuração e Desenvolvimento**](docs/DEVELOPER_GUIDE.md)
-  Instruções para subir o ambiente local. Cobre a parametrização das variáveis de ambiente (`.env`), inicialização de serviços no Docker (PostgreSQL, Redis, Prometheus, Grafana) e os comandos para rodar o backend Spring Boot e o frontend React.
+    subgraph "2. Acesso Físico & Catracas"
+        GERACESSO["GerAcesso API<br/>(Catracas Físicas)"]
+        ACCESS["Módulo Access<br/>(QR Code, Tolerância 2h-21h, Acompanhantes)"]
+        MOTOR --> ACCESS
+        ACCESS <--> GERACESSO
+    end
+
+    subgraph "3. Automação Financeira"
+        CONTAAZUL["Conta Azul V2 API<br/>(OAuth2 & Baixas)"]
+        FINANCE["Módulo Financeiro<br/>(Recibos OpenPDF, Rate-Limit Redis)"]
+        FINANCE <--> CONTAAZUL
+    end
+
+    subgraph "4. ITSM, CMDB & Governança"
+        DISCORD["Discord Bot (JDA 5)<br/>(Slash Commands, Botões & Alertas)"]
+        ITSM["Módulo ITSM / CMDB<br/>(SLA Dinâmico, Parada Crítica, Estoque FIFO)"]
+        VAULT["Cofre de Senhas (Vault)<br/>(AES-256-GCM + MFA Mandatório)"]
+        ITSM <--> DISCORD
+    end
+```
 
 ---
 
-## Inicialização Rápida
+## 📦 Módulos do Sistema (`api/src/main/java/.../modules/`)
 
-Para iniciar a execução local dos serviços de infraestrutura e das aplicações:
+A API backend em **Java 21 / Spring Boot 3** é desenhada sob a **Arquitetura Hexagonal (Ports & Adapters)** com 18 módulos delimitados:
 
+1. **`access`**: Integração com catracas físicas (GerAcesso), geração de credenciais/QR Codes, acompanhantes e tolerância de horários.
+2. **`admin`**: Gestão administrativa de profissionais, parametrização de pautas e controles globais.
+3. **`analytics`**: Dashboards executivos de confirmações, taxas de comparecimento e métricas financeiras.
+4. **`appointment`**: Ingestão matinal, esteira de confirmações, nudges recorrentes, regras anti-loop/anti-regressão e Google Review.
+5. **`asset`**: Gestão de ativos físicos (CMDB), computadores multi-usuário e rastreamento de ordens de manutenção.
+6. **`audit`**: Trilha de auditoria LGPD imutável (`audit_logs`) com Correlation/Trace IDs assíncronos.
+7. **`auth`**: Autenticação stateless JWT, MFA/TOTP com Google Authenticator e recuperação de senhas.
+8. **`communication`**: Roteadores de webhooks e dispatchers de mensagens.
+9. **`finance`**: Conciliação Conta Azul V2, emissão e despacho de recibos em PDF e monetização de médicos.
+10. **`inventory`**: Controle de insumos de TI, deduções transacionais por algoritmo FIFO e alertas de estoque mínimo (`min_stock`).
+11. **`knowledge`**: Base de conhecimento corporativa (FAQ TI) para autoatendimento e padronização.
+12. **`network`**: Probes de infraestrutura e monitoramento de conectividade de rede.
+13. **`notification`**: Bot do Discord (JDA 5) com Slash Commands (`/ti status`, `/solicitar`), botões de assumir/recusar chamados e alertas de parada crítica.
+14. **`report`**: Geração de relatórios gerenciais e exportação de PDFs estruturados (OpenPDF).
+15. **`settings`**: Configurações dinâmicas persistidas e parâmetros de ambiente.
+16. **`ticket`**: Central de chamados (ITSM), cálculo de SLA em horas úteis, subchamados (`parent_ticket_id`) e tags com macros de 1 clique.
+17. **`user`**: Cadastro de colaboradores, setores organizacionais (`sectors`) e papéis de acesso (`ADMIN`, `TECHNICIAN`, `USER`).
+18. **`vault`**: Cofre de senhas e arquivos criptografado com AES-256-GCM com proteção MFA obrigatória.
+
+---
+
+## 📚 Índice da Documentação Técnica
+
+| Documento | Descrição |
+| :--- | :--- |
+| 🏛️ [**Arquitetura e Modelo de Dados**](docs/ARCHITECTURE.md) | Padrão Hexagonal, divisão de camadas, histórico de 49 migrações do Flyway, dicionário completo de tabelas e diagrama ERD. |
+| ⚡ [**Catálogo de Funcionalidades e Regras**](docs/FEATURES.md) | Especificação das regras de negócio: Ingestão de consultas, esteira de nudges, janela de catracas, SLA de TI, parada crítica e FIFO de estoque. |
+| 🔌 [**Manual de Integrações e APIs**](docs/INTEGRATIONS.md) | Contratos de integração: Feegow ERP (13 status oficiais), Take Blip (Dual-Scope Router + Desk), GerAcesso, Conta Azul V2 e Discord JDA 5. |
+| 🛠️ [**Guia do Desenvolvedor e Operações**](docs/DEVELOPER_GUIDE.md) | Setup do ambiente local, dicionário de variáveis de ambiente (`.env`), observabilidade (Prometheus/Grafana) e runbooks de resolução de incidentes. |
+
+---
+
+## 🚀 Inicialização Rápida
+
+### 1. Pré-requisitos
+- **Java JDK 21** & **Maven 3.9+** (ou `./mvnw`)
+- **Node.js 20+** & **npm**
+- **Docker & Docker Compose**
+
+### 2. Subir Infraestrutura Local (PostgreSQL, Redis e Prometheus)
 ```bash
-# 1. Iniciar banco de dados (PostgreSQL), cache (Redis) e telemetria (Prometheus)
+# Na raiz do projeto
 docker compose up -d db redis prometheus
+```
 
-# 2. Copiar e preencher as variáveis do ambiente de desenvolvimento
+### 3. Configurar Variáveis de Ambiente
+```bash
 cp .env.example .env
 cp .env.example api/.env
+```
 
-# 3. Executar o backend Spring Boot (escutando na porta 8085)
+### 4. Executar a API Backend (Porta 8085)
+```bash
 cd api
+./mvnw clean compile
 ./mvnw spring-boot:run
+```
 
-# 4. Instalar dependências e iniciar o frontend React (escutando na porta 5173)
-cd ../front
+### 5. Executar o Frontend React (Porta 5173)
+```bash
+cd front
 npm install
 npm run dev
 ```
 
-A especificação Swagger-UI das rotas HTTP da API está disponível localmente em `http://localhost:8085/swagger-ui.html` ou pelo contrato em [openapi.yaml](docs/openapi.yaml).
+---
+
+## 🔄 Deploy em Produção
+
+No servidor de produção (`homeserver`):
+```bash
+cd /opt/ctrls-inovare-ti/Inovare-TI
+git pull
+docker-compose down
+docker-compose up -d --build
+docker-compose logs -f api
+```
+
+A documentação interativa Swagger/OpenAPI está acessível localmente em `http://localhost:8085/api/swagger-ui.html` ou pelo contrato em [openapi.yaml](docs/openapi.yaml).

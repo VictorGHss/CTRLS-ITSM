@@ -1,326 +1,161 @@
-# Manual de Integrações — Inovare TI
+# Manual de Integrações e APIs Externas — Inovare TI
 
-Este documento detalha o fluxo de dados, a arquitetura e as regras de negócio das integrações da plataforma com os sistemas externos Feegow ERP, Take Blip (WhatsApp) e Conta Azul V2 (Financeiro), além do bot de suporte e alertas do Discord.
-
----
-
-## 1. Motor de Agendamentos e Mensageria (Feegow ERP + Take Blip)
-
-A sincronização de consultas e a esteira de confirmação automática integram o Feegow ERP ao WhatsApp (via Take Blip).
-
-```mermaid
-sequenceDiagram
-    participant F as Feegow ERP
-    participant S as IngestAppointmentsUseCase
-    participant SM as ConfirmationStateMachineService
-    participant B as Take Blip (WhatsApp)
-    participant C as ConfirmBlipWebhookActionHandler
-
-    Note over S: Execução Diária (Scheduler)
-    S->>F: FeegowAppointmentSearcher (Busca consultas status=1)
-    F-->>S: Lista de agendamentos
-    Note over S: Agrupa por Telefone + Data
-    S->>S: Criação do NotificationGroup
-    S->>B: BlipPayloadBuilder (Dispara template de grupo)
-    Note over B: Paciente clica em "Ver Agenda"
-    B->>C: Webhook Callback (Ação: confirm_group_ID)
-    C->>SM: markConfirmed(session)
-    C->>F: updateAppointmentStatus(appointmentId, statusId=7)
-    C->>B: setQueueRedirect & setMasterState (Transbordo Desk)
-```
-
-### 1.1 Ingestão e Busca de Agendamentos (`FeegowAppointmentSearcher`)
-A rotina é orquestrada pelo caso de uso `IngestAppointmentsUseCase` e consome a API do Feegow por meio do `AppointmentExternalPort`.
-* **Filtro de Procedimentos Elegíveis:** O ID do procedimento de cada consulta é comparado com os valores configurados na propriedade `app.appointment.eligible-procedure-ids`. Agendamentos não elegíveis são descartados.
-* **Processamento no Modo de Teste:** Se `app.appointment-motor.test-mode=true`, a busca é delegada ao método `searchTestModeAppointments`. Este método lê os IDs dos médicos de teste definidos na propriedade `test-mode-doctor-ids` (ou `test-doctor-id`) e dispara consultas simultâneas no Feegow para `LocalDate.now()` e a data alvo (`targetDate`). Para otimizar o tempo de resposta, o paralelismo é implementado utilizando **Virtual Threads** por meio de `Executors.newVirtualThreadPerTaskExecutor()`.
-* **Sanitização de Configuração:** Caso o valor de `test-mode-doctor-ids` contenha a sintaxe de placeholder cru do Spring (como `${...}`), a busca é abortada de forma segura para prevenir vazamentos de chaves ou erros de parser HTTP.
-
-### 1.2 Formatação de Mensagens de Grupo (`BlipPayloadBuilder`)
-Caso o paciente possua múltiplas consultas para o mesmo dia, os registros são reunidos em um `NotificationGroup` com um identificador de grupo (`groupId`).
-* **Estrutura do Payload JSON LIME:** O componente `BlipPayloadBuilder` monta a chamada REST de template dinâmico enviada para o Blip.
-* **Botão Interativo de Resposta Rápida (Quick Reply):** O payload do botão é configurado com a string `"ver_agenda_" + groupId.toString()`, apontando para a URI de destino `<telefone>@wa.gw.msging.net`.
-* **Metadados:** A requisição carrega o campo `groupId` como metadados adicionais, garantindo a rastreabilidade do clique no webhook.
-
-### 1.3 Processamento de Webhook (`ConfirmBlipWebhookActionHandler`)
-Quando o paciente interage com o botão de confirmação, o Blip envia um evento para o webhook da aplicação.
-* **Captura da Ação:** A classe `ConfirmBlipWebhookActionHandler` atua na confirmação de consultas, interceptando ações com o prefixo `confirm_group_`.
-* **Resolução de Sessões:** A partir do `groupId` contido na ação, o handler recupera todos os registros de sessões do grupo através de `NotificationGroup` e de sessões ativas do mesmo telefone cadastrado no banco local (`activeContactSessions`).
-* **Máquina de Estados de Confirmação:** O método `ConfirmationStateMachineService.markConfirmed` é chamado para atualizar o status das sessões para `CONFIRMED`, registrando a data e hora de encerramento (`closedAt`).
-* **Sincronização com o Feegow:** O handler invoca `AppointmentExternalPort.updateAppointmentStatus` para alterar o status da consulta no ERP parceiro para o ID configurado em `feegow-confirmed-status-id` (padrão `"7"`).
-* **Roteamento Dinâmico para o Desk (Transbordo):**
-  1. **Resolução de Fila:** O médico associado à consulta é consultado na tabela de mapeamento (`AppointmentDoctorMappingRepositoryPort`). A fila associada (`blipQueueId`) é carregada. Caso não haja mapeamento ou seja inválido, o padrão adotado é `"Recepção Central / Suporte"`.
-  2. **Atualização do Contexto:** O serviço `BlipContextService.setQueueRedirect` limpa contextos antigos no Blip e define o nome sanitizado da fila de atendimento humano no caminho `/contexts/{identity}/attendanceQueueToRedirect`.
-  3. **Master-State Redirect:** O redirecionamento de estado ativo do roteador Blip é feito via `setMasterState` enviando o comando LIME para `desk@msging.net` apontando para o bloco final de confirmação de sucesso (ID de bloco de sucesso extraído da propriedade `blip-blocks-confirm-success`, padrão `"644d54dd-aefd-478b-93eb-10081acdd387"`).
+Este documento apresenta os contratos de integração, diagramas de sequência, payloads JSON e fluxos de contingência entre o ecossistema Inovare TI e as plataformas externas parceiras: **Feegow ERP**, **Take Blip (WhatsApp)**, **GerAcesso (Catracas)**, **Conta Azul V2 (Financeiro)** e **Discord (Bot JDA 5)**.
 
 ---
 
-## 2. Conciliação Financeira (Conta Azul V2)
+## 1. Integração com Feegow ERP (Prontuário & Pautas)
 
-Integração com a API V2 da Conta Azul para o processamento de vendas recebidas e automação do despacho de recibos eletrônicos.
+O Feegow ERP é o sistema central de prontuários médicos da clínica. A comunicação é realizada via chamadas HTTPS autenticadas pelo header `x-access-token`.
 
-### 2.1 Fluxo de Autenticação OAuth2 e Proatividade (`ContaAzulTokenService`)
-A comunicação com os endpoints protegidos da Conta Azul exige tokens portadores JWT válidos.
-* **URL de Autorização:** O método `buildAuthorizationUrl` monta o endereço de consentimento utilizando `client_id`, `redirect_uri` e um código de estado (`state`) gerado aleatoriamente via UUID.
-* **Troca do Authorization Code:** Ao receber o código temporário no endpoint `/callback`, o método `exchangeAuthorizationCode` faz a requisição POST para o token endpoint, salvando o `access_token` e `refresh_token` na tabela `contaazul_oauth_tokens`.
-* **Bloqueio Concorrente de Renovação:** O método `getValidTokenFromDatabase` avalia se o token expira em menos de 5 minutos. Caso sim, adquire uma trava baseada em `ReentrantLock` (`tokenLock`), recarrega o token do banco para verificar se outra thread já o atualizou e, em caso negativo, realiza o refresh.
-* **Provedor de Refresh Proativo:** Um agendamento periódico anotado com `@Scheduled(fixedDelay = 3_000_000L, initialDelay = 300_000L)` executa a renovação silenciosa do token em segundo plano.
-* **Tratamento de BadRequest (invalid_grant):** Caso a Conta Azul retorne erro indicando token expirado ou revogado (`invalid_grant`), o serviço apaga todos os registros de tokens persistidos (`tokenRepository.deleteAll()`), invalidando a integração e forçando o operador a realizar o fluxo de re-autorização manual via painel.
+### 1.1 Tabela Oficial de Status de Agendamento do Feegow
 
-### 2.2 Processamento de Recibos e Proteções Técnicas
-O serviço `ContaAzulReceiptProcessor` gerencia o lote de baixas quitadas (`ACQUITTED`) no ERP.
-* **Rate Limiting no Endpoints Administrativos:** O endpoint de `/force-refresh` é protegido pelo `RedisRateLimiter` através do método `tryAcquire`. O rate limit aplica uma janela de **1 minuto** com o limite máximo de **3 requisições** por chave combinada de usuário + IP de origem (`contaazul:force_refresh:<who>:<ip>`). Caso o Redis esteja inoperante, um fallback baseado em `ConcurrentHashMap` aplica a mesma proteção de janela em memória. Requisições excedentes retornam o status HTTP `429 Too Many Requests`.
-* **Algoritmo de Pacing (Throttling):** Para respeitar o rate-limit oficial do Conta Azul, o processor faz uma pausa controlada de **350 milissegundos** a cada iteração de venda no loop, usando `LockSupport.parkNanos(350_000_000L)`.
-* **Idempotência Concorrente:** O processamento concorrente de baixas de faturamento é mitigado por meio do `ReceiptConcurrencyHandler`. Ele tenta adquirir uma trava lógica em nível de thread baseada no `baixaId` antes de iniciar a conciliação. A liberação ocorre em bloco `finally`.
-* **Emissão Interna de Fallback (OpenPDF):** Se o download do recibo oficial falhar ou a API da Conta Azul retornar `NoReceiptAvailableException`, entra em ação o `InternalReceiptEmissionService`. Este serviço compila os dados da transação do banco local e gera um PDF de recibo interno substituto, evitando o travamento do despacho de e-mails.
-* **Tratamento de Plano Inelegível:** Respostas HTTP 403 contendo as strings `"END_TRIAL"` ou `"NAO ESTA ELEGIVEL"` no corpo JSON da Conta Azul indicam que o plano do cliente está bloqueado. O sistema intercepta essa exceção e silencia o alerta, suspendendo temporariamente os jobs de busca para não inundar os logs com exceptions.
+| ID | Status Oficial | Classificação Inovare | Comportamento no Sistema |
+|:---:|:---|:---:|:---|
+| **`1`** | **Marcado - não confirmado** | `PENDING` | Elegível para disparo inicial de confirmação e lembretes (nudges). |
+| **`7`** | **Marcado - confirmado** | `CONFIRMED` | Confirmado: Preservado, nunca cancelado e sem cobrança de lembrete. |
+| **`15`** | **Remarcado** | `PENDING` | Elegível para nova confirmação de data. |
+| **`2`** | **Em atendimento** | `CONFIRMED` / Presença | Paciente em consultório. Não cancela / Aborta lembrete. |
+| **`3`** | **Atendido** | `CONFIRMED` / Presença | Consulta concluída. Dispara avaliação Google Review pós-atendimento. |
+| **`4`** | **Aguardando \| Atendimento** | `CONFIRMED` / Presença | Paciente presente na recepção. Não cancela / Aborta lembrete. |
+| **`5`** | **Chamando \| atendimento** | `CONFIRMED` / Presença | Paciente chamado no painel. Não cancela / Aborta lembrete. |
+| **`101`** | **Aguardando \| Triagem** | `CONFIRMED` / Presença | Paciente na triagem. Não cancela / Aborta lembrete. |
+| **`103`** | **Em atendimento \| Triagem** | `CONFIRMED` / Presença | Paciente em triagem. Não cancela / Aborta lembrete. |
+| **`105`** | **Chamando \| Triagem** | `CONFIRMED` / Presença | Paciente sendo chamado para triagem. Não cancela / Aborta lembrete. |
+| **`6`** | **Não compareceu** | `CANCELED` (Falta) | Sessão local encerrada como cancelada / Bloqueio de lembretes. |
+| **`11`** | **Desmarcado pelo paciente** | `CANCELED` | Sessão local encerrada como cancelada / Bloqueio de lembretes. |
+| **`16`** | **Desmarcado pelo profissional** | `CANCELED` | Sessão local encerrada como cancelada / Bloqueio de lembretes. |
 
----
+### 1.2 Principais Endpoints Consumidos
 
-## 3. Monitoramento de Incidentes e Suporte (Discord API + Bot JDA 5)
-
-Roteamento de alertas da Clínica Inovare no Discord, além de botões e comandos para atuação direta nos chamados.
-
-```
-                  ┌────────────────────────────────────────┐
-                  │          Criar chamado / Evento        │
-                  └───────────────────┬────────────────────┘
-                                      │
-                                      ▼
-                      ┌───────────────────────────────┐
-                      │    DiscordWebhookService      │
-                      └───────────────┬───────────────┘
-                                      ├───────────────────────────────┐
-                     Se atribuído     │              Se não atribuído │
-                                      ▼                               ▼
-                      ┌───────────────────────────────┐   ┌───────────────────────────────┐
-                      │ DM ao Técnico Responsável     │   │ DM a todos Admins / Técnicos  │
-                      └───────────────┬───────────────┘   └───────────────┬───────────────┘
-                                      │                               │
-                                      └───────────────┬───────────────┘
-                                                      ▼
-                                      ┌───────────────────────────────┐
-                                      │   Despacho Webhook + Embed    │
-                                      │       Canal Operacional       │
-                                      └───────────────┬───────────────┘
-                                                      │ (JDA Ativo)
-                                                      ▼
-                                      ┌───────────────────────────────┐
-                                      │ JDA Bot: Mensagem Operacional │
-                                      │  com Botões Assumir/Recusar   │
-                                      └───────────────────────────────┘
-```
-
-### 3.1 Notificações e Roteamento de Alertas (`DiscordWebhookService`)
-O envio de novos chamados e atualizações ao Discord segue regras específicas:
-* **Roteamento de Destinatários:**
-  * **Com Técnico Atribuído:** Notifica exclusivamente a conta do Discord configurada no cadastro do técnico responsável (`assignedTo.getDiscordUserId()`) caso o campo `receivesItNotifications` seja verdadeiro.
-  * **Sem Técnico Atribuído:** Obtém todos os usuários com papel `ADMIN` ou `TECHNICIAN` que possuem alertas ativos e encaminha DMs individuais contendo os detalhes, excetuando o próprio criador do chamado.
-* **Sanitização de LGPD:** Todos os textos de descrições expostos nas mensagens do Discord passam pelo `DiscordLgpdSanitizer.sanitize(...)` para ofuscar dados pessoais sensíveis de pacientes ou profissionais de saúde.
-* **Envio para o Canal Operacional:** Além do envio de DMs, uma mensagem rica (Embed) é despachada para o canal operacional via Webhook (`discord.operational.webhook.url`).
-* **Resiliência e Recuperação:** As chamadas de envio de webhooks e mensagens JDA possuem a anotação `@Retryable`, executando até 3 tentativas com atraso exponencial (atraso de 1000ms com multiplicador de 2.0). Em caso de erro persistente, o método `@Recover` grava um alerta `DISCORD_WEBHOOK_FAILURE` na tabela de logs de incidentes `system_alerts`.
-* **Notificação JDA com Botões:** Se o JDA estiver ativo, envia uma mensagem especial contendo os botões interativos "✅ Assumir" e "❌ Recusar" usando a ActionRow criada pelo método helper `DiscordInteractionListener.criarBotoesDeAcao(ticketId)`.
-
-### 3.2 Comandos e Ações Interativas do Bot (`DiscordInteractionListener`)
-A classe estende o `ListenerAdapter` da biblioteca JDA 5 para capturar cliques e slash commands executados na interface do Discord.
-* **Comando `/ti status`:** Comando administrativo que exibe o resumo técnico de infraestrutura do sistema. O bot avalia se o ID do Discord do usuário que digitou o comando está contido na lista configurada em `discord.bot.admin-ids` e na tabela de técnicos do sistema. Caso validado, apresenta o embed rico gerado por `DiscordInfraStatusService`.
-* **Comando `/solicitar`:** Comando interativo para requisição de insumos do estoque. O método `onCommandAutoCompleteInteraction` provê autocompletes em tempo real para busca de itens cadastrados no inventário. O comando cria um ticket de chamado associado ao solicitante.
-* **Interação com os Botões de Ação:**
-  * **Aceitar Chamado (`ticket_accept:<id>`):** Aciona o método `discordCommandService.assumirChamado`. O sistema associa o chamado ao técnico correspondente no banco. Se o fluxo completar com sucesso, edita a mensagem no Discord desabilitando os botões interativos e inclui o rodapé indicando qual técnico assumiu.
-  * **Recusar Chamado (`ticket_reject:<id>`):** Aciona `discordCommandService.recusarChamado` liberando o chamado para os demais técnicos e desabilitando as ações.
-* **Virtual Threads Executor:** Todas as ações pesadas executadas nos comandos ou botões são despachadas para o executor assíncrono `discordExecutor` (Virtual Threads). Isso evita o travamento e a perda de conexões do JDA com os servidores do Discord.
-
----
-
-## 4. Integração com Sistema de Catracas (Controle de Acesso Físico)
-
-Esta integração visa automatizar a liberação de entrada na recepção física da clínica a partir dos agendamentos no Feegow, notificando médicos e pacientes assim que o acesso for realizado.
-
-```mermaid
-sequenceDiagram
-    participant C as Catraca Física (Controladora)
-    participant I as Inovare TI Backend
-    participant F as Feegow ERP
-    participant D as Discord (Médico)
-    participant B as Take Blip (WhatsApp Paciente)
-
-    Note over I: Polling agendados (Scheduler)
-    I->>F: Consulta pauta do dia
-    F-->>I: Retorna pacientes + CPFs + Horários
-    I->>I: Salva em gate_access_permissions (Cache)
-
-    Note over C: Paciente digita CPF ou lê QR Code
-    C->>I: GET /api/gate/validate-access?document=CPF
-    alt Agendamento Válido (Janela ativa)
-        I-->>C: { authorized: true, patientName: "..." }
-        Note over C: Libera braço da catraca
-    else Sem agendamento
-        I-->>C: { authorized: false }
-    end
-
-    Note over C: Giro físico detectado
-    C->>I: POST /api/gate/events (Giro confirmado)
-    par Atualização ERP
-        I->>F: POST /atendimento/confirmar-presenca (Chegou)
-    and Alerta ao Profissional
-        I->>D: Notifica Médico (DM ou Canal do Consultório)
-    and Boas-vindas WhatsApp
-        I->>B: Dispara template "Paciente Chegou" (Boas-vindas/Instruções)
-    end
-```
-
-### 4.1 Sincronização Prévia e Carga de Permissões (Feegow -> Local DB)
-Para evitar que oscilações na conexão de internet externa bloqueiem a entrada física da clínica, a API Inovare TI implementa um modelo de resiliência local offline-first.
-* **Job Schedulado de Sincronização:** Um serviço em background configurado com `@Scheduled` consome a API do Feegow nas primeiras horas do dia, obtendo todos os agendamentos confirmados ou agendados da data.
-* **Tabela de Permissões (`gate_access_permissions`):** Extrai o CPF do paciente, nome, ID do agendamento no Feegow, ID do médico associado e a hora da consulta. Esses dados são persistidos na tabela local de permissões, que expira/limpa os registros ao fim do dia.
-
-### 4.2 Endpoint de Liberação de Acesso (`GET /api/gate/validate-access`)
-O firmware ou a controladora de acesso das catracas consome este endpoint no backend da Inovare TI.
-* **Mecanismo de Consulta:** A requisição passa o CPF/documento sanitizado na query string (`document`).
-* **Validação da Janela de Tolerância:** O serviço busca o CPF nas permissões locais do dia e valida a hora atual contra a hora agendada. A liberação padrão adota uma janela de tolerância configurável (ex: entrada autorizada a partir de **30 minutos antes** até **15 minutos após** o horário do agendamento).
-* **Resposta de Liberação:**
-  * **Sucesso (Janela ativa):** Retorna status `200 OK` com o payload `{ "authorized": true, "patientName": "..." }` e a catraca libera o acesso físico.
-  * **Sem permissão:** Retorna `200 OK` com `{ "authorized": false, "reason": "Sem agendamento ativo na janela de tempo" }`.
-
-### 4.3 Webhook de Evento de Giro e Ações em Cascata (`POST /api/gate/events`)
-Quando a passagem física do paciente é concluída, a controladora confirma o evento de acesso no backend.
-* **Consumo do Webhook:** A catraca envia uma requisição `POST /api/gate/events` contendo o CPF do paciente e a data/hora exata do giro.
-* **Processamento Transacional e Assíncrono:** Para que a catraca não sofra atraso na resposta de rede, o endpoint responde imediatamente `200 OK` e despacha as ações subsequentes de forma assíncrona (fire-and-forget) via Virtual Threads:
-  1. **Atualização no Feegow (Check-In):** Invoca o `AppointmentExternalPort` enviando a confirmação de presença do paciente. O status do agendamento é alterado para "Aguardando Atendimento" no ERP.
-  2. **Notificação ao Médico no Discord:** O `DiscordWebhookService` resolve o médico associado àquela consulta e envia uma mensagem direta (DM) ou um alerta rico em embed no canal de texto privado do consultório (ex: `"Seu paciente [Nome] acabou de passar pela catraca e está aguardando na recepção"`).
-  3. **Comunicação no WhatsApp via Blip:** O backend aciona a API de mensagens do Blip, enviando ao WhatsApp do paciente uma mensagem de recepção baseada em template (ex: `"Olá! Registramos sua entrada. Aguarde na recepção do 2º andar. O médico já foi notificado!"`).
-
-### 4.4 Módulo de Controle de Acesso (Access Control)
-
-O módulo de controle de acesso físico das catracas está implementado em inglês no pacote `modules.access` segundo a arquitetura hexagonal (Ports & Adapters).
-
-#### 4.4.1 Configurações e Segurança (.env / application.properties)
-Todas as credenciais sensíveis e configurações foram migradas para variáveis de ambiente locais (arquivos `.env` e `.env.servidor`), sendo mapeadas no `application.properties` por meio de placeholders:
-* `INOVARE_GERACESSO_URL`: URL base local do GerAcesso. Mapeado para `inovare.geracesso.url`.
-* `INOVARE_GERACESSO_TOKEN`: Bearer token de autorização. Mapeado para `inovare.geracesso.token`.
-* `INOVARE_MOTOR_TEST_MODE`: Flag boolean. Mapeado para `inovare.motor.test-mode`.
-* `INOVARE_MOTOR_TEST_DOCTOR_IDS`: IDs de médicos de testes (1 e 70). Mapeado para `inovare.motor.test-doctor-ids`.
-* `INOVARE_MOTOR_PROD_DOCTOR_IDS`: IDs de médicos de produção. Mapeado para `inovare.motor.prod-doctor-ids`.
-
-Uma classe `GerAcessoProperties` mapeia o prefixo `inovare.geracesso` para extinguir os alertas de propriedades desconhecidas da IDE.
-
-#### 4.4.2 Rota de Teste Manual (`POST /api/v1/access/test`)
-Exclusiva para validação manual. Aceita apenas `doctorId` igual a `1` ou `70`. Qualquer outro valor resulta em `403 Forbidden` imediato.
-
-#### 4.4.3 Rota de Validação Real e Orquestração (`POST /api/v1/access/validate`)
-Aceita um payload JSON (`AccessValidationRequest`) com `appointmentId`, `cpf` opcional e a lista de `companions` (acompanhantes).
-
-1. **Integração Feegow (`FeegowClientPort`)**:
-   * O sistema busca o agendamento correspondente no Feegow. Se o CPF estiver ausente, retorna a flag de contingência `"requiresCpfFallback": true`.
-
-2. **Lógica de Janela de Acesso (`AccessService`)**:
-   * Agrupa consultas do mesmo dia por CPF ou telefone (mesmo grupo familiar).
-   * Identifica a primeira consulta do dia. Calcula a janela física: abertura exatamente **2 horas antes** e fechamento fixo às **21:00** daquele dia.
-
-3. **Integração com a API da GerAcesso (`GerAcessoClientPort`)**:
-   * Cadastra o Paciente Titular via POST e obtém a credencial/localizador para persistência.
-   * **Orquestração de Acompanhantes em Paralelo**: Para cada acompanhante no payload, o backend dispara requisições POST individuais separadas para a GerAcesso. Devido à natureza I/O bloqueante da rede local, o envio é processado em paralelo de forma eficiente usando **Java 21 Virtual Threads** (`Executors.newVirtualThreadPerTaskExecutor()`).
-   * **Comportamento Resiliente (Fail-Safe)**: O cadastro de cada acompanhante ocorre em blocos isolados com try-catch. Se a API GerAcesso falhar para algum acompanhante, um log do erro é gerado, mas o fluxo principal continua. O paciente titular e outros acompanhantes válidos são liberados e salvos normalmente.
-
-#### 4.4.4 Webhook do Blip (`POST /api/v1/access/blip/confirmation`)
-Endpoint exclusivo para receber a confirmação de agendamentos pelo fluxo do chatbot do Blip.
-* **Validação de Ação**: Filtra apenas a ação `"Finalizar_Agendamento"`.
-* **Tratamento de Fallback Síncrono**: Caso o CPF esteja ausente (tanto no payload quanto no prontuário do Feegow), responde imediatamente de forma síncrona com `"requiresCpfFallback": true` para direcionar o chatbot à coleta de CPF.
-* **Processamento Assíncrono (Java 21 Virtual Threads)**: Se o CPF estiver presente, delega todo o processamento de liberação física de catracas e cadastro de acompanhantes em segundo plano e retorna imediatamente um `200 OK` com `"authorized": true` para evitar timeouts no chatbot do paciente.
-
-#### 4.4.5 Sincronização Ativa de Contatos (`BlipContactClientPort`)
-Para sanar problemas de sincronização tardia de dados na nuvem do Blip, o backend efetua uma chamada de comando ativa (`POST /commands` mapeada para a URI `/contacts`) atualizando o Nome do paciente, CPF (campo `taxDocument` e extras) e a Fila de triagem resolvida do consultório do médico antes de disparar qualquer fluxo ativo de mensagem do motor. O fluxo principal fica bloqueado aguardando o retorno de sucesso do Blip.
-
-#### 4.4.6 Consulta de Credenciais para o Portal React (`GET /api/v1/access/credentials/{idAgendamento}`)
-Endpoint exposto para consumo da rota dinâmica do front-end em React para renderizar os cartões e QR Codes de liberação física.
-* **URL**: `/api/v1/access/credentials/{idAgendamento}` (onde `{idAgendamento}` é o ID do Feegow).
-* **Método**: `GET`
-* **Retorno em caso de Sucesso (200 OK)**:
-  Retorna uma lista de objetos contendo os dados do titular e seus acompanhantes (se cadastrados). Exemplo:
-  ```json
-  [
-    {
-      "name": "VICTOR HUGO HASS",
-      "userType": "PATIENT",
-      "locator": "LOC12938129",
-      "credentialCode": "5501832049"
-    },
-    {
-      "name": "MARIA SILVA",
-      "userType": "COMPANION",
-      "locator": "LOC12938130",
-      "credentialCode": "5501832050"
-    }
-  ]
+* **Busca de Agendamentos por Data e Status:**
+  ```http
+  GET https://api.feegow.com/v1/api/appoints/search?data={YYYY-MM-DD}&status=1&id_profissional={id}
+  x-access-token: {{FEEGOW_TOKEN}}
   ```
-* **Retorno em caso de processamento pendente ou inexistente (200 OK)**:
-  Se o agendamento ainda não tiver credenciais geradas ou não existir, o endpoint responde amigavelmente com uma lista vazia (`[]`). Isso permite que o portal React exiba a tela de contingência apropriada (ex: *"Seu acesso prévio está em processamento..."*).
+* **Busca de Agendamento Individual por ID:**
+  ```http
+  GET https://api.feegow.com/v1/api/appoints/search?agendamento_id={id}
+  x-access-token: {{FEEGOW_TOKEN}}
+  ```
+* **Atualização de Status de Consulta:**
+  ```http
+  POST https://api.feegow.com/v1/api/appoints/statusUpdate
+  Content-Type: application/json
+  x-access-token: {{FEEGOW_TOKEN}}
+
+  {
+    "AgendamentoID": 3360464,
+    "StatusID": 7,
+    "Obs": ""
+  }
+  ```
+* **FEEGOW-STATUS-GUARD:** O adaptador impede regressão indevida para status 7 caso o paciente já esteja em estado avançado (`2, 3, 4, 5, 6, 7, 11, 16, 101, 103, 105`).
 
 ---
 
-## 6. Desafio de Segurança 2FA — Validação dos 4 Dígitos do Telefone
+## 2. Integração com Take Blip (WhatsApp Cloud & Blip Desk)
 
-O endpoint de consulta de credenciais exige a validação prévia do desafio dos 4 últimos dígitos do número de telefone do paciente, protegendo o link público de acesso contra visualizações não autorizadas.
-
-### 6.1 Fluxo do Desafio Web (React → Java → Feegow)
+A integração com o Take Blip utiliza comandos LIME e webhooks para automação e transbordo para secretárias.
 
 ```mermaid
 sequenceDiagram
-    participant P as Portal React (Paciente)
-    participant A as AccessController (Spring)
-    participant S as AccessService
+    participant P as Paciente (WhatsApp)
+    participant B as Take Blip (Roteador/Túnel)
+    participant API as Inovare TI API
     participant F as Feegow ERP
+    participant D as Blip Desk (Secretária)
 
-    P->>P: Paciente digita 4 últimos dígitos do telefone
-    P->>A: GET /v1/access/credentials/{idAgendamento}?phoneDigits=XXXX
-    A->>S: validatePhoneChallenge(appointmentId, phoneDigits)
-    S->>F: fetchPatientAccessInfo + patientInfo (prontuário)
-    F-->>S: Telefone do paciente (ex: "(42) 99161-7187")
-    S->>S: Limpa máscara → "42991617187" → 4 últimos: "7187"
-    alt Dígitos corretos
-        S-->>A: Retorna normalmente
-        A->>A: Busca credenciais no banco local
-        A-->>P: 200 OK — Lista de AccessCredentialResponse
-        P->>P: isVerified = true → Exibe carrossel de QR Codes
-    else Dígitos incorretos
-        S--xA: Lança InvalidChallengeException
-        A-->>P: 401 Unauthorized — ProblemDetail (mensagem de erro)
-        P->>P: Exibe erro e limpa campos para nova tentativa
+    Note over API: Ingestão Matinal
+    API->>B: Envia Template Interativo de Confirmação
+    B-->>P: Mensagem no WhatsApp com Botões
+
+    P->>B: Clica em "Confirmar Presença"
+    B->>API: Webhook (POST /api/webhooks/blip - Ação: confirm_3360464)
+    
+    API->>F: Atualiza StatusID=7 no Feegow
+    API->>B: Dual-Scope Contact Sync (Grava fila, médico e CPF)
+    API->>B: setMasterState (Redireciona para bloco Sucesso_Confirmacao)
+    API->>B: setQueueRedirect (Define fila da secretária)
+    
+    opt Se o paciente solicitar alteração ou falar com atendente
+        B->>D: Transbordo para a fila específica do médico (ex: Ortopedia)
     end
 ```
 
-### 6.2 Parâmetros do Endpoint
+### 2.1 Sincronização de Contatos em Duplo Escopo (Dual-Scope Sync)
+Para garantir que os dados do paciente e o roteamento de fila estejam disponíveis tanto no bot principal quanto no painel de atendimento humano:
+* O serviço `BlipContactClientAdapter` envia o comando LIME `/contacts` de forma síncrona para:
+  1. **Roteador Principal:** Utilizando a chave `APP_APPOINTMENT_BLIP_BOT_KEY`.
+  2. **Túnel do Blip Desk:** Utilizando a chave `APP_APPOINTMENT_BLIP_DESK_KEY`.
+* **Metadados Gravados em `extras`:**
+  * `Medico`: Nome do profissional atendente.
+  * `fila`: Nome textual sanitizado da fila de destino (ex: `Ortopedia Pediátrica - Dr. Eduardo Mattos`, `Cirurgia Vascular - Dr. Bruno Figueiredo Pançan`).
+  * `taxDocument`: CPF formatado do titular.
+  * `birthDate`: Data de nascimento do prontuário.
 
-| Parâmetro | Tipo | Obrigatório | Descrição |
-|---|---|---|---|
-| `idAgendamento` | Path Variable | Sim | Identificador do agendamento Feegow |
-| `phoneDigits` | Query String | Sim | 4 últimos dígitos do telefone do paciente |
+### 2.2 Transbordo Dinâmico por Fila no Blip Desk
+* O resolvedor de filas (`BlipContextService.resolveQueueName`) traduz o UUID ou ID do médico para o nome exato da fila cadastrada no Blip Desk.
+* O comando `setQueueRedirect` injeta a variável de contexto `attendanceQueueToRedirect` no contato. No fluxo do Blip, o bloco de transbordo humano lê `{{contact.extras.fila}}` para direcionar a conversa à secretária responsável.
 
-### 6.3 Códigos HTTP de Resposta
+---
 
-| Situação | Código HTTP | Descrição |
-|---|---|---|
-| Dígitos corretos, credenciais encontradas | `200 OK` | Lista de `AccessCredentialResponse` no corpo |
-| Dígitos corretos, sem credenciais ainda | `200 OK` | Array vazio `[]` |
-| Dígitos incorretos | `401 Unauthorized` | RFC7807 Problem Detail com `title: "Desafio de Identidade Inválido"` |
-| Agendamento não encontrado no Feegow | `404 Not Found` | RFC7807 Problem Detail com `title: "Not Found"` |
+## 3. Integração com Controle de Catracas Físicas (GerAcesso)
 
-### 6.4 Robustez de Strings de Telefone (Java)
+O módulo `access` orquestra a emissão de credenciais físicas e QR Codes para entrada na clínica.
 
-O sistema aplica sanitização obrigatória no telefone obtido do prontuário antes de comparar:
+### 3.1 Contrato REST da API GerAcesso
 
-```java
-// Remove toda formatação: "(42) 99161-7187" → "42991617187"
-String cleanPhone = phone.replaceAll("\\D", "");
-String lastFourDigits = cleanPhone.substring(cleanPhone.length() - 4);
-```
+* **Endpoint:** `POST http://172.25.100.106:8082/AgendamentoVisita`
+* **Autenticação:** `Authorization: Bearer {{INOVARE_GERACESSO_TOKEN}}`
+* **Payload de Cadastro:**
+  ```json
+  {
+    "documento": "12251091831",
+    "nome": "SILVANA CRISTINA CARDOSO",
+    "tipo": 1,
+    "inicioValidade": "2026-08-24T08:00:00",
+    "fimValidade": "2026-08-24T21:00:00",
+    "observacao": "Agendamento Feegow 3366065"
+  }
+  ```
+* **Campos Retornados:**
+  * `localizador`: Código alfanumérico único (ex: `LOC-849201`).
+  * `codigoCredencial`: Código numérico lido pelo leitor da catraca ou convertido em QR Code.
 
-### 6.5 Alinhamento de Payload do Webhook Blip (camelCase)
+### 3.2 Cadastro Concorrente de Acompanhantes
+* Acompanhantes enviados no payload de confirmação são disparados para o GerAcesso em **paralelo** via **Java 21 Virtual Threads**.
+* Em caso de indisponibilidade no cadastro de um acompanhante secundário, o titular e os outros acompanhantes são mantidos e liberados normalmente.
 
-O payload enviado pelo Blip após a correção do parser usa variáveis em camelCase puro. O DTO `BlipWebhookPayload` no módulo `access` foi alinhado:
+---
 
-| Variável Blip (camelCase) | Campo Java | Comentário |
-|---|---|---|
-| `idAgendamentoFeegow` | `appointmentId` | Identificador do agendamento Feegow |
-| `listaAcompanhantes` | `companions` | Lista de acompanhantes a cadastrar |
+## 4. Integração Financeira (Conta Azul V2)
 
+Automação de conciliação de faturamentos quitados (`ACQUITTED`) e emissão de recibos fiscais.
 
+### 4.1 Ciclo de Vida OAuth2 e Renovação Proativa
+* **Fluxo de Autorização:** Consentimento via URL gerada com `client_id`, `redirect_uri` e `state` UUID.
+* **Troca de Authorization Code:** Troca síncrona no endpoint `/callback`, gravando `access_token` e `refresh_token` na tabela `contaazul_oauth_tokens`.
+* **Proatividade e Concorrência:** Um job periódico a cada 50 minutos valida se a expiração está a menos de 5 minutos. Uma trava `ReentrantLock` impede que múltiplas threads disparem renovações duplicadas.
+* **Purga Automática:** Se a API retornar `invalid_grant`, todos os tokens locais são purgados e o painel exibe aviso para nova autorização manual.
+
+### 4.2 Rate Limiting e Pacing
+* **Rate Limiting Distribuído:** O endpoint `/force-refresh` é protegido pelo `RedisRateLimiter` (limite de 3 requisições por minuto por usuário/IP), com fallback síncrono em memória (`ConcurrentHashMap`).
+* **Pacing no Loop de Vendas:** Pausa controlada de **350ms** (`LockSupport.parkNanos`) entre cada venda processada.
+* **Emissão de Contingência (OpenPDF):** Se o download do recibo oficial falhar, o serviço `InternalReceiptEmissionService` gera um PDF interno padronizado com layout corporativo Inovare.
+
+---
+
+## 5. Integração com Discord (Bot JDA 5)
+
+Roteamento de incidentes e operações de suporte em tempo real.
+
+### 5.1 Slash Commands Administrativos
+* `/ti status`: Exibe embed rico com status da JVM, memória, banco de dados, filas e conexões de rede. Restrito aos IDs de administradores configurados em `discord.bot.admin-ids`.
+* `/solicitar`: Interface para colaboradores solicitarem insumos de hardware com autocomplete em tempo real.
+
+### 5.2 Botões Interativos de Ação em Chamados
+* As mensagens de novos chamados enviadas aos técnicos incluem botões interativos:
+  * `ticket_accept:{ticketId}`: Atribui o chamado ao técnico no banco de dados e atualiza a mensagem no Discord com rodapé confirmatório.
+  * `ticket_reject:{ticketId}`: Libera o chamado para os demais técnicos.
+* **Virtual Threads:** Todas as interações do bot são executadas sob o `discordExecutor` para não bloquear a thread de heartbeat do WebSocket do Discord.
