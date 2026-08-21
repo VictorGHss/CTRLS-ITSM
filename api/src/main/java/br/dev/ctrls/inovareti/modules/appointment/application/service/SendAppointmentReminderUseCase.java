@@ -6,6 +6,7 @@ import java.util.Optional;
 
 import org.springframework.stereotype.Service;
 
+import br.dev.ctrls.inovareti.modules.appointment.application.usecase.IngestAppointmentsUseCase;
 import br.dev.ctrls.inovareti.modules.appointment.domain.model.AppointmentSession;
 import br.dev.ctrls.inovareti.modules.appointment.domain.model.AppointmentSessionStatus;
 import br.dev.ctrls.inovareti.modules.appointment.domain.model.NotificationGroup;
@@ -50,9 +51,19 @@ public class SendAppointmentReminderUseCase {
             }
 
             String statusId = feegowAppt.statusId() != null ? feegowAppt.statusId().trim() : "";
-            // Status de cancelamento/desmarcação conhecidos no Feegow: 6 (Não compareceu), 11 (Desmarcado pelo paciente), 12 (Desmarcado clínica)
-            if ("6".equals(statusId) || "11".equals(statusId) || "12".equals(statusId)) {
-                log.info("[LEMBRETE-CANCELADO] Disparo ignorado para o agendamento ID={}. Motivo: Consulta remarcada ou cancelada na Feegow.", feegowId);
+            // Se já foi confirmado / atendido no Feegow
+            if (IngestAppointmentsUseCase.isFeegowConfirmedStatus(statusId)) {
+                log.info("[LEMBRETE-CONFIRMADO] Disparo de lembrete ignorado para o agendamento ID={}. Motivo: Já confirmado/atendido no Feegow (statusId={}).", feegowId, statusId);
+                session.setStatus(AppointmentSessionStatus.CONFIRMED);
+                session.setClosedAt(LocalDateTime.now());
+                session.setStatusDetails("CONFIRMED_ON_FEEGOW");
+                appointmentSessionRepository.save(session);
+                return false;
+            }
+
+            // Status de cancelamento/desmarcação conhecidos no Feegow: 6 (Não compareceu), 11 (Desmarcado pelo paciente), 16 (Desmarcado pelo profissional)
+            if ("6".equals(statusId) || "11".equals(statusId) || "16".equals(statusId)) {
+                log.info("[LEMBRETE-CANCELADO] Disparo ignorado para o agendamento ID={}. Motivo: Consulta cancelada/desmarcada na Feegow (statusId={}).", feegowId, statusId);
                 invalidateLocalSession(session, "CANCELLED_ON_FEEGOW_STATUS_" + statusId);
                 return false;
             }
