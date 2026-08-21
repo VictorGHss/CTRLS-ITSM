@@ -2,8 +2,9 @@ package br.dev.ctrls.inovareti.modules.appointment.application.usecase;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.slf4j.MDC;
 import org.springframework.stereotype.Component;
@@ -11,184 +12,105 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import br.dev.ctrls.inovareti.core.shared.domain.model.exception.NotFoundException;
 import br.dev.ctrls.inovareti.core.shared.domain.port.output.AuditPort;
-import br.dev.ctrls.inovareti.modules.appointment.application.service.BlipAppointmentFormatter;
 import br.dev.ctrls.inovareti.modules.appointment.application.service.BlipContextService;
+import br.dev.ctrls.inovareti.modules.appointment.application.service.BlipDeliveryFailureHandler;
+import br.dev.ctrls.inovareti.modules.appointment.application.service.BlipDeskRoutingService;
 import br.dev.ctrls.inovareti.modules.appointment.application.service.BlipGroupActionHandler;
-import br.dev.ctrls.inovareti.modules.appointment.application.service.FeegowBulkIntegrationHandler;
 import br.dev.ctrls.inovareti.modules.appointment.application.service.BlipIdempotencyService;
 import br.dev.ctrls.inovareti.modules.appointment.application.service.BlipIdentityReconciler;
-import br.dev.ctrls.inovareti.modules.appointment.application.service.BlipNotificationService;
+import br.dev.ctrls.inovareti.modules.appointment.application.service.BlipIntentResolver;
 import br.dev.ctrls.inovareti.modules.appointment.application.service.BlipNudgeResponseHandler;
 import br.dev.ctrls.inovareti.modules.appointment.application.service.BlipPayloadParser;
+import br.dev.ctrls.inovareti.modules.appointment.application.service.BlipPhysicalAccessHandler;
+import br.dev.ctrls.inovareti.modules.appointment.application.service.BlipPrepararExibirHandler;
 import br.dev.ctrls.inovareti.modules.appointment.application.service.BlipTextSanitizer;
 import br.dev.ctrls.inovareti.modules.appointment.application.service.BlipWebhookActionExecutor;
+import br.dev.ctrls.inovareti.modules.appointment.application.service.BlipWebhookPreprocessor;
+import br.dev.ctrls.inovareti.modules.appointment.application.service.FeegowBulkIntegrationHandler;
 import br.dev.ctrls.inovareti.modules.appointment.domain.model.AppointmentDoctorMapping;
 import br.dev.ctrls.inovareti.modules.appointment.domain.model.AppointmentSession;
-import br.dev.ctrls.inovareti.modules.appointment.domain.model.AppointmentSessionStatus;
-import br.dev.ctrls.inovareti.modules.appointment.domain.model.BlipDeliveryFailure;
-import br.dev.ctrls.inovareti.modules.appointment.domain.model.NotificationGroup;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentDoctorMappingRepositoryPort;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentSessionRepositoryPort;
-import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.BlipDeliveryFailureRepositoryPort;
-import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.NotificationGroupRepositoryPort;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.ProfessionalExternalPort;
-import br.dev.ctrls.inovareti.modules.appointment.infrastructure.adapter.output.metrics.BlipNotificationMetrics;
-import br.dev.ctrls.inovareti.modules.appointment.infrastructure.config.AppointmentMotorProperties;
 import br.dev.ctrls.inovareti.modules.appointment.infrastructure.config.BlipProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
  * Caso de Uso orquestrador principal para recepção e roteamento de Webhooks do Blip.
- * Intercepta payloads, valida assinaturas de token de segurança, delega verificações de idempotência
- * e executa pipelines de ação via BlipWebhookActionExecutor.
+ * Intercepta payloads, valida idempotência e tokens de segurança,
+ * delega o processamento para serviços especializados e executa pipelines de ação via BlipWebhookActionExecutor.
  */
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class HandleBlipWebhookUseCase {
 
-    private final AppointmentSessionRepositoryPort appointmentSessionRepository;
-    private final AppointmentMotorProperties appointmentMotorProperties;
-    private final ProfessionalExternalPort professionalExternalPort;
-    private final BlipContextService blipContextService;
-    private final AppointmentDoctorMappingRepositoryPort appointmentDoctorMappingRepository;
-    private final AuditPort auditPort;
-    private final BlipIdempotencyService blipIdempotencyService;
-    private final BlipWebhookActionExecutor blipWebhookActionExecutor;
-    private final TransactionTemplate transactionTemplate;
-    private final NotificationGroupRepositoryPort notificationGroupRepository;
-    private final SendAppointmentTemplateUseCase sendAppointmentTemplateUseCase;
-    private final BlipProperties blipProperties;
-    private final BlipTextSanitizer blipTextSanitizer;
-    private final BlipIdentityReconciler blipIdentityReconciler;
-    private final BlipPayloadParser blipPayloadParser;
-    private final BlipNudgeResponseHandler blipNudgeResponseHandler;
+    private final BlipWebhookPreprocessor preprocessor;
+    private final BlipPrepararExibirHandler prepararExibirHandler;
+    private final BlipDeskRoutingService deskRoutingService;
+    private final BlipIntentResolver intentResolver;
+    private final BlipPhysicalAccessHandler physicalAccessHandler;
+    private final BlipDeliveryFailureHandler deliveryFailureHandler;
     private final BlipGroupActionHandler blipGroupActionHandler;
-    private final BlipAppointmentFormatter blipAppointmentFormatter;
-    private final BlipDeliveryFailureRepositoryPort blipDeliveryFailureRepository;
-    private final BlipNotificationMetrics blipNotificationMetrics;
-    private final br.dev.ctrls.inovareti.modules.appointment.infrastructure.adapter.output.client.BlipLIMEClient blipLimeClient;
-    private final br.dev.ctrls.inovareti.modules.appointment.domain.port.output.BlipUserIdentityReconciliationRepositoryPort blipUserIdentityReconciliationRepository;
-    private final br.dev.ctrls.inovareti.modules.access.domain.service.AccessService accessService;
+    private final BlipNudgeResponseHandler blipNudgeResponseHandler;
+    private final BlipIdempotencyService blipIdempotencyService;
+    private final BlipPayloadParser blipPayloadParser;
+    private final BlipContextService blipContextService;
+    private final BlipWebhookActionExecutor blipWebhookActionExecutor;
     private final FeegowBulkIntegrationHandler feegowBulkIntegrationHandler;
-    private final br.dev.ctrls.inovareti.modules.appointment.domain.port.output.DoctorConfigurationRepository doctorConfigurationRepository;
-    private final br.dev.ctrls.inovareti.modules.appointment.domain.port.output.PatientExternalPort patientExternalPort;
-    private final br.dev.ctrls.inovareti.modules.access.infrastructure.adapter.output.GerAcessoCatracaAdapter gerAcessoCatracaAdapter;
-    private final br.dev.ctrls.inovareti.modules.access.domain.port.output.BlipContactClientPort blipContactClientPort;
-    private final BlipNotificationService blipNotificationService;
+    private final SendAppointmentTemplateUseCase sendAppointmentTemplateUseCase;
+    private final AppointmentSessionRepositoryPort appointmentSessionRepository;
+    private final AppointmentDoctorMappingRepositoryPort appointmentDoctorMappingRepository;
+    private final ProfessionalExternalPort professionalExternalPort;
+    private final BlipTextSanitizer blipTextSanitizer;
+    private final AuditPort auditPort;
+    private final TransactionTemplate transactionTemplate;
+    private final BlipProperties blipProperties;
+    private final BlipIdentityReconciler blipIdentityReconciler;
 
     private record SessionDbData(
         AppointmentSession session,
         AppointmentDoctorMapping doctorMapping
     ) {}
 
-    public WebhookResult execute(BlipWebhookPayload payload) {
-        return execute(payload, false);
+    public enum WebhookIntent {
+        CONFIRM, CANCEL, ALTER, UNKNOWN
+    }
+
+    public static WebhookIntent detectIntent(String text) {
+        return BlipIntentResolver.detectIntent(text);
+    }
+
+    public static boolean isWithinBusinessHours() {
+        return BlipDeskRoutingService.isWithinBusinessHours();
+    }
+
+    public WebhookResult applySilentDeskRouting(String fromPhone) {
+        return deskRoutingService.applySilentDeskRouting(fromPhone);
+    }
+
+    public WebhookResult applySilentDeskRouting(String fromPhone, BlipWebhookPayload payload) {
+        return deskRoutingService.applySilentDeskRouting(fromPhone, payload);
+    }
+
+    public void executeNotificationFailure(BlipDeliveryFailureCommand failureCommand) {
+        deliveryFailureHandler.executeNotificationFailure(failureCommand);
+    }
+
+    public WebhookResult execute(BlipWebhookPayload rawPayload) {
+        return execute(rawPayload, false);
     }
 
     /**
      * Ponto de entrada para execução do processamento do Webhook do Blip.
      */
-    public WebhookResult execute(BlipWebhookPayload payload, boolean skipTokenValidation) {
-        if (payload == null) {
+    public WebhookResult execute(BlipWebhookPayload rawPayload, boolean skipTokenValidation) {
+        if (rawPayload == null) {
             return null;
         }
-        String inboundIdentity = payload.from();
-        String reconciledIdentity = inboundIdentity;
-        try {
-            reconciledIdentity = blipLimeClient.reconcileNinthDigit(inboundIdentity, appointmentSessionRepository);
-        } catch (Exception ex) {
-            log.warn("[WEBHOOK-RECONCILE-WARN] Falha graciosa ao reconciliar nono dígito para {}: {}", inboundIdentity, ex.getMessage());
-        }
-        
-        payload = new BlipWebhookPayload(
-            payload.messageId(),
-            payload.appointmentId(),
-            payload.action(),
-            reconciledIdentity,
-            payload.token(),
-            payload.content(),
-            payload.metadata(),
-            payload.bsuid(),
-            payload.type()
-        );
 
-        // Injeção de payloadclique no contexto para alinhamento nativo com o Builder do Blip
-        String actionForContext = payload.action();
-        if (actionForContext != null && (actionForContext.contains("confirm_") || actionForContext.contains("alter_"))) {
-            try {
-                blipContextService.setUserContextForUser(inboundIdentity, "payloadclique", actionForContext);
-                if (reconciledIdentity != null && !reconciledIdentity.equalsIgnoreCase(inboundIdentity)) {
-                    blipContextService.setUserContextForUser(reconciledIdentity, "payloadclique", actionForContext);
-                }
-                
-                // Também tenta setar no túnel determinístico
-                try {
-                    String subbotId = blipProperties.getSubbotId();
-                    String subbotLocalPart = null;
-                    if (subbotId != null && !subbotId.isBlank() && !subbotId.toLowerCase().contains("fluxov1")) {
-                        subbotLocalPart = subbotId.trim();
-                        if (subbotLocalPart.contains("@")) {
-                            subbotLocalPart = subbotLocalPart.substring(0, subbotLocalPart.indexOf('@'));
-                        }
-                    }
-                    if (subbotLocalPart != null) {
-                        String phoneDigits = inboundIdentity.trim();
-                        if (phoneDigits.contains("@")) {
-                            phoneDigits = phoneDigits.substring(0, phoneDigits.indexOf('@'));
-                        }
-                        phoneDigits = phoneDigits.replaceAll("\\D", "");
-                        if (!phoneDigits.startsWith("55") && !phoneDigits.isEmpty()) {
-                            phoneDigits = "55" + phoneDigits;
-                        }
-                        String deterministicTunnel = phoneDigits + "." + subbotLocalPart + "@tunnel.msging.net";
-                        blipContextService.setUserContextForUser(deterministicTunnel, "payloadclique", actionForContext);
-                        log.info("[WEBHOOK] Injetado payloadclique={} no túnel determinístico: {}", actionForContext, deterministicTunnel);
-                    }
-                } catch (Exception ex) {
-                    log.warn("[WEBHOOK] Falha ao setar payloadclique no túnel determinístico: {}", ex.getMessage());
-                }
-                
-                log.info("[WEBHOOK] Injetado payloadclique={} no contexto de {}", actionForContext, inboundIdentity);
-            } catch (Exception ex) {
-                log.warn("[WEBHOOK] Falha ao setar payloadclique no contexto: {}", ex.getMessage());
-            }
-        }
-
-        // Reconciliação proativa com base no rawFrom recebido nos metadados
-        if (payload.metadata() instanceof Map<?, ?> metadataMap) {
-            Object rawFromObj = metadataMap.get("rawFrom");
-            if (rawFromObj != null) {
-                String rawFrom = rawFromObj.toString().trim();
-                if (rawFrom.contains("@tunnel.msging.net")) {
-                    String guid = rawFrom.substring(0, rawFrom.indexOf('@')).trim();
-                    boolean isUuid = guid.matches("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$");
-                    if (isUuid) {
-                        String dbPhone = blipIdentityReconciler.resolveAndReconcileIdentity(payload.from(), payload.bsuid());
-                        if (dbPhone != null && !dbPhone.isBlank()) {
-                            try {
-                                Optional<br.dev.ctrls.inovareti.modules.appointment.domain.model.BlipUserIdentityReconciliation> existing =
-                                    blipUserIdentityReconciliationRepository.findByBlipGuid(guid);
-                                if (existing.isEmpty()) {
-                                    br.dev.ctrls.inovareti.modules.appointment.domain.model.BlipUserIdentityReconciliation newRec =
-                                        br.dev.ctrls.inovareti.modules.appointment.domain.model.BlipUserIdentityReconciliation.builder()
-                                            .blipGuid(guid)
-                                            .bsuid(payload.bsuid())
-                                            .phoneNumber(dbPhone)
-                                            .build();
-                                    blipUserIdentityReconciliationRepository.save(newRec);
-                                    log.info("[WEBHOOK] Reconciliação proativa salva para túnel GUID: {} -> Telefone={}", guid, dbPhone);
-                                }
-                            } catch (Exception ex) {
-                                log.warn("[WEBHOOK] Falha ao salvar reconciliação proativa: {}", ex.getMessage());
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
+        BlipWebhookPayload payload = preprocessor.enrichPayload(rawPayload);
         String actionValue = payload.action() != null ? payload.action().trim() : "";
         String rawText = actionValue + " " + (payload.content() != null ? payload.content().toString() : "");
         String rawLower = rawText.toLowerCase();
@@ -197,16 +119,16 @@ public class HandleBlipWebhookUseCase {
         String exibirUuid = blipProperties.getBlocks().getExibirAgenda();
 
         boolean isPrepararAtendimento = "preparar_atendimento".equalsIgnoreCase(actionValue)
-            || (prepararUuid != null && java.util.regex.Pattern.compile("\\b" + java.util.regex.Pattern.quote(prepararUuid.toLowerCase()) + "\\b").matcher(rawLower).find());
+            || (prepararUuid != null && Pattern.compile("\\b" + Pattern.quote(prepararUuid.toLowerCase()) + "\\b").matcher(rawLower).find());
         boolean isExibirAgenda = "exibir_agenda".equalsIgnoreCase(actionValue)
-            || (exibirUuid != null && java.util.regex.Pattern.compile("\\b" + java.util.regex.Pattern.quote(exibirUuid.toLowerCase()) + "\\b").matcher(rawLower).find());
+            || (exibirUuid != null && Pattern.compile("\\b" + Pattern.quote(exibirUuid.toLowerCase()) + "\\b").matcher(rawLower).find());
 
         if (isPrepararAtendimento || isExibirAgenda) {
-            return handlePrepararOuExibir(payload, isPrepararAtendimento);
+            return prepararExibirHandler.handlePrepararOuExibir(payload, isPrepararAtendimento);
         }
 
         if (!skipTokenValidation) {
-            validateWebhookToken(payload);
+            preprocessor.validateWebhookToken(payload);
         }
 
         if (!blipIdempotencyService.registerIfFirstTime(payload.messageId())) {
@@ -215,44 +137,16 @@ public class HandleBlipWebhookUseCase {
         }
 
         String fromPhone = payload.from();
-        
+
         // Anti-Ghost: Filtra respostas de ausência comercial antes de processar qualquer texto livre
-        if ("text/plain".equalsIgnoreCase(payload.type()) && (payload.action() == null || payload.action().isBlank())) {
-            String messageText = "";
-            if (payload.content() instanceof String text) {
-                messageText = text;
-            } else if (payload.content() instanceof Map<?, ?> map) {
-                Object textObj = map.get("text");
-                if (textObj != null) {
-                    messageText = textObj.toString();
-                }
-            }
-            
-            String lowerText = messageText.toLowerCase();
-            boolean isInteractive = lowerText.contains("confirm_") 
-                || lowerText.contains("alter_") 
-                || lowerText.contains("cancel_")
-                || lowerText.contains("ver_agenda_") 
-                || lowerText.contains("group_view_") 
-                || lowerText.contains("finalizar_agendamento");
-                
-            if (!isInteractive) {
-                if ((lowerText.contains("agradece") && lowerText.contains("contato"))
-                    || lowerText.contains("como podemos ajudar") 
-                    || lowerText.contains("estamos ausentes")
-                    || lowerText.contains("mensagem automática")
-                    || lowerText.contains("mensagem automatica")) {
-                    
-                    log.info("[ANTI-GHOST] Resposta automática comercial interceptada e descartada para o telefone: {}. Ignorando criação de ticket.", fromPhone);
-                    return new WebhookResult("", "", "", "", "processed", "");
-                }
-            }
+        if (preprocessor.isAntiGhostCommercialResponse(payload)) {
+            return new WebhookResult("", "", "", "", "processed", "");
         }
 
         String dbPhone = blipIdentityReconciler.resolveAndReconcileIdentity(fromPhone, payload.bsuid());
-        dbPhone = purifyPhoneNumberForSearch(dbPhone);
+        dbPhone = preprocessor.purifyPhoneNumberForSearch(dbPhone);
         if (dbPhone.isEmpty()) {
-            dbPhone = purifyPhoneNumberForSearch(fromPhone);
+            dbPhone = preprocessor.purifyPhoneNumberForSearch(fromPhone);
         }
         String action = payload.action() != null ? payload.action().trim() : "";
 
@@ -264,61 +158,12 @@ public class HandleBlipWebhookUseCase {
         }
 
         // Interceptação de respostas ao lembrete ("Já estou na clínica" / "Estou a caminho")
-        String rawContentText = "";
-        if (payload.content() instanceof String strContent) {
-            rawContentText = strContent;
-        } else if (payload.content() instanceof Map<?, ?> mapContent) {
-            Object tObj = mapContent.get("text");
-            if (tObj != null) {
-                rawContentText = tObj.toString();
-            }
-        }
-        String combinedActionText = (action + " " + rawContentText).trim().toLowerCase();
-
-        boolean isLembreteResposta = combinedActionText.contains("já estou na clínica")
-                || combinedActionText.contains("ja estou na clinica")
-                || combinedActionText.contains("estou a caminho")
-                || combinedActionText.contains("a caminho");
-
-        if (isLembreteResposta) {
-            String statusInfo = combinedActionText.contains("caminho") ? "Estou a caminho" : "Já estou na clínica";
-            log.info("[LEMBRETE-RESPOSTA] Paciente ID {} (De: {}) informou status: {}.",
-                    dbPhone.isEmpty() ? fromPhone : dbPhone, fromPhone, statusInfo);
-
-            String searchPhone = (dbPhone != null && !dbPhone.isEmpty()) ? dbPhone : fromPhone;
-
-            // 1. Remove qualquer redirecionamento para o Desk para evitar abertura de ticket humano
-            try {
-                blipContextService.clearQueueRedirect(fromPhone);
-                if (searchPhone != null && !searchPhone.equalsIgnoreCase(fromPhone)) {
-                    blipContextService.clearQueueRedirect(searchPhone);
-                }
-
-                // 2. Registra histórico/contexto da mensagem
-                List<String> targets = List.of(fromPhone, searchPhone);
-                for (String target : targets) {
-                    if (target == null || target.isBlank()) continue;
-                    blipContextService.setUserContext(target, "flow_action", "reminder_notice");
-                    blipContextService.setUserContext(target, "lembrete_resposta", statusInfo);
-                }
-
-                // 3. Direciona o Master State para o bloco de finalização/encerramento
-                String confirmSuccessBlockId = blipProperties.getBlocks().getConfirmSuccess();
-                if (confirmSuccessBlockId != null && !confirmSuccessBlockId.isBlank()) {
-                    blipContextService.changeMasterState(fromPhone, confirmSuccessBlockId);
-                    if (searchPhone != null && !searchPhone.equalsIgnoreCase(fromPhone)) {
-                        blipContextService.changeMasterState(searchPhone, confirmSuccessBlockId);
-                    }
-                }
-            } catch (Exception ex) {
-                log.warn("[LEMBRETE-FINALIZACAO] Falha ao ajustar estado de finalização no Blip: {}", ex.getMessage());
-            }
-
-            log.info("[LEMBRETE-FINALIZACAO] Resposta de lembrete do paciente={} direcionada para auto-encerramento (sem fila de Desk).", searchPhone);
-            return new WebhookResult("", "", "", "", "reminder_notice_auto_closed", "");
+        WebhookResult reminderResult = handleReminderNoticeIfApplicable(action, payload, fromPhone, dbPhone);
+        if (reminderResult != null) {
+            return reminderResult;
         }
 
-        java.util.regex.Pattern uuidPattern = java.util.regex.Pattern.compile("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$");
+        Pattern uuidPattern = Pattern.compile("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$");
         if (uuidPattern.matcher(action).matches()) {
             String msgType = payload.type();
             boolean isLegitimateType = "text/plain".equalsIgnoreCase(msgType)
@@ -339,7 +184,7 @@ public class HandleBlipWebhookUseCase {
 
         String normalizedAction = action.trim().toLowerCase();
 
-        // Intercepta ações de grupo em texto/botões ("CONFIRMAR TUDO", "1", etc.) para impedir queda no Desk como não suportado
+        // Intercepta ações de grupo em texto/botões ("CONFIRMAR TUDO", "1", etc.)
         WebhookResult groupTextResult = blipGroupActionHandler.handleGroupAction(normalizedAction, fromPhone, payload.bsuid(), payload.metadata());
         if (groupTextResult != null) {
             return groupTextResult;
@@ -349,238 +194,38 @@ public class HandleBlipWebhookUseCase {
             return new WebhookResult("", "", "", "", "nudge_response_processed", "");
         }
 
-        action = resolveTextIntentions(normalizedAction, action, payload);
+        action = intentResolver.resolveTextIntentions(normalizedAction, action, payload);
 
-        if ("Atendimento humano".equalsIgnoreCase(actionValue) 
-                || "atendimento humano".equalsIgnoreCase(actionValue) 
+        if ("Atendimento humano".equalsIgnoreCase(actionValue)
+                || "atendimento humano".equalsIgnoreCase(actionValue)
                 || "atendimento_humano".equalsIgnoreCase(actionValue)
-                || "Atendimento humano".equalsIgnoreCase(action) 
-                || "atendimento humano".equalsIgnoreCase(action) 
+                || "Atendimento humano".equalsIgnoreCase(action)
+                || "atendimento humano".equalsIgnoreCase(action)
                 || "atendimento_humano".equalsIgnoreCase(action)) {
             log.info("[WEBHOOK] Recebida ação Atendimento humano para {}", fromPhone);
-            return applySilentDeskRouting(fromPhone, payload);
+            return deskRoutingService.applySilentDeskRouting(fromPhone, payload);
         }
 
         switch (action) {
             case "Atendimento humano", "atendimento humano", "atendimento_humano":
                 log.info("[WEBHOOK] Recebida ação Atendimento humano para {}", fromPhone);
-                return applySilentDeskRouting(fromPhone, payload);
+                return deskRoutingService.applySilentDeskRouting(fromPhone, payload);
 
             case "already_confirmed_handled":
                 log.info("[WEBHOOK] Agendamento já confirmado tratado amigavelmente para {}", fromPhone);
                 return new WebhookResult("", "", "", "", "already_confirmed_handled", "");
 
             case "Sucesso_Confirmacao":
-                log.info("[WEBHOOK] Recebida ação Sucesso_Confirmacao. De: {} | ID: {}", fromPhone, payload.messageId());
-                try {
-                    String isGroupStr = blipContextService.getUserContext(fromPhone, "isGroupFlow");
-                    String groupIdStr = blipContextService.getUserContext(fromPhone, "groupId");
-                    
-                    if ("true".equalsIgnoreCase(isGroupStr) && groupIdStr != null && !groupIdStr.isBlank()) {
-                        UUID groupId = UUID.fromString(groupIdStr.trim());
-                        log.info("[WEBHOOK] Detectado fluxo de grupo em Sucesso_Confirmacao. Disparando confirmGroupAsync para groupId={}", groupId);
-                        feegowBulkIntegrationHandler.confirmGroupAsync(groupId, fromPhone);
-                    }
-                } catch (Exception ex) {
-                    log.error("[WEBHOOK] Erro ao tratar fluxo de grupo em Sucesso_Confirmacao para {}: {}", fromPhone, ex.getMessage(), ex);
-                }
-                return new WebhookResult("", "", "", "", "Sucesso_Confirmacao", "");
+                return handleSucessoConfirmacao(fromPhone, payload);
 
             case "Integrar_GerAcesso":
-                log.info("[WEBHOOK] Recebida ação Integrar_GerAcesso. De: {} | ID: {}", fromPhone, payload.messageId());
-                String catracaAppId = null;
-                String catracaCpf = null;
-                if (payload.content() instanceof java.util.Map<?, ?> contentMap) {
-                    Object appVal = contentMap.get("idAgendamentoFeegow");
-                    if (appVal == null) {
-                        appVal = contentMap.get("appointmentId");
-                    }
-                    if (appVal != null) {
-                        catracaAppId = appVal.toString().trim();
-                    }
-                    Object cpfVal = contentMap.get("cpf");
-                    if (cpfVal != null) {
-                        catracaCpf = cpfVal.toString().trim();
-                    }
-                }
-                if (catracaAppId == null || catracaAppId.isBlank()) {
-                    catracaAppId = blipContextService.getUserContext(fromPhone, "appointmentId");
-                }
-                if (catracaCpf == null || catracaCpf.isBlank()) {
-                    catracaCpf = blipContextService.getUserContext(fromPhone, "cpf");
-                }
+                return physicalAccessHandler.handleIntegrarGerAcesso(payload, fromPhone);
 
-                if (catracaAppId != null && !catracaAppId.isBlank()) {
-                    AppointmentSession session = appointmentSessionRepository.findByFeegowAppointmentId(catracaAppId).orElse(null);
-                    if (session == null) {
-                        log.warn("[CATRACA-ALERTA] Sessão não encontrada para o agendamento ID: {}", catracaAppId);
-                        return new WebhookResult("", "", catracaAppId, "", "Integrar_GerAcesso", "");
-                    }
-
-                    if (!isDoctorAllowed(session.getDoctorProfissionalId())) {
-                        log.warn("[WEBHOOK-BYPASS] Agendamento ID {} pertence ao médico ID {} (não listado na ENV de automação). Ignorando confirmação automática e liberando fluxo para atendimento manual/Blip.",
-                                catracaAppId, session.getDoctorProfissionalId());
-                        return new WebhookResult("", "", catracaAppId, "", "Integrar_GerAcesso", "");
-                    }
-
-                    Long feegowProfissionalId = null;
-                    try {
-                        feegowProfissionalId = Long.parseLong(session.getDoctorProfissionalId());
-                    } catch (Exception ex) {
-                        log.warn("[CATRACA-ALERTA] Falha ao converter profissionalId {} para Long", session.getDoctorProfissionalId());
-                    }
-
-                    if (feegowProfissionalId == null) {
-                        log.warn("[CATRACA-ALERTA] Profissional ID é nulo ou inválido para o agendamento ID: {}", catracaAppId);
-                        return new WebhookResult("", "", catracaAppId, "", "Integrar_GerAcesso", "");
-                    }
-
-                    var doctorConfigOpt = (feegowProfissionalId != null)
-                            ? doctorConfigurationRepository.findById(feegowProfissionalId)
-                            : java.util.Optional.<br.dev.ctrls.inovareti.modules.appointment.domain.model.DoctorConfiguration>empty();
-                    String matriculaVisitado = doctorConfigOpt
-                            .map(config -> config.getGerAcessoMatricula())
-                            .filter(s -> s != null && !s.isBlank())
-                            .orElse("");
-                    String cpfVisitado = doctorConfigOpt
-                            .map(config -> config.getGerAcessoCpf())
-                            .filter(s -> s != null && !s.isBlank())
-                            .orElse("");
-
-                    try {
-                        br.dev.ctrls.inovareti.modules.appointment.domain.port.output.FeegowPatient patient = 
-                            patientExternalPort.patientInfo(session.getPatientId());
-                        String patientName = (patient != null && patient.name() != null) ? patient.name().trim() : "Paciente";
-                        String patientPhone = (patient != null && patient.phone() != null) ? patient.phone() : session.getPhoneNumber();
-                        String patientEmail = "";
-                        String patientCpf = (patient != null && patient.cpf() != null) 
-                            ? patient.cpf().replaceAll("\\D", "") 
-                            : (catracaCpf != null ? catracaCpf.replaceAll("\\D", "") : "");
-
-                        java.time.format.DateTimeFormatter dtf = java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
-                        String inicioVisita = session.getAppointmentAt().minusHours(2).format(dtf);
-                        String fimVisita = session.getAppointmentAt().toLocalDate().atTime(23, 0).format(dtf);
-
-                        br.dev.ctrls.inovareti.modules.access.domain.model.GerAcessoVisitorRequest visitorRequest = 
-                            br.dev.ctrls.inovareti.modules.access.domain.model.GerAcessoVisitorRequest.builder()
-                                .cpf(patientCpf)
-                                .status(1)
-                                .nome(patientName)
-                                .telefone(patientPhone)
-                                .email(patientEmail)
-                                .tipovisista(1)
-                                .matricula_visitado(matriculaVisitado)
-                                .cpf_visitado(cpfVisitado)
-                                .inicio_visita(inicioVisita)
-                                .fim_visita(fimVisita)
-                                .build();
-
-                        gerAcessoCatracaAdapter.sendVisitorRequest(visitorRequest);
-                    } catch (Exception ex) {
-                        log.error("[WEBHOOK] Erro ao integrar catraca GerAcesso para o agendamento ID: {}", catracaAppId, ex);
-                    }
-                } else {
-                    log.warn("[WEBHOOK] Ação Integrar_GerAcesso recebida, mas nenhum appointmentId pôde ser extraído.");
-                }
-                return new WebhookResult("", "", catracaAppId != null ? catracaAppId : "", "", "Integrar_GerAcesso", "");
-
-            case "Não":
-                log.info("Paciente informou que não trará acompanhantes. Processando acesso GerAcesso...");
-                String appId = null;
-                String cpf = null;
-                if (payload.content() instanceof java.util.Map<?, ?> contentMap) {
-                    Object appVal = contentMap.get("idAgendamentoFeegow");
-                    if (appVal == null) {
-                        appVal = contentMap.get("appointmentId");
-                    }
-                    if (appVal != null) {
-                        appId = appVal.toString().trim();
-                    }
-                    Object cpfVal = contentMap.get("cpf");
-                    if (cpfVal != null) {
-                        cpf = cpfVal.toString().trim();
-                    }
-                }
-                if (appId == null || appId.isBlank()) {
-                    appId = blipContextService.getUserContext(fromPhone, "appointmentId");
-                }
-                if (cpf == null || cpf.isBlank()) {
-                    cpf = blipContextService.getUserContext(fromPhone, "cpf");
-                }
-                if (appId != null && !appId.isBlank()) {
-                    try {
-                        log.info("[WEBHOOK] Persistindo credenciais finais GerAcesso para agendamento ID: {} (sem acompanhantes). CPF: {}", appId, cpf);
-                        accessService.processAccessRequest(appId, cpf, java.util.List.of());
-                    } catch (Exception ex) {
-                        log.error("[WEBHOOK] Erro ao processar integração física GerAcesso no caso 'Não' para agendamento ID: {}", appId, ex);
-                    }
-                }
-                return new WebhookResult("", "", appId != null ? appId : "", "", "Não", "");
+            case "Não", "nao", "Nao", "NÃO":
+                return physicalAccessHandler.handleNaoAction(payload, fromPhone);
 
             case "Finalizar_Agendamento":
-                log.info("[WEBHOOK] Recebida ação Finalizar_Agendamento. De: {} | ID: {}", fromPhone, payload.messageId());
-                String targetAppId = null;
-                String patientCpf = null;
-                List<br.dev.ctrls.inovareti.modules.access.domain.model.CompanionAccessInfo> companionsList = new java.util.ArrayList<>();
-
-                if (payload.content() instanceof java.util.Map<?, ?> contentMap) {
-                    Object appVal = contentMap.get("idAgendamentoFeegow");
-                    if (appVal == null) {
-                        appVal = contentMap.get("appointmentId");
-                    }
-                    if (appVal != null) {
-                        targetAppId = appVal.toString().trim();
-                    }
-
-                    Object cpfVal = contentMap.get("cpf");
-                    if (cpfVal != null) {
-                        patientCpf = cpfVal.toString().trim();
-                    }
-
-                    Object companionsVal = contentMap.get("listaAcompanhantes");
-                    if (companionsVal instanceof java.util.List<?> rawList) {
-                        for (Object item : rawList) {
-                            if (item instanceof java.util.Map<?, ?> companionMap) {
-                                String name = companionMap.get("nome") != null ? companionMap.get("nome").toString() : "";
-                                if (name.isEmpty()) {
-                                    name = companionMap.get("name") != null ? companionMap.get("name").toString() : "";
-                                }
-                                String cCpf = companionMap.get("cpf") != null ? companionMap.get("cpf").toString() : "";
-                                String phone = companionMap.get("telefone") != null ? companionMap.get("telefone").toString() : "";
-                                if (phone.isEmpty()) {
-                                    phone = companionMap.get("phone") != null ? companionMap.get("phone").toString() : "";
-                                }
-                                String email = companionMap.get("email") != null ? companionMap.get("email").toString() : "";
-                                String birthDate = companionMap.get("birthDate") != null ? companionMap.get("birthDate").toString() : "";
-                                if (birthDate.isEmpty()) {
-                                    birthDate = companionMap.get("data_nascimento") != null ? companionMap.get("data_nascimento").toString() : "";
-                                }
-                                
-                                companionsList.add(new br.dev.ctrls.inovareti.modules.access.domain.model.CompanionAccessInfo(name, cCpf, phone, email, birthDate));
-                            }
-                        }
-                    }
-                }
-
-                if (targetAppId == null || targetAppId.isBlank()) {
-                    targetAppId = blipContextService.getUserContext(fromPhone, "appointmentId");
-                }
-                if (patientCpf == null || patientCpf.isBlank()) {
-                    patientCpf = blipContextService.getUserContext(fromPhone, "cpf");
-                }
-
-                if (targetAppId != null && !targetAppId.isBlank()) {
-                    try {
-                        log.info("[WEBHOOK] Persistindo credenciais finais GerAcesso para agendamento ID: {} com {} acompanhante(s). CPF: {}", targetAppId, companionsList.size(), patientCpf);
-                        accessService.processAccessRequest(targetAppId, patientCpf, companionsList);
-                    } catch (Exception ex) {
-                        log.error("[WEBHOOK] Erro ao processar integração física GerAcesso na finalização para agendamento ID: {}", targetAppId, ex);
-                    }
-                } else {
-                    log.warn("[WEBHOOK] Ação Finalizar_Agendamento recebida, mas nenhum appointmentId pôde ser extraído do payload de {}", fromPhone);
-                }
-
-                return new WebhookResult("", "", targetAppId != null ? targetAppId : "", "", "Finalizar_Agendamento", "");
+                return physicalAccessHandler.handleFinalizarAgendamento(payload, fromPhone);
         }
 
         WebhookResult groupResult = blipGroupActionHandler.handleGroupAction(action, fromPhone, payload.bsuid(), payload.metadata());
@@ -588,103 +233,11 @@ public class HandleBlipWebhookUseCase {
             return groupResult;
         }
 
-        java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("(?i)(confirm|alter|cancel)_(\\d+(?:\\.\\d+)?)");
-        java.util.regex.Matcher matcher = pattern.matcher(action);
+        Pattern pattern = Pattern.compile("(?i)(confirm|alter|cancel)_(\\d+(?:\\.\\d+)?)");
+        Matcher matcher = pattern.matcher(action);
 
         if (!matcher.find()) {
-            log.debug("[WEBHOOK] Ação ignorada (não é confirm_, alter_ nem cancel_). action='{}'", action);
-
-            String textLower = rawContentText != null ? rawContentText.toLowerCase().trim() : "";
-
-            // Ignora chamadas de webhook sem texto do usuário (notificações de estado, eventos de sistema, etc.)
-            if (textLower.isBlank()) {
-                return null;
-            }
-
-            // Ignora chamadas de callback de blocos do sistema Blip
-            String safeAction = action != null ? action.trim().toLowerCase() : "";
-            boolean isBlipSystemAction = safeAction.contains("início")
-                    || safeAction.contains("inicio")
-                    || safeAction.contains("pesquisa")
-                    || safeAction.contains("agradecimento")
-                    || safeAction.contains("sucesso")
-                    || safeAction.contains("preparar")
-                    || safeAction.contains("exibir")
-                    || safeAction.contains("menu")
-                    || safeAction.contains("finalizar");
-
-            if (isBlipSystemAction) {
-                return null;
-            }
-
-            // Verificação de segurança: se for um paciente com agendamento ativo no dia enviando texto livre
-            try {
-                String searchPhone = !dbPhone.isEmpty() ? dbPhone : fromPhone;
-                List<AppointmentSession> activeSessions = appointmentSessionRepository.findActiveByPhoneNumber(searchPhone);
-                if (activeSessions != null && !activeSessions.isEmpty()) {
-                    AppointmentSession mainSession = activeSessions.get(0);
-
-                    // BLOQUEIO DE ROTEAMENTO SILENCIOSO PARA AVALIAÇÕES / AGRADECIMENTOS
-                    boolean isReviewSent = mainSession.getReviewRequestedAt() != null;
-
-                    boolean isExplicitHumanRequest = textLower.contains("falar")
-                            || textLower.contains("humano")
-                            || textLower.contains("atendente")
-                            || textLower.contains("atendimento")
-                            || textLower.contains("duvida")
-                            || textLower.contains("dúvida")
-                            || textLower.contains("ajuda")
-                            || textLower.contains("problema")
-                            || textLower.contains("recepcao")
-                            || textLower.contains("recepção")
-                            || textLower.contains("remarcar")
-                            || textLower.contains("cancelar");
-
-                    if (isReviewSent && !isExplicitHumanRequest) {
-                        log.info("[GOOGLE-REVIEW-ROUTING] Resposta de avaliação/cortesia recebida de {} (reviewRequestedAt={}). Ignorando roteamento para o Desk.",
-                                searchPhone, mainSession.getReviewRequestedAt());
-                        return new WebhookResult("", "", "", "", "review_response_ignored", "");
-                    }
-
-                    if (isExplicitHumanRequest) {
-                        log.info("[WEBHOOK] Solicitação explícita de atendimento humano em texto livre de {}. Limpando contexto de confirmação e roteando.", searchPhone);
-                        return applySilentDeskRouting(fromPhone, payload);
-                    }
-
-                    String flowAction = blipContextService.getUserContext(fromPhone, "flow_action");
-                    boolean isReminderContext = "reminder_notice".equalsIgnoreCase(flowAction)
-                            || (mainSession.getStatusDetails() != null && mainSession.getStatusDetails().contains("PRE_NOTICE_SENT"));
-
-                    boolean isCourtesyOrConfirmationText = textLower.matches("(?i)^(obrigado|obrigada|valeu|ok|otimo|ótimo|bom|boa|excelente|nota \\d+|\\d+|tudo certo|agradeço|agradeco|obg|blz|tmj|sim|joia|jóa|confirmado|certo|estou a caminho|ja estou na clinica|já estou na clínica)$");
-
-                    if (isReminderContext || isCourtesyOrConfirmationText) {
-                        try {
-                            blipContextService.clearQueueRedirect(fromPhone);
-                            if (dbPhone != null && !dbPhone.isBlank() && !dbPhone.equalsIgnoreCase(fromPhone)) {
-                                blipContextService.clearQueueRedirect(dbPhone);
-                            }
-                            String confirmSuccessBlockId = blipProperties.getBlocks().getConfirmSuccess();
-                            if (confirmSuccessBlockId != null && !confirmSuccessBlockId.isBlank()) {
-                                blipContextService.changeMasterState(fromPhone, confirmSuccessBlockId);
-                                if (dbPhone != null && !dbPhone.isBlank() && !dbPhone.equalsIgnoreCase(fromPhone)) {
-                                    blipContextService.changeMasterState(dbPhone, confirmSuccessBlockId);
-                                }
-                            }
-                        } catch (Exception ex) {
-                            log.warn("[LEMBRETE-FINALIZACAO] Erro ao aplicar auto-encerramento em texto livre: {}", ex.getMessage());
-                        }
-                        log.info("[LEMBRETE-FINALIZACAO] Resposta/texto livre do paciente={} ('{}') direcionado para auto-encerramento (sem fila de Desk).", searchPhone, textLower);
-                        return new WebhookResult("", "", "", "", "reminder_notice_auto_closed", "");
-                    }
-
-                    log.debug("[FREE-TEXT-ROUTING] Paciente {} em autoatendimento/triagem. Roteamento silencioso forçado desativado para permitir navegação livre no bot.", searchPhone);
-                    return null;
-                }
-            } catch (Exception ex) {
-                log.warn("[FREE-TEXT-ROUTING] Erro ao verificar agendamentos ativos para texto livre de {}: {}", fromPhone, ex.getMessage());
-            }
-
-            return null;
+            return handleFreeTextRouting(action, payload, fromPhone, dbPhone);
         }
 
         String actionType = matcher.group(1).toLowerCase();
@@ -692,7 +245,7 @@ public class HandleBlipWebhookUseCase {
         String appointmentId = blipPayloadParser.normalizeFeegowAppointmentId(rawId);
 
         if (appointmentId == null || appointmentId.isBlank()) {
-            log.warn("[WEBHOOK] Payload {}_  recebido sem ID válido. action={}", actionType, action);
+            log.warn("[WEBHOOK] Payload {}_ recebido sem ID válido. action={}", actionType, action);
             return null;
         }
 
@@ -722,360 +275,176 @@ public class HandleBlipWebhookUseCase {
         );
     }
 
-    public static boolean isWithinBusinessHours() {
-        java.time.ZonedDateTime now = java.time.ZonedDateTime.now(java.time.ZoneId.of("America/Sao_Paulo"));
-        java.time.DayOfWeek day = now.getDayOfWeek();
-        if (day == java.time.DayOfWeek.SATURDAY || day == java.time.DayOfWeek.SUNDAY) {
-            return false;
+    private WebhookResult handleReminderNoticeIfApplicable(String action, BlipWebhookPayload payload, String fromPhone, String dbPhone) {
+        String rawContentText = "";
+        if (payload.content() instanceof String strContent) {
+            rawContentText = strContent;
+        } else if (payload.content() instanceof Map<?, ?> mapContent) {
+            Object tObj = mapContent.get("text");
+            if (tObj != null) {
+                rawContentText = tObj.toString();
+            }
         }
-        java.time.LocalTime time = now.toLocalTime();
-        return !time.isBefore(java.time.LocalTime.of(7, 0)) && !time.isAfter(java.time.LocalTime.of(18, 30));
-    }
+        String combinedActionText = (action + " " + rawContentText).trim().toLowerCase();
 
-    public WebhookResult applySilentDeskRouting(String fromPhone) {
-        return applySilentDeskRouting(fromPhone, null);
-    }
+        boolean isLembreteResposta = combinedActionText.contains("já estou na clínica")
+                || combinedActionText.contains("ja estou na clinica")
+                || combinedActionText.contains("estou a caminho")
+                || combinedActionText.contains("a caminho");
 
-    public WebhookResult applySilentDeskRouting(String fromPhone, BlipWebhookPayload payload) {
-        if (!isWithinBusinessHours()) {
-            log.info("[DESK-ROUTING] Solicitação de transbordo recebida fora do expediente (07:00 às 18:30). Não criando ticket no Desk para o contato: {}", fromPhone);
-            return new WebhookResult("", "", "", "", "out_of_hours_ignored", "");
-        }
+        if (isLembreteResposta) {
+            String statusInfo = combinedActionText.contains("caminho") ? "Estou a caminho" : "Já estou na clínica";
+            log.info("[LEMBRETE-RESPOSTA] Paciente ID {} (De: {}) informou status: {}.",
+                    dbPhone.isEmpty() ? fromPhone : dbPhone, fromPhone, statusInfo);
 
-        log.info("[DESK-ROUTING] Processando transbordo para Desk/Atendimento Humano para o contato: {}", fromPhone);
-        
-        // 1. Limpa sincronamente variáveis de contexto de confirmação em ambos os escopos (Master e Túnel)
-        blipContextService.clearConfirmationContext(fromPhone);
+            String searchPhone = (dbPhone != null && !dbPhone.isEmpty()) ? dbPhone : fromPhone;
 
-        String dbPhone = blipIdentityReconciler.resolveAndReconcileIdentity(fromPhone, payload != null ? payload.bsuid() : null);
-        String searchPhone = (dbPhone != null && !dbPhone.isBlank()) ? dbPhone : fromPhone;
-        String purifiedPhone = purifyPhoneNumberForSearch(searchPhone);
-        if (purifiedPhone.isEmpty()) {
-            purifiedPhone = purifyPhoneNumberForSearch(fromPhone);
-        }
+            try {
+                blipContextService.clearQueueRedirect(fromPhone);
+                if (searchPhone != null && !searchPhone.equalsIgnoreCase(fromPhone)) {
+                    blipContextService.clearQueueRedirect(searchPhone);
+                }
 
-        String resolvedQueue = "Recepção Central / Suporte";
-        String resolvedPatientName = "";
-        String resolvedCpf = "";
-        String resolvedDoctorName = "";
-        String resolvedBirthdate = "";
+                List<String> targets = List.of(fromPhone, searchPhone);
+                for (String target : targets) {
+                    if (target == null || target.isBlank()) continue;
+                    blipContextService.setUserContext(target, "flow_action", "reminder_notice");
+                    blipContextService.setUserContext(target, "lembrete_resposta", statusInfo);
+                }
 
-        try {
-            List<AppointmentSession> activeSessions = appointmentSessionRepository.findActiveByPhoneNumber(purifiedPhone);
-            if ((activeSessions == null || activeSessions.isEmpty()) && !purifiedPhone.startsWith("55")) {
-                activeSessions = appointmentSessionRepository.findActiveByPhoneNumber("55" + purifiedPhone);
+                String confirmSuccessBlockId = blipProperties.getBlocks().getConfirmSuccess();
+                if (confirmSuccessBlockId != null && !confirmSuccessBlockId.isBlank()) {
+                    blipContextService.changeMasterState(fromPhone, confirmSuccessBlockId);
+                    if (searchPhone != null && !searchPhone.equalsIgnoreCase(fromPhone)) {
+                        blipContextService.changeMasterState(searchPhone, confirmSuccessBlockId);
+                    }
+                }
+            } catch (Exception ex) {
+                log.warn("[LEMBRETE-FINALIZACAO] Falha ao ajustar estado de finalização no Blip: {}", ex.getMessage());
             }
 
-            if (activeSessions != null && !activeSessions.isEmpty()) {
-                AppointmentSession session = activeSessions.get(0);
-                if (session.getDoctorProfissionalId() != null && !session.getDoctorProfissionalId().isBlank()) {
-                    Optional<AppointmentDoctorMapping> doctorMappingOpt = appointmentDoctorMappingRepository.findByProfissionalId(session.getDoctorProfissionalId());
-                    if (doctorMappingOpt.isPresent()) {
-                        String queueId = doctorMappingOpt.get().getBlipQueueId();
-                        if (queueId != null && !queueId.isBlank()) {
-                            resolvedQueue = blipContextService.resolveQueueName(queueId.trim());
-                        }
-                        if (doctorMappingOpt.get().getProfissionalNome() != null) {
-                            resolvedDoctorName = doctorMappingOpt.get().getProfissionalNome();
-                        }
-                    }
-                }
+            log.info("[LEMBRETE-FINALIZACAO] Resposta de lembrete do paciente={} direcionada para auto-encerramento (sem fila de Desk).", searchPhone);
+            return new WebhookResult("", "", "", "", "reminder_notice_auto_closed", "");
+        }
+        return null;
+    }
 
-                if (session.getPatientId() != null && !session.getPatientId().isBlank()) {
-                    try {
-                        var patient = patientExternalPort.patientInfo(session.getPatientId());
-                        if (patient != null) {
-                            if (patient.name() != null) resolvedPatientName = patient.name();
-                            if (patient.cpf() != null) resolvedCpf = patient.cpf().replaceAll("\\D", "");
-                            if (patient.birthdate() != null) resolvedBirthdate = patient.birthdate();
-                        }
-                    } catch (Exception ex) {
-                        log.debug("[DESK-ROUTING] Erro ao consultar paciente para {}: {}", session.getPatientId(), ex.getMessage());
-                    }
-                }
+    private WebhookResult handleSucessoConfirmacao(String fromPhone, BlipWebhookPayload payload) {
+        log.info("[WEBHOOK] Recebida ação Sucesso_Confirmacao. De: {} | ID: {}", fromPhone, payload.messageId());
+        try {
+            String isGroupStr = blipContextService.getUserContext(fromPhone, "isGroupFlow");
+            String groupIdStr = blipContextService.getUserContext(fromPhone, "groupId");
 
-                // Sincroniza redirecionamento de fila para contatos vinculados a um agendamento ativo
-                try {
-                    blipContextService.setQueueRedirect(fromPhone, resolvedQueue);
-                } catch (Exception ex) {
-                    log.warn("[DESK-ROUTING] Falha ao configurar redirecionamento de fila para {}: {}", fromPhone, ex.getMessage());
-                }
-            } else {
-                log.info("[DESK-ROUTING] Contato {} sem sessão de agendamento ativa. Mantendo pauta/fila definida pelo fluxo do bot ou contato existente.", fromPhone);
+            if ("true".equalsIgnoreCase(isGroupStr) && groupIdStr != null && !groupIdStr.isBlank()) {
+                UUID groupId = UUID.fromString(groupIdStr.trim());
+                log.info("[WEBHOOK] Detectado fluxo de grupo em Sucesso_Confirmacao. Disparando confirmGroupAsync para groupId={}", groupId);
+                feegowBulkIntegrationHandler.confirmGroupAsync(groupId, fromPhone);
             }
         } catch (Exception ex) {
-            log.warn("[DESK-ROUTING] Falha defensiva ao carregar dados do agendamento para Desk: {}", ex.getMessage());
+            log.error("[WEBHOOK] Erro ao tratar fluxo de grupo em Sucesso_Confirmacao para {}: {}", fromPhone, ex.getMessage(), ex);
         }
-
-        return new WebhookResult(resolvedQueue, resolvedPatientName, resolvedCpf, resolvedBirthdate, "Atendimento humano", resolvedDoctorName);
+        return new WebhookResult("", "", "", "", "Sucesso_Confirmacao", "");
     }
 
-    private WebhookResult handlePrepararOuExibir(BlipWebhookPayload payload, boolean isPrepararAtendimento) {
-        String from = payload.from();
-        if (from != null && !from.isBlank()) {
-            String dbPhone = blipIdentityReconciler.resolveAndReconcileIdentity(from, payload.bsuid());
-            String normalizedPhone = from.trim();
-            if (isPrepararAtendimento) {
-                log.info("[WEBHOOK-BLOCK] Interceptando Preparar_Atendimento para {} (DB Phone: {})", normalizedPhone, dbPhone);
+    private WebhookResult handleFreeTextRouting(String action, BlipWebhookPayload payload, String fromPhone, String dbPhone) {
+        log.debug("[WEBHOOK] Ação ignorada (não é confirm_, alter_ nem cancel_). action='{}'", action);
 
-                String resolvedQueueName = null;
-                String resolvedDoctorId = null;
-                String resolvedPatientName = null;
-                String resolvedCpf = null;
-
-                // PRIORIDADE ABSOLUTA DO CPF: busca primeiro por CPF/feegowId autenticado na sessão ativa
-                String flowCpf = blipContextService.getUserContext(normalizedPhone, "cpf");
-                if (flowCpf == null || flowCpf.isBlank()) {
-                    flowCpf = blipContextService.getUserContext(normalizedPhone, "userCpf");
-                }
-                String flowPatientId = blipContextService.getUserContext(normalizedPhone, "feegowId");
-
-                if ((flowCpf != null && !flowCpf.isBlank()) || (flowPatientId != null && !flowPatientId.isBlank())) {
-                    String queryParam = (flowPatientId != null && !flowPatientId.isBlank())
-                            ? flowPatientId
-                            : (flowCpf != null ? flowCpf.replaceAll("\\D", "") : null);
-                    if (queryParam != null && !queryParam.isBlank()) {
-                        try {
-                            var patient = patientExternalPort.patientInfo(queryParam);
-                            if (patient != null) {
-                                if (patient.name() != null && !patient.name().isBlank() && !br.dev.ctrls.inovareti.modules.access.infrastructure.adapter.output.BlipContactClientAdapter.isInvalidName(patient.name()) && !br.dev.ctrls.inovareti.modules.access.infrastructure.adapter.output.BlipContactClientAdapter.isGenericName(patient.name())) {
-                                    resolvedPatientName = patient.name().trim();
-                                }
-                                if (patient.cpf() != null && !patient.cpf().isBlank()) {
-                                    resolvedCpf = patient.cpf().replaceAll("\\D", "");
-                                }
-                            }
-                        } catch (Exception ex) {
-                            log.debug("[WEBHOOK-BLOCK] Erro ao buscar paciente por CPF/feegowId da sessão: {}", ex.getMessage());
-                        }
-                    }
-                }
-
-                try {
-                    String searchPhone = (dbPhone != null && !dbPhone.isEmpty()) ? dbPhone : from;
-                    String purifiedPhone = purifyPhoneNumberForSearch(searchPhone);
-                    if (purifiedPhone.isEmpty()) {
-                        purifiedPhone = purifyPhoneNumberForSearch(from);
-                    }
-
-                    List<AppointmentSession> activeSessions = appointmentSessionRepository.findActiveByPhoneNumber(purifiedPhone);
-                    if ((activeSessions == null || activeSessions.isEmpty()) && !purifiedPhone.startsWith("55")) {
-                        activeSessions = appointmentSessionRepository.findActiveByPhoneNumber("55" + purifiedPhone);
-                    }
-
-                    if (activeSessions != null && !activeSessions.isEmpty()) {
-                        // Se o nome ainda não foi resolvido por CPF, verifica se é paciente único no telefone
-                        if (resolvedPatientName == null) {
-                            java.util.Set<String> patientIds = activeSessions.stream()
-                                    .filter(java.util.Objects::nonNull)
-                                    .map(s -> s.getPatientId())
-                                    .filter(java.util.Objects::nonNull)
-                                    .filter(id -> !id.isBlank())
-                                    .collect(java.util.stream.Collectors.toSet());
-
-                            if (patientIds.size() == 1) {
-                                String singlePatientId = patientIds.iterator().next();
-                                var patient = patientExternalPort.patientInfo(singlePatientId);
-                                if (patient != null) {
-                                    if (patient.name() != null && !patient.name().isBlank() && !br.dev.ctrls.inovareti.modules.access.infrastructure.adapter.output.BlipContactClientAdapter.isInvalidName(patient.name()) && !br.dev.ctrls.inovareti.modules.access.infrastructure.adapter.output.BlipContactClientAdapter.isGenericName(patient.name())) {
-                                        resolvedPatientName = patient.name().trim();
-                                    }
-                                    if (patient.cpf() != null && !patient.cpf().isBlank()) {
-                                        resolvedCpf = patient.cpf().replaceAll("\\D", "");
-                                    }
-                                }
-                            } else if (patientIds.size() > 1) {
-                                log.info("[WEBHOOK-BLOCK] Múltiplos pacientes ({}) no telefone {}. NÃO sobrescrevendo nome/CPF por telefone sem autenticação por CPF.",
-                                        patientIds.size(), normalizedPhone);
-                            }
-                        }
-
-                        AppointmentSession session = activeSessions.get(0);
-                        resolvedDoctorId = session.getDoctorProfissionalId();
-                        if (resolvedDoctorId != null && !resolvedDoctorId.isBlank()) {
-                            Optional<AppointmentDoctorMapping> doctorMappingOpt = appointmentDoctorMappingRepository.findByProfissionalId(resolvedDoctorId);
-                            if (doctorMappingOpt.isPresent()) {
-                                String blipQueueId = doctorMappingOpt.get().getBlipQueueId();
-                                if (blipQueueId != null && !blipQueueId.isBlank()) {
-                                    String resolved = blipContextService.resolveQueueName(blipQueueId);
-                                    resolvedQueueName = (resolved != null && !resolved.isBlank()) ? resolved : blipQueueId;
-                                    try {
-                                        blipContextService.setQueueRedirect(normalizedPhone, blipQueueId.trim());
-                                    } catch (Exception qEx) {
-                                        log.warn("[WEBHOOK-BLOCK] Falha ao executar setQueueRedirect em Preparar_Atendimento: {}", qEx.getMessage());
-                                    }
-                                }
-                            }
-                        }
-                    }
-                } catch (Exception ex) {
-                    log.debug("[WEBHOOK-BLOCK] Falha defensiva ao resolver agendamento ativo em Preparar_Atendimento: {}", ex.getMessage());
-                }
-
-                try {
-                    blipContactClientPort.syncContact(
-                        normalizedPhone,
-                        resolvedPatientName,
-                        resolvedCpf != null ? resolvedCpf : "",
-                        resolvedQueueName,
-                        resolvedDoctorId != null ? resolvedDoctorId : ""
-                    );
-                } catch (Exception ex) {
-                    log.warn("[WEBHOOK-BLOCK] Falha ao sincronizar contato no Preparar_Atendimento: {}", ex.getMessage());
-                }
-
-                record GroupInfo(boolean isGroup, UUID groupId) {}
-                GroupInfo groupInfo = transactionTemplate.execute(status -> {
-                    List<AppointmentSession> activeSessions = appointmentSessionRepository.findActiveByPhoneNumber(dbPhone);
-                    if (activeSessions != null) {
-                        for (AppointmentSession activeSession : activeSessions) {
-                            List<NotificationGroup> groups = notificationGroupRepository.findBySessionId(activeSession.getId());
-                            if (groups != null && !groups.isEmpty()) {
-                                return new GroupInfo(true, groups.get(0).getGroupId());
-                            }
-                        }
-                    }
-                    return new GroupInfo(false, null);
-                });
-
-                boolean isGroup = groupInfo != null && groupInfo.isGroup();
-                UUID groupId = groupInfo != null ? groupInfo.groupId() : null;
-
-                blipContextService.setUserContextForUser(normalizedPhone, "isGroupFlow", String.valueOf(isGroup));
-                if (isGroup && groupId != null) {
-                    blipContextService.setUserContextForUser(normalizedPhone, "groupId", groupId.toString());
-                } else {
-                    blipContextService.deleteUserContext(normalizedPhone, "groupId");
-                }
-                return new WebhookResult("", "", "", "", "processed", "");
-            } else {
-                log.info("[WEBHOOK-BLOCK] Interceptando Exibir_Agenda para {} (DB Phone: {})", normalizedPhone, dbPhone);
-
-                // ─── Estratégia 1: groupId enviado explicitamente no content do payload ──────
-                UUID resolvedGroupId = null;
-                String rawContent = payload.content() != null ? payload.content().toString().trim() : "";
-                java.util.regex.Pattern uuidPat = java.util.regex.Pattern.compile(
-                    "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}");
-                java.util.regex.Matcher uuidMatcher = uuidPat.matcher(rawContent);
-                if (uuidMatcher.find()) {
-                    try {
-                        resolvedGroupId = UUID.fromString(uuidMatcher.group());
-                        log.info("[WEBHOOK-BLOCK] groupId extraído do content do payload: {}", resolvedGroupId);
-                    } catch (IllegalArgumentException ignored) {}
-                }
-
-                final UUID initialResolvedGroupId = resolvedGroupId;
-                record ExibirAgendaDbResult(String listaDetalhada, UUID finalGroupId) {}
-
-                ExibirAgendaDbResult dbResult = transactionTemplate.execute(status -> {
-                    UUID groupToUse = initialResolvedGroupId;
-                    String textResult = null;
-                    try {
-                        List<AppointmentSession> activeSessionsResult = appointmentSessionRepository.findActiveByPhoneNumber(dbPhone);
-                        if (activeSessionsResult != null && !activeSessionsResult.isEmpty()) {
-                            List<AppointmentSession> activeSessions = new java.util.ArrayList<>(activeSessionsResult);
-                            activeSessions.sort((s1, s2) -> {
-                                if (s1.getAppointmentAt() == null && s2.getAppointmentAt() == null) return 0;
-                                if (s1.getAppointmentAt() == null) return 1;
-                                if (s2.getAppointmentAt() == null) return -1;
-                                return s1.getAppointmentAt().compareTo(s2.getAppointmentAt());
-                            });
-
-                            // Estratégia 2: currentGroupId persistido no banco pelo clique do botão
-                            if (groupToUse == null) {
-                                for (AppointmentSession s : activeSessions) {
-                                    if (s.getCurrentGroupId() != null) {
-                                        groupToUse = s.getCurrentGroupId();
-                                        log.info("[WEBHOOK-BLOCK] groupId resolvido via currentGroupId do banco: {}", groupToUse);
-                                        break;
-                                    }
-                                }
-                            }
-
-                            // Busca lista_detalhada pelo groupId resolvido
-                            if (groupToUse != null) {
-                                List<NotificationGroup> groups = notificationGroupRepository.findByGroupId(groupToUse);
-                                if (groups != null && !groups.isEmpty()) {
-                                    for (NotificationGroup g : groups) {
-                                        if (g.getPreCompiledScheduleText() != null && !g.getPreCompiledScheduleText().isBlank()) {
-                                            textResult = g.getPreCompiledScheduleText();
-                                            log.info("[WEBHOOK-BLOCK] Recuperado preCompiledScheduleText do banco para groupId={}", groupToUse);
-                                            break;
-                                        }
-                                    }
-                                }
-                            }
-
-                            // Estratégia 3: último grupo do paciente como fallback
-                            if (textResult == null) {
-                                Optional<NotificationGroup> latestGroupOpt = notificationGroupRepository.findLatestByPhone(dbPhone);
-                                if (latestGroupOpt.isPresent()) {
-                                    NotificationGroup latestGroup = latestGroupOpt.get();
-                                    if (groupToUse == null) {
-                                        groupToUse = latestGroup.getGroupId();
-                                    }
-                                    List<NotificationGroup> groups = notificationGroupRepository.findByGroupId(latestGroup.getGroupId());
-                                    if (groups != null && !groups.isEmpty()) {
-                                        for (NotificationGroup g : groups) {
-                                            if (g.getPreCompiledScheduleText() != null && !g.getPreCompiledScheduleText().isBlank()) {
-                                                textResult = g.getPreCompiledScheduleText();
-                                                log.info("[WEBHOOK-BLOCK] Recuperado preCompiledScheduleText do banco para o último groupId={}", latestGroup.getGroupId());
-                                                break;
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-
-                            // Estratégia 4: compila em tempo de execução
-                            if (textResult == null) {
-                                log.info("[WEBHOOK-BLOCK] Nenhuma lista pré-compilada encontrada. Gerando lista detalhada via Feegow...");
-                                textResult = blipAppointmentFormatter.buildListaDetalhada(activeSessions);
-                            }
-                        }
-                    } catch (RuntimeException ex) {
-                        log.error("[WEBHOOK-BLOCK] Erro ao buscar/gerar lista formatada do banco.", ex);
-                    }
-                    return new ExibirAgendaDbResult(textResult, groupToUse);
-                });
-
-                String listaDetalhada = dbResult != null ? dbResult.listaDetalhada() : null;
-                resolvedGroupId = dbResult != null ? dbResult.finalGroupId() : resolvedGroupId;
-
-                if (listaDetalhada != null && !listaDetalhada.isBlank()) {
-                    blipContextService.setUserContextForUser(normalizedPhone, "lista_detalhada", listaDetalhada);
-                    blipContextService.setUserContextForUser(normalizedPhone, "listaDetalhada", listaDetalhada);
-                    log.info("[WEBHOOK-BLOCK] Injetada lista_detalhada e listaDetalhada para {}.", normalizedPhone);
-                } else {
-                    log.warn("[WEBHOOK-BLOCK] lista_detalhada vazia ou nula para {}.", normalizedPhone);
-                }
-
-                if (resolvedGroupId != null) {
-                    blipContextService.setUserContextForUser(normalizedPhone, "groupId", resolvedGroupId.toString());
-                    blipContextService.setUserContextForUser(normalizedPhone, "isConfirmingAgenda", "true");
-                    log.info("[WEBHOOK-BLOCK] Injetado groupId={} e isConfirmingAgenda=true para {}.", resolvedGroupId, normalizedPhone);
-                }
-
-                log.info("[WEBHOOK-HTTP] Requisição síncrona de Exibir_Agenda respondida com sucesso para o usuário: {}", normalizedPhone);
-                return new WebhookResult("", "", "", "", "processed", "");
+        String rawContentText = "";
+        if (payload.content() instanceof String strContent) {
+            rawContentText = strContent;
+        } else if (payload.content() instanceof Map<?, ?> mapContent) {
+            Object tObj = mapContent.get("text");
+            if (tObj != null) {
+                rawContentText = tObj.toString();
             }
         }
-        return new WebhookResult("", "", "", "", "processed", "");
-    }
+        String textLower = rawContentText.toLowerCase().trim();
 
-    private void validateWebhookToken(BlipWebhookPayload payload) {
-        String expectedToken = appointmentMotorProperties.getSecurity().getWebhookToken();
-        if (expectedToken != null && !expectedToken.isBlank()) {
-            if (payload.token() == null || !secureCompare(expectedToken, payload.token())) {
-                log.warn("Token de webhook inválido.");
-                throw new SecurityException("Invalid token");
-            }
-            auditPort.record(
-                    "APPOINTMENT_MOTOR",
-                    "ASSINATURA_VALIDADA",
-                    "Assinatura do webhook validada. messageId=" + payload.messageId(),
-                    resolveTraceId());
+        if (textLower.isBlank()) {
+            return null;
         }
+
+        String safeAction = action.toLowerCase();
+        boolean isBlipSystemAction = safeAction.contains("início")
+                || safeAction.contains("inicio")
+                || safeAction.contains("pesquisa")
+                || safeAction.contains("agradecimento")
+                || safeAction.contains("sucesso")
+                || safeAction.contains("preparar")
+                || safeAction.contains("exibir")
+                || safeAction.contains("menu")
+                || safeAction.contains("finalizar");
+
+        if (isBlipSystemAction) {
+            return null;
+        }
+
+        try {
+            String searchPhone = !dbPhone.isEmpty() ? dbPhone : fromPhone;
+            List<AppointmentSession> activeSessions = appointmentSessionRepository.findActiveByPhoneNumber(searchPhone);
+            if (activeSessions != null && !activeSessions.isEmpty()) {
+                AppointmentSession mainSession = activeSessions.get(0);
+
+                boolean isReviewSent = mainSession.getReviewRequestedAt() != null;
+
+                boolean isExplicitHumanRequest = textLower.contains("falar")
+                        || textLower.contains("humano")
+                        || textLower.contains("atendente")
+                        || textLower.contains("atendimento")
+                        || textLower.contains("duvida")
+                        || textLower.contains("dúvida")
+                        || textLower.contains("ajuda")
+                        || textLower.contains("problema")
+                        || textLower.contains("recepcao")
+                        || textLower.contains("recepção")
+                        || textLower.contains("remarcar")
+                        || textLower.contains("cancelar");
+
+                if (isReviewSent && !isExplicitHumanRequest) {
+                    log.info("[GOOGLE-REVIEW-ROUTING] Resposta de avaliação/cortesia recebida de {} (reviewRequestedAt={}). Ignorando roteamento para o Desk.",
+                            searchPhone, mainSession.getReviewRequestedAt());
+                    return new WebhookResult("", "", "", "", "review_response_ignored", "");
+                }
+
+                if (isExplicitHumanRequest) {
+                    log.info("[WEBHOOK] Solicitação explícita de atendimento humano em texto livre de {}. Limpando contexto de confirmação e roteando.", searchPhone);
+                    return deskRoutingService.applySilentDeskRouting(fromPhone, payload);
+                }
+
+                String flowAction = blipContextService.getUserContext(fromPhone, "flow_action");
+                boolean isReminderContext = "reminder_notice".equalsIgnoreCase(flowAction)
+                        || (mainSession.getStatusDetails() != null && mainSession.getStatusDetails().contains("PRE_NOTICE_SENT"));
+
+                boolean isCourtesyOrConfirmationText = textLower.matches("(?i)^(obrigado|obrigada|valeu|ok|otimo|ótimo|bom|boa|excelente|nota \\d+|\\d+|tudo certo|agradeço|agradeco|obg|blz|tmj|sim|joia|jóa|confirmado|certo|estou a caminho|ja estou na clinica|já estou na clínica)$");
+
+                if (isReminderContext || isCourtesyOrConfirmationText) {
+                    try {
+                        blipContextService.clearQueueRedirect(fromPhone);
+                        if (dbPhone != null && !dbPhone.isBlank() && !dbPhone.equalsIgnoreCase(fromPhone)) {
+                            blipContextService.clearQueueRedirect(dbPhone);
+                        }
+                        String confirmSuccessBlockId = blipProperties.getBlocks().getConfirmSuccess();
+                        if (confirmSuccessBlockId != null && !confirmSuccessBlockId.isBlank()) {
+                            blipContextService.changeMasterState(fromPhone, confirmSuccessBlockId);
+                            if (dbPhone != null && !dbPhone.isBlank() && !dbPhone.equalsIgnoreCase(fromPhone)) {
+                                blipContextService.changeMasterState(dbPhone, confirmSuccessBlockId);
+                            }
+                        }
+                    } catch (Exception ex) {
+                        log.warn("[LEMBRETE-FINALIZACAO] Erro ao aplicar auto-encerramento em texto livre: {}", ex.getMessage());
+                    }
+                    log.info("[LEMBRETE-FINALIZACAO] Resposta/texto livre do paciente={} ('{}') direcionado para auto-encerramento (sem fila de Desk).", searchPhone, textLower);
+                    return new WebhookResult("", "", "", "", "reminder_notice_auto_closed", "");
+                }
+
+                log.debug("[FREE-TEXT-ROUTING] Paciente {} em autoatendimento/triagem. Roteamento silencioso forçado desativado para permitir navegação livre no bot.", searchPhone);
+                return null;
+            }
+        } catch (Exception ex) {
+            log.warn("[FREE-TEXT-ROUTING] Erro ao verificar agendamentos ativos para texto livre de {}: {}", fromPhone, ex.getMessage());
+        }
+
+        return null;
     }
 
     private WebhookResult handleUuidAction(String action, String dbPhone) {
@@ -1093,287 +462,6 @@ public class HandleBlipWebhookUseCase {
             log.info("[WEBHOOK] Nenhuma sessão encontrada ou autorizada para a ação de UUID: {}", action);
             return null;
         }
-    }
-
-    public enum WebhookIntent {
-        CONFIRM, CANCEL, ALTER, UNKNOWN
-    }
-
-    public static WebhookIntent detectIntent(String text) {
-        if (text == null || text.isBlank()) return WebhookIntent.UNKNOWN;
-        
-        String rawTrimmed = text.trim();
-        // Se for resposta encapsulada de template com múltiplas linhas, extrai a última linha não vazia
-        String[] lines = rawTrimmed.split("\\r?\\n");
-        if (lines.length > 1) {
-            for (int i = lines.length - 1; i >= 0; i--) {
-                String l = lines[i].trim();
-                if (!l.isBlank()) {
-                    rawTrimmed = l;
-                    break;
-                }
-            }
-        }
-
-        String cleaned = rawTrimmed.toLowerCase().replaceAll("[^a-z0-9áàâãéèêíïóôõöúçñ\\s]", " ").replaceAll("\\s+", " ").trim();
-
-        // 1. Regra de Tamanho: Se a linha tiver mais de 35 caracteres ou mais de 4 palavras, trate como UNKNOWN
-        if (cleaned.length() > 35) return WebhookIntent.UNKNOWN;
-        String[] words = cleaned.split(" ");
-        if (words.length > 4) return WebhookIntent.UNKNOWN;
-
-        // 2. Guarda de Negação/Condicional: Se o texto contiver palavras de negação ou condição, retorne UNKNOWN
-        for (String w : words) {
-            if (w.equals("não") || w.equals("nao") || w.equals("nunca") || w.equals("nem") ||
-                w.equals("se") || w.equals("caso") || w.equals("depois")) {
-                return WebhookIntent.UNKNOWN;
-            }
-        }
-
-        // 3. Casamento Estrito por Palavras-Chave de Intenção Inequívoca
-        return switch (cleaned) {
-            case "sim", "confirmar", "confirmo", "confirmado", "confirma",
-                 "presença", "presenca", "confirmar presença", "confirmar presenca", "sim confirmo" -> WebhookIntent.CONFIRM;
-
-            case "cancelar", "cancel" -> WebhookIntent.CANCEL;
-
-            case "alterar", "remarcar", "trocar",
-                 "solicitar alteração", "solicitar alteracao", "preciso alterar", "quero remarcar", "quero alterar" -> WebhookIntent.ALTER;
-
-            default -> WebhookIntent.UNKNOWN;
-        };
-    }
-
-    private java.util.List<AppointmentSession> findPendingSessionsByPhoneWithVariations(String rawPhone, String bsuid) {
-        if (rawPhone == null || rawPhone.isBlank()) {
-            return java.util.List.of();
-        }
-
-        String dbPhone = blipIdentityReconciler.resolveAndReconcileIdentity(rawPhone, bsuid);
-        String searchPhone = (dbPhone != null && !dbPhone.isBlank()) ? dbPhone : rawPhone;
-        String digitsOnly = searchPhone.trim().replaceAll("\\D", "");
-
-        if (digitsOnly.isBlank()) {
-            digitsOnly = rawPhone.trim().replaceAll("\\D", "");
-        }
-        if (digitsOnly.isBlank()) {
-            return java.util.List.of();
-        }
-
-        java.util.Set<String> phoneVariations = new java.util.LinkedHashSet<>();
-        phoneVariations.add(digitsOnly);
-
-        String without55 = digitsOnly.startsWith("55") ? digitsOnly.substring(2) : digitsOnly;
-        String with55 = digitsOnly.startsWith("55") ? digitsOnly : "55" + digitsOnly;
-
-        phoneVariations.add(without55);
-        phoneVariations.add(with55);
-
-        // Normalização de 9º dígito para telefones do Brasil (DDD + 8 ou 9 dígitos)
-        if (without55.length() == 11 && without55.charAt(2) == '9') {
-            String eightDigit = without55.substring(0, 2) + without55.substring(3);
-            phoneVariations.add(eightDigit);
-            phoneVariations.add("55" + eightDigit);
-        } else if (without55.length() == 10) {
-            String nineDigit = without55.substring(0, 2) + "9" + without55.substring(2);
-            phoneVariations.add(nineDigit);
-            phoneVariations.add("55" + nineDigit);
-        }
-
-        java.util.Map<UUID, AppointmentSession> sessionMap = new java.util.LinkedHashMap<>();
-        for (String phoneVar : phoneVariations) {
-            List<AppointmentSession> sessions = appointmentSessionRepository.findActiveByPhoneNumber(phoneVar);
-            if (sessions != null) {
-                for (AppointmentSession s : sessions) {
-                    if (s.getStatus() != null 
-                            && s.getStatus() != AppointmentSessionStatus.CONFIRMED 
-                            && s.getStatus() != AppointmentSessionStatus.CANCELED 
-                            && s.getStatus() != AppointmentSessionStatus.CANCELED_NO_RESPONSE) {
-                        sessionMap.put(s.getId(), s);
-                    }
-                }
-            }
-        }
-
-        return new java.util.ArrayList<>(sessionMap.values());
-    }
-
-    private boolean hasRecentlyConfirmedSession(String rawPhone, String bsuid) {
-        if (rawPhone == null || rawPhone.isBlank()) return false;
-        
-        String dbPhone = blipIdentityReconciler.resolveAndReconcileIdentity(rawPhone, bsuid);
-        String searchPhone = (dbPhone != null && !dbPhone.isBlank()) ? dbPhone : rawPhone;
-        String purified = purifyPhoneNumberForSearch(searchPhone);
-        if (purified.isBlank()) {
-            purified = purifyPhoneNumberForSearch(rawPhone);
-        }
-        if (purified.isBlank()) return false;
-
-        List<AppointmentSession> sessions = appointmentSessionRepository.findActiveByPhoneNumber(purified);
-        if ((sessions == null || sessions.isEmpty()) && !purified.startsWith("55")) {
-            sessions = appointmentSessionRepository.findActiveByPhoneNumber("55" + purified);
-        }
-        
-        if (sessions != null) {
-            for (AppointmentSession s : sessions) {
-                if (s.getStatus() == AppointmentSessionStatus.CONFIRMED) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
-    private String resolveTextIntentions(String normalizedAction, String action, BlipWebhookPayload payload) {
-        WebhookIntent intent = detectIntent(normalizedAction);
-        if (intent == WebhookIntent.UNKNOWN) {
-            return action;
-        }
-
-        String fromPhone = payload != null ? payload.from() : null;
-        String bsuid = payload != null ? payload.bsuid() : null;
-
-        // 1. Busca agendamentos pendentes por telefone (com normalização de DDI 55 e 9º dígito)
-        List<AppointmentSession> pendingSessions = findPendingSessionsByPhoneWithVariations(fromPhone, bsuid);
-
-        if (pendingSessions.size() == 1) {
-            AppointmentSession singleSession = pendingSessions.get(0);
-            String feegowId = singleSession.getFeegowAppointmentId();
-            log.info("[WEBHOOK-PHONE-RESOLVE] 1 agendamento pendente (Feegow ID: {}) encontrado por telefone para {}. Mapeando para {}_{}",
-                    feegowId, fromPhone, intent.name().toLowerCase(), feegowId);
-            
-            return switch (intent) {
-                case CONFIRM -> "confirm_" + feegowId;
-                case ALTER -> "alter_" + feegowId;
-                case CANCEL -> "cancel_" + feegowId;
-                default -> action;
-            };
-        } else if (pendingSessions.size() > 1) {
-            log.info("[WEBHOOK-PHONE-RESOLVE] {} agendamentos pendentes encontrados por telefone para {}. Direcionando para confirmação em lote.",
-                    pendingSessions.size(), fromPhone);
-            for (AppointmentSession session : pendingSessions) {
-                if (session.getCurrentGroupId() != null) {
-                    String gId = session.getCurrentGroupId().toString();
-                    return (intent == WebhookIntent.CONFIRM ? "confirm_group_" : "alter_group_") + gId;
-                }
-            }
-            return (intent == WebhookIntent.CONFIRM ? "confirm_group_fallback" : "alter_group_fallback");
-        } else {
-            // 0 agendamentos pendentes encontrados
-            if (hasRecentlyConfirmedSession(fromPhone, bsuid)) {
-                log.info("[WEBHOOK-PHONE-RESOLVE] 0 agendamentos pendentes, porém consulta já confirmada recentemente para {}. Enviando resposta de cortesia.", fromPhone);
-                try {
-                    blipNotificationService.sendPlainTextMessage(fromPhone, "Olá! Identificamos que seu agendamento já se encontra confirmado. Estamos te aguardando!");
-                    String confirmSuccessBlockId = blipProperties.getBlocks().getConfirmSuccess();
-                    if (confirmSuccessBlockId != null && !confirmSuccessBlockId.isBlank()) {
-                        blipContextService.changeMasterState(fromPhone, confirmSuccessBlockId);
-                    }
-                } catch (Exception ex) {
-                    log.warn("[WEBHOOK-PHONE-RESOLVE] Erro ao enviar mensagem de consulta já confirmada para {}: {}", fromPhone, ex.getMessage());
-                }
-                return "already_confirmed_handled";
-            }
-            
-            // Fallback de contexto de grupo se existir
-            String groupContextId = resolveGroupContextId(payload);
-            if (groupContextId != null) {
-                if (intent == WebhookIntent.CONFIRM) {
-                    return "confirm_group_" + groupContextId;
-                } else if (intent == WebhookIntent.ALTER) {
-                    return "alter_group_" + groupContextId;
-                }
-            }
-
-            return processIntent(intent.name().toLowerCase(), action, payload, intent.name().toLowerCase());
-        }
-    }
-
-    private String resolveGroupContextId(BlipWebhookPayload payload) {
-        if (payload == null || payload.from() == null || payload.from().isBlank()) {
-            return null;
-        }
-
-        try {
-            String dbPhone = blipIdentityReconciler.resolveAndReconcileIdentity(payload.from(), payload.bsuid());
-            if (dbPhone != null && !dbPhone.isBlank()) {
-                List<AppointmentSession> activeSessions = transactionTemplate.execute(status ->
-                    appointmentSessionRepository.findActiveByPhoneNumber(dbPhone)
-                );
-                if (activeSessions != null) {
-                    for (AppointmentSession session : activeSessions) {
-                        if (session.getCurrentGroupId() != null) {
-                            return session.getCurrentGroupId().toString();
-                        }
-                    }
-                }
-            }
-
-            String groupId = blipContextService.getUserContext(payload.from(), "groupId");
-            if (groupId == null) {
-                return null;
-            }
-
-            String normalizedGroupId = groupId.trim();
-            if (normalizedGroupId.isBlank() || "null".equalsIgnoreCase(normalizedGroupId)) {
-                return null;
-            }
-
-            return normalizedGroupId;
-        } catch (Exception ex) {
-            log.debug("[WEBHOOK] Falha ao resolver groupId do contexto para {}: {}", payload.from(), ex.getMessage());
-            return null;
-        }
-    }
-
-    private String processIntent(String prefix, String action, BlipWebhookPayload payload, String label) {
-        String resolvedId = resolveActiveAppointmentId(payload);
-        if (resolvedId != null && !resolvedId.isBlank()) {
-            log.info("[WEBHOOK] Texto livre de {} '{}' interceptado. Mapeando para {}_{}", label, action, prefix, resolvedId);
-            return prefix + "_" + resolvedId;
-        }
-        return action;
-    }
-
-    private String purifyPhoneNumberForSearch(String rawPhone) {
-        if (rawPhone == null || rawPhone.isBlank()) {
-            return "";
-        }
-        String clean = rawPhone.trim();
-        if (clean.contains("@")) {
-            clean = clean.substring(0, clean.indexOf('@')).trim();
-        }
-        if (clean.contains(".")) {
-            clean = clean.substring(0, clean.indexOf('.')).trim();
-        }
-        clean = clean.replaceAll("\\D", "");
-        if (clean.startsWith("55") && clean.length() > 10) {
-            clean = clean.substring(2);
-        }
-        return clean;
-    }
-
-    private String resolveActiveAppointmentId(BlipWebhookPayload payload) {
-        String resolvedId = payload.appointmentId();
-        if (resolvedId == null || resolvedId.isBlank()) {
-            String fromPhone = payload.from();
-            if (fromPhone != null && !fromPhone.isBlank()) {
-                String dbPhone = blipIdentityReconciler.resolveAndReconcileIdentity(fromPhone, payload.bsuid());
-                
-                String cleanPhone = purifyPhoneNumberForSearch(dbPhone);
-                if (cleanPhone.isEmpty()) {
-                    cleanPhone = purifyPhoneNumberForSearch(fromPhone);
-                }
-                
-                final String finalPhone = cleanPhone;
-                List<AppointmentSession> activeSessions = transactionTemplate.execute(status -> 
-                    appointmentSessionRepository.findActiveByPhoneNumber(finalPhone)
-                );
-                if (activeSessions != null && !activeSessions.isEmpty()) {
-                    resolvedId = activeSessions.get(0).getFeegowAppointmentId();
-                }
-            }
-        }
-        return resolvedId;
     }
 
     private SessionDbData fetchSessionDbData(String appointmentId, String dbPhone) {
@@ -1453,12 +541,12 @@ public class HandleBlipWebhookUseCase {
     }
 
     public record BlipWebhookPayload(
-        String messageId, 
-        String appointmentId, 
-        String action, 
-        String from, 
-        String token, 
-        Object content, 
+        String messageId,
+        String appointmentId,
+        String action,
+        String from,
+        String token,
+        Object content,
         Map<String, Object> metadata,
         String bsuid,
         String type
@@ -1481,111 +569,4 @@ public class HandleBlipWebhookUseCase {
         String errorMessage,
         String traceId
     ) {}
-
-    /**
-     * Processa a notificação de falha de entrega de mensagem recebida do Blip.
-     * Registra o erro no MDC para rastreabilidade de logs, atualiza as métricas
-     * de observabilidade e persiste a falha no banco de dados.
-     *
-     * @param failureCommand Comando contendo os detalhes da falha.
-     */
-    public void executeNotificationFailure(BlipDeliveryFailureCommand failureCommand) {
-        if (failureCommand == null) {
-            log.warn("Tentativa de processar falha de entrega com comando nulo.");
-            return;
-        }
-
-        // Injeta os metadados da falha no MDC
-        MDC.put("blipMessageId", failureCommand.messageId());
-        MDC.put("blipErrorCode", failureCommand.errorCode() != null ? failureCommand.errorCode().toString() : "UNKNOWN");
-        MDC.put("appointmentId", failureCommand.appointmentId() != null ? failureCommand.appointmentId() : "N/A");
-
-        try {
-            // Dispara log detalhado nível ERROR para monitoramento de SRE
-            log.error("[BLIP-DELIVERY-FAILURE] ❌ Falha crítica de entrega de mensagem Blip! " +
-                      "MessageID: '{}' | AppointmentID: '{}' | Código: '{}' | Motivo: '{}' | TraceID: '{}'",
-                      failureCommand.messageId(),
-                      failureCommand.appointmentId(),
-                      failureCommand.errorCode(),
-                      failureCommand.errorMessage(),
-                      failureCommand.traceId());
-
-            // Atualiza métricas de observabilidade via Micrometer
-            blipNotificationMetrics.incrementFailureCount(failureCommand.errorCode(), failureCommand.errorMessage());
-
-            // Persiste a falha no banco de dados através da porta de saída
-            BlipDeliveryFailure domainModel = BlipDeliveryFailure.builder()
-                    .messageId(failureCommand.messageId())
-                    .appointmentId(failureCommand.appointmentId())
-                    .errorCode(failureCommand.errorCode())
-                    .errorMessage(failureCommand.errorMessage())
-                    .traceId(failureCommand.traceId())
-                    .build();
-
-            blipDeliveryFailureRepository.save(domainModel);
-
-            // Busca a sessão do agendamento correspondente e atualiza para ERROR_DELIVERY
-            if (failureCommand.appointmentId() != null && !failureCommand.appointmentId().isBlank()) {
-                log.error("[MOTOR-MENSAGERIA] Falha crítica de entrega notificada pela Blip. Atualizando agendamento ID: {} para ERROR_DELIVERY. Motivo: {}",
-                        failureCommand.appointmentId(), failureCommand.errorMessage());
-                Optional<AppointmentSession> sessionOpt = appointmentSessionRepository.findByFeegowAppointmentId(failureCommand.appointmentId());
-                if (sessionOpt.isPresent()) {
-                    AppointmentSession session = sessionOpt.get();
-                    session.setStatus(AppointmentSessionStatus.ERROR_DELIVERY);
-                    session.setStatusDetails(String.format("Erro de entrega Blip: %s - %s",
-                            failureCommand.errorCode(), failureCommand.errorMessage()));
-                    appointmentSessionRepository.save(session);
-                } else {
-                    log.warn("[MOTOR-MENSAGERIA] Sessão não encontrada para atualizar status de falha de entrega. Agendamento ID: {}", failureCommand.appointmentId());
-                }
-            }
-
-            // Registra o evento no histórico de auditoria
-            auditPort.record(
-                    "APPOINTMENT_MOTOR",
-                    "BLIP_DELIVERY_FAILURE",
-                    String.format("Falha de entrega Blip para agendamento %s. Código: %s - %s",
-                            failureCommand.appointmentId(), failureCommand.errorCode(), failureCommand.errorMessage()),
-                    failureCommand.traceId()
-            );
-
-        } finally {
-            // Limpa as chaves inseridas no MDC para evitar poluição de thread em requisições concorrentes
-            MDC.remove("blipMessageId");
-            MDC.remove("blipErrorCode");
-            MDC.remove("appointmentId");
-        }
-    }
-
-    private boolean secureCompare(String a, String b) {
-        if (a == null || b == null) {
-            return false;
-        }
-        return java.security.MessageDigest.isEqual(
-            a.getBytes(java.nio.charset.StandardCharsets.UTF_8),
-            b.getBytes(java.nio.charset.StandardCharsets.UTF_8)
-        );
-    }
-
-    private boolean isDoctorAllowed(String doctorId) {
-        String docId = doctorId != null ? doctorId.trim() : "";
-        if (docId.isBlank()) {
-            return false;
-        }
-        if (appointmentMotorProperties.getTestDoctorIds().contains(docId)) {
-            return true;
-        }
-        if (appointmentMotorProperties.getActiveDoctorIds().contains(docId)) {
-            return true;
-        }
-        try {
-            Long id = Long.parseLong(docId);
-            var configOpt = doctorConfigurationRepository.findById(id);
-            if (configOpt.isPresent() && configOpt.get().isConfigActive()) {
-                return true;
-            }
-        } catch (Exception ignored) {}
-
-        return false;
-    }
 }
