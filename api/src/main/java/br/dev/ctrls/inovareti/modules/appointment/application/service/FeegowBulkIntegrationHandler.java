@@ -95,12 +95,9 @@ public class FeegowBulkIntegrationHandler {
 
         List<AppointmentSession> sessionList = new ArrayList<>();
         for (AppointmentSession s : uniqueSessions.values()) {
-            if (s.getStatus() == br.dev.ctrls.inovareti.modules.appointment.domain.model.AppointmentSessionStatus.CONFIRMED ||
-                s.getStatus() == br.dev.ctrls.inovareti.modules.appointment.domain.model.AppointmentSessionStatus.CANCELED ||
-                s.getStatus() == br.dev.ctrls.inovareti.modules.appointment.domain.model.AppointmentSessionStatus.CANCELED_NO_RESPONSE ||
-                s.getStatus() == br.dev.ctrls.inovareti.modules.appointment.domain.model.AppointmentSessionStatus.ALTERATION_REQUESTED) {
-                log.warn("[BULK-STATUS-GUARD] Descartando sessão {} (feegowId={}) da confirmação em lote pois o status local é {} (não regredir).",
-                    s.getId(), s.getFeegowAppointmentId(), s.getStatus());
+            if (s.getStatus() == br.dev.ctrls.inovareti.modules.appointment.domain.model.AppointmentSessionStatus.CONFIRMED) {
+                log.info("[BULK-STATUS-GUARD] Sessão {} (feegowId={}) já está confirmada no status local.",
+                    s.getId(), s.getFeegowAppointmentId());
                 continue;
             }
             sessionList.add(s);

@@ -212,17 +212,51 @@ public class IngestAppointmentsUseCase {
                     if (feegowId == null || feegowId.isBlank()) continue;
 
                     AppointmentSessionStatus status = localSession.getStatus();
+                    // NUNCA invalidar sessões já confirmadas (seja pelo bot ou pela clínica)
+                    if (status == AppointmentSessionStatus.CONFIRMED) {
+                        continue;
+                    }
+
                     if (status != AppointmentSessionStatus.CANCELED && status != AppointmentSessionStatus.CANCELED_NO_RESPONSE) {
                         if (!validFeegowAppointmentIds.contains(feegowId.trim())) {
-                            log.info("[INGESTÃO-INVALIDAÇÃO] Agendamento local ID={} (Feegow ID={}) não consta mais na lista ativa da Feegow para a data {}. Atualizando status local para CANCELED (Remarcado ou Cancelado na Feegow).",
-                                    localSession.getId(), feegowId, targetDate);
+                            // Antes de cancelar, consulta o status real individual no Feegow
+                            boolean reconciled = false;
+                            try {
+                                FeegowAppointment feegowAppt = appointmentExternalPort.findById(feegowId.trim());
+                                if (feegowAppt != null) {
+                                    String statusId = feegowAppt.statusId() != null ? feegowAppt.statusId().trim() : "";
+                                    if (isFeegowConfirmedStatus(statusId)) {
+                                        log.info("[INGESTÃO-RECONCILIAÇÃO] Agendamento local ID={} (Feegow ID={}) já está confirmado/atendido no Feegow (statusId={}). Atualizando para CONFIRMED.",
+                                                localSession.getId(), feegowId, statusId);
+                                        transactionTemplate.execute(txStatus -> {
+                                            localSession.setStatus(AppointmentSessionStatus.CONFIRMED);
+                                            localSession.setClosedAt(LocalDateTime.now());
+                                            localSession.setStatusDetails("CONFIRMED_ON_FEEGOW");
+                                            return appointmentSessionRepository.save(localSession);
+                                        });
+                                        reconciled = true;
+                                    } else if ("1".equals(statusId) || "15".equals(statusId)) {
+                                        // Permanece agendado no Feegow (apenas não entrou no lote de busca por procedimento ou pauta)
+                                        log.info("[INGESTÃO-RECONCILIAÇÃO] Agendamento local ID={} (Feegow ID={}) permanece ativo no Feegow (statusId={}). Mantendo status local {}.",
+                                                localSession.getId(), feegowId, statusId, status);
+                                        reconciled = true;
+                                    }
+                                }
+                            } catch (Exception ex) {
+                                log.warn("[INGESTÃO-RECONCILIAÇÃO] Falha ao consultar status individual no Feegow para ID {}: {}", feegowId, ex.getMessage());
+                            }
 
-                            transactionTemplate.execute(txStatus -> {
-                                localSession.setStatus(AppointmentSessionStatus.CANCELED);
-                                localSession.setClosedAt(LocalDateTime.now());
-                                localSession.setStatusDetails("CANCELLED_OR_RESCHEDULED_ON_FEEGOW");
-                                return appointmentSessionRepository.save(localSession);
-                            });
+                            if (!reconciled) {
+                                log.info("[INGESTÃO-INVALIDAÇÃO] Agendamento local ID={} (Feegow ID={}) não consta mais na lista ativa da Feegow para a data {}. Atualizando status local para CANCELED (Remarcado ou Cancelado na Feegow).",
+                                        localSession.getId(), feegowId, targetDate);
+
+                                transactionTemplate.execute(txStatus -> {
+                                    localSession.setStatus(AppointmentSessionStatus.CANCELED);
+                                    localSession.setClosedAt(LocalDateTime.now());
+                                    localSession.setStatusDetails("CANCELLED_OR_RESCHEDULED_ON_FEEGOW");
+                                    return appointmentSessionRepository.save(localSession);
+                                });
+                            }
                         }
                     }
                 }
@@ -1280,6 +1314,13 @@ public class IngestAppointmentsUseCase {
         }
 
         return false;
+    }
+
+    public static boolean isFeegowConfirmedStatus(String statusId) {
+        if (statusId == null || statusId.isBlank()) return false;
+        String s = statusId.trim();
+        // 7=Marcado-confirmado, 2=Em atendimento, 3=Atendido, 4=Aguardando atendimento, 5=Chamando atendimento, 101/103/105=Triagem
+        return "7".equals(s) || "2".equals(s) || "3".equals(s) || "4".equals(s) || "5".equals(s) || "101".equals(s) || "103".equals(s) || "105".equals(s);
     }
 
     public record IngestionSummary(int totalReceived, int filteredReceived, int sessionsCreated, int messagesSent, String mode) {
