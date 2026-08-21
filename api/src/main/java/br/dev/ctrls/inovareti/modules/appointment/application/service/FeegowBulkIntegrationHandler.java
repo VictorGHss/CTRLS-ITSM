@@ -8,6 +8,7 @@ import java.util.UUID;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
 import br.dev.ctrls.inovareti.modules.appointment.domain.model.AppointmentSession;
+import br.dev.ctrls.inovareti.modules.appointment.domain.model.FeegowAppointmentStatus;
 import br.dev.ctrls.inovareti.modules.appointment.domain.model.NotificationGroup;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentDoctorMappingRepositoryPort;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentExternalPort;
@@ -116,7 +117,7 @@ public class FeegowBulkIntegrationHandler {
         }
 
         // Resolver o statusConfirmado antes do loop
-        int statusConfirmado = 7;
+        int statusConfirmado = FeegowAppointmentStatus.MARCADO_CONFIRMADO.getId();
         String configuredStatusId = appointmentMotorProperties.getFeegowConfirmedStatusId();
         if (configuredStatusId != null && !configuredStatusId.isBlank()) {
             String trimmed = configuredStatusId.trim();

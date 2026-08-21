@@ -121,6 +121,11 @@ public class BlipContactClientAdapter implements BlipContactClientPort {
 
         String normalizedIdentity = normalizeIdentity(phoneNumber);
 
+        if (properties != null && (properties.isTestMode() || properties.isTestMode(doctorId) || properties.isTestMode(phoneNumber) || properties.isTestMode(queueName))) {
+            log.info("[BlipContact-Adapter] Test mode ativo para {}. Simulando sucesso de sincronização de contato.", phoneNumber);
+            return true;
+        }
+
         final String cleanName = resolveCleanName(phoneNumber, normalizedIdentity, name);
 
         final String cleanCpf = (cpf != null && !cpf.isBlank() && !cpf.equalsIgnoreCase("null"))
@@ -350,6 +355,11 @@ public class BlipContactClientAdapter implements BlipContactClientPort {
             "type", "application/vnd.lime.contact+json",
             "resource", contactResource
         );
+
+        if (properties != null && (properties.isTestMode() || properties.isTestMode(cleanQueue))) {
+            log.info("[BlipContact-Adapter] Test mode ativo. Simulando sucesso de sincronização para {}", identity);
+            return true;
+        }
 
         try {
             String path = properties.getBlipSetContextPath();
