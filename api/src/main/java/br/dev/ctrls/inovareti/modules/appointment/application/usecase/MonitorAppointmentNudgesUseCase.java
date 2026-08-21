@@ -18,6 +18,7 @@ import br.dev.ctrls.inovareti.modules.appointment.application.service.BlipNotifi
 import br.dev.ctrls.inovareti.modules.appointment.domain.model.AppointmentCategory;
 import br.dev.ctrls.inovareti.modules.appointment.domain.model.AppointmentSession;
 import br.dev.ctrls.inovareti.modules.appointment.domain.model.AppointmentSessionStatus;
+import br.dev.ctrls.inovareti.modules.appointment.domain.model.FeegowAppointmentStatus;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentConfigRepositoryPort;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentSessionRepositoryPort;
 import br.dev.ctrls.inovareti.modules.appointment.infrastructure.config.AppointmentMotorProperties;
@@ -138,13 +139,14 @@ public class MonitorAppointmentNudgesUseCase {
                         FeegowAppointment feegowAppt = appointmentExternalPort.findById(lockedSession.getFeegowAppointmentId());
                         if (feegowAppt != null) {
                             String statusId = feegowAppt.statusId();
-                            // Se no Feegow o agendamento não estiver mais com status_id == 1 (Marcado) ou 15 (Remarcado)
-                            if (statusId != null && !"1".equals(statusId.trim()) && !"15".equals(statusId.trim())) {
-                                AppointmentSessionStatus newStatus = IngestAppointmentsUseCase.isFeegowConfirmedStatus(statusId)
+                            FeegowAppointmentStatus feegowStatus = FeegowAppointmentStatus.fromId(statusId);
+                            // Se no Feegow o agendamento não estiver mais elegível para disparo inicial (Marcado ou Remarcado)
+                            if (!feegowStatus.isEligibleForInitialDispatch()) {
+                                AppointmentSessionStatus newStatus = feegowStatus.isConfirmedOrPresent()
                                         ? AppointmentSessionStatus.CONFIRMED
                                         : AppointmentSessionStatus.CANCELED;
-                                log.info("[NUDGE-GUARD] Agendamento Feegow ID {} possui status '{}' no ERP (não pendente). Atualizando sessão local para {} e cancelando envio de lembrete.",
-                                        lockedSession.getFeegowAppointmentId(), statusId, newStatus);
+                                log.info("[NUDGE-GUARD] Agendamento Feegow ID {} possui status '{}' ({}) no ERP (não pendente). Atualizando sessão local para {} e cancelando envio de lembrete.",
+                                        lockedSession.getFeegowAppointmentId(), statusId, feegowStatus.getDescription(), newStatus);
                                 lockedSession.setStatus(newStatus);
                                 lockedSession.setClosedAt(LocalDateTime.now(SAO_PAULO_ZONE));
                                 appointmentSessionRepository.save(lockedSession);
@@ -226,12 +228,13 @@ public class MonitorAppointmentNudgesUseCase {
                         FeegowAppointment feegowAppt = appointmentExternalPort.findById(s.getFeegowAppointmentId());
                         if (feegowAppt != null) {
                             String statusId = feegowAppt.statusId();
-                            if (statusId != null && !"1".equals(statusId.trim()) && !"15".equals(statusId.trim())) {
-                                AppointmentSessionStatus newStatus = IngestAppointmentsUseCase.isFeegowConfirmedStatus(statusId)
+                            FeegowAppointmentStatus feegowStatus = FeegowAppointmentStatus.fromId(statusId);
+                            if (!feegowStatus.isEligibleForInitialDispatch()) {
+                                AppointmentSessionStatus newStatus = feegowStatus.isConfirmedOrPresent()
                                         ? AppointmentSessionStatus.CONFIRMED
                                         : AppointmentSessionStatus.CANCELED;
-                                log.info("[GRUPO-NUDGE-GUARD] Agendamento Feegow ID {} do grupo {} possui status '{}'. Atualizando sessão para {} e abortando envio.",
-                                        s.getFeegowAppointmentId(), groupId, statusId, newStatus);
+                                log.info("[GRUPO-NUDGE-GUARD] Agendamento Feegow ID {} do grupo {} possui status '{}' ({}) no ERP. Atualizando sessão para {} e abortando envio.",
+                                        s.getFeegowAppointmentId(), groupId, statusId, feegowStatus.getDescription(), newStatus);
                                 AppointmentSession locked = appointmentSessionRepository.findByIdLocked(s.getId()).orElse(s);
                                 locked.setStatus(newStatus);
                                 locked.setClosedAt(LocalDateTime.now(SAO_PAULO_ZONE));

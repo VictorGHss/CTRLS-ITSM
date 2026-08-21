@@ -28,9 +28,12 @@ import br.dev.ctrls.inovareti.modules.appointment.application.service.BlipNotifi
 import br.dev.ctrls.inovareti.modules.appointment.application.service.NoopAppointmentSendIdempotencyService;
 import br.dev.ctrls.inovareti.modules.appointment.application.service.FeegowAppointmentSearcher;
 import br.dev.ctrls.inovareti.modules.appointment.application.service.FeegowPatientDetailsFetcher;
+import br.dev.ctrls.inovareti.infrastructure.shared.utils.TextNormalizer;
 import br.dev.ctrls.inovareti.modules.appointment.domain.model.AppointmentCategory;
 import br.dev.ctrls.inovareti.modules.appointment.domain.model.AppointmentSession;
 import br.dev.ctrls.inovareti.modules.appointment.domain.model.AppointmentSessionStatus;
+import br.dev.ctrls.inovareti.modules.appointment.domain.model.FeegowAppointmentStatus;
+import br.dev.ctrls.inovareti.modules.appointment.infrastructure.utils.AppointmentIdNormalizer;
 import br.dev.ctrls.inovareti.modules.appointment.domain.model.NotificationGroup;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentConfigRepositoryPort;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentDoctorMappingRepositoryPort;
@@ -197,7 +200,7 @@ public class IngestAppointmentsUseCase {
         // --- INVALIDAÇÃO DE AGENDAMENTOS REMARCADOS/CANCELADOS NA FEEGOW ---
         // Coleta todos os IDs de agendamentos ativos retornados pelo Feegow para as datas-alvo
         java.util.Set<String> validFeegowAppointmentIds = appointments.stream()
-                .map(a -> normalizeFeegowAppointmentId(a.id()))
+                .map(a -> AppointmentIdNormalizer.normalize(a.id()))
                 .filter(id -> !id.isBlank())
                 .collect(Collectors.toSet());
 
@@ -225,9 +228,10 @@ public class IngestAppointmentsUseCase {
                                 FeegowAppointment feegowAppt = appointmentExternalPort.findById(feegowId.trim());
                                 if (feegowAppt != null) {
                                     String statusId = feegowAppt.statusId() != null ? feegowAppt.statusId().trim() : "";
-                                    if (isFeegowConfirmedStatus(statusId)) {
-                                        log.info("[INGESTÃO-RECONCILIAÇÃO] Agendamento local ID={} (Feegow ID={}) já está confirmado/atendido no Feegow (statusId={}). Atualizando para CONFIRMED.",
-                                                localSession.getId(), feegowId, statusId);
+                                    FeegowAppointmentStatus feegowStatus = FeegowAppointmentStatus.fromId(statusId);
+                                    if (feegowStatus.isConfirmedOrPresent()) {
+                                        log.info("[INGESTÃO-RECONCILIAÇÃO] Agendamento local ID={} (Feegow ID={}) já está confirmado/atendido no Feegow (statusId={}, {}). Atualizando para CONFIRMED.",
+                                                localSession.getId(), feegowId, statusId, feegowStatus.getDescription());
                                         transactionTemplate.execute(txStatus -> {
                                             localSession.setStatus(AppointmentSessionStatus.CONFIRMED);
                                             localSession.setClosedAt(LocalDateTime.now());
@@ -235,10 +239,10 @@ public class IngestAppointmentsUseCase {
                                             return appointmentSessionRepository.save(localSession);
                                         });
                                         reconciled = true;
-                                    } else if ("1".equals(statusId) || "15".equals(statusId)) {
+                                    } else if (feegowStatus.isEligibleForInitialDispatch()) {
                                         // Permanece agendado no Feegow (apenas não entrou no lote de busca por procedimento ou pauta)
-                                        log.info("[INGESTÃO-RECONCILIAÇÃO] Agendamento local ID={} (Feegow ID={}) permanece ativo no Feegow (statusId={}). Mantendo status local {}.",
-                                                localSession.getId(), feegowId, statusId, status);
+                                        log.info("[INGESTÃO-RECONCILIAÇÃO] Agendamento local ID={} (Feegow ID={}) permanece ativo no Feegow (statusId={}, {}). Mantendo status local {}.",
+                                                localSession.getId(), feegowId, statusId, feegowStatus.getDescription(), status);
                                         reconciled = true;
                                     }
                                 }
@@ -387,24 +391,26 @@ public class IngestAppointmentsUseCase {
         List<FeegowAppointment> activeAppointments = appointments.stream()
                 .filter(appointment -> {
                     String statusId = appointment.statusId() != null ? appointment.statusId().trim() : "";
-                    // Status 1 (Marcado - não confirmado) e Status 15 (Remarcado) são elegíveis para disparo de confirmação
-                    if ("1".equals(statusId) || "15".equals(statusId)) {
+                    FeegowAppointmentStatus feegowStatus = FeegowAppointmentStatus.fromId(statusId);
+                    if (feegowStatus.isEligibleForInitialDispatch()) {
                         return true;
                     }
                     
-                    String normId = normalizeFeegowAppointmentId(appointment.id());
+                    String normId = AppointmentIdNormalizer.normalize(appointment.id());
                     sessionCache.computeIfPresent(normId, (id, session) -> {
                         if (session.getStatus() == AppointmentSessionStatus.PENDING ||
                             session.getStatus() == AppointmentSessionStatus.NUDGE_1_SENT ||
                             session.getStatus() == AppointmentSessionStatus.NUDGE_FINAL_SENT) {
                             
-                            if ("7".equals(statusId) || "2".equals(statusId) || "3".equals(statusId)) {
-                                log.info("[RECONCILIAÇÃO-FEEGOW] Agendamento ID={} confirmado/atendido no Feegow (statusId={}). Atualizando BD local para CONFIRMED.", normId, statusId);
+                            if (feegowStatus.isConfirmedOrPresent()) {
+                                log.info("[RECONCILIAÇÃO-FEEGOW] Agendamento ID={} confirmado/atendido no Feegow (statusId={}, {}). Atualizando BD local para CONFIRMED.",
+                                        normId, statusId, feegowStatus.getDescription());
                                 session.setStatus(AppointmentSessionStatus.CONFIRMED);
                                 session.setClosedAt(LocalDateTime.now());
                                 appointmentSessionRepository.save(session);
-                            } else if ("6".equals(statusId) || "11".equals(statusId) || "16".equals(statusId)) {
-                                log.info("[RECONCILIAÇÃO-FEEGOW] Agendamento ID={} cancelado/desmarcado/falta no Feegow (statusId={}). Atualizando BD local para CANCELED.", normId, statusId);
+                            } else if (feegowStatus.isCancelledOrMissed()) {
+                                log.info("[RECONCILIAÇÃO-FEEGOW] Agendamento ID={} cancelado/desmarcado/falta no Feegow (statusId={}, {}). Atualizando BD local para CANCELED.",
+                                        normId, statusId, feegowStatus.getDescription());
                                 session.setStatus(AppointmentSessionStatus.CANCELED);
                                 session.setClosedAt(LocalDateTime.now());
                                 appointmentSessionRepository.save(session);
@@ -413,25 +419,8 @@ public class IngestAppointmentsUseCase {
                         return session;
                     });
 
-                    String statusDescription = switch (statusId) {
-                        case "1" -> "Marcado - não confirmado";
-                        case "2" -> "Em atendimento";
-                        case "3" -> "Atendido";
-                        case "4" -> "Aguardando | Atendimento";
-                        case "5" -> "Chamando | atendimento";
-                        case "6" -> "Não compareceu";
-                        case "7" -> "Marcado - confirmado";
-                        case "11" -> "Desmarcado pelo paciente";
-                        case "15" -> "Remarcado";
-                        case "16" -> "Desmarcado pelo profissional";
-                        case "101" -> "Aguardando | Triagem";
-                        case "103" -> "Em atendimento | Triagem";
-                        case "105" -> "Chamando | Triagem";
-                        default -> "Outro Status (" + statusId + ")";
-                    };
-                    
                     log.info("[ELEGIBILIDADE-STATUS] Agendamento ID={} descartado sumariamente da esteira. Status ID={} ({}) não elegível. Apenas status 1 (Marcado - não confirmado) e 15 (Remarcado) são permitidos para disparo.",
-                            appointment.id(), statusId, statusDescription);
+                            appointment.id(), statusId, feegowStatus.getDescription());
                     return false;
                 })
                 .collect(Collectors.toList());
@@ -1267,10 +1256,7 @@ public class IngestAppointmentsUseCase {
 
     public static boolean isProcedureEligible(String procId, String procName, java.util.List<String> eligibleProcedureIdsList) {
         if (procName != null) {
-            String norm = java.text.Normalizer.normalize(procName, java.text.Normalizer.Form.NFD)
-                    .replaceAll("\\p{M}", "")
-                    .toLowerCase()
-                    .trim();
+            String norm = TextNormalizer.normalize(procName);
 
             // BLOQUEIO ESTRITO DE CIRURGIAS (ex: CIRURGIAS MU, CIRURGIAS MAR, CIRURGIA DR. MURILO, etc.)
             // Exceto especificamente "conversar cirurgia", "acertar cirurgia" e retornos pós-cirúrgicos
@@ -1301,10 +1287,7 @@ public class IngestAppointmentsUseCase {
 
         // Se o nome corresponder a qualquer termo da lista permitida
         if (procName != null) {
-            String norm = java.text.Normalizer.normalize(procName, java.text.Normalizer.Form.NFD)
-                    .replaceAll("\\p{M}", "")
-                    .toLowerCase()
-                    .trim();
+            String norm = TextNormalizer.normalize(procName);
 
             for (String allowed : ALLOWED_PROCEDURE_KEYWORDS) {
                 if (norm.contains(allowed)) {
@@ -1317,10 +1300,7 @@ public class IngestAppointmentsUseCase {
     }
 
     public static boolean isFeegowConfirmedStatus(String statusId) {
-        if (statusId == null || statusId.isBlank()) return false;
-        String s = statusId.trim();
-        // 7=Marcado-confirmado, 2=Em atendimento, 3=Atendido, 4=Aguardando atendimento, 5=Chamando atendimento, 101/103/105=Triagem
-        return "7".equals(s) || "2".equals(s) || "3".equals(s) || "4".equals(s) || "5".equals(s) || "101".equals(s) || "103".equals(s) || "105".equals(s);
+        return FeegowAppointmentStatus.fromId(statusId).isConfirmedOrPresent();
     }
 
     public record IngestionSummary(int totalReceived, int filteredReceived, int sessionsCreated, int messagesSent, String mode) {

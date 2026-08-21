@@ -25,6 +25,8 @@ import br.dev.ctrls.inovareti.modules.appointment.infrastructure.adapter.output.
 import br.dev.ctrls.inovareti.modules.appointment.infrastructure.adapter.output.client.FeegowCancelPayload;
 import br.dev.ctrls.inovareti.modules.appointment.infrastructure.config.AppointmentMotorProperties;
 import br.dev.ctrls.inovareti.modules.appointment.infrastructure.config.FeegowProperties;
+import br.dev.ctrls.inovareti.modules.appointment.domain.model.FeegowAppointmentStatus;
+import br.dev.ctrls.inovareti.modules.appointment.infrastructure.utils.AppointmentIdNormalizer;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -285,13 +287,10 @@ public class FeegowAppointmentAdapter implements AppointmentExternalPort {
                 FeegowAppointment currentAppt = findById(normalizedAppointmentId);
                 if (currentAppt != null && currentAppt.statusId() != null) {
                     String currentStatus = currentAppt.statusId().trim();
-                    // Feegow Status IDs avançados ou finais: 2 (Em atendimento), 3 (Atendido), 4 (Aguardando atendimento), 5 (Chamando atendimento), 6 (Não compareceu), 7 (Já confirmado), 11 (Desmarcado paciente), 16 (Desmarcado profissional), 101/103/105 (Triagem)
-                    if ("2".equals(currentStatus) || "3".equals(currentStatus) || "4".equals(currentStatus) 
-                            || "5".equals(currentStatus) || "6".equals(currentStatus) || "7".equals(currentStatus) 
-                            || "11".equals(currentStatus) || "16".equals(currentStatus) || "101".equals(currentStatus) 
-                            || "103".equals(currentStatus) || "105".equals(currentStatus)) {
-                        log.info("[FEEGOW-STATUS-GUARD] Ignorando envio redundante/regressivo de status 7 (CONFIRMED) no agendamento {} pois o status atual no Feegow já é {} (não regredir).",
-                                normalizedAppointmentId, currentStatus);
+                    FeegowAppointmentStatus currentFeegowStatus = FeegowAppointmentStatus.fromId(currentStatus);
+                    if (currentFeegowStatus.isConfirmedOrPresent() || currentFeegowStatus.isCancelledOrMissed()) {
+                        log.info("[FEEGOW-STATUS-GUARD] Ignorando envio redundante/regressivo de status 7 (CONFIRMED) no agendamento {} pois o status atual no Feegow já é {} ({}) (não regredir).",
+                                normalizedAppointmentId, currentStatus, currentFeegowStatus.getDescription());
                         return;
                     }
                 }
@@ -300,8 +299,13 @@ public class FeegowAppointmentAdapter implements AppointmentExternalPort {
             }
         }
 
+        Object payloadApptId = AppointmentIdNormalizer.toLongOrNull(normalizedAppointmentId);
+        if (payloadApptId == null) {
+            payloadApptId = normalizedAppointmentId;
+        }
+
         FeegowStatusUpdatePayload payload = new FeegowStatusUpdatePayload(
-                normalizeAppointmentIdForPayload(normalizedAppointmentId),
+                payloadApptId,
                 statusIdInt,
                 ""
         );

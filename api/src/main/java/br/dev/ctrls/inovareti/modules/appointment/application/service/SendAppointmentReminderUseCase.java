@@ -6,9 +6,9 @@ import java.util.Optional;
 
 import org.springframework.stereotype.Service;
 
-import br.dev.ctrls.inovareti.modules.appointment.application.usecase.IngestAppointmentsUseCase;
 import br.dev.ctrls.inovareti.modules.appointment.domain.model.AppointmentSession;
 import br.dev.ctrls.inovareti.modules.appointment.domain.model.AppointmentSessionStatus;
+import br.dev.ctrls.inovareti.modules.appointment.domain.model.FeegowAppointmentStatus;
 import br.dev.ctrls.inovareti.modules.appointment.domain.model.NotificationGroup;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentExternalPort;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentSessionRepositoryPort;
@@ -51,9 +51,12 @@ public class SendAppointmentReminderUseCase {
             }
 
             String statusId = feegowAppt.statusId() != null ? feegowAppt.statusId().trim() : "";
+            FeegowAppointmentStatus feegowStatus = FeegowAppointmentStatus.fromId(statusId);
+
             // Se já foi confirmado / atendido no Feegow
-            if (IngestAppointmentsUseCase.isFeegowConfirmedStatus(statusId)) {
-                log.info("[LEMBRETE-CONFIRMADO] Disparo de lembrete ignorado para o agendamento ID={}. Motivo: Já confirmado/atendido no Feegow (statusId={}).", feegowId, statusId);
+            if (feegowStatus.isConfirmedOrPresent()) {
+                log.info("[LEMBRETE-CONFIRMADO] Disparo de lembrete ignorado para o agendamento ID={}. Motivo: Já confirmado/atendido no Feegow (statusId={}, {}).",
+                        feegowId, statusId, feegowStatus.getDescription());
                 session.setStatus(AppointmentSessionStatus.CONFIRMED);
                 session.setClosedAt(LocalDateTime.now());
                 session.setStatusDetails("CONFIRMED_ON_FEEGOW");
@@ -61,9 +64,10 @@ public class SendAppointmentReminderUseCase {
                 return false;
             }
 
-            // Status de cancelamento/desmarcação conhecidos no Feegow: 6 (Não compareceu), 11 (Desmarcado pelo paciente), 16 (Desmarcado pelo profissional)
-            if ("6".equals(statusId) || "11".equals(statusId) || "16".equals(statusId)) {
-                log.info("[LEMBRETE-CANCELADO] Disparo ignorado para o agendamento ID={}. Motivo: Consulta cancelada/desmarcada na Feegow (statusId={}).", feegowId, statusId);
+            // Status de cancelamento/desmarcação conhecidos no Feegow: 6, 11, 16
+            if (feegowStatus.isCancelledOrMissed()) {
+                log.info("[LEMBRETE-CANCELADO] Disparo ignorado para o agendamento ID={}. Motivo: Consulta cancelada/desmarcada na Feegow (statusId={}, {}).",
+                        feegowId, statusId, feegowStatus.getDescription());
                 invalidateLocalSession(session, "CANCELLED_ON_FEEGOW_STATUS_" + statusId);
                 return false;
             }
