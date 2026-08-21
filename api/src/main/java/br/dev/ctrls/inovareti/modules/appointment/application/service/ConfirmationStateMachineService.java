@@ -34,11 +34,9 @@ public class ConfirmationStateMachineService {
     }
 
     public AppointmentSession markConfirmed(AppointmentSession session) {
-        if (session.getStatus() == AppointmentSessionStatus.CONFIRMED ||
-            session.getStatus() == AppointmentSessionStatus.CANCELED ||
-            session.getStatus() == AppointmentSessionStatus.CANCELED_NO_RESPONSE) {
-            log.warn("[STATUS-GUARD] Ignorando markConfirmed para agendamento {} pois o status local é {} (não regredir).",
-                    session.getFeegowAppointmentId(), session.getStatus());
+        if (session.getStatus() == AppointmentSessionStatus.CONFIRMED) {
+            log.info("[STATUS-GUARD] Agendamento {} já está confirmado no status local.",
+                    session.getFeegowAppointmentId());
             return session;
         }
         session.setStatus(AppointmentSessionStatus.CONFIRMED);
