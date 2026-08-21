@@ -1,7 +1,6 @@
 package br.dev.ctrls.inovareti.modules.appointment.application.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -18,6 +17,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Captor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -52,6 +52,9 @@ class BlipPhysicalAccessHandlerTest {
 
     @Mock
     private BlipContextService blipContextService;
+
+    @Captor
+    private ArgumentCaptor<List<CompanionAccessInfo>> companionsCaptor;
 
     @InjectMocks
     private BlipPhysicalAccessHandler handler;
@@ -128,7 +131,6 @@ class BlipPhysicalAccessHandlerTest {
 
     @Test
     @DisplayName("Finalizar_Agendamento: Extrai acompanhantes com campos heterogêneos (camelCase e snake_case)")
-    @SuppressWarnings("unchecked")
     void shouldProcessFinalizarAgendamentoWithCompanions() {
         Map<String, Object> comp1 = Map.of("nome", "Acompanhante Um", "cpf", "111", "telefone", "4299991", "email", "a@a.com", "data_nascimento", "1990-01-01");
         Map<String, Object> comp2 = Map.of("name", "Acompanhante Dois", "cpf", "222", "phone", "4299992", "email", "b@b.com", "birthDate", "1995-05-05");
@@ -145,10 +147,9 @@ class BlipPhysicalAccessHandlerTest {
         assertThat(result.patientCPF()).isEqualTo("88888");
         assertThat(result.action()).isEqualTo("Finalizar_Agendamento");
 
-        ArgumentCaptor<List<CompanionAccessInfo>> captor = ArgumentCaptor.forClass((Class) List.class);
-        verify(accessService).processAccessRequest(eq("88888"), eq("33344455566"), captor.capture());
+        verify(accessService).processAccessRequest(eq("88888"), eq("33344455566"), companionsCaptor.capture());
 
-        List<CompanionAccessInfo> captured = captor.getValue();
+        List<CompanionAccessInfo> captured = companionsCaptor.getValue();
         assertThat(captured).hasSize(2);
         assertThat(captured.get(0).name()).isEqualTo("Acompanhante Um");
         assertThat(captured.get(0).phone()).isEqualTo("4299991");
