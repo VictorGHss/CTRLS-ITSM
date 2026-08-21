@@ -7,7 +7,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Component;
 
@@ -119,10 +118,12 @@ public class IngestAppointmentsUseCase {
         }
 
         // 4. Busca em Lote de Detalhes dos Pacientes (Telefones, CPFs)
-        Set<String> patientIds = eligibleAppointments.stream()
-                .map(FeegowAppointment::patientId)
-                .filter(id -> id != null && !id.isBlank())
-                .collect(Collectors.toSet());
+        Set<String> patientIds = new java.util.HashSet<>();
+        for (FeegowAppointment appt : eligibleAppointments) {
+            if (appt != null && appt.patientId() != null && !appt.patientId().isBlank()) {
+                patientIds.add(appt.patientId().trim());
+            }
+        }
 
         Map<String, FeegowPatient> patientDetailsMap = feegowPatientDetailsFetcher.fetchPatientDetailsInParallel(patientIds);
 

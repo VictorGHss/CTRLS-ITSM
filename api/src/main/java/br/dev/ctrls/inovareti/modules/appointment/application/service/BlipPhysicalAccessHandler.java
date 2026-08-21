@@ -3,7 +3,6 @@ package br.dev.ctrls.inovareti.modules.appointment.application.service;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 import org.springframework.stereotype.Service;
 
@@ -84,17 +83,15 @@ public class BlipPhysicalAccessHandler {
                 return new WebhookResult("", "", catracaAppId, "", "Integrar_GerAcesso", "");
             }
 
-            var doctorConfigOpt = (feegowProfissionalId != null)
-                    ? doctorConfigurationRepository.findById(feegowProfissionalId)
-                    : Optional.<DoctorConfiguration>empty();
-            String matriculaVisitado = doctorConfigOpt
-                    .map(DoctorConfiguration::getGerAcessoMatricula)
-                    .filter(s -> s != null && !s.isBlank())
-                    .orElse("");
-            String cpfVisitado = doctorConfigOpt
-                    .map(DoctorConfiguration::getGerAcessoCpf)
-                    .filter(s -> s != null && !s.isBlank())
-                    .orElse("");
+            DoctorConfiguration doctorConfig = (feegowProfissionalId != null)
+                    ? doctorConfigurationRepository.findById(feegowProfissionalId).orElse(null)
+                    : null;
+            String matriculaVisitado = (doctorConfig != null && doctorConfig.getGerAcessoMatricula() != null)
+                    ? doctorConfig.getGerAcessoMatricula().trim()
+                    : "";
+            String cpfVisitado = (doctorConfig != null && doctorConfig.getGerAcessoCpf() != null)
+                    ? doctorConfig.getGerAcessoCpf().trim()
+                    : "";
 
             try {
                 log.info("[WEBHOOK] Invocando GerAcesso para agendamento Feegow ID: {}, CPF Paciente: {}, Médico Feegow ID: {}, Matrícula Visitado: {}, CPF Visitado: {}",

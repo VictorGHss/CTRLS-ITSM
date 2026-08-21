@@ -119,7 +119,7 @@ public class AppointmentGroupDispatcher {
                     }, executor))
                     .toList();
 
-            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+            CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new)).join();
         }
 
         return new DispatchResult(processed.get(), created.get(), sent.get(), skipped.get());
@@ -254,10 +254,11 @@ public class AppointmentGroupDispatcher {
                     }
 
                     final String finalScheduleText = scheduleText;
+                    final String groupIdStr = (groupId != null) ? groupId.toString() : "";
                     CompletableFuture.runAsync(() -> {
                         try {
                             blipContextService.setUserContextForUser(effectivePhone, "isGroupFlow", "true");
-                            blipContextService.setUserContextForUser(effectivePhone, "groupId", groupId.toString());
+                            blipContextService.setUserContextForUser(effectivePhone, "groupId", groupIdStr);
                             blipContextService.setUserContextForUser(effectivePhone, "lista_detalhada", finalScheduleText);
                             blipContextService.setUserContextForUser(effectivePhone, "listaDetalhada", finalScheduleText);
                             blipContactClientPort.syncContact(effectivePhone, patientName, patientCpf, null, firstAppt.doctorId());
