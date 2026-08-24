@@ -79,7 +79,8 @@ public class AppointmentDiscordNotifierService {
         }
 
         try {
-            TextChannel channel = jda.getTextChannelById(channelId.trim());
+            String safeChannelId = channelId.trim();
+            TextChannel channel = jda.getTextChannelById(safeChannelId);
             if (channel == null) {
                 log.warn("[DISCORD-APPOINTMENT] Canal Discord ID {} do médico {} não foi encontrado ou bot não possui acesso.",
                         channelId, summary.getDoctorName());
@@ -87,15 +88,15 @@ public class AppointmentDiscordNotifierService {
             }
 
             EmbedBuilder eb = new EmbedBuilder();
-            eb.setTitle("📋 Relatório de Confirmações — " + summary.getDoctorName());
+            eb.setTitle("📋 Relatório de Confirmações — " + (summary.getDoctorName() != null ? summary.getDoctorName() : "Médico"));
             eb.setColor(summary.getAttentionList() != null && !summary.getAttentionList().isEmpty() ? WARNING_ORANGE : SUCCESS_GREEN);
 
             String formattedDate = summary.getTargetDate() != null ? summary.getTargetDate().format(DATE_FORMATTER) : LocalDate.now().format(DATE_FORMATTER);
             eb.setDescription("Resumo dos disparos de confirmação via WhatsApp para o atendimento de **" + formattedDate + "**.");
 
-            eb.addField("📤 Mensagens Disparadas", String.valueOf(summary.getTotalDisparados()), true);
-            eb.addField("✅ Já Confirmadas", String.valueOf(summary.getTotalPreConfirmados()), true);
-            eb.addField("📊 Total Agendadas", String.valueOf(summary.getTotalConsultas()), true);
+            eb.addField("📤 Mensagens Disparadas", Integer.toString(summary.getTotalDisparados()), true);
+            eb.addField("✅ Já Confirmadas", Integer.toString(summary.getTotalPreConfirmados()), true);
+            eb.addField("📊 Total Agendadas", Integer.toString(summary.getTotalConsultas()), true);
 
             if (summary.getAttentionList() != null && !summary.getAttentionList().isEmpty()) {
                 StringBuilder sb = new StringBuilder();
@@ -117,8 +118,8 @@ public class AppointmentDiscordNotifierService {
             eb.setTimestamp(java.time.Instant.now());
 
             channel.sendMessageEmbeds(eb.build()).queue(
-                    msg -> log.info("[DISCORD-APPOINTMENT] Relatório matinal enviado com sucesso no canal {} para {}", channelId, summary.getDoctorName()),
-                    err -> log.warn("[DISCORD-APPOINTMENT] Falha ao enviar embed no canal {}: {}", channelId, err.getMessage())
+                    msg -> log.info("[DISCORD-APPOINTMENT] Relatório matinal enviado com sucesso no canal {} para {}", safeChannelId, summary.getDoctorName()),
+                    err -> log.warn("[DISCORD-APPOINTMENT] Falha ao enviar embed no canal {}: {}", safeChannelId, err.getMessage())
             );
 
         } catch (Exception ex) {
@@ -141,7 +142,8 @@ public class AppointmentDiscordNotifierService {
         }
 
         try {
-            TextChannel channel = jda.getTextChannelById(channelId.trim());
+            String safeChannelId = channelId.trim();
+            TextChannel channel = jda.getTextChannelById(safeChannelId);
             if (channel == null) {
                 return;
             }
@@ -153,10 +155,10 @@ public class AppointmentDiscordNotifierService {
             String formattedDate = targetDate != null ? targetDate.format(DATE_FORMATTER) : LocalDate.now().format(DATE_FORMATTER);
             eb.setDescription("Processamento matinal executado para a data **" + formattedDate + "**.");
 
-            eb.addField("📋 Consultas Analisadas", String.valueOf(totalRaw), true);
-            eb.addField("📤 Mensagens Enviadas", String.valueOf(totalDispatched), true);
-            eb.addField("✅ Já Confirmadas", String.valueOf(totalPreConfirmed), true);
-            eb.addField("⚠️ Contato Manual (Sem Telefone)", String.valueOf(totalAttention), true);
+            eb.addField("📋 Consultas Analisadas", Integer.toString(totalRaw), true);
+            eb.addField("📤 Mensagens Enviadas", Integer.toString(totalDispatched), true);
+            eb.addField("✅ Já Confirmadas", Integer.toString(totalPreConfirmed), true);
+            eb.addField("⚠️ Contato Manual (Sem Telefone)", Integer.toString(totalAttention), true);
             eb.addField("⏱️ Tempo de Execução", (durationMs / 1000.0) + "s", true);
 
             eb.setFooter("Inovare-TI • Motor de Agendamentos", null);
