@@ -10,7 +10,6 @@ import java.util.Set;
 import java.util.UUID;
 
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import br.dev.ctrls.inovareti.modules.appointment.application.service.BlipContextService;
@@ -46,7 +45,6 @@ public class MonitorAppointmentNudgesUseCase {
     private final PatientExternalPort patientExternalPort;
     private final TransactionTemplate transactionTemplate;
 
-    @Transactional
     public void execute() {
         java.time.LocalTime nowTime = java.time.LocalTime.now(SAO_PAULO_ZONE);
         if (nowTime.isBefore(java.time.LocalTime.of(7, 0)) || nowTime.isAfter(java.time.LocalTime.of(19, 0))) {
