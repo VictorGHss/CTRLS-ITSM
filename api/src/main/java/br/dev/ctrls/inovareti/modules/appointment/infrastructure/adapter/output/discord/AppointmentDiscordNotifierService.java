@@ -23,17 +23,14 @@ import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@SuppressWarnings("null")
 public class AppointmentDiscordNotifierService {
 
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy");
-    private static final int INOVARE_BLUE = 0x1F4E79;
     private static final int WARNING_ORANGE = 0xF59E0B;
     private static final int SUCCESS_GREEN = 0x10B981;
 
     private final ObjectProvider<JDA> jdaProvider;
-
-    @Value("${discord.channel.reception-general:}")
-    private String generalReceptionChannelId;
 
     @Getter
     @Builder
@@ -124,49 +121,6 @@ public class AppointmentDiscordNotifierService {
 
         } catch (Exception ex) {
             log.error("[DISCORD-APPOINTMENT] Erro ao enviar relatório no canal {}: {}", channelId, ex.getMessage(), ex);
-        }
-    }
-
-    /**
-     * Envia o resumo geral consolidado da ingestão matinal no canal de TI/Recepção Geral.
-     */
-    public void sendGeneralIngestionSummary(LocalDate targetDate, int totalRaw, int totalDispatched, int totalPreConfirmed, int totalAttention, long durationMs) {
-        String channelId = generalReceptionChannelId;
-        if (channelId == null || channelId.isBlank()) {
-            return;
-        }
-
-        JDA jda = jdaProvider.getIfAvailable();
-        if (jda == null) {
-            return;
-        }
-
-        try {
-            String safeChannelId = channelId.trim();
-            TextChannel channel = jda.getTextChannelById(safeChannelId);
-            if (channel == null) {
-                return;
-            }
-
-            EmbedBuilder eb = new EmbedBuilder();
-            eb.setTitle("📢 Ingestão Matinal de Agendamentos Concluída");
-            eb.setColor(INOVARE_BLUE);
-
-            String formattedDate = targetDate != null ? targetDate.format(DATE_FORMATTER) : LocalDate.now().format(DATE_FORMATTER);
-            eb.setDescription("Processamento matinal executado para a data **" + formattedDate + "**.");
-
-            eb.addField("📋 Consultas Analisadas", Integer.toString(totalRaw), true);
-            eb.addField("📤 Mensagens Enviadas", Integer.toString(totalDispatched), true);
-            eb.addField("✅ Já Confirmadas", Integer.toString(totalPreConfirmed), true);
-            eb.addField("⚠️ Contato Manual (Sem Telefone)", Integer.toString(totalAttention), true);
-            eb.addField("⏱️ Tempo de Execução", (durationMs / 1000.0) + "s", true);
-
-            eb.setFooter("Inovare-TI • Motor de Agendamentos", null);
-            eb.setTimestamp(java.time.Instant.now());
-
-            channel.sendMessageEmbeds(eb.build()).queue();
-        } catch (Exception ex) {
-            log.warn("[DISCORD-APPOINTMENT] Falha ao despachar resumo geral para Discord: {}", ex.getMessage());
         }
     }
 }

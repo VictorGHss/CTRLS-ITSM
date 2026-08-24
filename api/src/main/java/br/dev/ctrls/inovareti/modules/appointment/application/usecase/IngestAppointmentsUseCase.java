@@ -239,18 +239,8 @@ public class IngestAppointmentsUseCase {
                 }
             }
 
-            int totalAttention = attentionByDoctor.values().stream().mapToInt(List::size).sum();
-            discordNotifierService.sendGeneralIngestionSummary(
-                    targetDates.isEmpty() ? today : targetDates.get(0),
-                    totalRaw,
-                    result.templatesSentCount(),
-                    0,
-                    totalAttention,
-                    durationMs
-            );
-
         } catch (Exception ex) {
-            log.warn("[MOTOR-INGESTÃO] Falha ao processar notificações Discord pós-ingestão: {}", ex.getMessage());
+            log.warn("[MOTOR-INGESTÃO] Falha ao processar notificações Discord pós-ingestão por médico: {}", ex.getMessage());
         }
 
         String mode = appointmentMotorProperties.isTestMode() ? "TEST" : "PROD";
