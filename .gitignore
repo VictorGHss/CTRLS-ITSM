@@ -96,3 +96,5 @@ procedimentos_feegow.*
 log_api
 log_api.*
 *.log
+scratch/
+api/scratch/

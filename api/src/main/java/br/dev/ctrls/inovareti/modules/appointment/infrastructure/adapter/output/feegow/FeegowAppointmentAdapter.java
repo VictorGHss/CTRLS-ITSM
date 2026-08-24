@@ -607,11 +607,11 @@ public class FeegowAppointmentAdapter implements AppointmentExternalPort {
         LocalDate start = startDate != null ? startDate : LocalDate.now();
         LocalDate end = endDate != null ? endDate : start;
 
-        String formattedStart = start.format(DateTimeFormatter.ofPattern("dd-MM-yyyy"));
-        String formattedEnd = end.format(DateTimeFormatter.ofPattern("dd-MM-yyyy"));
+        String formattedStart = start.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+        String formattedEnd = end.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"));
 
         UriComponentsBuilder uriBuilder = UriComponentsBuilder.fromUriString(properties.getFeegowBaseUrl())
-                .path("/lock/list")
+                .path("/v1/api/lock/list")
                 .queryParam("date_start", formattedStart)
                 .queryParam("date_end", formattedEnd);
 
