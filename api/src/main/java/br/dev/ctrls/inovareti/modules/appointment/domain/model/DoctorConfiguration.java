@@ -30,6 +30,9 @@ public class DoctorConfiguration {
     private Boolean isActive = true;
     private String googleReviewUrl;
     private String discordChannelId;
+    private String contaazulCustomerUuid;
+    private String doctorEmail;
+    private String doctorCpfCnpj;
 
     public boolean isConfigActive() {
         return isActive == null || isActive;

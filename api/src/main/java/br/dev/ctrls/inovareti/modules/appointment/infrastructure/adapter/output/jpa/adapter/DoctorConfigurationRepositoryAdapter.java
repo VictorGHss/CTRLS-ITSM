@@ -25,6 +25,14 @@ public class DoctorConfigurationRepositoryAdapter implements DoctorConfiguration
     }
 
     @Override
+    public Optional<DoctorConfiguration> findByContaazulCustomerUuid(String contaazulCustomerUuid) {
+        if (contaazulCustomerUuid == null || contaazulCustomerUuid.isBlank()) {
+            return Optional.empty();
+        }
+        return springDataRepository.findByContaazulCustomerUuid(contaazulCustomerUuid).map(entity -> entity.toDomain());
+    }
+
+    @Override
     public List<DoctorConfiguration> findAll() {
         return springDataRepository.findAll().stream()
                 .map(entity -> entity.toDomain())

@@ -57,6 +57,15 @@ public class DoctorConfigurationEntity {
     @Column(name = "discord_channel_id", length = 50)
     private String discordChannelId;
 
+    @Column(name = "contaazul_customer_uuid", length = 64, unique = true)
+    private String contaazulCustomerUuid;
+
+    @Column(name = "doctor_email", length = 255)
+    private String doctorEmail;
+
+    @Column(name = "doctor_cpf_cnpj", length = 20)
+    private String doctorCpfCnpj;
+
     public DoctorConfiguration toDomain() {
         return DoctorConfiguration.builder()
                 .feegowProfissionalId(this.feegowProfissionalId)
@@ -70,6 +79,9 @@ public class DoctorConfigurationEntity {
                 .isActive(this.isActive != null ? this.isActive : true)
                 .googleReviewUrl(this.googleReviewUrl)
                 .discordChannelId(this.discordChannelId)
+                .contaazulCustomerUuid(this.contaazulCustomerUuid)
+                .doctorEmail(this.doctorEmail)
+                .doctorCpfCnpj(this.doctorCpfCnpj)
                 .build();
     }
 
@@ -87,6 +99,9 @@ public class DoctorConfigurationEntity {
                 .isActive(domain.getIsActive() != null ? domain.getIsActive() : true)
                 .googleReviewUrl(domain.getGoogleReviewUrl())
                 .discordChannelId(domain.getDiscordChannelId())
+                .contaazulCustomerUuid(domain.getContaazulCustomerUuid())
+                .doctorEmail(domain.getDoctorEmail())
+                .doctorCpfCnpj(domain.getDoctorCpfCnpj())
                 .build();
     }
 }
