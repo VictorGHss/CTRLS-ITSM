@@ -6,7 +6,6 @@ import java.util.List;
 import java.util.Optional;
 
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import br.dev.ctrls.inovareti.modules.appointment.domain.model.AppointmentSession;
 import br.dev.ctrls.inovareti.modules.appointment.domain.model.DoctorConfiguration;
@@ -59,7 +58,6 @@ public class SendPostAppointmentReviewUseCase {
         return set;
     }
 
-    @Transactional
     public int execute() {
         java.time.LocalTime nowTime = java.time.LocalTime.now(java.time.ZoneId.of("America/Sao_Paulo"));
         if (nowTime.isBefore(java.time.LocalTime.of(7, 0)) || nowTime.isAfter(java.time.LocalTime.of(19, 0))) {
