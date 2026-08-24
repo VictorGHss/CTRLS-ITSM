@@ -24,6 +24,7 @@ public class DoctorConfigurationDTO {
     private Integer advanceNoticeDays;
     private Boolean isActive;
     private String googleReviewUrl;
+    private String discordChannelId;
 
     public static DoctorConfigurationDTO fromDomain(DoctorConfiguration domain) {
         if (domain == null) return null;
@@ -38,6 +39,7 @@ public class DoctorConfigurationDTO {
                 .advanceNoticeDays(domain.getAdvanceNoticeDays())
                 .isActive(domain.getIsActive())
                 .googleReviewUrl(domain.getGoogleReviewUrl())
+                .discordChannelId(domain.getDiscordChannelId())
                 .build();
     }
 
@@ -53,6 +55,7 @@ public class DoctorConfigurationDTO {
                 .advanceNoticeDays(this.advanceNoticeDays)
                 .isActive(this.isActive)
                 .googleReviewUrl(this.googleReviewUrl)
+                .discordChannelId(this.discordChannelId)
                 .build();
     }
 }

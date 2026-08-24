@@ -54,6 +54,9 @@ public class DoctorConfigurationEntity {
     @Column(name = "google_review_url", length = 500)
     private String googleReviewUrl;
 
+    @Column(name = "discord_channel_id", length = 50)
+    private String discordChannelId;
+
     public DoctorConfiguration toDomain() {
         return DoctorConfiguration.builder()
                 .feegowProfissionalId(this.feegowProfissionalId)
@@ -66,6 +69,7 @@ public class DoctorConfigurationEntity {
                 .advanceNoticeDays(this.advanceNoticeDays != null ? this.advanceNoticeDays : 1)
                 .isActive(this.isActive != null ? this.isActive : true)
                 .googleReviewUrl(this.googleReviewUrl)
+                .discordChannelId(this.discordChannelId)
                 .build();
     }
 
@@ -82,6 +86,7 @@ public class DoctorConfigurationEntity {
                 .advanceNoticeDays(domain.getAdvanceNoticeDays())
                 .isActive(domain.getIsActive() != null ? domain.getIsActive() : true)
                 .googleReviewUrl(domain.getGoogleReviewUrl())
+                .discordChannelId(domain.getDiscordChannelId())
                 .build();
     }
 }

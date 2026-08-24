@@ -38,6 +38,7 @@ public class BlipWebhookActionExecutor {
     private final TransactionTemplate transactionTemplate;
     private final BlipUserIdentityReconciliationRepositoryPort blipUserIdentityReconciliationRepository;
     private final BlipProperties blipProperties;
+    private final AppointmentMetricsService appointmentMetricsService;
 
     /**
      * Executa a pipeline completa da ação correspondente (confirm ou alter).
@@ -254,6 +255,9 @@ public class BlipWebhookActionExecutor {
                 } catch (Exception ex) {
                     log.warn("[WEBHOOK-EXEC] Falha ao atualizar variáveis de contexto no Blip: {}", ex.getMessage());
                 }
+                appointmentMetricsService.incrementCanceled(finalResult.doctorName(), "", "whatsapp_bot");
+            } else if ("confirm".equalsIgnoreCase(actionType) || "confirmacao".equalsIgnoreCase(actionType)) {
+                appointmentMetricsService.incrementConfirmed(finalResult.doctorName(), "", "whatsapp_bot");
             }
         }
 

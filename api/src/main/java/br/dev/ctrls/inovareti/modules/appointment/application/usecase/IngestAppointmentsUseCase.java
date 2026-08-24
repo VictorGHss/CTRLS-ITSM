@@ -45,6 +45,9 @@ public class IngestAppointmentsUseCase {
     private final AppointmentBatchFilterPipeline filterPipeline;
     private final FeegowPatientDetailsFetcher feegowPatientDetailsFetcher;
     private final AppointmentGroupDispatcher groupDispatcher;
+    private final br.dev.ctrls.inovareti.modules.appointment.application.service.AppointmentMetricsService appointmentMetricsService;
+    private final br.dev.ctrls.inovareti.modules.appointment.infrastructure.adapter.output.discord.AppointmentDiscordNotifierService discordNotifierService;
+    private final br.dev.ctrls.inovareti.modules.appointment.domain.port.output.DoctorConfigurationRepository doctorConfigurationRepository;
 
     public record IngestionSummary(
         int totalReceived,
@@ -75,6 +78,7 @@ public class IngestAppointmentsUseCase {
     }
 
     public IngestionSummary execute(List<String> doctorIds, boolean forceSend, String testPhone) {
+        long startTime = System.currentTimeMillis();
         final String overridePhone = (testPhone != null && !testPhone.isBlank())
                 ? testPhone.trim().replaceAll("\\D", "")
                 : null;
@@ -127,9 +131,20 @@ public class IngestAppointmentsUseCase {
 
         Map<String, FeegowPatient> patientDetailsMap = feegowPatientDetailsFetcher.fetchPatientDetailsInParallel(patientIds);
 
-        // 5. Agrupamento por Telefone do Paciente
+        // 5. Agrupamento por Telefone do Paciente e Mapeamento de Atenção
         Map<String, List<FeegowAppointment>> groupedByPhone = new HashMap<>();
+        Map<Long, List<br.dev.ctrls.inovareti.modules.appointment.infrastructure.adapter.output.discord.AppointmentDiscordNotifierService.PatientAttentionItem>> attentionByDoctor = new HashMap<>();
+        Map<Long, Integer> appointmentsCountByDoctor = new HashMap<>();
+
         for (FeegowAppointment appt : eligibleAppointments) {
+            Long docId = null;
+            try {
+                if (appt.doctorId() != null) {
+                    docId = Long.parseLong(appt.doctorId().trim());
+                    appointmentsCountByDoctor.put(docId, appointmentsCountByDoctor.getOrDefault(docId, 0) + 1);
+                }
+            } catch (Exception ignored) {}
+
             FeegowPatient patient = patientDetailsMap.get(appt.patientId());
             String phone = (patient != null && patient.phone() != null)
                     ? patient.phone().trim().replaceAll("\\D", "")
@@ -138,6 +153,20 @@ public class IngestAppointmentsUseCase {
             if (phone.isBlank()) {
                 log.warn("[INGESTÃO-TELEFONE] Paciente ID={} sem telefone válido. Ignorando agendamento ID={}.",
                         appt.patientId(), appt.id());
+                appointmentMetricsService.incrementPhoneMissing(appt.doctorName());
+
+                if (docId != null) {
+                    String pName = (patient != null && patient.name() != null) ? patient.name() : ("Paciente ID " + appt.patientId());
+                    String timeStr = appt.startAt() != null ? appt.startAt().toLocalTime().toString() : "--:--";
+                    attentionByDoctor.computeIfAbsent(docId, k -> new ArrayList<>()).add(
+                            br.dev.ctrls.inovareti.modules.appointment.infrastructure.adapter.output.discord.AppointmentDiscordNotifierService.PatientAttentionItem.builder()
+                                    .patientName(pName)
+                                    .appointmentTime(timeStr)
+                                    .procedureName(appt.procedureName())
+                                    .reason("Sem telefone no Feegow")
+                                    .build()
+                    );
+                }
                 continue;
             }
 
@@ -158,6 +187,71 @@ public class IngestAppointmentsUseCase {
                 forceSend,
                 overridePhone
         );
+
+        long durationMs = System.currentTimeMillis() - startTime;
+        appointmentMetricsService.recordIngestionDuration(durationMs);
+
+        // 7. Notificações Discord por Médico e Resumo Geral
+        try {
+            Map<Long, br.dev.ctrls.inovareti.modules.appointment.domain.model.DoctorConfiguration> doctorConfigMap = new HashMap<>();
+            doctorConfigurationRepository.findAll().forEach(cfg -> {
+                if (cfg.getFeegowProfissionalId() != null) {
+                    doctorConfigMap.put(cfg.getFeegowProfissionalId(), cfg);
+                }
+            });
+
+            // Agrupa disparos por médico para métricas e relatórios
+            Map<Long, Integer> dispatchedByDoctor = new HashMap<>();
+            for (List<FeegowAppointment> apptList : groupedByPhone.values()) {
+                for (FeegowAppointment a : apptList) {
+                    try {
+                        Long dId = Long.parseLong(a.doctorId().trim());
+                        dispatchedByDoctor.put(dId, dispatchedByDoctor.getOrDefault(dId, 0) + 1);
+                        appointmentMetricsService.incrementDispatched(a.doctorName(), a.procedureName());
+                    } catch (Exception ignored) {}
+                }
+            }
+
+            // Dispara relatório Discord para os médicos que tiveram agendamentos
+            for (Map.Entry<Long, Integer> entry : appointmentsCountByDoctor.entrySet()) {
+                Long dId = entry.getKey();
+                br.dev.ctrls.inovareti.modules.appointment.domain.model.DoctorConfiguration cfg = doctorConfigMap.get(dId);
+                String docName = cfg != null ? cfg.getDoctorName() : ("Médico " + dId);
+                String channelId = cfg != null ? cfg.getDiscordChannelId() : null;
+
+                if (channelId != null && !channelId.isBlank()) {
+                    int totalAppointments = entry.getValue();
+                    int dispatched = dispatchedByDoctor.getOrDefault(dId, 0);
+                    List<br.dev.ctrls.inovareti.modules.appointment.infrastructure.adapter.output.discord.AppointmentDiscordNotifierService.PatientAttentionItem> attentionItems = attentionByDoctor.get(dId);
+
+                    discordNotifierService.sendDoctorDispatchReport(
+                            br.dev.ctrls.inovareti.modules.appointment.infrastructure.adapter.output.discord.AppointmentDiscordNotifierService.DoctorDispatchSummary.builder()
+                                    .doctorId(dId)
+                                    .doctorName(docName)
+                                    .discordChannelId(channelId)
+                                    .targetDate(targetDates.isEmpty() ? today : targetDates.get(0))
+                                    .totalConsultas(totalAppointments)
+                                    .totalDisparados(dispatched)
+                                    .totalPreConfirmados(0)
+                                    .attentionList(attentionItems)
+                                    .build()
+                    );
+                }
+            }
+
+            int totalAttention = attentionByDoctor.values().stream().mapToInt(List::size).sum();
+            discordNotifierService.sendGeneralIngestionSummary(
+                    targetDates.isEmpty() ? today : targetDates.get(0),
+                    totalRaw,
+                    result.templatesSentCount(),
+                    0,
+                    totalAttention,
+                    durationMs
+            );
+
+        } catch (Exception ex) {
+            log.warn("[MOTOR-INGESTÃO] Falha ao processar notificações Discord pós-ingestão: {}", ex.getMessage());
+        }
 
         String mode = appointmentMotorProperties.isTestMode() ? "TEST" : "PROD";
         log.info("[MOTOR-INGESTÃO] Ingestão concluída com sucesso! Modo: {}. Processados: {}, Criados: {}, Disparados: {}, Ignorados: {}",
