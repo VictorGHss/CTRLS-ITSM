@@ -4,10 +4,8 @@ import java.security.MessageDigest;
 import java.util.Map;
 import java.util.Optional;
 
-import org.slf4j.MDC;
 import org.springframework.stereotype.Service;
 
-import br.dev.ctrls.inovareti.core.shared.domain.port.output.AuditPort;
 import br.dev.ctrls.inovareti.modules.appointment.application.usecase.HandleBlipWebhookUseCase.BlipWebhookPayload;
 import br.dev.ctrls.inovareti.modules.appointment.domain.model.BlipUserIdentityReconciliation;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentSessionRepositoryPort;
@@ -37,7 +35,6 @@ public class BlipWebhookPreprocessor {
     private final BlipIdentityReconciler blipIdentityReconciler;
     private final BlipUserIdentityReconciliationRepositoryPort blipUserIdentityReconciliationRepository;
     private final AppointmentMotorProperties appointmentMotorProperties;
-    private final AuditPort auditPort;
 
     public BlipWebhookPayload enrichPayload(BlipWebhookPayload payload) {
         if (payload == null) {
@@ -153,11 +150,6 @@ public class BlipWebhookPreprocessor {
                 log.warn("Token de webhook inválido.");
                 throw new SecurityException("Invalid token");
             }
-            auditPort.record(
-                    "APPOINTMENT_MOTOR",
-                    "ASSINATURA_VALIDADA",
-                    "Assinatura do webhook validada. messageId=" + payload.messageId(),
-                    resolveTraceId());
         }
     }
 
@@ -221,13 +213,5 @@ public class BlipWebhookPreprocessor {
             a.getBytes(java.nio.charset.StandardCharsets.UTF_8),
             b.getBytes(java.nio.charset.StandardCharsets.UTF_8)
         );
-    }
-
-    private String resolveTraceId() {
-        String traceId = MDC.get("traceId");
-        if (traceId == null || traceId.isBlank()) {
-            traceId = MDC.get("trace_id");
-        }
-        return traceId;
     }
 }
