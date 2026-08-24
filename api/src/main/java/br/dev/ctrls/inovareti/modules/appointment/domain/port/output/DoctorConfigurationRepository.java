@@ -12,6 +12,8 @@ public interface DoctorConfigurationRepository {
 
     Optional<DoctorConfiguration> findById(Long id);
 
+    Optional<DoctorConfiguration> findByContaazulCustomerUuid(String contaazulCustomerUuid);
+
     List<DoctorConfiguration> findAll();
 
     List<DoctorConfiguration> findByIsActiveTrue();

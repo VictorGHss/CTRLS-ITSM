@@ -25,6 +25,9 @@ public class DoctorConfigurationDTO {
     private Boolean isActive;
     private String googleReviewUrl;
     private String discordChannelId;
+    private String contaazulCustomerUuid;
+    private String doctorEmail;
+    private String doctorCpfCnpj;
 
     public static DoctorConfigurationDTO fromDomain(DoctorConfiguration domain) {
         if (domain == null) return null;
@@ -40,6 +43,9 @@ public class DoctorConfigurationDTO {
                 .isActive(domain.getIsActive())
                 .googleReviewUrl(domain.getGoogleReviewUrl())
                 .discordChannelId(domain.getDiscordChannelId())
+                .contaazulCustomerUuid(domain.getContaazulCustomerUuid())
+                .doctorEmail(domain.getDoctorEmail())
+                .doctorCpfCnpj(domain.getDoctorCpfCnpj())
                 .build();
     }
 
@@ -56,6 +62,9 @@ public class DoctorConfigurationDTO {
                 .isActive(this.isActive)
                 .googleReviewUrl(this.googleReviewUrl)
                 .discordChannelId(this.discordChannelId)
+                .contaazulCustomerUuid(this.contaazulCustomerUuid)
+                .doctorEmail(this.doctorEmail)
+                .doctorCpfCnpj(this.doctorCpfCnpj)
                 .build();
     }
 }
