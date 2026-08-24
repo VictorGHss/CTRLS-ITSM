@@ -19,11 +19,11 @@ public class AuditLogHousekeeper {
     private final AuditLogBatchDeleter deleter;
 
     /**
-     * Agenda a limpeza de logs obsoletos para todo domingo às 03:00 da madrugada (horário de vale).
+     * Agenda a limpeza diária de logs obsoletos (>30 dias) para as 03:00 da madrugada (horário de vale).
      */
-    @Scheduled(cron = "0 0 3 * * SUN")
+    @Scheduled(cron = "0 0 3 * * *")
     public void executeHousekeeping() {
-        log.info("Iniciando rotina semanal de limpeza de logs de auditoria (Housekeeping)...");
+        log.info("Iniciando rotina diária de limpeza de logs de auditoria (Housekeeping)...");
         LocalDateTime cutoffDate = LocalDateTime.now().minusDays(30);
         int totalDeleted = 0;
         int deletedInBatch;
