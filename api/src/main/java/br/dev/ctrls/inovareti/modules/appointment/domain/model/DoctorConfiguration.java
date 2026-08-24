@@ -29,6 +29,7 @@ public class DoctorConfiguration {
     @Builder.Default
     private Boolean isActive = true;
     private String googleReviewUrl;
+    private String discordChannelId;
 
     public boolean isConfigActive() {
         return isActive == null || isActive;
