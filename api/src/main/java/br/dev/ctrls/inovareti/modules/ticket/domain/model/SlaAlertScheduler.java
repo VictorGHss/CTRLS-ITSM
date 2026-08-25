@@ -105,14 +105,19 @@ public class SlaAlertScheduler {
         if (guild == null) return;
 
         String ticketNumStr = ticket.getNumber() != null ? ticket.getNumber().toLowerCase() : shortId.toLowerCase();
-        String prefix = "ticket-" + ticketNumStr;
+        String ticketIdStr = ticket.getId() != null ? ticket.getId().toString().toLowerCase() : "";
 
         List<net.dv8tion.jda.api.entities.channel.concrete.TextChannel> channels = guild.getTextChannels().stream()
-                .filter(tc -> tc.getName().startsWith(prefix))
+                .filter(tc -> {
+                    String name = tc.getName().toLowerCase();
+                    String topic = tc.getTopic() != null ? tc.getTopic().toLowerCase() : "";
+                    return name.endsWith("-" + ticketNumStr) || name.startsWith("ticket-" + ticketNumStr) || name.contains(ticketNumStr)
+                            || (!ticketIdStr.isEmpty() && topic.contains(ticketIdStr));
+                })
                 .toList();
 
         if (channels.isEmpty()) {
-            log.warn("[SLA-SCHEDULER] Canal privado com prefixo '{}' não encontrado no Discord para alerta de SLA.", prefix);
+            log.warn("[SLA-SCHEDULER] Canal privado para chamado #{} não encontrado no Discord para alerta de SLA.", ticketNumStr);
             return;
         }
 

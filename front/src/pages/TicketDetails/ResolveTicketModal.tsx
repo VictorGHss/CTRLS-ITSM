@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { X, Laptop, Box, AlertCircle, Image, Loader2 } from 'lucide-react';
+import { X, Laptop, Box, AlertCircle, Image, Loader2, Split, Trash2 } from 'lucide-react';
 import MDEditor from '@uiw/react-md-editor';
 
 import { useResolveTicket } from './hooks/useResolveTicket';
@@ -69,7 +69,9 @@ export default function ResolveTicketModal({
     handleSubmit,
     itemsToDeliver,
     handleRecipientChange,
-    ticketUsers,
+    handleSplitItem,
+    handleRemoveSplitItem,
+    availableRecipients,
     linkInsumosToAsset,
     setLinkInsumosToAsset,
     targetAssetId,
@@ -223,25 +225,68 @@ export default function ResolveTicketModal({
                 </div>
               </div>
 
-              <div className="flex flex-col gap-4 rounded-2xl border border-slate-200 p-4">
-                {itemsToDeliver.map((item) => (
-                  <div key={item.itemId} className="flex flex-col sm:flex-row gap-4 items-center justify-between border-b border-slate-100 pb-4 last:border-0 last:pb-0">
-                    <div className="flex flex-col gap-0.5 flex-1">
-                      <span className="text-sm font-bold text-slate-800">{item.itemName}</span>
-                      <span className="text-xs text-slate-500">Quantidade: {item.quantity} unidade(s)</span>
-                    </div>
+              <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 p-4 bg-slate-50/50">
+                {itemsToDeliver.map((item) => {
+                  const canSplit = item.quantity > 1;
+                  const isSplitRow = itemsToDeliver.filter((i) => i.itemId === item.itemId).length > 1;
 
-                    <div className="flex flex-col gap-1.5 w-full sm:w-64">
-                      <label className="text-xs font-semibold text-slate-600">Entregar a quem? *</label>
-                      <SearchableDropdown
-                        options={ticketUsers.map((u) => ({ id: u.id, name: u.name }))}
-                        value={item.recipientUserId}
-                        onChange={(val) => handleRecipientChange(item.itemId, val)}
-                        placeholder="Selecione quem recebeu..."
-                      />
+                  return (
+                    <div
+                      key={item.id}
+                      className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm"
+                    >
+                      <div className="flex flex-col gap-1 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-bold text-slate-800">{item.itemName}</span>
+                          {isSplitRow && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-200">
+                              Entrega Parcial
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-slate-500 font-medium">Quantidade:</span>
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-bold bg-slate-100 text-slate-700">
+                            {item.quantity} un
+                          </span>
+                          {canSplit && (
+                            <button
+                              type="button"
+                              onClick={() => handleSplitItem(item.id)}
+                              className="inline-flex items-center gap-1 text-[11px] font-semibold text-brand-primary hover:text-brand-primary-dark hover:underline transition-colors ml-2 cursor-pointer"
+                              title="Dividir este item para entregar a mais de uma pessoa"
+                            >
+                              <Split size={13} />
+                              Dividir Entrega
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-end gap-2 w-full sm:w-72">
+                        <div className="flex flex-col gap-1 flex-1">
+                          <label className="text-xs font-semibold text-slate-600">Entregar a quem? *</label>
+                          <SearchableDropdown
+                            options={availableRecipients}
+                            value={item.recipientUserId}
+                            onChange={(val) => handleRecipientChange(item.id, val)}
+                            placeholder="Pesquise o médico ou secretária..."
+                          />
+                        </div>
+                        {isSplitRow && (
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveSplitItem(item.id)}
+                            className="p-2 rounded-xl text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+                            title="Remover esta entrega parcial e unificar quantidade"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           ) : (
@@ -439,7 +484,7 @@ export default function ResolveTicketModal({
                       <div className="flex flex-col gap-2">
                         <label className="text-sm font-medium text-slate-700">Entregar a quem? *</label>
                         <SearchableDropdown
-                          options={ticketUsers.map((u) => ({ id: u.id, name: u.name }))}
+                          options={availableRecipients}
                           value={recipientUserId}
                           onChange={(val) => setRecipientUserId(val)}
                           placeholder="Selecione quem recebeu..."
