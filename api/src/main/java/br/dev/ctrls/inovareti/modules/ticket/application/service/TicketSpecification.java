@@ -41,12 +41,15 @@ public class TicketSpecification {
 
             // Garante o isolamento: se for um utilizador comum, vê chamados onde é criador, responsável ou co-envolvido
             if (requesterId != null) {
-                query.distinct(true);
-                var assignedUsersJoin = root.join("assignedUsers", jakarta.persistence.criteria.JoinType.LEFT);
+                var subqueryCoInvolved = query.subquery(UUID.class);
+                var subRootCoInvolved = subqueryCoInvolved.from(Ticket.class);
+                var subJoinCoInvolved = subRootCoInvolved.join("assignedUsers");
+                subqueryCoInvolved.select(subRootCoInvolved.get("id"))
+                        .where(cb.equal(subJoinCoInvolved.get("id"), requesterId));
                 
                 Predicate isRequester = cb.equal(root.get("requester").get("id"), requesterId);
                 Predicate isAssignedTo = cb.equal(root.get("assignedTo").get("id"), requesterId);
-                Predicate isCoInvolved = cb.equal(assignedUsersJoin.get("id"), requesterId);
+                Predicate isCoInvolved = root.get("id").in(subqueryCoInvolved);
                 
                 predicates.add(cb.or(isRequester, isAssignedTo, isCoInvolved));
             }

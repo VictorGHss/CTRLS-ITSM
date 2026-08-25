@@ -2,8 +2,8 @@ import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PlusCircle, Search, X, ArrowDownWideNarrow } from 'lucide-react';
 import { toast } from 'react-toastify';
-import { getTickets, getTicketTags } from '../../services/ticketService';
-import type { Ticket, TicketTag } from '../../types/models';
+import { getTickets, getTicketTags, getTicketCategories } from '../../services/ticketService';
+import type { Ticket, TicketTag, TicketCategory } from '../../types/models';
 import SkeletonTable from '@/components/ui/SkeletonTable';
 import PageHero from '@/components/ui/PageHero';
 import TicketsTable from '../Dashboard/TicketsTable';
@@ -16,6 +16,7 @@ export default function Tickets() {
   const { user } = useAuth();
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [availableTags, setAvailableTags] = useState<TicketTag[]>([]);
+  const [availableCategories, setAvailableCategories] = useState<TicketCategory[]>([]);
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
   const [isTagsDropdownOpen, setIsTagsDropdownOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -63,21 +64,26 @@ export default function Tickets() {
   }, [fetchTickets]);
 
   useEffect(() => {
-    const fetchTags = async () => {
+    const fetchMetadata = async () => {
       try {
-        const tagsData = await getTicketTags(true);
+        const [tagsData, catsData] = await Promise.all([
+          getTicketTags(true),
+          getTicketCategories(),
+        ]);
         setAvailableTags(tagsData);
+        setAvailableCategories(catsData);
       } catch {
         setAvailableTags([]);
+        setAvailableCategories([]);
       }
     };
-    void fetchTags();
+    void fetchMetadata();
   }, []);
 
   // Reseta o ecrã/página de listagem para 0 ao iniciar uma nova busca ou alterar os filtros
   useEffect(() => {
     setCurrentPage(0);
-  }, [selectedTagIds, activeTab, searchQuery, selectedPriority, selectedCategory]);
+  }, [selectedTagIds, activeTab, debouncedSearch, selectedPriority, selectedCategory]);
 
   // Com a filtragem ocorrendo no servidor, o array filteredTickets apenas repassa a lista original recebida
   const filteredTickets = tickets;
@@ -88,11 +94,6 @@ export default function Tickets() {
     const dateB = new Date(b.createdAt).getTime();
     return sortOrder === 'newest' ? dateB - dateA : dateA - dateB;
   });
-
-  // Get unique categories from tickets
-  const categories = Array.from(
-    new Map(tickets.map(t => [t.categoryId, { id: t.categoryId, name: t.categoryName }])).values()
-  ).sort((a, b) => a.name.localeCompare(b.name));
 
   const priorities = [
     { value: 'LOW', label: 'Baixa' },
@@ -197,8 +198,8 @@ export default function Tickets() {
             <SearchableDropdown
               options={[
                 { id: 'all', name: 'Todas as Categorias' },
-                ...categories.map((category) => ({
-                  id: category.id || '',
+                ...availableCategories.map((category) => ({
+                  id: category.id,
                   name: category.name || 'Sem Categoria',
                 })),
               ]}
@@ -311,7 +312,7 @@ export default function Tickets() {
             )}
             {selectedCategory !== 'all' && (
               <span className="inline-flex items-center gap-2 rounded-full bg-brand-primary/10 px-2.5 py-0.5 text-xs font-medium text-brand-primary">
-                {categories.find(c => c.id === selectedCategory)?.name}
+                {availableCategories.find(c => c.id === selectedCategory)?.name}
                 <button onClick={() => setSelectedCategory('all')} className="hover:text-brand-primary-dark">
                   <X size={14} />
                 </button>
