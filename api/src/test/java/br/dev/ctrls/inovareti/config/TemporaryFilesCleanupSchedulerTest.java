@@ -28,21 +28,33 @@ class TemporaryFilesCleanupSchedulerTest {
         ReflectionTestUtils.setField(scheduler, "uploadDir", tempDir.toString());
 
         // Cria arquivo antigo (48 horas atrás)
-        Path oldFile = tempDir.resolve("backup_old.sql");
-        Files.writeString(oldFile, "DUMP SQL ANTIGO");
-        Files.setLastModifiedTime(oldFile, FileTime.from(Instant.now().minus(48, ChronoUnit.HOURS)));
+        Path oldSql = tempDir.resolve("backup_old.sql");
+        Files.writeString(oldSql, "DUMP SQL ANTIGO");
+        Files.setLastModifiedTime(oldSql, FileTime.from(Instant.now().minus(48, ChronoUnit.HOURS)));
 
         // Cria arquivo recente (1 hora atrás)
-        Path newFile = tempDir.resolve("backup_recent.sql");
-        Files.writeString(newFile, "DUMP SQL RECENTE");
-        Files.setLastModifiedTime(newFile, FileTime.from(Instant.now().minus(1, ChronoUnit.HOURS)));
+        Path newSql = tempDir.resolve("backup_recent.sql");
+        Files.writeString(newSql, "DUMP SQL RECENTE");
+        Files.setLastModifiedTime(newSql, FileTime.from(Instant.now().minus(1, ChronoUnit.HOURS)));
+
+        // Cria backup ZIP recente (5 dias atrás - deve ser preservado pela retenção de 30 dias)
+        Path zipRecent = tempDir.resolve("backup_20260820_030000.zip");
+        Files.writeString(zipRecent, "ZIP RECENTE");
+        Files.setLastModifiedTime(zipRecent, FileTime.from(Instant.now().minus(5, ChronoUnit.DAYS)));
+
+        // Cria backup ZIP muito antigo (45 dias atrás - deve ser deletado pela retenção de 30 dias)
+        Path zipOld = tempDir.resolve("backup_20260710_030000.zip");
+        Files.writeString(zipOld, "ZIP EXPIRADO");
+        Files.setLastModifiedTime(zipOld, FileTime.from(Instant.now().minus(45, ChronoUnit.DAYS)));
 
         // Executa a limpeza
         scheduler.executePreventiveCleanup();
 
         // Validações
-        assertFalse(Files.exists(oldFile), "O arquivo antigo com mais de 24h deveria ter sido deletado");
-        assertTrue(Files.exists(newFile), "O arquivo recente deveria ter sido preservado");
+        assertFalse(Files.exists(oldSql), "O dump SQL temporário com mais de 24h deveria ter sido deletado");
+        assertTrue(Files.exists(newSql), "O dump SQL recente deveria ter sido preservado");
+        assertTrue(Files.exists(zipRecent), "O backup ZIP de 5 dias atrás deveria ter sido preservado pela regra de 30 dias");
+        assertFalse(Files.exists(zipOld), "O backup ZIP expirado com mais de 30 dias deveria ter sido deletado");
     }
 
     @Test

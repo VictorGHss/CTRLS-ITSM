@@ -37,3 +37,11 @@ export async function downloadBackup(filename: string): Promise<Blob> {
 export async function deleteBackup(filename: string): Promise<void> {
   await api.delete(`/admin/backups/${filename}`);
 }
+
+/**
+ * Dispara um e-mail de teste de backup.
+ */
+export async function testBackupEmail(): Promise<{ message: string }> {
+  const { data } = await api.post<{ message: string }>('/admin/backups/test-email');
+  return data;
+}

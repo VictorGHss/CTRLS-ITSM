@@ -1,7 +1,5 @@
 package br.dev.ctrls.inovareti.modules.admin.infrastructure.adapter.input;
 
-
-
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -10,6 +8,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.FileSystemResource;
@@ -95,7 +94,7 @@ public class BackupController {
      */
     @PreAuthorize("hasRole('ADMIN')")
     @PostMapping("/trigger")
-    public ResponseEntity<Void> triggerBackup() {
+    public ResponseEntity<Map<String, String>> triggerBackup() {
         // Exige validação ativa do segundo fator de autenticação (MFA/2FA) antes de disparar manualmente um backup.
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         twoFactorSessionGuard.assertVerified(authentication);
@@ -103,10 +102,29 @@ public class BackupController {
         log.info("Execução manual de backup disparada pelo administrador.");
         try {
             databaseBackupScheduler.executeBackupManual();
-            return ResponseEntity.status(HttpStatus.CREATED).build();
+            return ResponseEntity.status(HttpStatus.CREATED).body(Map.of("message", "Backup gerado com sucesso."));
         } catch (Exception ex) {
             log.error("Falha ao executar backup manual", ex);
             throw new BadRequestException("Falha ao gerar o backup manualmente: " + ex.getMessage());
+        }
+    }
+
+    /**
+     * Dispara um e-mail de teste para validação da entrega de relatórios e anexos de backup.
+     */
+    @PreAuthorize("hasRole('ADMIN')")
+    @PostMapping("/test-email")
+    public ResponseEntity<Map<String, String>> testBackupEmail() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        twoFactorSessionGuard.assertVerified(authentication);
+
+        log.info("Solicitação de disparo de e-mail de teste de backup recebida pelo administrador.");
+        try {
+            databaseBackupScheduler.sendTestEmail();
+            return ResponseEntity.ok(Map.of("message", "E-mail de teste de backup enviado com sucesso."));
+        } catch (Exception ex) {
+            log.error("Falha ao enviar e-mail de teste de backup", ex);
+            throw new BadRequestException("Falha ao enviar e-mail de teste: " + ex.getMessage());
         }
     }
 

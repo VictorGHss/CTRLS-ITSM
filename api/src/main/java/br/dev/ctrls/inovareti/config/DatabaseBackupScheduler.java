@@ -15,7 +15,6 @@ import org.springframework.stereotype.Component;
 
 import br.dev.ctrls.inovareti.modules.finance.domain.model.SystemAlert;
 import br.dev.ctrls.inovareti.modules.finance.domain.port.SystemAlertRepository;
-import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -151,17 +150,33 @@ public class DatabaseBackupScheduler {
             log.info("Arquivo compactado com sucesso em formato ZIP: {}", zipFile.getAbsolutePath());
 
             // 4. Utilizar JavaMailSender para enviar por e-mail
-            try {
-                sendBackupEmail(zipFile, timestamp);
-            } catch (Exception emailEx) {
-                log.warn("Falha ao enviar backup por e-mail, mas o arquivo físico foi preservado: {}", emailEx.getMessage());
+            boolean emailSent = false;
+            String emailError = null;
+            if (destinationEmail != null && !destinationEmail.isBlank() && !"backup@example.com".equalsIgnoreCase(destinationEmail.trim())) {
+                try {
+                    sendBackupEmail(zipFile, timestamp);
+                    emailSent = true;
+                } catch (Exception emailEx) {
+                    emailError = emailEx.getMessage();
+                    log.error("Falha ao enviar backup por e-mail para {}: {}", destinationEmail, emailEx.getMessage(), emailEx);
+                }
+            } else {
+                log.warn("E-mail de destino de backup não configurado ou está com valor padrão ({}).", destinationEmail);
             }
 
-            // 5. Registrar sucesso no SystemAlertRepository e Logs
-            saveAlert("INFO", "Backup do banco de dados realizado com sucesso", 
-                    "O backup foi executado e salvo em disco com sucesso. Origem: " + (isManual ? "Manual" : "Agendado"), timestamp, zipFile.length());
+            // 5. Registrar sucesso ou alerta no SystemAlertRepository e Logs
+            if (emailSent) {
+                saveAlert("INFO", "Backup do banco de dados realizado com sucesso", 
+                        "O backup foi executado, salvo em disco (" + zipFile.getName() + ") e enviado por e-mail para " + destinationEmail + ". Origem: " + (isManual ? "Manual" : "Agendado"), timestamp, zipFile.length());
+            } else if (emailError != null) {
+                saveAlert("WARNING", "Backup salvo em disco, mas falhou envio por e-mail", 
+                        "O backup foi salvo em disco com sucesso (" + zipFile.getName() + "), porém o envio por e-mail para " + destinationEmail + " falhou: " + emailError + ". Origem: " + (isManual ? "Manual" : "Agendado"), timestamp, zipFile.length());
+            } else {
+                saveAlert("INFO", "Backup do banco de dados realizado com sucesso", 
+                        "O backup foi executado e salvo em disco com sucesso (" + zipFile.getName() + "). Origem: " + (isManual ? "Manual" : "Agendado"), timestamp, zipFile.length());
+            }
             
-            log.info("Rotina de backup finalizada com sucesso. Arquivo ZIP salvo em: {}", zipFile.getAbsolutePath());
+            log.info("Rotina de backup finalizada com sucesso. Arquivo ZIP salvo em: {}. Email enviado={}", zipFile.getAbsolutePath(), emailSent);
 
         } catch (IOException | InterruptedException e) {
             log.error("Falha crítica durante a execução do backup do banco de dados: {}", e.getMessage(), e);
@@ -209,26 +224,72 @@ public class DatabaseBackupScheduler {
     }
 
     /**
+     * Dispara um e-mail de teste para validação da conectividade SMTP e recebimento de anexos.
+     */
+    public void sendTestEmail() throws Exception {
+        String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
+        File tempFolder = new File(tempDir);
+        if (!tempFolder.exists()) {
+            tempFolder.mkdirs();
+        }
+        File testFile = new File(tempFolder, "teste_backup_" + timestamp + ".txt");
+        try {
+            java.nio.file.Files.writeString(testFile.toPath(), "Teste de envio de e-mail de backup Inovare-TI em " + LocalDateTime.now());
+            sendBackupEmail(testFile, timestamp);
+        } finally {
+            if (testFile.exists()) {
+                testFile.delete();
+            }
+        }
+    }
+
+    /**
      * Constrói e envia o e-mail contendo o anexo do backup compactado.
      */
-    private void sendBackupEmail(File attachmentFile, String timestamp) throws MessagingException {
+    private void sendBackupEmail(File attachmentFile, String timestamp) throws Exception {
+        if (destinationEmail == null || destinationEmail.isBlank() || "backup@example.com".equalsIgnoreCase(destinationEmail.trim())) {
+            log.warn("E-mail de destino de backup não está configurado. Envio abortado.");
+            throw new IllegalArgumentException("Destinatário de e-mail de backup não configurado (app.backup.destination-email).");
+        }
+
+        String fromEmail = (smtpUsername != null && !smtpUsername.isBlank()) ? smtpUsername.trim() : "administrativo@inovare.med.br";
+        String targetDest = destinationEmail.trim();
+
         MimeMessage message = mailSender.createMimeMessage();
         MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
 
-        helper.setFrom(smtpUsername);
-        helper.setTo(destinationEmail);
+        try {
+            helper.setFrom(fromEmail, "Inovare TI - Backup");
+        } catch (Exception e) {
+            helper.setFrom(fromEmail);
+        }
+
+        helper.setTo(targetDest);
         helper.setSubject("Backup Diário Automático (PostgreSQL) - Clínica Inovare - " + timestamp);
         
+        long fileSizeBytes = attachmentFile.length();
+        double fileSizeMb = fileSizeBytes / (1024.0 * 1024.0);
+
         String bodyText = "<html>"
-                + "<body style='font-family: Arial, sans-serif; color: #333;'>"
-                + "<h2 style='color: #1e3a8a;'>Relatório de Backup Automático</h2>"
+                + "<body style='font-family: Arial, sans-serif; color: #333; line-height: 1.6;'>"
+                + "<div style='max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;'>"
+                + "<div style='background-color: #1e3a8a; padding: 20px; text-align: center; color: white;'>"
+                + "<h2 style='margin: 0;'>Relatório de Backup do Sistema</h2>"
+                + "<p style='margin: 5px 0 0 0; opacity: 0.8;'>Clínica Inovare • PostgreSQL</p>"
+                + "</div>"
+                + "<div style='padding: 24px;'>"
                 + "<p>Olá Administrador,</p>"
-                + "<p>Confirmamos que a rotina automática de backup do banco de dados da <strong>Clínica Inovare</strong> foi concluída com sucesso.</p>"
-                + "<p><strong>Identificador do Backup:</strong> <code>backup_" + timestamp + "</code></p>"
-                + "<p><strong>Data de Execução:</strong> " + LocalDateTime.now().toString() + "</p>"
-                + "<p>O arquivo ZIP contendo o dump SQL do banco de dados PostgreSQL segue anexado a esta mensagem.</p>"
-                + "<br/>"
-                + "<p style='font-size: 12px; color: #666;'>Esta é uma notificação automática enviada pela plataforma Inovare-TI. Favor não responder.</p>"
+                + "<p>A rotina de backup do banco de dados foi concluída com sucesso no servidor.</p>"
+                + "<table style='width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 14px;'>"
+                + "<tr><td style='padding: 8px; border-bottom: 1px solid #f3f4f6; font-weight: bold;'>Arquivo:</td><td style='padding: 8px; border-bottom: 1px solid #f3f4f6;'><code>" + attachmentFile.getName() + "</code></td></tr>"
+                + "<tr><td style='padding: 8px; border-bottom: 1px solid #f3f4f6; font-weight: bold;'>Tamanho:</td><td style='padding: 8px; border-bottom: 1px solid #f3f4f6;'>" + String.format("%.2f MB (%d bytes)", fileSizeMb, fileSizeBytes) + "</td></tr>"
+                + "<tr><td style='padding: 8px; border-bottom: 1px solid #f3f4f6; font-weight: bold;'>Data/Hora:</td><td style='padding: 8px; border-bottom: 1px solid #f3f4f6;'>" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss")) + "</td></tr>"
+                + "</table>"
+                + "<p>O arquivo com o snapshot do banco de dados segue anexado a esta mensagem.</p>"
+                + "<hr style='border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;'/>"
+                + "<p style='font-size: 12px; color: #6b7280; text-align: center;'>Inovare TI • Esta é uma notificação automática gerada pelo sistema.</p>"
+                + "</div>"
+                + "</div>"
                 + "</body>"
                 + "</html>";
                 
@@ -236,7 +297,7 @@ public class DatabaseBackupScheduler {
         helper.addAttachment(attachmentFile.getName(), attachmentFile);
 
         mailSender.send(message);
-        log.info("E-mail com anexo de backup enviado com sucesso para: {}", destinationEmail);
+        log.info("E-mail com anexo de backup enviado com sucesso para: {}", targetDest);
     }
 
     /**

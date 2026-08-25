@@ -19,4 +19,5 @@ public class CleanupProperties {
     private String cron = "0 30 3 * * ?";
     private int tempRetentionHours = 24;
     private int orphanRetentionDays = 30;
+    private int backupRetentionDays = 30;
 }
