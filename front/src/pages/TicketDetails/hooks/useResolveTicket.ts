@@ -15,6 +15,7 @@ interface UseResolveTicketParams {
 }
 
 export interface ResolveTicketItemState {
+  id: string;
   itemId: string;
   itemName: string;
   quantity: number;
@@ -61,8 +62,9 @@ export function useResolveTicket({
       
       // 1. Se o chamado tem múltiplos itens solicitados cadastrados
       if (ticket.requestedItems && ticket.requestedItems.length > 0) {
-        ticket.requestedItems.forEach((ri) => {
+        ticket.requestedItems.forEach((ri, idx) => {
           initialItems.push({
+            id: `${ri.itemId}-${idx}-${Date.now()}`,
             itemId: ri.itemId,
             itemName: ri.itemName || 'Material de Consumo',
             quantity: ri.quantity,
@@ -73,6 +75,7 @@ export function useResolveTicket({
       // 2. Fallback para chamado com item único de inventário legado
       else if (ticket.requestedItemId && ticket.requestedQuantity) {
         initialItems.push({
+          id: `${ticket.requestedItemId}-0-${Date.now()}`,
           itemId: ticket.requestedItemId,
           itemName: ticket.requestedItemName || 'Material de Consumo',
           quantity: ticket.requestedQuantity,
@@ -144,6 +147,42 @@ export function useResolveTicket({
     }
     
     return filtered.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  }, [users, ticket]);
+
+  // Lista expandida com todos os usuários/médicos da clínica para seleção flexível (com solicitante no topo)
+  const availableRecipients = useMemo(() => {
+    const linkedIds = new Set([ticket?.requesterId, ...(ticket?.additionalUserIds || [])].filter(Boolean) as string[]);
+
+    const linked: { id: string; name: string }[] = [];
+    const others: { id: string; name: string }[] = [];
+
+    users.forEach((u) => {
+      if (linkedIds.has(u.id)) {
+        const isReq = u.id === ticket?.requesterId;
+        linked.push({
+          id: u.id,
+          name: `${u.name}${isReq ? ' (Solicitante)' : ' (Vinculado)'}`,
+        });
+      } else {
+        others.push({
+          id: u.id,
+          name: u.name || 'Sem nome',
+        });
+      }
+    });
+
+    // Se o solicitante não veio no array geral users, adiciona manualmente
+    if (ticket?.requesterId && !linked.some((l) => l.id === ticket.requesterId)) {
+      linked.unshift({
+        id: ticket.requesterId,
+        name: `${ticket.requesterName || 'Solicitante'} (Solicitante)`,
+      });
+    }
+
+    linked.sort((a, b) => a.name.localeCompare(b.name));
+    others.sort((a, b) => a.name.localeCompare(b.name));
+
+    return [...linked, ...others];
   }, [users, ticket]);
 
   // Se houver insumos a entregar atrelados ao chamado, ativa a dedução automática
@@ -307,11 +346,76 @@ export function useResolveTicket({
     setMaintCost('');
   }
 
-  function handleRecipientChange(itemId: string, recipientId: string) {
+  function handleRecipientChange(rowId: string, recipientId: string) {
     setItemsToDeliver((prev) =>
       prev.map((item) =>
-        item.itemId === itemId ? { ...item, recipientUserId: recipientId } : item
+        item.id === rowId ? { ...item, recipientUserId: recipientId } : item
       )
+    );
+  }
+
+  function handleSplitItem(rowId: string) {
+    setItemsToDeliver((prev) => {
+      const itemIndex = prev.findIndex((item) => item.id === rowId);
+      if (itemIndex === -1) return prev;
+
+      const targetItem = prev[itemIndex];
+      if (targetItem.quantity <= 1) {
+        toast.warning('A quantidade mínima para divisão é 2 unidades.');
+        return prev;
+      }
+
+      // Diminui a quantidade da linha atual em 1
+      const updatedTarget = {
+        ...targetItem,
+        quantity: targetItem.quantity - 1,
+      };
+
+      // Cria a nova linha desmembrada com quantidade 1 e destinatário em branco para escolha
+      const newSplitRow: ResolveTicketItemState = {
+        id: `${targetItem.itemId}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        itemId: targetItem.itemId,
+        itemName: targetItem.itemName,
+        quantity: 1,
+        recipientUserId: '',
+      };
+
+      const newItems = [...prev];
+      newItems.splice(itemIndex, 1, updatedTarget);
+      newItems.splice(itemIndex + 1, 0, newSplitRow);
+      return newItems;
+    });
+  }
+
+  function handleRemoveSplitItem(rowId: string) {
+    setItemsToDeliver((prev) => {
+      const targetItem = prev.find((item) => item.id === rowId);
+      if (!targetItem) return prev;
+
+      // Localiza outra linha do mesmo insumo para devolver a quantidade
+      const otherRowIndex = prev.findIndex((item) => item.itemId === targetItem.itemId && item.id !== rowId);
+      if (otherRowIndex === -1) {
+        return prev;
+      }
+
+      const updatedOther = {
+        ...prev[otherRowIndex],
+        quantity: prev[otherRowIndex].quantity + targetItem.quantity,
+      };
+
+      const remaining = prev.filter((item) => item.id !== rowId);
+      const newOtherIdx = remaining.findIndex((item) => item.id === prev[otherRowIndex].id);
+      if (newOtherIdx !== -1) {
+        remaining[newOtherIdx] = updatedOther;
+      }
+      return remaining;
+    });
+  }
+
+  function handleItemQuantityChange(rowId: string, newQty: number) {
+    if (newQty < 1) return;
+    setItemsToDeliver((prev) =>
+      prev.map((item) => (item.id === rowId ? { ...item, quantity: newQty } : item))
     );
   }
 
@@ -393,6 +497,7 @@ export function useResolveTicket({
       // Se o técnico adicionou manualmente a entrega de um insumo avulso
       if (deliverEquipment && deliveryType === 'item' && selectedItemId) {
         finalItemsToDeliver.push({
+          id: `${selectedItemId}-${Date.now()}`,
           itemId: selectedItemId,
           itemName: items.find((i) => i.id === selectedItemId)?.name || 'Insumo',
           quantity: quantity,
@@ -487,7 +592,11 @@ export function useResolveTicket({
     handleSubmit,
     itemsToDeliver,
     handleRecipientChange,
+    handleSplitItem,
+    handleRemoveSplitItem,
+    handleItemQuantityChange,
     ticketUsers,
+    availableRecipients,
     // Novos campos expostos para vinculação da alocação de insumos
     linkInsumosToAsset,
     setLinkInsumosToAsset,

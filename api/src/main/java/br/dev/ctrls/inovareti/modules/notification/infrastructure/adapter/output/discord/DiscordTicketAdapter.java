@@ -102,27 +102,40 @@ public class DiscordTicketAdapter implements DiscordTicketPort {
         }
 
         String shortNum = ticket.getNumber() != null ? ticket.getNumber().toLowerCase() : "ticket";
-        String suffix = "";
+        String normalizedTitle = "chamado";
         if (ticket.getTitle() != null && !ticket.getTitle().isBlank()) {
-            String normalized = java.text.Normalizer.normalize(ticket.getTitle(), java.text.Normalizer.Form.NFD)
+            normalizedTitle = java.text.Normalizer.normalize(ticket.getTitle(), java.text.Normalizer.Form.NFD)
                     .replaceAll("\\p{M}", "")
                     .toLowerCase()
                     .replaceAll("[^a-z0-9\\s-]", "")
                     .replaceAll("\\s+", "-")
                     .replaceAll("-+", "-")
                     .trim();
-            if (!normalized.isEmpty()) {
-                suffix = "-" + normalized;
-            }
+        }
+        if (normalizedTitle.isEmpty()) {
+            normalizedTitle = "chamado";
+        }
+        if (normalizedTitle.length() > 65) {
+            normalizedTitle = normalizedTitle.substring(0, 65).replaceAll("-$", "");
         }
 
-        String channelName = "ticket-" + shortNum + suffix;
-        if (channelName.length() > 30) {
-            channelName = channelName.substring(0, 30).replaceAll("-$", "");
+        String channelName = normalizedTitle + "-" + shortNum;
+        if (channelName.length() > 85) {
+            channelName = channelName.substring(0, 85).replaceAll("-$", "");
+        }
+
+        String requesterDisplayName = preResolvedRequesterName != null ? preResolvedRequesterName : (ticket.getRequester() != null ? ticket.getRequester().getName() : "Solicitante");
+        String sectorDisplayName = preResolvedSectorName != null ? preResolvedSectorName : (ticket.getRequester() != null && ticket.getRequester().getSector() != null ? ticket.getRequester().getSector().getName() : "Geral");
+        String ticketTitleDisplay = ticket.getTitle() != null ? ticket.getTitle() : "Sem título";
+        String channelTopic = String.format("🎫 Chamado #%s | %s (%s) | %s | ID: %s",
+                shortNum.toUpperCase(), requesterDisplayName, sectorDisplayName, ticketTitleDisplay, ticket.getId());
+        if (channelTopic.length() > 1024) {
+            channelTopic = channelTopic.substring(0, 1020) + "...";
         }
 
         // Configura ações de override de permissão
         var channelAction = activeCategory.createTextChannel(java.util.Objects.requireNonNull(channelName))
+                .setTopic(channelTopic)
                 .addPermissionOverride(guild.getPublicRole(), null, EnumSet.of(Permission.VIEW_CHANNEL));
 
         if (requesterMember != null) {
@@ -253,17 +266,10 @@ public class DiscordTicketAdapter implements DiscordTicketPort {
                 return;
             }
 
-            String prefix = "ticket-" + dbTicket.getNumber().toLowerCase();
-            List<TextChannel> channels = new java.util.ArrayList<>();
-            for (TextChannel tc : guild.getTextChannels()) {
-                if (tc.getName().startsWith(prefix)) {
-                    channels.add(tc);
-                }
-            }
+            List<TextChannel> channels = findChannelsForTicket(guild, dbTicket);
 
             if (channels.isEmpty()) {
-                log.warn("[DISCORD-TICKET] Nenhum canal encontrado com o prefixo '{}' para o chamado #{}.",
-                        prefix, dbTicket.getNumber());
+                log.warn("[DISCORD-TICKET] Nenhum canal encontrado para o chamado #{}.", dbTicket.getNumber());
                 return;
             }
 
@@ -437,10 +443,7 @@ public class DiscordTicketAdapter implements DiscordTicketPort {
             return;
         }
 
-        String prefix = "ticket-" + ticket.getNumber().toLowerCase();
-        List<TextChannel> channels = guild.getTextChannels().stream()
-                .filter(tc -> tc.getName().startsWith(prefix))
-                .toList();
+        List<TextChannel> channels = findChannelsForTicket(guild, ticket);
 
         for (TextChannel channel : channels) {
             // Move de volta para a categoria de ativos
@@ -479,7 +482,7 @@ public class DiscordTicketAdapter implements DiscordTicketPort {
     public void notifyMerged(Ticket childTicket, Ticket parentTicket) {
         childTicket = ticketRepository.findById(childTicket.getId()).orElse(childTicket);
         parentTicket = ticketRepository.findById(parentTicket.getId()).orElse(parentTicket);
-        log.info("[DISCORD-TICKET] Enviando notificação de unificação para canal do chamado filho #{}.", childTicket.getNumber());
+        log.info("[DISCORD-TICKET] Processando unificação do chamado filho #{} ao pai #{}.", childTicket.getNumber(), parentTicket.getNumber());
 
         JDA jda = jdaProvider.getIfAvailable();
         if (jda == null) {
@@ -493,20 +496,74 @@ public class DiscordTicketAdapter implements DiscordTicketPort {
             return;
         }
 
-        String prefix = "ticket-" + childTicket.getNumber().toLowerCase();
-        List<TextChannel> channels = new java.util.ArrayList<>();
-        for (TextChannel tc : guild.getTextChannels()) {
-            if (tc.getName().startsWith(prefix)) {
-                channels.add(tc);
-            }
-        }
+        Category baseArchivedCategory = guild.getCategoryById(ARCHIVED_CATEGORY_ID);
+        Category targetArchivedCategory = resolveAvailableArchivedCategory(guild, baseArchivedCategory);
 
-        for (TextChannel channel : channels) {
-            channel.sendMessage("🚨 Este chamado foi unificado ao Chamado Mestre #" + parentTicket.getNumber()).queue(
-                    v -> log.info("[DISCORD-TICKET] Notificação de unificação enviada no canal #{}", channel.getName()),
-                    err -> log.error("[DISCORD-TICKET] Erro ao enviar notificação de unificação no canal #{}", channel.getName(), err)
+        List<TextChannel> childChannels = findChannelsForTicket(guild, childTicket);
+        List<TextChannel> parentChannels = findChannelsForTicket(guild, parentTicket);
+        TextChannel parentChannel = parentChannels.isEmpty() ? null : parentChannels.get(0);
+
+        String parentMention = parentChannel != null ? "<#" + parentChannel.getId() + ">" : "Chamado Mestre #" + parentTicket.getNumber();
+
+        // 1. Notifica e arquiva o(s) canal(is) do chamado filho
+        for (TextChannel channel : childChannels) {
+            net.dv8tion.jda.api.EmbedBuilder eb = new net.dv8tion.jda.api.EmbedBuilder();
+            eb.setTitle("🚨 Chamado #" + childTicket.getNumber() + " Unificado ao Chamado #" + parentTicket.getNumber());
+            eb.setColor(CLINIC_BRAND_COLOR);
+            eb.setDescription("Este chamado foi **unificado** ao atendimento principal em " + parentMention + ".\n\n"
+                    + "📋 **Chamado Mestre:** #" + parentTicket.getNumber() + " - " + parentTicket.getTitle() + "\n"
+                    + "🔒 *Este canal está sendo arquivado. O atendimento continuará no canal principal.*");
+            eb.setFooter("Inovare TI • Unificação de Chamados");
+            eb.setTimestamp(java.time.Instant.now());
+
+            channel.sendMessageEmbeds(eb.build()).queue(
+                    msg -> {
+                        // Remove permissões de envio de mensagens
+                        for (PermissionOverride override : channel.getMemberPermissionOverrides()) {
+                            long targetId = override.getIdLong();
+                            if (targetId != jda.getSelfUser().getIdLong()) {
+                                try {
+                                    channel.getManager().putMemberPermissionOverride(
+                                            targetId,
+                                            EnumSet.of(Permission.VIEW_CHANNEL, Permission.MESSAGE_HISTORY),
+                                            EnumSet.of(Permission.MESSAGE_SEND)
+                                    ).queue();
+                                } catch (Exception ignored) {}
+                            }
+                        }
+
+                        // Move para a categoria de arquivados
+                        if (targetArchivedCategory != null) {
+                            channel.getManager().setParent(targetArchivedCategory).queue(
+                                    v -> log.info("[DISCORD-TICKET] Canal do filho #{} arquivado com sucesso.", channel.getName()),
+                                    err -> log.error("[DISCORD-TICKET] Falha ao mover canal do filho #{} para arquivados: {}", channel.getName(), err.getMessage())
+                            );
+                        }
+                    },
+                    err -> log.error("[DISCORD-TICKET] Falha ao enviar mensagem de unificação no canal do filho #{}: {}", channel.getName(), err.getMessage())
             );
         }
+
+        // 2. Notifica no canal do chamado mestre (pai) e sincroniza permissões
+        if (parentChannel != null) {
+            net.dv8tion.jda.api.EmbedBuilder parentEb = new net.dv8tion.jda.api.EmbedBuilder();
+            parentEb.setTitle("🔗 Novo Chamado Unificado a Este Atendimento");
+            parentEb.setColor(CLINIC_BRAND_COLOR);
+            String childRequester = childTicket.getRequester() != null ? childTicket.getRequester().getName() : "Solicitante";
+            parentEb.setDescription("O chamado **#" + childTicket.getNumber() + "** (*" + childTicket.getTitle() + "*), "
+                    + "solicitado por **" + childRequester + "**, foi unificado a este chamado mestre.\n\n"
+                    + "👥 *Os envolvidos agora têm acesso a este canal e receberão as atualizações por aqui.*");
+            parentEb.setFooter("Inovare TI • Central de Atendimento");
+            parentEb.setTimestamp(java.time.Instant.now());
+
+            parentChannel.sendMessageEmbeds(parentEb.build()).queue(
+                    v -> log.info("[DISCORD-TICKET] Notificação de unificação enviada no canal mestre #{}", parentChannel.getName()),
+                    err -> log.error("[DISCORD-TICKET] Erro ao enviar aviso no canal mestre #{}: {}", parentChannel.getName(), err.getMessage())
+            );
+        }
+
+        // Sincroniza permissões do canal mestre para dar acesso aos novos usuários vinculados
+        syncTicketChannelPermissions(parentTicket);
     }
 
     @Override
@@ -527,17 +584,10 @@ public class DiscordTicketAdapter implements DiscordTicketPort {
             return;
         }
 
-        String prefix = "ticket-" + ticket.getNumber().toLowerCase();
-        List<TextChannel> channels = new java.util.ArrayList<>();
-        for (TextChannel tc : guild.getTextChannels()) {
-            if (tc.getName().startsWith(prefix)) {
-                channels.add(tc);
-            }
-        }
+        List<TextChannel> channels = findChannelsForTicket(guild, ticket);
 
         if (channels.isEmpty()) {
-            log.warn("[DISCORD-TICKET] Nenhum canal encontrado com o prefixo '{}' para o chamado #{}.",
-                    prefix, ticket.getNumber());
+            log.warn("[DISCORD-TICKET] Nenhum canal encontrado para sincronizar permissões do chamado #{}.", ticket.getNumber());
             return;
         }
 
@@ -646,5 +696,35 @@ public class DiscordTicketAdapter implements DiscordTicketPort {
                     ticket.getNumber() != null ? ticket.getNumber() : "-", ex.getMessage());
         }
         return "";
+    }
+
+    /**
+     * Localiza canais de texto associados a um chamado no Discord.
+     * Suporta tanto o novo formato (título-shortNum) quanto legados (ticket-shortNum) ou pelo ID no tópico.
+     */
+    private List<TextChannel> findChannelsForTicket(Guild guild, Ticket ticket) {
+        if (guild == null || ticket == null) {
+            return java.util.Collections.emptyList();
+        }
+        String shortNum = ticket.getNumber() != null ? ticket.getNumber().toLowerCase() : "";
+        String idStr = ticket.getId() != null ? ticket.getId().toString().toLowerCase() : "";
+
+        List<TextChannel> found = new java.util.ArrayList<>();
+        for (TextChannel tc : guild.getTextChannels()) {
+            String name = tc.getName().toLowerCase();
+            String topic = tc.getTopic() != null ? tc.getTopic().toLowerCase() : "";
+
+            boolean matchesName = !shortNum.isEmpty() && (
+                    name.endsWith("-" + shortNum) ||
+                    name.startsWith("ticket-" + shortNum) ||
+                    name.contains(shortNum)
+            );
+            boolean matchesTopic = !idStr.isEmpty() && topic.contains(idStr);
+
+            if (matchesName || matchesTopic) {
+                found.add(tc);
+            }
+        }
+        return found;
     }
 }

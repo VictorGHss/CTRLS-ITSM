@@ -7,6 +7,7 @@ import java.nio.file.Files;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -55,25 +56,44 @@ public class DiscordMessageListener extends ListenerAdapter {
         }
 
         String channelName = event.getChannel().getName();
-        if (!channelName.startsWith("ticket-")) {
-            return;
+        String topic = event.getChannel().asTextChannel().getTopic();
+        Ticket ticket = null;
+
+        // 1. Tenta identificar pelo UUID contido no tópico do canal (ID: <uuid>)
+        if (topic != null && topic.contains("ID: ")) {
+            try {
+                int idIdx = topic.indexOf("ID: ");
+                String uuidStr = topic.substring(idIdx + 4).trim().split("[\\s|]+")[0];
+                ticket = ticketRepository.findById(UUID.fromString(uuidStr)).orElse(null);
+            } catch (Exception ignored) {}
         }
 
-        log.info("[DISCORD-TICKET] Nova mensagem recebida no canal {}: {}", channelName, event.getMessage().getContentDisplay());
-
-        String shortId = channelName.substring("ticket-".length());
-        if (shortId.length() >= 8) {
-            shortId = shortId.substring(0, 8);
+        // 2. Se não encontrou no tópico, tenta pelo formato legado (ticket-<shortId>)
+        if (ticket == null && channelName.startsWith("ticket-")) {
+            String shortId = channelName.substring("ticket-".length());
+            if (shortId.length() >= 8) {
+                shortId = shortId.substring(0, 8);
+            }
+            ticket = ticketRepository.findByShortIdStartingWith(shortId).stream().findFirst().orElse(null);
         }
-        Ticket ticket = ticketRepository.findByShortIdStartingWith(shortId)
-                .stream()
-                .findFirst()
-                .orElse(null);
+
+        // 3. Tenta pelo novo formato com sufixo de ID curto (<titulo>-<shortId>)
+        if (ticket == null) {
+            String[] parts = channelName.split("-");
+            if (parts.length > 0) {
+                String lastPart = parts[parts.length - 1];
+                if (lastPart.length() >= 4) {
+                    ticket = ticketRepository.findByShortIdStartingWith(lastPart).stream().findFirst().orElse(null);
+                }
+            }
+        }
 
         if (ticket == null) {
-            log.warn("[DISCORD-TICKET] Chamado com ID curto {} não encontrado no banco de dados.", shortId);
             return;
         }
+
+        log.info("[DISCORD-TICKET] Nova mensagem recebida no canal {} para chamado #{}: {}",
+                channelName, ticket.getNumber(), event.getMessage().getContentDisplay());
 
         // Resolve author from sender's Discord ID
         String authorDiscordId = event.getAuthor().getId();
