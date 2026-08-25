@@ -53,15 +53,26 @@ class AppointmentBatchFilterPipelineTest {
     }
 
     @Test
-    @DisplayName("isProcedureEligible: Aceita consultas e bloqueia cirurgias hospitalares sem isenção")
+    @DisplayName("isProcedureEligible: Aceita consultas e bloqueia cirurgias hospitalares, recados e tarefas")
     void testIsProcedureEligible() {
+        // Consultas e atendimentos ambulatoriais autorizados
         assertThat(AppointmentBatchFilterPipeline.isProcedureEligible("1", "Consulta Médica", null)).isTrue();
         assertThat(AppointmentBatchFilterPipeline.isProcedureEligible("2", "Retorno", null)).isTrue();
         assertThat(AppointmentBatchFilterPipeline.isProcedureEligible("3", "Conversar Cirurgia", null)).isTrue();
+        assertThat(AppointmentBatchFilterPipeline.isProcedureEligible("4", "Retorno Cirúrgico", null)).isTrue();
 
         // Cirurgias bloqueadas
-        assertThat(AppointmentBatchFilterPipeline.isProcedureEligible("4", "Cirurgia Dr. Murilo", null)).isFalse();
-        assertThat(AppointmentBatchFilterPipeline.isProcedureEligible("5", "CIRURGIAS MU", null)).isFalse();
+        assertThat(AppointmentBatchFilterPipeline.isProcedureEligible("5", "Cirurgia Dr. Murilo", null)).isFalse();
+        assertThat(AppointmentBatchFilterPipeline.isProcedureEligible("6", "CIRURGIAS MU", null)).isFalse();
+        assertThat(AppointmentBatchFilterPipeline.isProcedureEligible("7", "Cirurgia Plástica", null)).isFalse();
+        assertThat(AppointmentBatchFilterPipeline.isProcedureEligible("8", "Cirurgia Geral", null)).isFalse();
+
+        // Recados, tarefas e bloqueios de agenda bloqueados
+        assertThat(AppointmentBatchFilterPipeline.isProcedureEligible("9", "Recado", null)).isFalse();
+        assertThat(AppointmentBatchFilterPipeline.isProcedureEligible("10", "Tarefa", null)).isFalse();
+        assertThat(AppointmentBatchFilterPipeline.isProcedureEligible("11", "Bloqueio de Agenda", null)).isFalse();
+        assertThat(AppointmentBatchFilterPipeline.isProcedureEligible("12", "Sem Procedimento", null)).isFalse();
+        assertThat(AppointmentBatchFilterPipeline.isProcedureEligible(null, null, null)).isFalse();
     }
 
     @Test

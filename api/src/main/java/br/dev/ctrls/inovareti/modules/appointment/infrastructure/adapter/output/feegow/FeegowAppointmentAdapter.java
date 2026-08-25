@@ -417,20 +417,17 @@ public class FeegowAppointmentAdapter implements AppointmentExternalPort {
         String doctorName = (rawDoctor != null && !rawDoctor.trim().isBlank() && !"Profissional".equalsIgnoreCase(rawDoctor.trim())) ? rawDoctor.trim() : null;
 
         String rawProcedure = item.procedureName();
-        String procedureName = (rawProcedure != null && !rawProcedure.trim().isBlank() && !"Consulta".equalsIgnoreCase(rawProcedure.trim())) ? rawProcedure.trim() : null;
+        String procedureName = (rawProcedure != null && !rawProcedure.trim().isBlank()) ? rawProcedure.trim() : null;
 
-        if ((doctorName == null || procedureName == null) && profissionalId != null && !profissionalId.isBlank()) {
+        if (doctorName == null && profissionalId != null && !profissionalId.isBlank()) {
             AppointmentDoctorMappingRepositoryPort mappingRepo = doctorMappingRepositoryProvider.getIfAvailable();
             if (mappingRepo != null) {
                 try {
                     var mappingOpt = mappingRepo.findByProfissionalId(profissionalId);
                     if (mappingOpt.isPresent()) {
                         var mapping = mappingOpt.get();
-                        if (doctorName == null && mapping.getProfissionalNome() != null && !mapping.getProfissionalNome().isBlank()) {
+                        if (mapping.getProfissionalNome() != null && !mapping.getProfissionalNome().isBlank()) {
                             doctorName = mapping.getProfissionalNome().trim();
-                        }
-                        if (procedureName == null && mapping.getBlipQueueId() != null && mapping.getBlipQueueId().contains(" - ")) {
-                            procedureName = mapping.getBlipQueueId().split(" - ")[0].trim();
                         }
                     }
                 } catch (Exception ignored) {}
@@ -453,7 +450,7 @@ public class FeegowAppointmentAdapter implements AppointmentExternalPort {
             doctorName = "Profissional";
         }
         if (procedureName == null || procedureName.isBlank()) {
-            procedureName = "Consulta";
+            procedureName = "Sem Procedimento";
         }
 
         String unitName = item.unitName() != null && !item.unitName().isBlank() ? item.unitName().trim() : "Clínica Inovare";
