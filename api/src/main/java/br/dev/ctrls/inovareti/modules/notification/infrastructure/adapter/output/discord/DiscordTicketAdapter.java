@@ -23,7 +23,7 @@ import net.dv8tion.jda.api.entities.channel.concrete.Category;
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
 
 /**
- * Adapter that implements DiscordTicketPort using JDA.
+ * Adaptador que implementa DiscordTicketPort utilizando a biblioteca JDA para integração com o Discord.
  */
 @Slf4j
 @Component
@@ -711,15 +711,15 @@ public class DiscordTicketAdapter implements DiscordTicketPort {
 
         List<TextChannel> found = new java.util.ArrayList<>();
         for (TextChannel tc : guild.getTextChannels()) {
-            String name = tc.getName().toLowerCase();
-            String topic = tc.getTopic() != null ? tc.getTopic().toLowerCase() : "";
+            String name = tc.getName() != null ? tc.getName().toLowerCase() : "";
+            String topic = tc.getTopic();
 
             boolean matchesName = !shortNum.isEmpty() && (
                     name.endsWith("-" + shortNum) ||
                     name.startsWith("ticket-" + shortNum) ||
                     name.contains(shortNum)
             );
-            boolean matchesTopic = !idStr.isEmpty() && topic.contains(idStr);
+            boolean matchesTopic = topic != null && !idStr.isEmpty() && topic.toLowerCase().contains(idStr);
 
             if (matchesName || matchesTopic) {
                 found.add(tc);
