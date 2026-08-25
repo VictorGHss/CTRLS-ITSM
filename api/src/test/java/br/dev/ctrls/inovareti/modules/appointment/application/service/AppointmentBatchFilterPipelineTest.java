@@ -50,29 +50,28 @@ class AppointmentBatchFilterPipelineTest {
     void setUp() {
         when(appointmentMotorProperties.getTestDoctorIds()).thenReturn(List.of("10", "20"));
         when(appointmentMotorProperties.getActiveDoctorIds()).thenReturn(List.of("26", "12"));
+        when(appointmentMotorProperties.getEligibleProcedureIds()).thenReturn("1,2,16,17,100");
     }
 
     @Test
-    @DisplayName("isProcedureEligible: Aceita consultas e bloqueia cirurgias hospitalares, recados e tarefas")
+    @DisplayName("isProcedureEligible: Validação estrita por ID configurado na .env")
     void testIsProcedureEligible() {
-        // Consultas e atendimentos ambulatoriais autorizados
-        assertThat(AppointmentBatchFilterPipeline.isProcedureEligible("1", "Consulta Médica", null)).isTrue();
-        assertThat(AppointmentBatchFilterPipeline.isProcedureEligible("2", "Retorno", null)).isTrue();
-        assertThat(AppointmentBatchFilterPipeline.isProcedureEligible("3", "Conversar Cirurgia", null)).isTrue();
-        assertThat(AppointmentBatchFilterPipeline.isProcedureEligible("4", "Retorno Cirúrgico", null)).isTrue();
+        List<String> allowedIds = List.of("1", "2", "16", "17", "100");
 
-        // Cirurgias bloqueadas
-        assertThat(AppointmentBatchFilterPipeline.isProcedureEligible("5", "Cirurgia Dr. Murilo", null)).isFalse();
-        assertThat(AppointmentBatchFilterPipeline.isProcedureEligible("6", "CIRURGIAS MU", null)).isFalse();
-        assertThat(AppointmentBatchFilterPipeline.isProcedureEligible("7", "Cirurgia Plástica", null)).isFalse();
-        assertThat(AppointmentBatchFilterPipeline.isProcedureEligible("8", "Cirurgia Geral", null)).isFalse();
+        // IDs permitidos configurados no .env
+        assertThat(AppointmentBatchFilterPipeline.isProcedureEligible("1", "Consulta Médica", allowedIds)).isTrue();
+        assertThat(AppointmentBatchFilterPipeline.isProcedureEligible("2", "Retorno", allowedIds)).isTrue();
+        assertThat(AppointmentBatchFilterPipeline.isProcedureEligible("16", "Telemedicina", allowedIds)).isTrue();
+        assertThat(AppointmentBatchFilterPipeline.isProcedureEligible("100", "Qualquer Nome Autorizado", allowedIds)).isTrue();
 
-        // Recados, tarefas e bloqueios de agenda bloqueados
-        assertThat(AppointmentBatchFilterPipeline.isProcedureEligible("9", "Recado", null)).isFalse();
-        assertThat(AppointmentBatchFilterPipeline.isProcedureEligible("10", "Tarefa", null)).isFalse();
-        assertThat(AppointmentBatchFilterPipeline.isProcedureEligible("11", "Bloqueio de Agenda", null)).isFalse();
-        assertThat(AppointmentBatchFilterPipeline.isProcedureEligible("12", "Sem Procedimento", null)).isFalse();
-        assertThat(AppointmentBatchFilterPipeline.isProcedureEligible(null, null, null)).isFalse();
+        // IDs que não constam no .env (cirurgias hospitalares, recados, tarefas, etc.)
+        assertThat(AppointmentBatchFilterPipeline.isProcedureEligible("55", "Cirurgia Dr. Murilo", allowedIds)).isFalse();
+        assertThat(AppointmentBatchFilterPipeline.isProcedureEligible("999", "Recado", allowedIds)).isFalse();
+        assertThat(AppointmentBatchFilterPipeline.isProcedureEligible("888", "Tarefa", allowedIds)).isFalse();
+        assertThat(AppointmentBatchFilterPipeline.isProcedureEligible("", "Consulta", allowedIds)).isFalse();
+        assertThat(AppointmentBatchFilterPipeline.isProcedureEligible(null, "Consulta", allowedIds)).isFalse();
+        assertThat(AppointmentBatchFilterPipeline.isProcedureEligible("1", "Consulta", null)).isFalse();
+        assertThat(AppointmentBatchFilterPipeline.isProcedureEligible("1", "Consulta", List.of())).isFalse();
     }
 
     @Test
@@ -82,7 +81,7 @@ class AppointmentBatchFilterPipelineTest {
         FeegowAppointment encaixe = new FeegowAppointment("1", "10", "26", "Dra. Vania", "Matriz", LocalDateTime.now(), "1", "Consulta", "100", true);
         // Status 11 (Cancelado) -> Deve ser descartado
         FeegowAppointment cancelado = new FeegowAppointment("2", "11", "26", "Dra. Vania", "Matriz", LocalDateTime.now(), "11", "Consulta", "100", false);
-        // Válido (Status 1, sem encaixe) -> Deve passar
+        // Válido (Status 1, sem encaixe, procedimento 100 presente no .env) -> Deve passar
         FeegowAppointment valido = new FeegowAppointment("3", "12", "26", "Dra. Vania", "Matriz", LocalDateTime.now(), "1", "Consulta", "100", false);
 
         when(appointmentExternalPort.listLocks(any(), any(), any())).thenReturn(List.of());

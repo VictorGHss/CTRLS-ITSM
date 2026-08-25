@@ -8,7 +8,6 @@ import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 
-import br.dev.ctrls.inovareti.infrastructure.shared.utils.TextNormalizer;
 import br.dev.ctrls.inovareti.modules.appointment.application.dto.FeegowLockDto;
 import br.dev.ctrls.inovareti.modules.appointment.domain.model.FeegowAppointmentStatus;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentDoctorMappingRepositoryPort;
@@ -37,41 +36,6 @@ public class AppointmentBatchFilterPipeline {
     private final AppointmentDoctorMappingRepositoryPort appointmentDoctorMappingRepository;
     private final DoctorConfigurationRepository doctorConfigurationRepository;
     private final AppointmentMotorProperties appointmentMotorProperties;
-
-    /**
-     * Termos e palavras-chave terminantemente proibidos de receber confirmações automáticas
-     * (Cirurgias hospitalares, recados internos, tarefas, bloqueios de agenda, etc.).
-     */
-    private static final List<String> BLACKLISTED_PROCEDURE_TERMS = List.of(
-        "cirurg", "cirúrg", "recado", "tarefa", "bloqueio", "reserva",
-        "aviso", "lembrete", "reuniao", "reunião", "pessoal", "compromisso",
-        "plantao", "plantão", "feriado", "folga", "cirurgia geral", "cirurgia plastica",
-        "cirurgia plástica", "cirurgia vascular", "cirurgia toracica", "cirurgia torácica",
-        "procedimento cirurgico", "procedimento cirúrgico", "cirurgias mu", "cirurgias mar"
-    );
-
-    /**
-     * Isenções permitidas para termos cirúrgicos (atendimentos ambulatoriais de pré e pós-operatório).
-     */
-    private static final List<String> SURGERY_EXEMPTIONS = List.of(
-        "conversar cirurgia", "acertar cirurgia", "retorno cirurgico", "retorno cirúrgico",
-        "retorno de cirurgia", "pos cirurgico", "pós cirúrgico", "pos-cirurgico", "pós-operatório"
-    );
-
-    /**
-     * Lista de palavras-chave autorizadas para procedimentos e consultas ambulatoriais.
-     */
-    private static final List<String> ALLOWED_PROCEDURE_KEYWORDS = List.of(
-        "mano", "phmetria", "impedancia", "teste de contato", "teste cutaneo",
-        "leitura de teste", "mostra de exames", "telemedicina", "consulta", "antecipar",
-        "emergencia", "dilatacao pre refrativa", "pontos", "aplicacao", "pintar",
-        "exame", "curativo", "avaliacao", "retirada do dreno", "botox", "conversar cirurgia",
-        "retirada de pontos", "acertar cirurgia", "lobuloplastia", "laser co2", "infiltracao",
-        "pulsao", "puncao", "viscossuplementacao", "toc", "primeira consulta", "guiados por usg",
-        "skin booster", "intradermoterapia", "preenchimento", "microagulhamento", "excisao e sutura",
-        "retorno", "bioestimulador", "electroagulacao", "eletrocoagulacao", "exerese e sutura",
-        "biopsia", "intradermo capilar", "peeling"
-    );
 
     public List<FeegowAppointment> filterEligibleAppointments(List<FeegowAppointment> appointments, List<String> requestedDoctorIds) {
         if (appointments == null || appointments.isEmpty()) {
@@ -107,12 +71,12 @@ public class AppointmentBatchFilterPipeline {
                 })
                 .collect(Collectors.toList());
 
-        // 3. Filtro de Procedimentos / Categorias (Recupera lista de IDs elegíveis configurada)
+        // 3. Filtro de Procedimentos (Recupera lista de IDs elegíveis configurada no .env / application.properties)
         List<String> eligibleProcedureIdsList = null;
         if (appointmentMotorProperties != null) {
             String prop = appointmentMotorProperties.getEligibleProcedureIds();
             if (prop != null && !prop.isBlank()) {
-                eligibleProcedureIdsList = java.util.Arrays.stream(prop.split(","))
+                eligibleProcedureIdsList = java.util.Arrays.stream(prop.split("[,;\\s]+"))
                         .map(s -> s != null ? s.trim() : "")
                         .filter(s -> !s.isEmpty())
                         .toList();
@@ -124,7 +88,7 @@ public class AppointmentBatchFilterPipeline {
                 .filter(a -> {
                     boolean eligible = isProcedureEligible(a.procedureId(), a.procedureName(), finalEligibleIds);
                     if (!eligible) {
-                        log.info("[FILTRO-PROCEDIMENTO] Agendamento ID={} ignorado (procId={}, procName='{}').",
+                        log.info("[FILTRO-PROCEDIMENTO] Agendamento ID={} ignorado (procId='{}', procName='{}') - Não consta nos IDs permitidos da .env.",
                                 a.id(), a.procedureId(), a.procedureName());
                     }
                     return eligible;
@@ -156,66 +120,26 @@ public class AppointmentBatchFilterPipeline {
     }
 
     /**
-     * Valida se um procedimento/evento de agenda é elegível para disparo de confirmação.
-     * Bloqueia rigorosamente cirurgias, recados, tarefas, bloqueios e eventos sem procedimento.
+     * Valida se um procedimento é elegível para disparo de confirmação.
+     * Validação 100% dinâmica baseada na lista de IDs autorizados da variável de ambiente (.env / ELIGIBLE_PROCEDURE_IDS).
+     *
+     * @param procId O identificador do procedimento no Feegow
+     * @param procName O nome descritivo do procedimento no Feegow
+     * @param eligibleProcedureIdsList A lista de IDs permitidos carregada do .env
+     * @return true se o procId constar na lista configurada; false caso contrário
      */
     public static boolean isProcedureEligible(String procId, String procName, List<String> eligibleProcedureIdsList) {
-        String normName = (procName != null) ? TextNormalizer.normalize(procName).trim() : "";
-        String cleanProcId = (procId != null) ? procId.trim() : "";
-
-        // 1. BLOQUEIO ESTRITO POR BLACKLIST (Cirurgias hospitalares, recados, tarefas, bloqueios de agenda)
-        if (!normName.isEmpty()) {
-            for (String blocked : BLACKLISTED_PROCEDURE_TERMS) {
-                if (normName.contains(blocked)) {
-                    // Verifica se possui isenção explícita de consulta/atendimento de consultório
-                    boolean isExempt = false;
-                    for (String exemption : SURGERY_EXEMPTIONS) {
-                        if (normName.contains(exemption)) {
-                            isExempt = true;
-                            break;
-                        }
-                    }
-                    if (!isExempt) {
-                        return false;
-                    }
-                }
-            }
-        }
-
-        // Se o agendamento não possui nome ou veio explicitamente sem procedimento/vazio, bloqueia
-        if (normName.isEmpty() && cleanProcId.isEmpty()) {
-            return false;
-        }
-        if ("sem procedimento".equals(normName)) {
+        if (procId == null || procId.isBlank()) {
             return false;
         }
 
-        // 2. VALIDAÇÃO POR LISTA DE IDS AUTORIZADOS (Se configurada)
-        if (eligibleProcedureIdsList != null && !eligibleProcedureIdsList.isEmpty()) {
-            if (!cleanProcId.isEmpty() && eligibleProcedureIdsList.contains(cleanProcId)) {
-                return true;
-            }
-            // Se o ID foi informado e NÃO consta na lista de IDs autorizados da clínica, bloqueia!
-            if (!cleanProcId.isEmpty()) {
-                return false;
-            }
+        String cleanProcId = procId.trim();
+
+        if (eligibleProcedureIdsList == null || eligibleProcedureIdsList.isEmpty()) {
+            return false;
         }
 
-        // 3. SE NÃO TEMOS ID VÁLIDO OU LISTA DE IDS, VALIDAÇÃO POR PALAVRAS-CHAVE PERMITIDAS
-        if (!normName.isEmpty()) {
-            if (normName.startsWith("consulta") || normName.equals("consulta")
-                    || normName.startsWith("retorno") || normName.equals("retorno")) {
-                return true;
-            }
-
-            for (String allowed : ALLOWED_PROCEDURE_KEYWORDS) {
-                if (normName.contains(allowed)) {
-                    return true;
-                }
-            }
-        }
-
-        return false;
+        return eligibleProcedureIdsList.contains(cleanProcId);
     }
 
     public boolean isDoctorAllowed(String doctorId, List<String> requestedDoctorIds) {
