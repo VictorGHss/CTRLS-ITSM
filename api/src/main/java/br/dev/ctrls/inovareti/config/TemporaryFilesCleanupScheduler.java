@@ -93,7 +93,9 @@ public class TemporaryFilesCleanupScheduler {
 
     private void cleanDirectory(Path directory, Duration maxAge, AtomicInteger deletedCount, AtomicLong freedBytes) {
         log.info("[CLEANUP-STORAGE] Verificando diretório: {}", directory.toAbsolutePath());
-        Instant cutoffTime = Instant.now().minus(maxAge);
+        Instant tempCutoffTime = Instant.now().minus(maxAge);
+        int backupRetentionDays = cleanupProperties != null ? cleanupProperties.getBackupRetentionDays() : 30;
+        Instant backupCutoffTime = Instant.now().minus(Duration.ofDays(backupRetentionDays));
 
         try (Stream<Path> stream = Files.walk(directory)) {
             stream.filter(Files::isRegularFile)
@@ -101,13 +103,19 @@ public class TemporaryFilesCleanupScheduler {
                       try {
                           BasicFileAttributes attrs = Files.readAttributes(filePath, BasicFileAttributes.class);
                           Instant lastModified = attrs.lastModifiedTime().toInstant();
+                          String fileName = filePath.getFileName().toString().toLowerCase();
 
-                          if (lastModified.isBefore(cutoffTime)) {
+                          // Backups compactados (.zip) são preservados conforme retenção de backups (padrão: 30 dias).
+                          // Arquivos temporários e dumps brutos (.sql, .tmp, .part) seguem a retenção curta de temporários (padrão: 24h).
+                          Instant applicableCutoff = fileName.endsWith(".zip") ? backupCutoffTime : tempCutoffTime;
+
+                          if (lastModified.isBefore(applicableCutoff)) {
                               long fileSize = attrs.size();
                               if (Files.deleteIfExists(filePath)) {
                                   deletedCount.incrementAndGet();
                                   freedBytes.addAndGet(fileSize);
-                                  log.debug("[CLEANUP-STORAGE] Arquivo temporário removido: {} ({} bytes)", filePath.getFileName(), fileSize);
+                                  log.info("[CLEANUP-STORAGE] Arquivo expirado removido: {} ({:.2f} KB, modificado em {})",
+                                          filePath.getFileName(), fileSize / 1024.0, lastModified);
                               }
                           }
                       } catch (IOException e) {

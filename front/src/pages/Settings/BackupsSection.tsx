@@ -1,16 +1,17 @@
 import { useEffect, useState } from 'react';
-import { Loader2, RefreshCw, Trash2, Download, Database, AlertTriangle } from 'lucide-react';
+import { Loader2, RefreshCw, Trash2, Download, Database, AlertTriangle, Mail } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { useAuth } from '@/contexts/AuthContext';
 import type { FinanceAlert } from '@/types/models';
 import { getFinanceAlerts } from '@/services/financeService';
-import { getBackups, triggerBackup, downloadBackup, deleteBackup, type BackupInfo } from '@/services/adminService';
+import { getBackups, triggerBackup, downloadBackup, deleteBackup, testBackupEmail, type BackupInfo } from '@/services/adminService';
 
 export default function BackupsSection() {
   const { isTwoFactorVerified } = useAuth();
   const [backups, setBackups] = useState<BackupInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [triggering, setTriggering] = useState(false);
+  const [testingEmail, setTestingEmail] = useState(false);
   const [actionId, setActionId] = useState<string | null>(null);
 
   // Estados adicionados para o gerenciamento de alertas/logs de auditoria de backup
@@ -81,6 +82,20 @@ export default function BackupsSection() {
     }
   }
 
+  async function handleTestEmail() {
+    setTestingEmail(true);
+    try {
+      const res = await testBackupEmail();
+      toast.success(res.message || 'E-mail de teste de backup enviado com sucesso.');
+    } catch (err) {
+      const error = err as { response?: { data?: { detail?: string } } };
+      const msg = error.response?.data?.detail || 'Erro ao enviar e-mail de teste de backup.';
+      toast.error(msg);
+    } finally {
+      setTestingEmail(false);
+    }
+  }
+
   async function handleDownload(filename: string) {
     setActionId(filename);
     try {
@@ -146,14 +161,14 @@ export default function BackupsSection() {
           </p>
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={() => {
               void loadBackups();
               void loadBackupAlerts();
             }}
-            disabled={loading || triggering}
+            disabled={loading || triggering || testingEmail}
             className="p-2.5 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition-all disabled:opacity-50"
             title="Atualizar Lista"
           >
@@ -163,9 +178,22 @@ export default function BackupsSection() {
           <button
             type="button"
             onClick={() => {
+              void handleTestEmail();
+            }}
+            disabled={testingEmail || loading || triggering}
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 hover:text-slate-900 disabled:opacity-60"
+            title="Disparar e-mail de teste para o endereço configurado"
+          >
+            {testingEmail ? <Loader2 size={16} className="animate-spin text-brand-primary" /> : <Mail size={16} className="text-slate-500" />}
+            {testingEmail ? 'Enviando Teste...' : 'Testar E-mail'}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
               void handleTriggerBackup();
             }}
-            disabled={triggering || loading}
+            disabled={triggering || loading || testingEmail}
             className="inline-flex items-center gap-2 rounded-xl bg-brand-primary px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-primary-dark disabled:opacity-60"
           >
             {triggering ? <Loader2 size={16} className="animate-spin" /> : <Database size={16} />}
