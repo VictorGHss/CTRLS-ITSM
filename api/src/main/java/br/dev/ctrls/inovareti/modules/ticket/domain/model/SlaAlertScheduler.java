@@ -109,10 +109,11 @@ public class SlaAlertScheduler {
 
         List<net.dv8tion.jda.api.entities.channel.concrete.TextChannel> channels = guild.getTextChannels().stream()
                 .filter(tc -> {
-                    String name = tc.getName().toLowerCase();
-                    String topic = tc.getTopic() != null ? tc.getTopic().toLowerCase() : "";
-                    return name.endsWith("-" + ticketNumStr) || name.startsWith("ticket-" + ticketNumStr) || name.contains(ticketNumStr)
-                            || (!ticketIdStr.isEmpty() && topic.contains(ticketIdStr));
+                    String name = tc.getName() != null ? tc.getName().toLowerCase() : "";
+                    String topic = tc.getTopic();
+                    boolean matchesName = name.endsWith("-" + ticketNumStr) || name.startsWith("ticket-" + ticketNumStr) || name.contains(ticketNumStr);
+                    boolean matchesTopic = topic != null && !ticketIdStr.isEmpty() && topic.toLowerCase().contains(ticketIdStr);
+                    return matchesName || matchesTopic;
                 })
                 .toList();
 

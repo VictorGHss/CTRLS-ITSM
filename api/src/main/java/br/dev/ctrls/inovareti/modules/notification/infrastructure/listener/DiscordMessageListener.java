@@ -30,7 +30,8 @@ import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
 
 /**
- * Listener that listens to messages sent to ticket channels in Discord and integrates them as comments.
+ * Listener responsável por interceptar mensagens enviadas em canais de chamados no Discord
+ * e integrá-las automaticamente como comentários no chamado no sistema.
  */
 @Slf4j
 @Component
@@ -45,75 +46,44 @@ public class DiscordMessageListener extends ListenerAdapter {
 
     @Override
     public void onMessageReceived(@javax.annotation.Nonnull MessageReceivedEvent event) {
-        // Ignore bots
+        // Ignora mensagens enviadas por bots para evitar loops de mensagens
         if (event.getAuthor().isBot()) {
             return;
         }
 
-        // Process only text channels
+        // Processa apenas canais de texto
         if (!event.isFromType(ChannelType.TEXT)) {
             return;
         }
 
-        String channelName = event.getChannel().getName();
-        String topic = event.getChannel().asTextChannel().getTopic();
-        Ticket ticket = null;
-
-        // 1. Tenta identificar pelo UUID contido no tópico do canal (ID: <uuid>)
-        if (topic != null && topic.contains("ID: ")) {
-            try {
-                int idIdx = topic.indexOf("ID: ");
-                String uuidStr = topic.substring(idIdx + 4).trim().split("[\\s|]+")[0];
-                ticket = ticketRepository.findById(UUID.fromString(uuidStr)).orElse(null);
-            } catch (Exception ignored) {}
-        }
-
-        // 2. Se não encontrou no tópico, tenta pelo formato legado (ticket-<shortId>)
-        if (ticket == null && channelName.startsWith("ticket-")) {
-            String shortId = channelName.substring("ticket-".length());
-            if (shortId.length() >= 8) {
-                shortId = shortId.substring(0, 8);
-            }
-            ticket = ticketRepository.findByShortIdStartingWith(shortId).stream().findFirst().orElse(null);
-        }
-
-        // 3. Tenta pelo novo formato com sufixo de ID curto (<titulo>-<shortId>)
-        if (ticket == null) {
-            String[] parts = channelName.split("-");
-            if (parts.length > 0) {
-                String lastPart = parts[parts.length - 1];
-                if (lastPart.length() >= 4) {
-                    ticket = ticketRepository.findByShortIdStartingWith(lastPart).stream().findFirst().orElse(null);
-                }
-            }
-        }
-
+        final Ticket ticket = resolveTicketFromChannel(event.getChannel().asTextChannel());
         if (ticket == null) {
             return;
         }
 
+        String channelName = event.getChannel().getName();
         log.info("[DISCORD-TICKET] Nova mensagem recebida no canal {} para chamado #{}: {}",
                 channelName, ticket.getNumber(), event.getMessage().getContentDisplay());
 
-        // Resolve author from sender's Discord ID
+        // Resolve o autor do comentário a partir do Discord ID do remetente
         String authorDiscordId = event.getAuthor().getId();
         User author = userRepository.findByDiscordUserId(authorDiscordId)
                 .orElseGet(() -> {
-                    log.warn("[DISCORD-TICKET] Usuário do Discord {} não está vinculado. Usando fallback.", authorDiscordId);
+                    log.warn("[DISCORD-TICKET] Usuário do Discord {} não está vinculado ao sistema. Usando fallback.", authorDiscordId);
                     if (ticket.getAssignedTo() != null) {
                         return ticket.getAssignedTo();
                     }
                     return ticket.getRequester();
                 });
 
-        // Set Spring SecurityContext temporarily for UseCase execution
+        // Configura temporariamente o contexto de segurança do Spring para a execução do caso de uso
         String principal = author.getId().toString();
         var authentication = new UsernamePasswordAuthenticationToken(
                 principal, null, author.getAuthorities());
         SecurityContextHolder.getContext().setAuthentication(authentication);
 
         try {
-            // Process attachments/prints if any
+            // Processa anexos e capturas de tela enviados junto com a mensagem, se houver
             List<TicketAttachment> savedAttachments = new ArrayList<>();
             for (var attachment : event.getMessage().getAttachments()) {
                 try {
@@ -147,7 +117,7 @@ public class DiscordMessageListener extends ListenerAdapter {
                 }
             }
 
-            // Construct comment content
+            // Constrói o texto do comentário com suporte a visualização Markdown
             String messageText = event.getMessage().getContentDisplay();
             StringBuilder commentContent = new StringBuilder(messageText);
 
@@ -187,7 +157,51 @@ public class DiscordMessageListener extends ListenerAdapter {
     }
 
     /**
-     * Helper implementation of MultipartFile for passing byte array files to LocalFileStorageService.
+     * Localiza a entidade Ticket correspondente a partir do canal do Discord.
+     * Suporta identificação pelo tópico (ID: <uuid>), prefixo legado (ticket-<shortId>) ou sufixo (<titulo>-<shortId>).
+     */
+    private Ticket resolveTicketFromChannel(net.dv8tion.jda.api.entities.channel.concrete.TextChannel channel) {
+        String channelName = channel.getName();
+        String topic = channel.getTopic();
+
+        // 1. Tenta identificar pelo UUID contido no tópico do canal (ID: <uuid>)
+        if (topic != null && topic.contains("ID: ")) {
+            try {
+                int idIdx = topic.indexOf("ID: ");
+                String uuidStr = topic.substring(idIdx + 4).trim().split("[\\s|]+")[0];
+                Ticket found = ticketRepository.findById(UUID.fromString(uuidStr)).orElse(null);
+                if (found != null) {
+                    return found;
+                }
+            } catch (Exception ignored) {}
+        }
+
+        // 2. Se não encontrou no tópico, tenta pelo formato legado (ticket-<shortId>)
+        if (channelName.startsWith("ticket-")) {
+            String shortId = channelName.substring("ticket-".length());
+            if (shortId.length() >= 8) {
+                shortId = shortId.substring(0, 8);
+            }
+            Ticket found = ticketRepository.findByShortIdStartingWith(shortId).stream().findFirst().orElse(null);
+            if (found != null) {
+                return found;
+            }
+        }
+
+        // 3. Tenta pelo novo formato com sufixo de ID curto (<titulo>-<shortId>)
+        String[] parts = channelName.split("-");
+        if (parts.length > 0) {
+            String lastPart = parts[parts.length - 1];
+            if (lastPart.length() >= 4) {
+                return ticketRepository.findByShortIdStartingWith(lastPart).stream().findFirst().orElse(null);
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Implementação auxiliar de MultipartFile para enviar arquivos em array de bytes para o LocalFileStorageService.
      */
     private static class ByteArrayMultipartFile implements MultipartFile {
         private final byte[] content;
