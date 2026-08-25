@@ -91,12 +91,11 @@ export default function SearchableDropdown({
     getOptName(a).localeCompare(getOptName(b))
   );
 
-  // Filtra as opções localmente apenas se não houver um callback de pesquisa remota
-  const filteredOptions = onSearchChange
-    ? sortedOptions
-    : sortedOptions.filter((opt) =>
-        getOptName(opt).toLowerCase().includes(searchTerm.toLowerCase())
-      );
+  // Filtra as opções pelo termo de pesquisa digitado pelo usuário (sempre ativo)
+  const filteredOptions = sortedOptions.filter((opt) => {
+    if (!searchTerm.trim()) return true;
+    return getOptName(opt).toLowerCase().includes(searchTerm.toLowerCase());
+  });
 
   // Obtém a opção atualmente selecionada, caindo na cache se não estiver presente no array options
   const selectedOption = (value ? options.find((opt) => getOptId(opt) === value) : undefined)
