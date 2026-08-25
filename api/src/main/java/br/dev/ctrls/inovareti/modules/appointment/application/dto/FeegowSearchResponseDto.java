@@ -33,8 +33,9 @@ public record FeegowSearchResponseDto(
             @JsonProperty("data") @JsonAlias({"data", "data_agendamento", "date", "appointment_date", "appointmentDate"}) String appointmentDate,
             @JsonProperty("horario") @JsonAlias({"horario", "hora", "hora_agendamento", "time", "appointment_time", "appointmentTime"}) String appointmentTime,
             @JsonProperty("status_id") @JsonAlias({"statusId", "status_id", "status", "statusID"}) Object statusId,
-            @JsonProperty("especialidade_nome") @JsonAlias({"especialidade_nome", "especialidade", "nome_especialidade", "procedimento_nome", "procedimento", "procedimentoNome", "procedure_name", "procedureName", "procedimento_descricao"}) String procedureName,
-            @JsonProperty("procedimento_id") @JsonAlias({"procedimentoId", "procedimento_id", "procedure_id", "procedureId", "especialidade_id", "especialidadeId"}) String procedureId,
+            @JsonProperty("procedimento_nome") @JsonAlias({"procedimento_nome", "procedimento", "procedimentoNome", "procedure_name", "procedureName", "procedimento_descricao", "especialidade_nome", "especialidade", "nome_especialidade"}) String procedureName,
+            @JsonProperty("procedimento_id") @JsonAlias({"procedimento_id", "procedimentoId", "procedure_id", "procedureId"}) String procedureId,
+            @JsonProperty("especialidade_id") @JsonAlias({"especialidade_id", "especialidadeId"}) String specialtyId,
             @JsonProperty("encaixe") Object encaixe) {
     }
 }
