@@ -1,11 +1,16 @@
 import { useState, useRef } from 'react';
-import { X, Laptop, Box, AlertCircle, Image, Loader2, Split, Trash2 } from 'lucide-react';
+import type { ClipboardEvent, DragEvent } from 'react';
+import { X, AlertCircle, Image, Loader2 } from 'lucide-react';
 import MDEditor from '@uiw/react-md-editor';
 
 import { useResolveTicket } from './hooks/useResolveTicket';
 import type { ResolveTicketRequest, Ticket, User } from '@/types/models';
-import SearchableDropdown from '@/components/common/SearchableDropdown';
 import { uploadMarkdownAttachment } from '@/services/ticketService';
+
+import ResolveAutoDeductionSection from './components/ResolveAutoDeductionSection';
+import ResolveDeliverySection from './components/ResolveDeliverySection';
+import ResolveInsumoLinkSection from './components/ResolveInsumoLinkSection';
+import ResolveMaintenanceSection from './components/ResolveMaintenanceSection';
 
 interface ResolveTicketModalProps {
   isOpen: boolean;
@@ -77,7 +82,6 @@ export default function ResolveTicketModal({
     targetAssetId,
     setTargetAssetId,
     loadingAllAssets,
-    // Novos campos desestruturados para manutenção
     registerMaintenance,
     setRegisterMaintenance,
     maintAssetId,
@@ -113,7 +117,7 @@ export default function ResolveTicketModal({
     }
   };
 
-  const handlePaste = (e: React.ClipboardEvent) => {
+  const handlePaste = (e: ClipboardEvent) => {
     if (e.clipboardData.files && e.clipboardData.files.length > 0) {
       const file = e.clipboardData.files[0];
       if (file.type.startsWith('image/')) {
@@ -123,7 +127,7 @@ export default function ResolveTicketModal({
     }
   };
 
-  const handleDrop = (e: React.DragEvent) => {
+  const handleDrop = (e: DragEvent) => {
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       const file = e.dataTransfer.files[0];
       if (file.type.startsWith('image/')) {
@@ -213,416 +217,80 @@ export default function ResolveTicketModal({
             </p>
           </div>
 
+          {/* Dedução Automática de Insumos OU Entrega Manual */}
           {hasAutoInventoryDeduction ? (
-            <div className="flex flex-col gap-4">
-              <div className="flex items-start gap-3 rounded-2xl border border-brand-primary/35 bg-brand-secondary/55 p-4">
-                <AlertCircle size={18} className="mt-0.5 shrink-0 text-brand-primary-dark" />
-                <div>
-                  <p className="text-sm font-semibold text-slate-800">Dedução Automática de Insumos</p>
-                  <p className="mt-1 text-sm text-slate-700">
-                    Os seguintes itens solicitados serão deduzidos automaticamente do stock ao fechar este chamado:
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 p-4 bg-slate-50/50">
-                {itemsToDeliver.map((item) => {
-                  const canSplit = item.quantity > 1;
-                  const isSplitRow = itemsToDeliver.filter((i) => i.itemId === item.itemId).length > 1;
-
-                  return (
-                    <div
-                      key={item.id}
-                      className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm"
-                    >
-                      <div className="flex flex-col gap-1 flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-bold text-slate-800">{item.itemName}</span>
-                          {isSplitRow && (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-200">
-                              Entrega Parcial
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-slate-500 font-medium">Quantidade:</span>
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-bold bg-slate-100 text-slate-700">
-                            {item.quantity} un
-                          </span>
-                          {canSplit && (
-                            <button
-                              type="button"
-                              onClick={() => handleSplitItem(item.id)}
-                              className="inline-flex items-center gap-1 text-[11px] font-semibold text-brand-primary hover:text-brand-primary-dark hover:underline transition-colors ml-2 cursor-pointer"
-                              title="Dividir este item para entregar a mais de uma pessoa"
-                            >
-                              <Split size={13} />
-                              Dividir Entrega
-                            </button>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="flex items-end gap-2 w-full sm:w-72">
-                        <div className="flex flex-col gap-1 flex-1">
-                          <label className="text-xs font-semibold text-slate-600">Entregar a quem? *</label>
-                          <SearchableDropdown
-                            options={availableRecipients}
-                            value={item.recipientUserId}
-                            onChange={(val) => handleRecipientChange(item.id, val)}
-                            placeholder="Pesquise o médico ou secretária..."
-                          />
-                        </div>
-                        {isSplitRow && (
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveSplitItem(item.id)}
-                            className="p-2 rounded-xl text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
-                            title="Remover esta entrega parcial e unificar quantidade"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+            <ResolveAutoDeductionSection
+              itemsToDeliver={itemsToDeliver}
+              availableRecipients={availableRecipients}
+              onRecipientChange={handleRecipientChange}
+              onSplitItem={handleSplitItem}
+              onRemoveSplitItem={handleRemoveSplitItem}
+            />
           ) : (
-            <>
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id="deliverEquipment"
-                  checked={deliverEquipment}
-                  onChange={(event) => setDeliverEquipment(event.target.checked)}
-                  className="h-4 w-4 cursor-pointer rounded border-slate-300 text-brand-primary focus:ring-brand-primary"
-                  disabled={isSubmitting}
-                />
-                <label htmlFor="deliverEquipment" className="cursor-pointer text-sm font-medium text-slate-700">
-                  Entregar Equipamento ou Material nesta resolução?
-                </label>
-              </div>
-
-              {deliverEquipment && (
-                <div className="flex flex-col gap-4 rounded-2xl border border-brand-primary/40 bg-brand-secondary/50 p-4">
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setDeliveryType('asset')}
-                      className={`flex items-center gap-2 rounded-2xl px-4 py-2 text-sm font-semibold transition-colors ${
-                        deliveryType === 'asset'
-                          ? 'bg-brand-primary text-white'
-                          : 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-100'
-                      }`}
-                      disabled={isSubmitting}
-                    >
-                      <Laptop size={16} />
-                      Ativo de Patrimônio
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setDeliveryType('item')}
-                      className={`flex items-center gap-2 rounded-2xl px-4 py-2 text-sm font-semibold transition-colors ${
-                        deliveryType === 'item'
-                          ? 'bg-brand-primary text-white'
-                          : 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-100'
-                      }`}
-                      disabled={isSubmitting}
-                    >
-                      <Box size={16} />
-                      Item de Consumo
-                    </button>
-                  </div>
-
-                  {deliveryType === 'asset' && (
-                    <div className="flex flex-col gap-4">
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setAssetMode('existing')}
-                          className={`rounded-2xl px-3 py-1.5 text-sm font-semibold transition-colors ${
-                            assetMode === 'existing'
-                              ? 'bg-brand-primary text-white'
-                              : 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-100'
-                          }`}
-                          disabled={isSubmitting}
-                        >
-                          Selecionar Existente
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setAssetMode('new')}
-                          className={`rounded-2xl px-3 py-1.5 text-sm font-semibold transition-colors ${
-                            assetMode === 'new'
-                              ? 'bg-brand-primary text-white'
-                              : 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-100'
-                          }`}
-                          disabled={isSubmitting}
-                        >
-                          Cadastrar Novo
-                        </button>
-                      </div>
-
-                      {assetMode === 'existing' && (
-                        <div className="flex flex-col gap-2">
-                          <label className="text-sm font-medium text-slate-700">Selecione o Equipamento *</label>
-                          {loadingAssets ? (
-                            <div className="text-sm text-slate-500">Carregando equipamentos...</div>
-                          ) : assets.length === 0 ? (
-                            <div className="text-sm text-red-600">Nenhum equipamento disponível no estoque da TI.</div>
-                          ) : (
-                            <SearchableDropdown
-                              options={assets.map((asset) => ({
-                                id: asset.id,
-                                name: `${asset.name} (${asset.patrimonyCode})`,
-                              }))}
-                              value={selectedAssetId}
-                              onChange={(val) => setSelectedAssetId(val)}
-                              placeholder="Selecione um equipamento..."
-                              disabled={isSubmitting}
-                            />
-                          )}
-                        </div>
-                      )}
-
-                      {assetMode === 'new' && (
-                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                          <div className="flex flex-col gap-2 md:col-span-2">
-                            <label className="text-sm font-medium text-slate-700">Nome do Ativo *</label>
-                            <input
-                              type="text"
-                              value={newAssetName}
-                              onChange={(event) => setNewAssetName(event.target.value)}
-                              className="w-full rounded-2xl border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-brand-primary/50"
-                              placeholder="Ex.: Notebook Dell Latitude"
-                              disabled={isSubmitting}
-                            />
-                          </div>
-
-                          <div className="flex flex-col gap-2">
-                            <label className="text-sm font-medium text-slate-700">Categoria *</label>
-                            {loadingAssetCategories ? (
-                              <div className="text-sm text-slate-500">Carregando categorias...</div>
-                            ) : (
-                              <SearchableDropdown
-                                options={assetCategories.map((category) => ({
-                                  id: category.id,
-                                  name: category.name,
-                                }))}
-                                value={newAssetCategoryId}
-                                onChange={(val) => setNewAssetCategoryId(val)}
-                                placeholder="Selecione a categoria..."
-                                disabled={isSubmitting}
-                              />
-                            )}
-                          </div>
-
-                          <div className="flex flex-col gap-2">
-                            <label className="text-sm font-medium text-slate-700">Código do Patrimônio *</label>
-                            <input
-                              type="text"
-                              value={newAssetPatrimonyCode}
-                              onChange={(event) => setNewAssetPatrimonyCode(event.target.value)}
-                              className="w-full rounded-2xl border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-brand-primary/50"
-                              placeholder="Ex.: PAT-2026-001"
-                              disabled={isSubmitting}
-                            />
-                          </div>
-
-                          <div className="flex flex-col gap-2 md:col-span-2">
-                            <label className="text-sm font-medium text-slate-700">Especificações</label>
-                            <textarea
-                              value={newAssetSpecifications}
-                              onChange={(event) => setNewAssetSpecifications(event.target.value)}
-                              className="w-full resize-none rounded-2xl border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-brand-primary/50"
-                              rows={3}
-                              placeholder="CPU, memória, armazenamento, etc."
-                              disabled={isSubmitting}
-                            />
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {deliveryType === 'item' && (
-                    <>
-                      <div className="flex flex-col gap-2">
-                        <label className="text-sm font-medium text-slate-700">Selecione o Material *</label>
-                        {loadingItems ? (
-                          <div className="text-sm text-slate-500">Carregando materiais...</div>
-                        ) : items.length === 0 ? (
-                          <div className="text-sm text-red-600">Nenhum material disponível em estoque.</div>
-                        ) : (
-                          <SearchableDropdown
-                            options={items.map((item) => ({
-                              id: item.id,
-                              name: `${item.name} (Estoque: ${item.currentStock})`,
-                            }))}
-                            value={selectedItemId}
-                            onChange={(val) => setSelectedItemId(val)}
-                            placeholder="Selecione um material..."
-                            disabled={isSubmitting}
-                          />
-                        )}
-                      </div>
-
-                      <div className="flex flex-col gap-2">
-                        <label className="text-sm font-medium text-slate-700">Quantidade *</label>
-                        <input
-                          type="number"
-                          value={quantity}
-                          onChange={(event) => setQuantity(Math.max(1, Number.parseInt(event.target.value, 10) || 1))}
-                          min="1"
-                          className="w-full rounded-2xl border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-brand-primary/50"
-                          disabled={isSubmitting}
-                        />
-                      </div>
-
-                      <div className="flex flex-col gap-2">
-                        <label className="text-sm font-medium text-slate-700">Entregar a quem? *</label>
-                        <SearchableDropdown
-                          options={availableRecipients}
-                          value={recipientUserId}
-                          onChange={(val) => setRecipientUserId(val)}
-                          placeholder="Selecione quem recebeu..."
-                        />
-                      </div>
-                    </>
-                  )}
-                </div>
-              )}
-            </>
+            <ResolveDeliverySection
+              deliverEquipment={deliverEquipment}
+              setDeliverEquipment={setDeliverEquipment}
+              deliveryType={deliveryType}
+              setDeliveryType={setDeliveryType}
+              assetMode={assetMode}
+              setAssetMode={setAssetMode}
+              assets={assets}
+              items={items}
+              assetCategories={assetCategories}
+              selectedAssetId={selectedAssetId}
+              setSelectedAssetId={setSelectedAssetId}
+              selectedItemId={selectedItemId}
+              setSelectedItemId={setSelectedItemId}
+              quantity={quantity}
+              setQuantity={setQuantity}
+              newAssetName={newAssetName}
+              setNewAssetName={setNewAssetName}
+              newAssetCategoryId={newAssetCategoryId}
+              setNewAssetCategoryId={setNewAssetCategoryId}
+              newAssetPatrimonyCode={newAssetPatrimonyCode}
+              setNewAssetPatrimonyCode={setNewAssetPatrimonyCode}
+              newAssetSpecifications={newAssetSpecifications}
+              setNewAssetSpecifications={setNewAssetSpecifications}
+              loadingAssets={loadingAssets}
+              loadingItems={loadingItems}
+              loadingAssetCategories={loadingAssetCategories}
+              isSubmitting={isSubmitting}
+              availableRecipients={availableRecipients}
+              recipientUserId={recipientUserId}
+              setRecipientUserId={setRecipientUserId}
+            />
           )}
 
-          {/* Bloco de Vinculação Patrimonial de Insumos (Vertical 3) */}
-          {(hasAutoInventoryDeduction || (deliverEquipment && deliveryType === 'item' && selectedItemId)) && (
-            <div className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-slate-50/50 p-4">
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id="linkInsumosToAsset"
-                  checked={linkInsumosToAsset}
-                  onChange={(event) => setLinkInsumosToAsset(event.target.checked)}
-                  className="h-4 w-4 cursor-pointer rounded border-slate-300 text-brand-primary focus:ring-brand-primary"
-                  disabled={isSubmitting}
-                />
-                <label htmlFor="linkInsumosToAsset" className="cursor-pointer text-sm font-medium text-slate-700">
-                  Vincular insumos diretamente a um Equipamento/Ativo?
-                </label>
-              </div>
+          {/* Bloco de Vinculação Patrimonial de Insumos */}
+          <ResolveInsumoLinkSection
+            hasAutoInventoryDeduction={hasAutoInventoryDeduction}
+            deliverEquipment={deliverEquipment}
+            deliveryType={deliveryType}
+            selectedItemId={selectedItemId}
+            linkInsumosToAsset={linkInsumosToAsset}
+            setLinkInsumosToAsset={setLinkInsumosToAsset}
+            loadingAllAssets={loadingAllAssets}
+            allAssets={allAssets}
+            targetAssetId={targetAssetId}
+            setTargetAssetId={setTargetAssetId}
+            isSubmitting={isSubmitting}
+          />
 
-              {linkInsumosToAsset && (
-                <div className="flex flex-col gap-2">
-                  <label className="text-sm font-medium text-slate-700">Ativo / Equipamento do Inventário *</label>
-                  {loadingAllAssets ? (
-                    <div className="text-sm text-slate-500">Carregando equipamentos do inventário...</div>
-                  ) : allAssets.length === 0 ? (
-                    <div className="text-sm text-amber-600 flex items-center gap-1.5">
-                      <AlertCircle size={14} />
-                      Nenhum equipamento físico encontrado no módulo de inventário.
-                    </div>
-                  ) : (
-                    <SearchableDropdown
-                      options={allAssets.map((asset) => ({
-                        id: asset.id,
-                        name: `${asset.name} (${asset.patrimonyCode})`,
-                      }))}
-                      value={targetAssetId}
-                      onChange={(val) => setTargetAssetId(val)}
-                      placeholder="Selecione o equipamento do inventário..."
-                      disabled={isSubmitting}
-                    />
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Bloco de Registro Opcional de Manutenção (Cenário A) */}
-          <div className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-slate-50/50 p-4">
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="registerMaintenance"
-                checked={registerMaintenance}
-                onChange={(event) => setRegisterMaintenance(event.target.checked)}
-                className="h-4 w-4 cursor-pointer rounded border-slate-300 text-brand-primary focus:ring-brand-primary"
-                disabled={isSubmitting}
-              />
-              <label htmlFor="registerMaintenance" className="cursor-pointer text-sm font-medium text-slate-700">
-                Registrar Manutenção de Ativo associada a este chamado?
-              </label>
-            </div>
-
-            {registerMaintenance && (
-              <div className="flex flex-col gap-4">
-                <div className="flex flex-col gap-2">
-                  <label className="text-sm font-medium text-slate-700">Equipamento Afetado *</label>
-                  {allAssets.length === 0 ? (
-                    <div className="text-sm text-amber-600 flex items-center gap-1.5">
-                      <AlertCircle size={14} />
-                      Nenhum equipamento cadastrado no CMDB.
-                    </div>
-                  ) : (
-                    <SearchableDropdown
-                      options={allAssets.map((asset) => ({
-                        id: asset.id,
-                        name: `${asset.name} (${asset.patrimonyCode})`,
-                      }))}
-                      value={maintAssetId}
-                      onChange={(val) => setMaintAssetId(val)}
-                      placeholder="Selecione o equipamento..."
-                      disabled={isSubmitting}
-                    />
-                  )}
-                </div>
-
-                <div className="flex flex-col gap-2">
-                  <label className="text-sm font-medium text-slate-700">Tipo de Manutenção</label>
-                  <select
-                    value={maintType}
-                    onChange={(event) => setMaintType(event.target.value as 'PREVENTIVE' | 'CORRECTIVE' | 'UPGRADE' | 'TRANSFER')}
-                    className="w-full rounded-2xl border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-brand-primary/50"
-                    disabled={isSubmitting}
-                  >
-                    <option value="PREVENTIVE">Preventiva</option>
-                    <option value="CORRECTIVE">Corretiva</option>
-                    <option value="UPGRADE">Upgrade</option>
-                    <option value="TRANSFER">Transferência</option>
-                  </select>
-                </div>
-
-                <div className="flex flex-col gap-2">
-                  <label className="text-sm font-medium text-slate-700">Custo da Manutenção (R$)</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    placeholder="0.00"
-                    value={maintCost}
-                    onChange={(event) => setMaintCost(event.target.value)}
-                    className="w-full rounded-2xl border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-brand-primary/50"
-                    disabled={isSubmitting}
-                  />
-                </div>
-
-                <div className="flex flex-col gap-2">
-                  <label className="text-sm font-medium text-slate-700">Descrição/Laudo Técnico</label>
-                  <textarea
-                    value={maintDescription}
-                    onChange={(event) => setMaintDescription(event.target.value)}
-                    placeholder="Descreva o serviço realizado no equipamento..."
-                    className="w-full resize-none rounded-2xl border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-brand-primary/50"
-                    rows={3}
-                    disabled={isSubmitting}
-                  />
-                </div>
-              </div>
-            )}
-          </div>
+          {/* Bloco de Registro Opcional de Manutenção */}
+          <ResolveMaintenanceSection
+            registerMaintenance={registerMaintenance}
+            setRegisterMaintenance={setRegisterMaintenance}
+            allAssets={allAssets}
+            maintAssetId={maintAssetId}
+            setMaintAssetId={setMaintAssetId}
+            maintType={maintType}
+            setMaintType={setMaintType}
+            maintCost={maintCost}
+            setMaintCost={setMaintCost}
+            maintDescription={maintDescription}
+            setMaintDescription={setMaintDescription}
+            isSubmitting={isSubmitting}
+          />
 
           {/* Ações */}
           <div className="flex justify-end gap-3 border-t border-slate-200 pt-4">
