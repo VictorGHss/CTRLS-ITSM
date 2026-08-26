@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Save, Globe, User as UserIcon, Clock3, MessageSquare, DollarSign, Activity, MessageCircle, ArrowLeft, Settings2, Database, Tag, FileText, Share2, HelpCircle } from 'lucide-react';
+import { Globe, User as UserIcon, Clock3, ArrowLeft, Settings2, Database, Tag, FileText, Share2, HelpCircle, MessageCircle } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -17,51 +17,13 @@ import CategoriesSection from './CategoriesSection';
 import BackupsSection from './BackupsSection';
 import TagsSection from './TagsSection';
 import FaqManagement from '../FaqManagement';
+import IntegrationsSection from './IntegrationsSection';
+import SystemParamsSection from './SystemParamsSection';
+import SlaSection from './SlaSection';
+import ProfileTab from './ProfileTab';
 
 type TabType = 'system' | 'profile';
 type SubSectionType = 'menu' | 'integrations' | 'system-params' | 'sla' | 'reports' | 'feegow' | 'categories' | 'tags' | 'backups' | 'faq';
-
-const inputClassName =
-  'w-full rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 shadow-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#feb56c]/60 focus:border-[#feb56c] transition-all';
-
-const friendlyLabels: Record<string, string> = {
-  SLA_URGENT_HOURS: 'SLA — Chamados Urgentes (Horas)',
-  ATTACHMENT_SIZE_LIMIT_MB: 'Limite de Tamanho de Anexo (MB)',
-};
-
-function getFriendlyLabel(settingKey: string): string {
-  return friendlyLabels[settingKey] ?? settingKey.replaceAll('_', ' ');
-}
-
-function WebhookBadge({ status }: { status: string }) {
-  let text = 'Desconhecido';
-  let cls = 'bg-amber-100 text-amber-700';
-  switch (status) {
-    case 'PRESENT':
-      text = 'Presente';
-      cls = 'bg-emerald-100 text-emerald-700';
-      break;
-    case 'INVALID':
-      text = 'Erro/Inválido';
-      cls = 'bg-red-100 text-red-700';
-      break;
-    case 'MISSING':
-      text = 'Ausente';
-      cls = 'bg-slate-100 text-slate-500';
-      break;
-    default:
-      text = 'Desconhecido';
-      cls = 'bg-amber-100 text-amber-700';
-  }
-  return <span className={`${cls} text-xs font-medium px-2 py-1 rounded`}>{text}</span>;
-}
-
-function PresenceBadge({ present }: { present?: boolean }) {
-  const isPresent = Boolean(present);
-  const text = isPresent ? 'Configurado' : 'Ausente';
-  const cls = isPresent ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500';
-  return <span className={`${cls} text-xs font-medium px-2 py-1 rounded`}>{text}</span>;
-}
 
 export default function Settings() {
   const { user, isTwoFactorVerified } = useAuth();
@@ -395,148 +357,10 @@ export default function Settings() {
                   transition={{ duration: 0.2 }}
                 >
                   {renderBackHeader()}
-                  
-                  <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-                    {/* Card: Discord */}
-                    <div className="rounded-2xl border border-[#feb56c]/35 bg-white p-6 flex flex-col justify-between transition-all hover:shadow-md hover:border-[#feb56c]/60 shadow-sm animate-fade-in">
-                      <div>
-                        <div className="flex items-center justify-between mb-4">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl bg-[#feb56c]/10 flex items-center justify-center text-[#feb56c] shrink-0 shadow-sm">
-                              <MessageSquare size={20} />
-                            </div>
-                            <div>
-                              <h3 className="text-sm font-bold text-slate-800">Discord</h3>
-                              <p className="text-xs text-slate-400">Notificações e alertas</p>
-                            </div>
-                          </div>
-                          <PresenceBadge present={adminConfig?.discordWebhookPresent || adminConfig?.discordWebhookUrlPresent} />
-                        </div>
-                        <div className="space-y-2 mt-2">
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs text-slate-500">Webhook URL</span>
-                            <PresenceBadge present={adminConfig?.discordWebhookUrlPresent ?? adminConfig?.discordWebhookPresent} />
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs text-slate-500">Token do Bot</span>
-                            <PresenceBadge present={adminConfig?.discordBotTokenPresent} />
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs text-slate-500">Status do Webhook</span>
-                            <WebhookBadge status={discordWebhookStatus ?? 'UNKNOWN'} />
-                          </div>
-                        </div>
-                        <p className="mt-3 text-[11px] text-slate-400 font-medium">Somente leitura. Valores configurados via ENV.</p>
-                      </div>
-                    </div>
-
-                    {/* Card: Conta Azul */}
-                    <div className="rounded-2xl border border-[#feb56c]/35 bg-white p-6 flex flex-col justify-between transition-all hover:shadow-md hover:border-[#feb56c]/60 shadow-sm animate-fade-in">
-                      <div>
-                        <div className="flex items-center justify-between mb-4">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl bg-[#feb56c]/10 flex items-center justify-center text-[#feb56c] shrink-0 shadow-sm">
-                              <DollarSign size={20} />
-                            </div>
-                            <div>
-                              <h3 className="text-sm font-bold text-slate-800">Conta Azul</h3>
-                              <p className="text-xs text-slate-400">ERP e conciliação financeira</p>
-                            </div>
-                          </div>
-                          <PresenceBadge present={adminConfig?.contaAzulClientIdPresent && adminConfig?.contaAzulClientSecretPresent} />
-                        </div>
-                        <div className="space-y-2 mt-2">
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs text-slate-500">Client ID</span>
-                            <PresenceBadge present={adminConfig?.contaAzulClientIdPresent} />
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs text-slate-500">Client Secret</span>
-                            <PresenceBadge present={adminConfig?.contaAzulClientSecretPresent} />
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs text-slate-500">Backup (ENV)</span>
-                            <span className="text-xs text-slate-400">Gerenciado no servidor</span>
-                          </div>
-                        </div>
-                        <p className="mt-3 text-[11px] text-slate-400 font-medium">Somente leitura. Valores configurados via ENV.</p>
-                      </div>
-                    </div>
-
-                    {/* Card: Feegow */}
-                    <div className="rounded-2xl border border-[#feb56c]/35 bg-white p-6 flex flex-col justify-between transition-all hover:shadow-md hover:border-[#feb56c]/60 shadow-sm animate-fade-in">
-                      <div>
-                        <div className="flex items-center justify-between mb-4">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl bg-[#feb56c]/10 flex items-center justify-center text-[#feb56c] shrink-0 shadow-sm">
-                              <Activity size={20} />
-                            </div>
-                            <div>
-                              <h3 className="text-sm font-bold text-slate-800">Feegow</h3>
-                              <p className="text-xs text-slate-400">Consultas e prontuários médicos</p>
-                            </div>
-                          </div>
-                          <PresenceBadge present={adminConfig?.feegowApiKeyPresent && adminConfig?.feegowUnitIdPresent} />
-                        </div>
-                        <div className="space-y-2 mt-2">
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs text-slate-500">API Key</span>
-                            <PresenceBadge present={adminConfig?.feegowApiKeyPresent} />
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs text-slate-500">ID da Unidade</span>
-                            <PresenceBadge present={adminConfig?.feegowUnitIdPresent} />
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs text-slate-500">Backup (ENV)</span>
-                            <span className="text-xs text-slate-400">Gerenciado no servidor</span>
-                          </div>
-                        </div>
-                        <p className="mt-3 text-[11px] text-slate-400 font-medium">Somente leitura. Valores configurados via ENV.</p>
-                      </div>
-                    </div>
-
-                    {/* Card: Blip */}
-                    <div className="rounded-2xl border border-[#feb56c]/35 bg-white p-6 flex flex-col justify-between transition-all hover:shadow-md hover:border-[#feb56c]/60 shadow-sm animate-fade-in">
-                      <div>
-                        <div className="flex items-center justify-between mb-4">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl bg-[#feb56c]/10 flex items-center justify-center text-[#feb56c] shrink-0 shadow-sm">
-                              <MessageCircle size={20} />
-                            </div>
-                            <div>
-                              <h3 className="text-sm font-bold text-slate-800">Blip</h3>
-                              <p className="text-xs text-slate-400">WhatsApp e atendimento automatizado</p>
-                            </div>
-                          </div>
-                          <PresenceBadge present={adminConfig?.blipApiKeyPresent && adminConfig?.blipBotIdPresent} />
-                        </div>
-                        <div className="space-y-2 mt-2">
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs text-slate-500">API Key</span>
-                            <PresenceBadge present={adminConfig?.blipApiKeyPresent} />
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs text-slate-500">ID do Bot</span>
-                            <PresenceBadge present={adminConfig?.blipBotIdPresent} />
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs text-slate-500">Webhook Token</span>
-                            <PresenceBadge present={adminConfig?.blipWebhookTokenPresent} />
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs text-slate-500">Webhook Secret</span>
-                            <PresenceBadge present={adminConfig?.blipWebhookSecretPresent} />
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs text-slate-500">Backup (ENV)</span>
-                            <span className="text-xs text-slate-400 font-semibold text-slate-500">Gerenciado no servidor</span>
-                          </div>
-                        </div>
-                        <p className="mt-3 text-[11px] text-slate-400 font-medium">Somente leitura. Valores configurados via ENV.</p>
-                      </div>
-                    </div>
-                  </div>
+                  <IntegrationsSection
+                    adminConfig={adminConfig}
+                    discordWebhookStatus={discordWebhookStatus}
+                  />
                 </motion.div>
               )}
 
@@ -549,52 +373,15 @@ export default function Settings() {
                   transition={{ duration: 0.2 }}
                 >
                   {renderBackHeader()}
-                  
-                  <div className="bg-white rounded-2xl border border-[#feb56c]/35 shadow-sm overflow-hidden">
-                    <div className="px-6 py-4 border-b border-slate-100">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h2 className="text-sm font-semibold text-slate-900">Parâmetros Globais</h2>
-                          <p className="text-xs text-slate-500 mt-0.5">Configurações gerais do sistema.</p>
-                        </div>
-                        <div>
-                          {discordWebhookStatus && (
-                            <WebhookBadge status={discordWebhookStatus} />
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="divide-y divide-slate-100 bg-white">
-                      {Array.isArray(settings) && settings.map((setting) => (
-                        <div key={setting.id} className="px-6 py-4 flex flex-col lg:flex-row lg:items-center gap-3">
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-slate-800">{getFriendlyLabel(setting.id)}</p>
-                            <p className="text-xs text-slate-400 mt-0.5 truncate">{setting.description ?? 'Sem descrição disponível.'}</p>
-                          </div>
-                          <div className="w-full lg:w-48 shrink-0">
-                            <input
-                              type="text"
-                              value={values[setting.id] ?? ''}
-                              onChange={(event) => setValues((prev) => ({ ...prev, [setting.id]: event.target.value }))}
-                              className={inputClassName}
-                              placeholder="Valor"
-                            />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end">
-                      <button
-                        type="button"
-                        disabled={saving || !hasChanges}
-                        onClick={handleSave}
-                        className="inline-flex items-center gap-2 rounded-2xl bg-[#feb56c] px-5 py-2.5 text-sm font-bold text-slate-900 transition-colors hover:bg-[#f6a455] disabled:cursor-not-allowed disabled:opacity-40 shadow-sm"
-                      >
-                        <Save size={14} />
-                        {saving ? 'Salvando...' : 'Salvar Configurações'}
-                      </button>
-                    </div>
-                  </div>
+                  <SystemParamsSection
+                    settings={settings}
+                    values={values}
+                    setValues={setValues}
+                    saving={saving}
+                    hasChanges={hasChanges}
+                    onSave={handleSave}
+                    discordWebhookStatus={discordWebhookStatus}
+                  />
                 </motion.div>
               )}
 
@@ -607,51 +394,13 @@ export default function Settings() {
                   transition={{ duration: 0.2 }}
                 >
                   {renderBackHeader()}
-                  
-                  <div className="bg-white rounded-2xl border border-[#feb56c]/35 shadow-sm overflow-hidden">
-                    <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-amber-50 flex items-center justify-center shrink-0">
-                        <Clock3 size={16} className="text-[#feb56c]" />
-                      </div>
-                      <div>
-                        <h2 className="text-sm font-semibold text-slate-900">Configurações de SLA</h2>
-                        <p className="text-xs text-slate-500 mt-0.5">Defina os prazos de atendimento para cada nível de prioridade.</p>
-                      </div>
-                    </div>
-                    <div className="divide-y divide-slate-100 bg-white">
-                      {Array.isArray(slaKeys) && slaKeys.length === 0 ? (
-                        <div className="px-6 py-6 text-sm text-slate-500 text-center">Nenhuma configuração de SLA encontrada.</div>
-                      ) : (
-                        Array.isArray(slaKeys) && slaKeys.map((s) => (
-                          <div key={s.id} className="px-6 py-4 flex items-center gap-4">
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-slate-800">{getFriendlyLabel(s.id)}</p>
-                              <p className="text-xs text-slate-400 mt-0.5">{s.description ?? 'Sem descrição.'}</p>
-                            </div>
-                            <div className="w-32 shrink-0">
-                              <input
-                                type="number"
-                                min={0}
-                                value={values[s.id] ?? ''}
-                                onChange={(e) => setValues((prev) => ({ ...prev, [s.id]: e.target.value }))}
-                                className={inputClassName}
-                              />
-                            </div>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                    <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end">
-                      <button
-                        onClick={handleSaveSLA}
-                        disabled={saving}
-                        className="inline-flex items-center gap-2 rounded-2xl bg-[#feb56c] px-5 py-2.5 text-sm font-bold text-slate-900 transition-colors hover:bg-[#f6a455] disabled:opacity-40 shadow-sm"
-                      >
-                        <Save size={14} />
-                        Salvar SLAs
-                      </button>
-                    </div>
-                  </div>
+                  <SlaSection
+                    slaKeys={slaKeys}
+                    values={values}
+                    setValues={setValues}
+                    saving={saving}
+                    onSaveSla={handleSaveSLA}
+                  />
                 </motion.div>
               )}
 
@@ -748,43 +497,11 @@ export default function Settings() {
 
       {/* ── TAB: PERFIL ── */}
       {activeTab === 'profile' && (
-        <div className="space-y-3 max-w-2xl">
-          <div className="bg-white rounded-2xl border border-[#feb56c]/35 px-6 py-6 shadow-sm">
-            <div className="flex items-center gap-4">
-              <div className="w-10 h-10 rounded-full bg-[#fff6ee] flex items-center justify-center">
-                <UserIcon size={20} className="text-[#feb56c]" />
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-slate-900">Perfil</p>
-                <p className="text-xs text-slate-400 mt-0.5">Informações básicas da sua conta</p>
-              </div>
-            </div>
-
-            <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1.5">Nome</label>
-                <input type="text" readOnly value={user?.name ?? ''} className={inputClassName} />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1.5">E-mail</label>
-                <input type="text" readOnly value={user?.email ?? ''} className={inputClassName} />
-              </div>
-            </div>
-
-            <div className="flex justify-end mt-4">
-              <button
-                type="button"
-                onClick={handleSavePreferences}
-                className="inline-flex items-center gap-2 rounded-2xl bg-[#feb56c] px-5 py-2.5 text-sm font-bold text-slate-900 transition-colors hover:bg-[#f6a455] shadow-sm"
-              >
-                <Save size={14} />
-                Salvar Preferências
-              </button>
-            </div>
-          </div>
-        </div>
+        <ProfileTab
+          user={user}
+          onSavePreferences={handleSavePreferences}
+        />
       )}
     </main>
   );
 }
-
