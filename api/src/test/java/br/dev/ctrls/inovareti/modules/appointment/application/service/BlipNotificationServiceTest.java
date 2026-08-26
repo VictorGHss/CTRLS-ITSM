@@ -62,4 +62,14 @@ public class BlipNotificationServiceTest {
         assertTrue(service.isDoctorAllowed("99"), "Com lista de bloqueio e allowlist vazias, o comportamento padrão deve ser fail-open (true)");
         assertTrue(service.isDoctorAllowed("46"), "Sem bloqueio configurado e sem allowlist, o médico 46 deve ser permitido");
     }
+
+    @Test
+    public void testIsStaticZeroParamTemplate() {
+        assertTrue(BlipNotificationService.isStaticZeroParamTemplate("aviso_agendamento_grupo"));
+        assertTrue(BlipNotificationService.isStaticZeroParamTemplate("aviso agendamento grupo"));
+        assertTrue(BlipNotificationService.isStaticZeroParamTemplate(" AVISO_AGENDAMENTO_GRUPO "));
+        assertFalse(BlipNotificationService.isStaticZeroParamTemplate("confirmacao_consulta_v6_itsm"));
+        assertFalse(BlipNotificationService.isStaticZeroParamTemplate(""));
+        assertFalse(BlipNotificationService.isStaticZeroParamTemplate(null));
+    }
 }

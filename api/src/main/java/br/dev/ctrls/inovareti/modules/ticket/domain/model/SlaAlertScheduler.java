@@ -1,6 +1,6 @@
 package br.dev.ctrls.inovareti.modules.ticket.domain.model;
-import br.dev.ctrls.inovareti.modules.ticket.domain.port.output.TicketRepositoryPort;
 
+import br.dev.ctrls.inovareti.modules.ticket.domain.port.output.TicketRepositoryPort;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -18,13 +18,18 @@ import net.dv8tion.jda.api.JDA;
 /**
  * Scheduler de alertas de SLA crítico para chamados em andamento.
  *
- * <p>Executa a cada 15 minutos e verifica chamados com {@code slaDeadline} expirando
+ * <p>
+ * Executa a cada 15 minutos e verifica chamados com {@code slaDeadline}
+ * expirando
  * em menos de 30 minutos. Para cada chamado crítico encontrado, envia uma
  * <b>DM privada</b> diretamente para o Discord do técnico responsável com um
- * embed vermelho de urgência.</p>
+ * embed vermelho de urgência.
+ * </p>
  *
- * <p>Se o chamado não tiver técnico atribuído ou o técnico não tiver Discord
- * vinculado, o alerta é registrado em log como aviso.</p>
+ * <p>
+ * Se o chamado não tiver técnico atribuído ou o técnico não tiver Discord
+ * vinculado, o alerta é registrado em log como aviso.
+ * </p>
  */
 @Slf4j
 @Component
@@ -83,7 +88,8 @@ public class SlaAlertScheduler {
                     ticket.getAssignedTo() != null ? ticket.getAssignedTo().getName() : "Não atribuído");
 
             if (ticket.getAssignedTo() == null) {
-                log.warn("[SLA-SCHEDULER] Chamado #{} sem técnico atribuído — alerta de SLA não pode ser enviado.", shortId);
+                log.warn("[SLA-SCHEDULER] Chamado #{} sem técnico atribuído — alerta de SLA não pode ser enviado.",
+                        shortId);
                 continue;
             }
 
@@ -102,7 +108,8 @@ public class SlaAlertScheduler {
 
     private void sendSlaAlertToChannel(JDA jda, Ticket ticket, String shortId, long minutesRemaining) {
         net.dv8tion.jda.api.entities.Guild guild = jda.getGuilds().stream().findFirst().orElse(null);
-        if (guild == null) return;
+        if (guild == null)
+            return;
 
         String ticketNumStr = ticket.getNumber() != null ? ticket.getNumber().toLowerCase() : shortId.toLowerCase();
         String ticketIdStr = ticket.getId() != null ? ticket.getId().toString().toLowerCase() : "";
@@ -111,14 +118,17 @@ public class SlaAlertScheduler {
                 .filter(tc -> {
                     String name = tc.getName() != null ? tc.getName().toLowerCase() : "";
                     String topic = tc.getTopic();
-                    boolean matchesName = name.endsWith("-" + ticketNumStr) || name.startsWith("ticket-" + ticketNumStr) || name.contains(ticketNumStr);
-                    boolean matchesTopic = topic != null && !ticketIdStr.isEmpty() && topic.toLowerCase().contains(ticketIdStr);
+                    boolean matchesName = name.endsWith("-" + ticketNumStr) || name.startsWith("ticket-" + ticketNumStr)
+                            || name.contains(ticketNumStr);
+                    boolean matchesTopic = topic != null && !ticketIdStr.isEmpty()
+                            && topic.toLowerCase().contains(ticketIdStr);
                     return matchesName || matchesTopic;
                 })
                 .toList();
 
         if (channels.isEmpty()) {
-            log.warn("[SLA-SCHEDULER] Canal privado para chamado #{} não encontrado no Discord para alerta de SLA.", ticketNumStr);
+            log.warn("[SLA-SCHEDULER] Canal privado para chamado #{} não encontrado no Discord para alerta de SLA.",
+                    ticketNumStr);
             return;
         }
 
@@ -131,7 +141,8 @@ public class SlaAlertScheduler {
 
         var embed = new EmbedBuilder()
                 .setColor(EMBED_COLOR_RED)
-                .setTitle("🚨 ALERTA DE SLA CRÍTICO — Chamado #" + (ticket.getNumber() != null ? ticket.getNumber() : shortId))
+                .setTitle("🚨 ALERTA DE SLA CRÍTICO — Chamado #"
+                        + (ticket.getNumber() != null ? ticket.getNumber() : shortId))
                 .setDescription("⏰ **ATENÇÃO:** Este chamado está próximo do vencimento do SLA!\n\n"
                         + "📋 **Título:** " + ticket.getTitle() + "\n"
                         + "👤 **Solicitante:** " + requesterName + "\n"
@@ -145,9 +156,10 @@ public class SlaAlertScheduler {
 
         for (var channel : channels) {
             channel.sendMessageEmbeds(embed).queue(
-                    success -> log.info("[SLA-SCHEDULER] Alerta de SLA enviado no canal privado #{} (chamado #{})", channel.getName(), shortId),
-                    error -> log.warn("[SLA-SCHEDULER] Falha ao enviar alerta no canal #{}: {}", channel.getName(), error.getMessage())
-            );
+                    success -> log.info("[SLA-SCHEDULER] Alerta de SLA enviado no canal privado #{} (chamado #{})",
+                            channel.getName(), shortId),
+                    error -> log.warn("[SLA-SCHEDULER] Falha ao enviar alerta no canal #{}: {}", channel.getName(),
+                            error.getMessage()));
         }
     }
 }

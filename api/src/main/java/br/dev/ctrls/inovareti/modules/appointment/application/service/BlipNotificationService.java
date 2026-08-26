@@ -159,19 +159,26 @@ public class BlipNotificationService {
         log.info("[PARAMS TEMPLATE] destination={}, template={}, params={}", recipientE164, templateName, parameters);
 
         if (parameters.isEmpty()) {
-            log.error("[ABORT] Parâmetros vazios para o template '{}'. Envio cancelado para evitar mensagem sem conteúdo. destination={}",
-                templateName, recipientE164);
-            return;
+            if (!isStaticZeroParamTemplate(templateName)) {
+                log.error("[ABORT] Parâmetros vazios para o template dinâmico '{}'. Envio cancelado para evitar mensagem sem conteúdo. destination={}",
+                    templateName, recipientE164);
+                return;
+            }
+            log.info("[TEMPLATE-ESTATICO] Template '{}' possui 0 parâmetros. Disparando sem variáveis via Active Campaign.", templateName);
         }
 
-        Map<String, String> messageParamValues = new java.util.LinkedHashMap<>();
-        List<String> messageParamKeys = new ArrayList<>();
+        Map<String, String> messageParamValues = null;
+        List<String> messageParamKeys = null;
 
-        for (int i = 0; i < parameters.size(); i++) {
-            String key = String.valueOf(i + 1);
-            String val = parameters.get(i).getOrDefault("text", "");
-            messageParamValues.put(key, val);
-            messageParamKeys.add(key);
+        if (!parameters.isEmpty()) {
+            messageParamValues = new java.util.LinkedHashMap<>();
+            messageParamKeys = new ArrayList<>();
+            for (int i = 0; i < parameters.size(); i++) {
+                String key = String.valueOf(i + 1);
+                String val = parameters.get(i).getOrDefault("text", "");
+                messageParamValues.put(key, val);
+                messageParamKeys.add(key);
+            }
         }
 
         String uniqueSuffix = UUID.randomUUID().toString().substring(0, 8);
@@ -231,7 +238,18 @@ public class BlipNotificationService {
         }
     }
 
+    public static boolean isStaticZeroParamTemplate(String templateName) {
+        if (templateName == null || templateName.isBlank()) return false;
+        String norm = templateName.trim().toLowerCase().replace(" ", "_");
+        return "aviso_agendamento_grupo".equals(norm);
+    }
+
     private List<Map<String, String>> buildDynamicParameters(String templateName, AppointmentTemplateData appointmentData) {
+        if (isStaticZeroParamTemplate(templateName)) {
+            log.info("[TEMPLATE MAPPING] Template estático '{}' configurado para 0 parâmetros na Meta.", templateName);
+            return List.of();
+        }
+
         List<AppointmentTemplateMapping> mappings = templateMappingRepository
             .findByTemplateNameIgnoreCaseOrderByPlaceholderIndexAsc(templateName);
 
