@@ -25,7 +25,9 @@ import br.dev.ctrls.inovareti.modules.appointment.application.service.BlipContex
 import br.dev.ctrls.inovareti.modules.appointment.application.service.BlipDeskGuardService;
 import br.dev.ctrls.inovareti.modules.appointment.application.service.BlipIdentityReconciler;
 import br.dev.ctrls.inovareti.modules.appointment.application.service.BlipNotificationService;
+import br.dev.ctrls.inovareti.modules.appointment.application.service.BlipWebhookIdempotencyService;
 import br.dev.ctrls.inovareti.modules.appointment.application.service.BlipWebhookInboundService;
+import br.dev.ctrls.inovareti.modules.appointment.application.service.BlipWebhookIntentMatcher;
 import br.dev.ctrls.inovareti.modules.appointment.infrastructure.adapter.input.rest.BlipWebhookController;
 import br.dev.ctrls.inovareti.modules.appointment.infrastructure.adapter.output.client.BlipLIMEClient;
 import br.dev.ctrls.inovareti.modules.appointment.infrastructure.config.BlipProperties;
@@ -79,12 +81,16 @@ class BlipHumanAttendanceGuardTest {
         org.springframework.beans.factory.ObjectProvider<org.springframework.data.redis.core.StringRedisTemplate> redisProvider =
                 mock(org.springframework.beans.factory.ObjectProvider.class);
 
+        BlipWebhookIdempotencyService idempotencyService = new BlipWebhookIdempotencyService(redisProvider);
+        BlipWebhookIntentMatcher intentMatcher = new BlipWebhookIntentMatcher(blipProperties);
+
         controller = new BlipWebhookController(
                 handleBlipWebhookUseCase,
                 blipWebhookInboundService,
+                idempotencyService,
+                intentMatcher,
                 objectMapper,
                 webhookSignatureValidator,
-                redisProvider,
                 env,
                 blipContextService,
                 blipNotificationService,
