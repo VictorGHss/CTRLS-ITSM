@@ -59,6 +59,8 @@ class BlipHumanAttendanceGuardTest {
         blipProperties.getBlocks().setWaitingResponse("waiting-response-uuid");
 
         BlipDeskGuardService blipDeskGuardService = new BlipDeskGuardService(limeClient);
+        br.dev.ctrls.inovareti.modules.appointment.application.service.BlipContextPayloadFactory payloadFactory =
+                new br.dev.ctrls.inovareti.modules.appointment.application.service.BlipContextPayloadFactory();
 
         blipContextService = new BlipContextService(
                 limeClient,
@@ -66,7 +68,8 @@ class BlipHumanAttendanceGuardTest {
                 new SimpleAsyncTaskExecutor(),
                 reconciler,
                 blipProperties,
-                blipDeskGuardService
+                blipDeskGuardService,
+                payloadFactory
         );
 
         handleBlipWebhookUseCase = mock(HandleBlipWebhookUseCase.class);
