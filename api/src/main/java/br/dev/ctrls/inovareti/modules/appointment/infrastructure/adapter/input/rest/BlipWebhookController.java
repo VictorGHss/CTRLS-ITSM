@@ -147,6 +147,16 @@ public class BlipWebhookController {
         String from = parsed.from();
         Object content = parsed.content();
 
+        // 3. IDEMPOTÊNCIA (Prevenção de Duplicidade): Early Return 200 se for duplicado
+        boolean isNotification = payload.containsKey("event");
+        if (!isNotification && !idempotencyService.isFirstTimeProcessing(messageId)) {
+            log.debug("[IDEMPOTÊNCIA] Evento duplicado ignorado. messageId='{}'", messageId);
+            return ResponseEntity.ok(Map.of(
+                    "status", "processed",
+                    "reason", "duplicate-ignored"
+            ));
+        }
+
         // BLINDAGEM STATE-LOCK: Se o paciente estiver no fluxo de confirmação e mandar texto livre
         String isConfirmingAgenda = (from != null && !from.isBlank())
                 ? blipContextService.getUserContext(from, "isConfirmingAgenda")
@@ -191,16 +201,6 @@ public class BlipWebhookController {
                     "reason", "state-locked-text-ignored"
                 ));
             }
-        }
-
-        // 3. IDEMPOTÊNCIA (Prevenção de Duplicidade): Early Return 200 se for duplicado
-        boolean isNotification = payload.containsKey("event");
-        if (!isNotification && !idempotencyService.isFirstTimeProcessing(messageId)) {
-            log.debug("[IDEMPOTÊNCIA] Evento duplicado ignorado. messageId='{}'", messageId);
-            return ResponseEntity.ok(Map.of(
-                    "status", "processed",
-                    "reason", "duplicate-ignored"
-            ));
         }
 
         Map<String, Object> metadata = new java.util.HashMap<>(intentMatcher.extractMetadata(payload));

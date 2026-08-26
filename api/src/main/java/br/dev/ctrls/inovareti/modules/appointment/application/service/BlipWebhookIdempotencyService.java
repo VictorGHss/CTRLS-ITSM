@@ -34,17 +34,32 @@ public class BlipWebhookIdempotencyService {
     private final Map<String, Long> lastOrientationSentCache = new ConcurrentHashMap<>();
 
     /**
+     * Normaliza identificadores de mensagem do Blip removendo prefixos de encaminhamento (ex: fwd:, fwd:fwd:).
+     */
+    public static String normalizeMessageId(String messageId) {
+        if (!StringUtils.hasText(messageId)) {
+            return null;
+        }
+        String normalized = messageId.trim();
+        while (normalized.toLowerCase().startsWith("fwd:")) {
+            normalized = normalized.substring(4).trim();
+        }
+        return normalized;
+    }
+
+    /**
      * Verifica e registra o processamento do evento para garantir idempotência de forma resiliente.
      *
      * @param messageId ID único do evento/mensagem
      * @return true se for o primeiro processamento (deve processar), false se for duplicado (deve ignorar)
      */
     public boolean isFirstTimeProcessing(String messageId) {
-        if (!StringUtils.hasText(messageId)) {
+        String normalizedId = normalizeMessageId(messageId);
+        if (!StringUtils.hasText(normalizedId)) {
             return true; // Fail-open para mensagens sem identificação
         }
 
-        String cacheKey = "webhook:idempotency:blip:" + messageId.trim();
+        String cacheKey = "webhook:idempotency:blip:" + normalizedId;
         StringRedisTemplate redis = redisTemplateProvider.getIfAvailable();
 
         if (redis != null) {
@@ -71,7 +86,7 @@ public class BlipWebhookIdempotencyService {
         }
 
         AtomicBoolean isFirst = new AtomicBoolean(false);
-        processedEventsCache.compute(messageId, (key, currentVal) -> {
+        processedEventsCache.compute(normalizedId, (key, currentVal) -> {
             if (currentVal == null || currentVal <= now) {
                 isFirst.set(true);
                 return expirationTime;
