@@ -1,56 +1,20 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
-import { QRCodeSVG } from 'qrcode.react';
-import { 
-  Clock, 
-  ShieldCheck, 
-  ShieldAlert,
-  RefreshCw, 
-  ArrowRight,
-  AlertTriangle,
-  MapPin,
-  Facebook,
-  Instagram,
-  MessageCircle,
-  Github,
-  Maximize2,
-  Lock,
-  User,
-  Calendar
-} from 'lucide-react';
+import { Clock } from 'lucide-react';
 import api from '../../services/api';
-
-/**
- * Interface representando a credencial física retornada pelo backend.
- * Todos os campos escritos em inglês conforme as regras de nomenclatura do projeto.
- */
-interface AccessCredential {
-  name: string;
-  userType: 'PATIENT' | 'COMPANION';
-  locator: string;
-  credentialCode: string;
-  cpf?: string;
-  doctorName?: string;
-  appointmentDateTime?: string;
-  opensAt?: string;
-  closesAt?: string;
-}
-
-const formatCpf = (cpf?: string) => {
-  if (!cpf) return '';
-  const clean = cpf.replace(/\D/g, '');
-  if (clean.length !== 11) return cpf;
-  return `${clean.substring(0, 3)}.${clean.substring(3, 6)}.${clean.substring(6, 9)}-${clean.substring(9)}`;
-};
+import type { AccessCredential } from './types';
+import { TwoFactorAuthChallenge } from './components/TwoFactorAuthChallenge';
+import { FullscreenQrModal } from './components/FullscreenQrModal';
+import { CompanionModal } from './components/CompanionModal';
+import { CpfFallbackCard } from './components/CpfFallbackCard';
+import { CredentialsCarousel } from './components/CredentialsCarousel';
+import { PatientAccessFooter } from './components/PatientAccessFooter';
 
 export default function PatientAccess() {
   const { appointmentId } = useParams<{ appointmentId: string }>();
 
   // --- Estados de controle do desafio de identidade (2FA por telefone) ---
-  // isVerified controla se o desafio foi concluído com sucesso
   const [isVerified, setIsVerified] = useState<boolean>(false);
-
-  // Dígitos de entrada do desafio — 4 campos separados para UX otimizada mobile
   const [digits, setDigits] = useState<string[]>(['', '', '', '']);
   const inputRefs = [
     useRef<HTMLInputElement>(null),
@@ -58,31 +22,23 @@ export default function PatientAccess() {
     useRef<HTMLInputElement>(null),
     useRef<HTMLInputElement>(null)
   ];
-
-  // Estado de carregamento da requisição de validação do desafio
   const [challengeLoading, setChallengeLoading] = useState<boolean>(false);
-
-  // Mensagem de erro do desafio exibida caso os dígitos estejam incorretos
   const [challengeError, setChallengeError] = useState<string | null>(null);
 
   // --- Estados de controle das credenciais retornadas após o desafio ---
   const [credentials, setCredentials] = useState<AccessCredential[]>([]);
-
-  // Controle de QR Code em tela cheia
   const [fullscreenCard, setFullscreenCard] = useState<number | null>(null);
   const modalRef = useRef<HTMLDivElement>(null);
-
-  // Controle do carrossel/slide horizontal
   const [activeCardIndex, setActiveCardIndex] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Estados para o fallback de CPF na própria página do portal
+  // --- Fallback de CPF ---
   const [verifiedPhoneDigits, setVerifiedPhoneDigits] = useState<string>('');
   const [cpfInput, setCpfInput] = useState<string>('');
   const [cpfSubmitLoading, setCpfSubmitLoading] = useState<boolean>(false);
   const [cpfSubmitError, setCpfSubmitError] = useState<string | null>(null);
 
-  // Controle do modal de cadastrar acompanhantes
+  // --- Cadastro de Acompanhantes ---
   const [isCompanionModalOpen, setIsCompanionModalOpen] = useState<boolean>(false);
   const [companionName, setCompanionName] = useState<string>('');
   const [companionCpf, setCompanionCpf] = useState<string>('');
@@ -90,7 +46,7 @@ export default function PatientAccess() {
   const [companionSubmitLoading, setCompanionSubmitLoading] = useState<boolean>(false);
   const [companionSubmitError, setCompanionSubmitError] = useState<string | null>(null);
 
-  // Screen Wake Lock API: impede que o ecrã do telemóvel apague enquanto o QR Code está em ecrã inteiro
+  // Screen Wake Lock API: impede que o ecrã do telemóvel apague enquanto o QR Code está em tela cheia
   useEffect(() => {
     let activeLock: any = null;
 
@@ -147,6 +103,18 @@ export default function PatientAccess() {
   const fullscreenData = getFullscreenData();
 
   // Monitora saída da tela cheia nativa do browser para sincronizar o estado do React
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      if (!document.fullscreenElement) {
+        setFullscreenCard(null);
+      }
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    };
+  }, []);
+
   // Tenta restaurar credenciais salvas em cache local (localStorage) para suporte offline na recepção da clínica
   useEffect(() => {
     if (appointmentId) {
@@ -188,24 +156,8 @@ export default function PatientAccess() {
     }
   }, [isVerified]);
 
-  useEffect(() => {
-    const handleFullscreenChange = () => {
-      if (!document.fullscreenElement) {
-        setFullscreenCard(null);
-      }
-    };
-    document.addEventListener('fullscreenchange', handleFullscreenChange);
-    return () => {
-      document.removeEventListener('fullscreenchange', handleFullscreenChange);
-    };
-  }, []);
-
-  // Manipulação dos inputs dos dígitos de desafio com navegação automática entre campos
   const handleDigitChange = (index: number, val: string) => {
-    // Limpa a mensagem de erro imediatamente ao paciente começar a redigitar,
-    // evitando que a mensagem de erro da tentativa anterior fique travada na tela.
     setChallengeError(null);
-
     const numericVal = val.replace(/\D/g, '');
     if (!numericVal) {
       const newDigits = [...digits];
@@ -217,7 +169,6 @@ export default function PatientAccess() {
     newDigits[index] = numericVal.substring(numericVal.length - 1);
     setDigits(newDigits);
 
-    // Avança automaticamente o foco para o próximo campo ao preencher
     if (index < 3) {
       inputRefs[index + 1].current?.focus();
     }
@@ -232,11 +183,6 @@ export default function PatientAccess() {
     }
   };
 
-  /**
-   * Envia os 4 dígitos para a API de credenciais com validação do desafio.
-   * Em caso de sucesso: marca isVerified = true e armazena as credenciais retornadas.
-   * Em caso de erro (400/401): exibe a mensagem de erro e limpa os campos.
-   */
   const handleUnlock = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!appointmentId || digits.some(d => d === '')) return;
@@ -255,12 +201,10 @@ export default function PatientAccess() {
           }
         }
       );
-      // Desafio validado com sucesso: libera o carrossel e salva no cache offline
       saveCredentialsWithOfflineCache(response.data || []);
       setVerifiedPhoneDigits(phoneDigits);
     } catch (err: unknown) {
       console.error('[PatientAccess] Falha no desafio de segurança:', err);
-      // Exibe mensagem de erro e limpa os campos para nova tentativa
       setChallengeError('Código inválido. Tente novamente.');
       setDigits(['', '', '', '']);
       setTimeout(() => inputRefs[0].current?.focus(), 50);
@@ -284,7 +228,6 @@ export default function PatientAccess() {
 
     try {
       console.log('[PatientAccess] Enviando CPF para validação:', cleanCpf);
-      // Chama o endpoint de validação enviando o CPF preenchido pelo paciente
       await api.post(
         '/v1/access/validate',
         {
@@ -298,7 +241,6 @@ export default function PatientAccess() {
         }
       );
 
-      // Se der certo, recarrega as credenciais usando o telefone que foi verificado antes
       const response = await api.get<AccessCredential[]>(
         `/v1/access/credentials/${appointmentId}?phoneDigits=${verifiedPhoneDigits}`,
         {
@@ -353,7 +295,6 @@ export default function PatientAccess() {
         }
       );
 
-      // Recarrega as credenciais usando o telefone verificado
       const response = await api.get<AccessCredential[]>(
         `/v1/access/credentials/${appointmentId}?phoneDigits=${verifiedPhoneDigits}`,
         {
@@ -365,13 +306,11 @@ export default function PatientAccess() {
       const newCreds = response.data || [];
       setCredentials(newCreds);
       
-      // Fecha modal e limpa form
       setIsCompanionModalOpen(false);
       setCompanionName('');
       setCompanionCpf('');
       setCompanionBirthDate('');
 
-      // Foca no novo acompanhante (último card do carrossel)
       if (newCreds.length > 0) {
         setTimeout(() => {
           scrollToCard(newCreds.length - 1);
@@ -385,7 +324,6 @@ export default function PatientAccess() {
     }
   };
 
-  // Atualiza bolinhas do carrossel ao rolar
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
     const container = e.currentTarget;
     const scrollLeft = container.scrollLeft;
@@ -405,123 +343,26 @@ export default function PatientAccess() {
     }
   };
 
-  const isFormComplete = digits.every(d => d !== '');
-
   // === TELA DE DESAFIO DE IDENTIDADE (2FA) ===
-  // Exibida antes que o usuário desbloqueie os QR Codes com os 4 dígitos do telefone
   if (!isVerified) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-brand-secondary/35 via-slate-50 to-white flex items-center justify-center p-4 font-sans antialiased">
-        <div className="w-full max-w-md bg-white/90 backdrop-blur-md rounded-3xl shadow-xl shadow-brand-primary/5 border border-white/60 p-8 flex flex-col justify-between min-h-[580px] transition-all">
-          
-          {/* Logo da Clínica */}
-          <div className="text-center">
-            <img 
-              src="/Logo.png" 
-              alt="Logo Inovare" 
-              className="h-14 w-auto mx-auto mb-6 object-contain"
-              onError={(e) => {
-                e.currentTarget.src = 'https://placehold.co/180x60/feb56c/ffffff?text=Inovare+TI';
-              }}
-            />
-            
-            {/* Badge de Segurança */}
-            <div className="inline-flex items-center gap-1.5 bg-brand-secondary/30 border border-brand-primary/10 rounded-full px-3 py-1 mb-4">
-              <ShieldCheck className="w-4 h-4 text-brand-primary-dark" />
-              <span className="text-xs text-brand-primary-dark font-semibold">Verificação de Identidade</span>
-            </div>
-
-            <h2 className="text-xl font-extrabold text-slate-800 tracking-tight">Desbloquear Acesso</h2>
-            
-            {/* Mensagem do desafio conforme especificado */}
-            <p className="text-sm text-slate-500 mt-2.5 leading-relaxed max-w-[320px] mx-auto">
-              Para sua segurança e desbloqueio dos seus QR Codes de entrada, informe os{' '}
-              <b>4 últimos dígitos</b> do número de telefone que recebeu a mensagem de confirmação.
-            </p>
-          </div>
-
-          {/* Formulário de Desafio */}
-          <form onSubmit={handleUnlock} className="mt-8 flex-1 flex flex-col justify-between">
-            <div className="space-y-4">
-              
-              {/* Inputs dos 4 dígitos separados para otimização mobile */}
-              <div className="flex justify-center gap-3.5">
-                {digits.map((digit, index) => (
-                  <input
-                    key={index}
-                    ref={inputRefs[index]}
-                    id={`digit-input-${index}`}
-                    type="text"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    maxLength={1}
-                    value={digit}
-                    onChange={(e) => handleDigitChange(index, e.target.value)}
-                    onKeyDown={(e) => handleDigitKeyDown(index, e)}
-                    placeholder="•"
-                    disabled={challengeLoading}
-                    className={`w-14 h-16 text-center text-2xl font-extrabold text-slate-800 border-2 rounded-2xl focus:ring-4 bg-slate-50/50 transition-all font-mono placeholder:text-slate-300 disabled:opacity-50 disabled:cursor-wait ${
-                      challengeError
-                        ? 'border-red-400 focus:border-red-500 focus:ring-red-100'
-                        : 'border-slate-200 focus:border-brand-primary focus:ring-brand-primary/10'
-                    }`}
-                  />
-                ))}
-              </div>
-
-              {/* Mensagem de erro do desafio */}
-              {challengeError && (
-                <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-xl px-3 py-2.5 text-red-700">
-                  <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-                  <p className="text-xs font-semibold leading-relaxed">{challengeError}</p>
-                </div>
-              )}
-
-              {/* Ícone de cadeado + texto de orientação */}
-              <p className="text-xs text-slate-400 text-center flex items-center justify-center gap-1.5">
-                <Lock className="w-3.5 h-3.5 text-brand-primary" />
-                Os QR Codes são exibidos somente após a verificação
-              </p>
-            </div>
-
-            {/* Botão de Desbloqueio */}
-            <button
-              type="submit"
-              id="unlock-access-button"
-              disabled={!isFormComplete || challengeLoading}
-              className={`w-full py-4 px-6 rounded-2xl font-bold tracking-wide transition-all duration-300 mt-10 shadow-lg flex items-center justify-center gap-2 ${
-                isFormComplete && !challengeLoading
-                  ? 'bg-gradient-to-r from-brand-primary to-brand-primary-dark hover:from-brand-primary hover:to-brand-primary-dark shadow-brand-primary/25 cursor-pointer active:scale-[0.98] text-white' 
-                  : 'bg-slate-200 text-slate-400 shadow-none cursor-not-allowed'
-              }`}
-            >
-              {challengeLoading ? (
-                <>
-                  <RefreshCw className="w-4 h-4 animate-spin" />
-                  Verificando...
-                </>
-              ) : (
-                <>
-                  Desbloquear Acesso
-                  <ArrowRight className="w-4 h-4" />
-                </>
-              )}
-            </button>
-          </form>
-        </div>
-      </div>
+      <TwoFactorAuthChallenge
+        digits={digits}
+        inputRefs={inputRefs}
+        challengeLoading={challengeLoading}
+        challengeError={challengeError}
+        onDigitChange={handleDigitChange}
+        onDigitKeyDown={handleDigitKeyDown}
+        onUnlock={handleUnlock}
+      />
     );
   }
 
-  // Identifica a credencial do paciente titular para os detalhes superiores
   const patientCredential = credentials.find(c => c.userType === 'PATIENT') || credentials[0];
 
-
-
-  // === TELA PRINCIPAL (CARROSSEL DE CREDENCIAIS / CONTINGÊNCIA ARRAY VAZIO) ===
+  // === TELA PRINCIPAL (CARROSSEL DE CREDENCIAIS / CONTINGÊNCIA) ===
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col justify-between font-sans antialiased">
-      {/* Container Centralizado para Simulação Mobile (Mobile-First) */}
       <div className="w-full max-w-md bg-white shadow-2xl shadow-brand-primary/5 border-x border-brand-secondary/35 flex flex-col min-h-screen mx-auto relative">
         
         {/* Header Superior */}
@@ -539,7 +380,7 @@ export default function PatientAccess() {
         {/* Conteúdo Principal */}
         <main className="flex-1 px-5 py-6 space-y-6 overflow-y-auto pb-12 bg-gradient-to-b from-white via-slate-50/50 to-slate-50">
           
-          {/* Saudação Inicial baseada no Paciente Titular */}
+          {/* Saudação Inicial */}
           <div className="space-y-1">
             <h1 className="text-xl font-extrabold text-slate-800 tracking-tight">
               Olá{patientCredential ? `, ${patientCredential.name.split(' ')[0]}` : ''}!
@@ -547,74 +388,19 @@ export default function PatientAccess() {
             <p className="text-xs text-slate-400 font-medium">Aqui estão seus cartões para liberação das catracas físicas.</p>
           </div>
 
-          {/* Fluxo Condicional: Carrossel de Credenciais vs Falta de CPF vs Mensagem de Contingência */}
+          {/* Fluxo Condicional */}
           {credentials.some(c => c.locator === 'CPF_MISSING') ? (
-            <div className="bg-white border border-slate-200 rounded-3xl p-6 space-y-5 shadow-sm text-center">
-              <div className="w-14 h-14 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto">
-                <ShieldAlert className="w-7 h-7" />
-              </div>
-              <div className="space-y-2">
-                <h3 className="text-md font-bold text-slate-800">Informe seu CPF</h3>
-                <p className="text-xs text-slate-500 leading-relaxed max-w-[280px] mx-auto">
-                  Para validar sua identidade e liberar sua entrada nas catracas físicas da clínica, por favor informe seu CPF abaixo:
-                </p>
-              </div>
-
-              <form onSubmit={handleCpfSubmit} className="space-y-4">
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  placeholder="000.000.000-00"
-                  value={cpfInput}
-                  onChange={(e) => {
-                    setCpfSubmitError(null);
-                    // Aplica máscara de CPF
-                    const digits = e.target.value.replace(/\D/g, '').substring(0, 11);
-                    let masked = digits;
-                    if (digits.length > 9) {
-                      masked = `${digits.substring(0, 3)}.${digits.substring(3, 6)}.${digits.substring(6, 9)}-${digits.substring(9)}`;
-                    } else if (digits.length > 6) {
-                      masked = `${digits.substring(0, 3)}.${digits.substring(3, 6)}.${digits.substring(6)}`;
-                    } else if (digits.length > 3) {
-                      masked = `${digits.substring(0, 3)}.${digits.substring(3)}`;
-                    }
-                    setCpfInput(masked);
-                  }}
-                  disabled={cpfSubmitLoading}
-                  className="w-full text-center py-3.5 px-4 font-bold text-slate-700 border border-slate-200 rounded-2xl focus:border-brand-primary focus:ring-4 focus:ring-brand-primary/10 transition-all font-mono"
-                />
-
-                {cpfSubmitError && (
-                  <div className="text-xs font-semibold text-red-600 bg-red-50 border border-red-100 rounded-xl py-2 px-3 flex items-center gap-1.5 justify-center">
-                    <AlertTriangle className="w-3.5 h-3.5" />
-                    {cpfSubmitError}
-                  </div>
-                )}
-
-                <button
-                  type="submit"
-                  disabled={cpfSubmitLoading || cpfInput.replace(/\D/g, '').length !== 11}
-                  className={`w-full py-3.5 px-5 rounded-2xl font-bold transition-all shadow-md flex items-center justify-center gap-2 ${
-                    cpfInput.replace(/\D/g, '').length === 11 && !cpfSubmitLoading
-                      ? 'bg-gradient-to-r from-brand-primary to-brand-primary-dark text-white hover:scale-[1.01] active:scale-[0.99] cursor-pointer'
-                      : 'bg-slate-100 text-slate-400 cursor-not-allowed shadow-none'
-                  }`}
-                >
-                  {cpfSubmitLoading ? (
-                    <>
-                      <RefreshCw className="w-4 h-4 animate-spin" />
-                      Salvando...
-                    </>
-                  ) : (
-                    <>
-                      Salvar e Liberar Acesso
-                    </>
-                  )}
-                </button>
-              </form>
-            </div>
+            <CpfFallbackCard
+              cpfInput={cpfInput}
+              cpfSubmitLoading={cpfSubmitLoading}
+              cpfSubmitError={cpfSubmitError}
+              onCpfChange={(masked) => {
+                setCpfSubmitError(null);
+                setCpfInput(masked);
+              }}
+              onSubmit={handleCpfSubmit}
+            />
           ) : credentials.length === 0 ? (
-            /* Cenário de contingência: credenciais ainda não geradas no servidor */
             <div className="bg-brand-secondary/10 border border-brand-primary/20 rounded-3xl p-6 text-center space-y-4 shadow-sm">
               <div className="w-16 h-16 bg-brand-primary/10 rounded-full flex items-center justify-center mx-auto text-brand-primary animate-pulse">
                 <Clock className="w-8 h-8" />
@@ -625,197 +411,18 @@ export default function PatientAccess() {
               </p>
             </div>
           ) : (
-            /* Carrossel de cartões de credenciais */
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-bold text-slate-800">Cartões de Acesso (Catraca)</h3>
-                {credentials.length > 1 && (
-                  <span className="text-[10px] bg-brand-secondary/40 text-brand-primary-dark rounded-full px-2.5 py-0.5 font-bold">
-                    Deslize para o lado ({activeCardIndex + 1}/{credentials.length})
-                  </span>
-                )}
-              </div>
-
-              {/* Slider de rolagem horizontal com snap CSS */}
-              <div 
-                ref={scrollRef}
-                onScroll={handleScroll}
-                className="flex gap-4 overflow-x-auto snap-x snap-mandatory scrollbar-none px-1 py-2"
-                style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-              >
-                {credentials.map((cred, idx) => (
-                  <div 
-                    key={idx}
-                    className="w-[88%] shrink-0 snap-center bg-slate-50/50 backdrop-blur-sm border border-slate-200/50 shadow-md rounded-2xl p-5 flex flex-col justify-between"
-                  >
-                    {/* Metade Superior: QR Code e Metadados do Acesso */}
-                    <div className="flex flex-col items-center w-full">
-                      {/* Tag de Tipo de Usuário no Topo do Cartão */}
-                      <div className="flex items-center gap-2 mb-3">
-                        <span className={`text-[10px] font-extrabold uppercase px-3 py-1 rounded-full tracking-wider ${
-                          cred.userType === 'PATIENT' 
-                            ? 'bg-brand-primary/10 text-brand-primary-dark border border-brand-primary/10' 
-                            : 'bg-indigo-50 text-indigo-700 border border-indigo-100'
-                        }`}>
-                          {cred.userType === 'PATIENT' ? 'Paciente Titular' : 'Acompanhante'}
-                        </span>
-                        {cred.credentialCode !== 'BLOCKED_OUTSIDE_WINDOW' && cred.credentialCode !== 'CPF_MISSING' && (
-                          <span className="inline-flex items-center gap-1 bg-emerald-50 border border-emerald-200/80 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                            Liberado
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Bloco do QR Code */}
-                      <div className="p-4 bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col items-center justify-center relative min-h-[184px] w-[184px]">
-                        {cred.credentialCode === 'BLOCKED_OUTSIDE_WINDOW' ? (
-                          <div className="flex flex-col items-center justify-center text-center p-2 space-y-2 select-none">
-                            <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center text-slate-400">
-                              <Lock className="w-5 h-5" />
-                            </div>
-                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Acesso Bloqueado</span>
-                            <span className="text-[9.5px] text-slate-400 font-bold leading-snug block">Liberado a partir das {cred.opensAt} no dia da consulta</span>
-                          </div>
-                        ) : (
-                          <>
-                            <QRCodeSVG 
-                              value={cred.credentialCode} 
-                              size={150} 
-                              fgColor="#0f172a" 
-                              bgColor="#ffffff"
-                              level="H"
-                            />
-                            <div className="absolute top-2 right-2 flex items-center justify-center">
-                              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
-                              <span className="absolute w-2 h-2 rounded-full bg-emerald-500"></span>
-                            </div>
-                          </>
-                        )}
-                      </div>
-
-                      {/* Dica de Distância do Leitor */}
-                      <p className="text-[10px] text-slate-400 font-medium mt-2 text-center">
-                        💡 Aproxime a 10–15 cm da câmera da catraca
-                      </p>
-
-                      {/* Localizador Catraca Discreto */}
-                      <span className="text-[10.5px] font-bold text-slate-400 font-mono mt-1 uppercase tracking-wider">
-                        Ref: {cred.locator}
-                      </span>
-                    </div>
-
-                    {/* Divisor Tracejado Estilo Wallet */}
-                    <div className="w-full border-t border-dashed border-slate-300 my-5"></div>
-
-                    {/* Metade Inferior: Dados da Consulta */}
-                    <div className="w-full space-y-3.5 text-left mb-4">
-                      <div className="flex items-start gap-2.5 pb-2 border-b border-slate-200/40">
-                        <User className="w-4 h-4 text-brand-primary shrink-0 mt-0.5" />
-                        <div>
-                          <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block">Nome</span>
-                          <span className="text-xs font-bold text-slate-700">{cred.name}</span>
-                        </div>
-                      </div>
-                      
-                      {cred.cpf && (
-                        <div className="flex items-start gap-2.5 pb-2 border-b border-slate-200/40">
-                          <ShieldCheck className="w-4 h-4 text-brand-primary shrink-0 mt-0.5" />
-                          <div>
-                            <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block">CPF</span>
-                            <span className="text-xs font-semibold text-slate-700">{formatCpf(cred.cpf)}</span>
-                          </div>
-                        </div>
-                      )}
-                      
-                      {cred.doctorName && (
-                        <div className="flex items-start gap-2.5 pb-2 border-b border-slate-200/40">
-                          <User className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
-                          <div>
-                            <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block">Médico</span>
-                            <span className="text-xs font-semibold text-slate-700">{cred.doctorName}</span>
-                          </div>
-                        </div>
-                      )}
-                      
-                      {cred.appointmentDateTime && (
-                        <div className="flex items-start gap-2.5">
-                          <Calendar className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
-                          <div>
-                            <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block">Data e Horário</span>
-                            <span className="text-xs font-extrabold text-brand-primary-dark">{cred.appointmentDateTime}</span>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Botão Ampliar QR Code para tela cheia */}
-                    <button 
-                      onClick={() => openFullscreen(idx)}
-                      disabled={cred.credentialCode === 'BLOCKED_OUTSIDE_WINDOW'}
-                      className={`w-full py-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-sm mt-auto ${
-                        cred.credentialCode === 'BLOCKED_OUTSIDE_WINDOW'
-                          ? 'bg-slate-100 text-slate-400 cursor-not-allowed shadow-none'
-                          : 'bg-gradient-to-r from-brand-primary to-brand-primary-dark hover:opacity-95 active:scale-[0.98] text-white cursor-pointer'
-                      }`}
-                    >
-                      <Maximize2 className="w-3.5 h-3.5" />
-                      Ampliar QR Code
-                    </button>
-                  </div>
-                ))}
-              </div>
-
-              {/* Bolinhas de Paginação do carrossel */}
-              {credentials.length > 1 && (
-                <div className="flex justify-center gap-1.5 mt-2">
-                  {credentials.map((_, idx) => (
-                    <button 
-                      key={idx}
-                      onClick={() => scrollToCard(idx)}
-                      className={`h-2 rounded-full transition-all duration-300 ${
-                        activeCardIndex === idx ? 'w-6 bg-brand-primary' : 'w-2 bg-slate-200'
-                      }`}
-                      aria-label={`Ir para cartão ${idx + 1}`}
-                    />
-                  ))}
-                </div>
-              )}
-
-              {/* Botão de Cadastrar Acompanhante */}
-              <div className="pt-5 flex justify-center">
-                <button
-                  onClick={() => setIsCompanionModalOpen(true)}
-                  className="w-full py-3 px-4 bg-white border border-brand-primary hover:border-brand-primary-dark text-brand-primary-dark hover:text-brand-primary rounded-2xl text-xs font-bold transition-all flex items-center justify-center gap-2 hover:bg-brand-secondary/10 active:scale-[0.98] shadow-sm cursor-pointer"
-                >
-                  <User className="w-4 h-4 text-brand-primary" />
-                  Cadastrar Acompanhante
-                </button>
-              </div>
-
-              {/* Card de Localização / Como Chegar */}
-              <div className="mt-4 bg-slate-50/50 backdrop-blur-sm border border-slate-200/50 shadow-md rounded-2xl p-5 flex flex-col space-y-3">
-                <div className="flex items-center gap-2">
-                  <MapPin className="w-5 h-5 text-brand-primary" />
-                  <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">Inovare Serviços de Saúde</h4>
-                </div>
-                <p className="text-xs font-semibold text-slate-655 leading-relaxed">
-                  R. Carlos Osternack, 111 - Estrela, Ponta Grossa - PR, 84040-120
-                </p>
-                <a 
-                  href="https://maps.app.goo.gl/S2BaxmJFgr4YAjRT7" 
-                  target="_blank" 
-                  rel="noopener noreferrer" 
-                  className="w-full py-3 bg-gradient-to-r from-brand-primary to-brand-primary-dark active:scale-[0.98] text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-sm cursor-pointer hover:opacity-95"
-                >
-                  <MapPin className="w-4 h-4 text-white" />
-                  Abrir no Google Maps
-                </a>
-              </div>
-            </div>
+            <CredentialsCarousel
+              credentials={credentials}
+              scrollRef={scrollRef}
+              activeCardIndex={activeCardIndex}
+              onScroll={handleScroll}
+              scrollToCard={scrollToCard}
+              onOpenFullscreen={openFullscreen}
+              onOpenCompanionModal={() => setIsCompanionModalOpen(true)}
+            />
           )}
 
-          {/* Instruções para Acesso Compactas */}
+          {/* Instruções para Acesso */}
           <div className="text-center px-4 pt-2">
             <p className="text-xs text-slate-500 leading-relaxed">
               💡 <b>Instruções:</b> Aproxime o QR Code do leitor da catraca. Se houver acompanhantes cadastrados, passe primeiro o seu cartão (Titular), aguarde a passagem e deslize para passar os demais cartões.
@@ -824,258 +431,39 @@ export default function PatientAccess() {
 
         </main>
 
-        {/* Rodapé Padrão */}
-        <footer className="mt-auto border-t border-brand-secondary/30 bg-white py-8 px-6 text-center space-y-6">
-          <div className="flex flex-col items-center text-center gap-4">
-            <div className="flex h-28 w-28 items-center justify-center rounded-3xl bg-brand-secondary/30 p-4 shadow-sm border border-brand-primary/10">
-              <img
-                src="/Logo.png"
-                alt="Inovare – Serviços de Saúde"
-                className="h-full w-full object-contain"
-                onError={(e) => {
-                  e.currentTarget.src = 'https://placehold.co/120x120/feb56c/ffffff?text=Inovare';
-                }}
-              />
-            </div>
-
-            <div className="space-y-1.5 max-w-xs sm:max-w-md">
-              <p className="text-sm font-extrabold uppercase tracking-wider text-brand-primary-dark">
-                Inovare – Serviços de Saúde
-              </p>
-              <p className="text-[11px] text-slate-500 leading-relaxed font-semibold font-sans">
-                R. Carlos Osternack, 111 - Vila Placidina, Ponta Grossa - PR, 84040-120
-              </p>
-              <p className="text-[10px] text-slate-400 font-bold">
-                Atendimento: Segunda a sexta, 08h – 12h e 13h – 18h30
-              </p>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap justify-center gap-2">
-            <a 
-              href="https://maps.app.goo.gl/S2BaxmJFgr4YAjRT7" 
-              target="_blank" 
-              rel="noopener noreferrer" 
-              className="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-50 hover:bg-brand-secondary/20 hover:text-brand-primary-dark border border-brand-primary/10 rounded-xl text-xs font-bold text-slate-655 transition-all shadow-sm"
-            >
-              <MapPin className="w-4 h-4 text-brand-primary" />
-              Ver no Maps
-            </a>
-            <a 
-              href="https://wa.me/554230262601" 
-              target="_blank" 
-              rel="noopener noreferrer" 
-              className="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-50 hover:bg-brand-secondary/20 hover:text-brand-primary-dark border border-brand-primary/10 rounded-xl text-xs font-bold text-slate-650 transition-all shadow-sm"
-            >
-              <MessageCircle className="w-4 h-4 text-emerald-500" />
-              WhatsApp
-            </a>
-            <a 
-              href="https://www.instagram.com/inovaress/" 
-              target="_blank" 
-              rel="noopener noreferrer" 
-              className="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-50 hover:bg-brand-secondary/20 hover:text-brand-primary-dark border border-brand-primary/10 rounded-xl text-xs font-bold text-slate-650 transition-all shadow-sm"
-            >
-              <Instagram className="w-4 h-4 text-pink-500" />
-              Instagram
-            </a>
-            <a 
-              href="https://www.facebook.com/inovarepg" 
-              target="_blank" 
-              rel="noopener noreferrer" 
-              className="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-50 hover:bg-brand-secondary/20 hover:text-brand-primary-dark border border-brand-primary/10 rounded-xl text-xs font-bold text-slate-650 transition-all shadow-sm"
-            >
-              <Facebook className="w-4 h-4 text-blue-600" />
-              Facebook
-            </a>
-          </div>
-
-          <div className="border-t border-slate-100 pt-4 flex flex-col items-center gap-2">
-            <p className="text-xs text-slate-400 flex items-center justify-center gap-1">
-              Feito por
-              <Github className="inline w-4 h-4 mx-1 text-slate-400" />
-              <a
-                href="https://github.com/VictorGHss"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-brand-primary-dark hover:text-brand-primary font-bold transition-colors underline underline-offset-2"
-              >
-                VictorGHss
-              </a>
-            </p>
-          </div>
-        </footer>
+        <PatientAccessFooter />
 
       </div>
 
-      {/* Modal de Ampliação do QR Code para Tela Cheia */}
+      {/* Modal Tela Cheia */}
       {fullscreenData && (
-        <div 
-          ref={modalRef}
-          className="fixed inset-0 z-50 flex flex-col items-center justify-between p-6 sm:p-8"
-          style={{ backgroundColor: '#ffffff' }}
-        >
-          <div className="text-center mt-6">
-            <span className="text-[11px] font-extrabold tracking-wider text-brand-primary uppercase block">Catraca de Acesso Físico</span>
-            <h4 className="text-lg sm:text-xl font-black text-slate-800 mt-1">{fullscreenData.title}</h4>
-            <div className="inline-flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 px-3 py-1 rounded-full text-[11px] font-bold mt-2 shadow-xs">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-              Acesso Liberado para a Catraca
-            </div>
-            <p className="text-xs text-slate-500 mt-2 font-medium">💡 Mantenha o celular a cerca de <b>10 a 15 cm</b> da câmera da catraca</p>
-          </div>
-
-          <div className="flex flex-col items-center justify-center flex-1 my-4 w-full max-w-sm">
-            <div className="p-5 bg-white border-2 border-brand-primary/30 rounded-3xl shadow-2xl flex items-center justify-center">
-              {/* QR Code ampliado com apenas o credentialCode puro */}
-              <QRCodeSVG 
-                value={fullscreenData.value} 
-                size={300} 
-                fgColor="#0f172a" 
-                bgColor="#ffffff"
-                level="H"
-              />
-            </div>
-            <span className="text-[11px] font-mono text-slate-400 mt-3 font-semibold">Trava de brilho da tela ativada</span>
-          </div>
-
-          <button 
-            onClick={closeFullscreen}
-            className="w-full max-w-sm py-4 bg-gradient-to-r from-brand-primary to-brand-primary-dark active:scale-[0.98] text-white rounded-2xl font-bold tracking-wide transition-all duration-300 shadow-lg shadow-brand-primary/20 cursor-pointer text-sm"
-          >
-            Fechar Tela Cheia
-          </button>
-        </div>
+        <FullscreenQrModal
+          modalRef={modalRef}
+          title={fullscreenData.title}
+          qrCodeValue={fullscreenData.value}
+          onClose={closeFullscreen}
+        />
       )}
 
-      {/* Modal de Cadastro de Acompanhante */}
-      {isCompanionModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-          <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl border border-slate-100 p-6 flex flex-col space-y-4 animate-in fade-in zoom-in-95 duration-200">
-            <div className="text-center">
-              <div className="inline-flex items-center gap-1.5 bg-brand-secondary/30 border border-brand-primary/10 rounded-full px-3 py-1 mb-2">
-                <User className="w-4 h-4 text-brand-primary-dark" />
-                <span className="text-xs text-brand-primary-dark font-semibold">Novo Acompanhante</span>
-              </div>
-              <h3 className="text-md font-bold text-slate-800">Cadastrar Acompanhante</h3>
-              <p className="text-[11px] text-slate-500 leading-relaxed max-w-[280px] mx-auto mt-1">
-                Informe os dados para cadastrar o acompanhante nas catracas físicas de acesso.
-              </p>
-            </div>
-
-            <form onSubmit={handleCompanionSubmit} className="space-y-4 pt-2">
-              <div className="space-y-3">
-                {/* Nome Completo */}
-                <div>
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Nome Completo</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Nome do acompanhante"
-                    value={companionName}
-                    onChange={(e) => setCompanionName(e.target.value)}
-                    disabled={companionSubmitLoading}
-                    className="w-full py-3 px-4 border border-slate-200 rounded-xl focus:border-brand-primary focus:ring-4 focus:ring-brand-primary/10 transition-all text-xs font-semibold text-slate-700"
-                  />
-                </div>
-
-                {/* Data de Nascimento */}
-                <div>
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Data de Nascimento</label>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    required
-                    placeholder="DD/MM/AAAA"
-                    value={companionBirthDate}
-                    onChange={(e) => {
-                      setCompanionSubmitError(null);
-                      const digits = e.target.value.replace(/\D/g, '').substring(0, 8);
-                      let masked = digits;
-                      if (digits.length > 4) {
-                        masked = `${digits.substring(0, 2)}/${digits.substring(2, 4)}/${digits.substring(4)}`;
-                      } else if (digits.length > 2) {
-                        masked = `${digits.substring(0, 2)}/${digits.substring(2)}`;
-                      }
-                      setCompanionBirthDate(masked);
-                    }}
-                    disabled={companionSubmitLoading}
-                    className="w-full py-3 px-4 border border-slate-200 rounded-xl focus:border-brand-primary focus:ring-4 focus:ring-brand-primary/10 transition-all text-xs font-semibold text-slate-700"
-                  />
-                </div>
-
-                {/* CPF */}
-                <div>
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">CPF</label>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    required
-                    placeholder="000.000.000-00"
-                    value={companionCpf}
-                    onChange={(e) => {
-                      setCompanionSubmitError(null);
-                      const digits = e.target.value.replace(/\D/g, '').substring(0, 11);
-                      let masked = digits;
-                      if (digits.length > 9) {
-                        masked = `${digits.substring(0, 3)}.${digits.substring(3, 6)}.${digits.substring(6, 9)}-${digits.substring(9)}`;
-                      } else if (digits.length > 6) {
-                        masked = `${digits.substring(0, 3)}.${digits.substring(3, 6)}.${digits.substring(6)}`;
-                      } else if (digits.length > 3) {
-                        masked = `${digits.substring(0, 3)}.${digits.substring(3)}`;
-                      }
-                      setCompanionCpf(masked);
-                    }}
-                    disabled={companionSubmitLoading}
-                    className="w-full py-3 px-4 border border-slate-200 rounded-xl focus:border-brand-primary focus:ring-4 focus:ring-brand-primary/10 transition-all text-xs font-mono font-semibold text-slate-700"
-                  />
-                </div>
-              </div>
-
-              {companionSubmitError && (
-                <div className="text-[11px] font-semibold text-red-600 bg-red-50 border border-red-100 rounded-xl py-2 px-3 flex items-center gap-1.5 justify-center">
-                  <AlertTriangle className="w-3.5 h-3.5" />
-                  {companionSubmitError}
-                </div>
-              )}
-
-              <div className="flex gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsCompanionModalOpen(false);
-                    setCompanionName('');
-                    setCompanionCpf('');
-                    setCompanionBirthDate('');
-                  }}
-                  disabled={companionSubmitLoading}
-                  className="flex-1 py-3 border border-slate-200 text-slate-500 rounded-xl text-xs font-bold transition-all hover:bg-slate-50 active:scale-[0.98] cursor-pointer"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={companionSubmitLoading || !companionName || companionCpf.replace(/\D/g, '').length !== 11 || companionBirthDate.replace(/\D/g, '').length !== 8}
-                  className={`flex-1 py-3 rounded-xl text-xs font-bold transition-all shadow-md flex items-center justify-center gap-2 ${
-                    companionName && companionCpf.replace(/\D/g, '').length === 11 && companionBirthDate.replace(/\D/g, '').length === 8 && !companionSubmitLoading
-                      ? 'bg-gradient-to-r from-brand-primary to-brand-primary-dark text-white hover:scale-[1.01] active:scale-[0.99] cursor-pointer'
-                      : 'bg-slate-100 text-slate-400 cursor-not-allowed shadow-none'
-                  }`}
-                >
-                  {companionSubmitLoading ? (
-                    <>
-                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                      Cadastrando...
-                    </>
-                  ) : (
-                    'Cadastrar'
-                  )}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {/* Modal Acompanhante */}
+      <CompanionModal
+        isOpen={isCompanionModalOpen}
+        companionName={companionName}
+        companionCpf={companionCpf}
+        companionBirthDate={companionBirthDate}
+        companionSubmitLoading={companionSubmitLoading}
+        companionSubmitError={companionSubmitError}
+        onNameChange={setCompanionName}
+        onCpfChange={setCompanionCpf}
+        onBirthDateChange={setCompanionBirthDate}
+        onSubmit={handleCompanionSubmit}
+        onClose={() => {
+          setIsCompanionModalOpen(false);
+          setCompanionName('');
+          setCompanionCpf('');
+          setCompanionBirthDate('');
+        }}
+      />
     </div>
   );
 }
