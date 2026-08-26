@@ -44,8 +44,10 @@ stateDiagram-v2
   * Se o status retornado for de confirmação/presença (`7, 2, 3, 4, 5, 101, 103, 105`), atualiza/mantém como `CONFIRMED`.
   * Se o status for cancelamento explícito (`6` Falta, `11` Desmarcado pelo paciente, `16` Desmarcado pelo profissional), atualiza para `CANCELED`.
 
-### 1.4 Esteira de Lembretes Recorrentes (Nudges)
-* **Nudges Individuais e de Grupo:** Gerenciados pelo `MonitorAppointmentNudgesUseCase`. Se o paciente não responder ao primeiro template de aviso, o sistema agenda disparos de reforço.
+### 1.4 Esteira de Lembretes Recorrentes (Nudges) e Tratamento de Respostas
+* **Nudges Individuais e de Grupo:** Gerenciados pelo `MonitorAppointmentNudgesUseCase`. Se o paciente não responder ao primeiro template de aviso, o sistema agenda disparos de reforço a cada ciclo (janela configurável de 2 horas).
+* **Templates Estáticos de 0 Parâmetros:** Para templates de grupo sem placeholders (ex: `aviso_agendamento_grupo`), o `BlipNotificationService` detecta o formato estático e omite 100% o campo `messageParams` no payload para a API Active Campaign da Take Blip, evitando o erro de validação da Meta (#132000).
+* **Cancelamento Seguro sem Exclusão no ERP Feegow:** Quando o paciente solicita cancelamento respondendo ao WhatsApp, o robô encerra a sessão local (para cessar novos lembretes automáticos) e transborda o atendimento para a fila das secretárias no Desk com ticket aberto. **O agendamento permanece intacto na grade do Feegow**, permitindo que a recepção faça contato ativo e remanejamento manual sem risco de perder o histórico.
 * **Re-validação Preventiva:** Antes de enviar cada nudge, o sistema consulta a API do Feegow. Se a consulta tiver sido cancelada, remarcada ou confirmada na recepção, o envio é abortado imediatamente.
 * **Attendance Guard:** Se houver um ticket de atendimento humano ativo no Blip Desk para o paciente (`hasActiveTicket`), o envio de nudges é pausado para não interromper a conversa com a secretária.
 
@@ -68,12 +70,18 @@ Para garantir a segurança predial e a comodidade dos pacientes:
 * **Horário de Encerramento:** A validade estende-se até as **21:00 do mesmo dia**, cobrindo possíveis atrasos em consultas do período da tarde/noite.
 * **Agrupamento Familiar:** Pacientes com múltiplos agendamentos no mesmo dia têm sua janela calculada a partir da primeira consulta do dia.
 
-### 2.2 Cadastro Concorrente de Acompanhantes (Java 21 Virtual Threads)
-* O paciente titular pode informar múltiplos acompanhantes pelo chatbot do Blip.
+### 2.2 Portal Web do Paciente (`/acesso/:id`)
+* **Autenticação 2FA por Telefone:** O paciente digita os últimos 4 dígitos do seu telefone com foco automático no mobile para visualizar suas credenciais.
+* **Carrossel de Credenciais & Acompanhantes:** Apresentação em cartões estilo carteira digital (Wallet) com QR Codes gerados em alta tolerância a falhas (`level="H"`).
+* **Modo Tela Cheia de Alta Legibilidade:** Visualização ampliada do QR Code em fundo branco puro com instrução de leitura a 10–15 cm da câmera da catraca e trava de brilho de tela.
+* **Suporte Offline com Cache Local:** Credenciais validadas são salvas em `localStorage`, permitindo acesso instantâneo na recepção mesmo em caso de oscilação do sinal de internet no smartphone do paciente.
+
+### 2.3 Cadastro Concorrente de Acompanhantes (Java 21 Virtual Threads)
+* O paciente titular pode informar múltiplos acompanhantes pelo chatbot do Blip ou pelo Portal Web.
 * O backend dispara as requisições de cadastro de cada acompanhante para a API do GerAcesso em **paralelo** utilizando **Virtual Threads** (`Executors.newVirtualThreadPerTaskExecutor()`).
 * **Resiliência Fail-Safe:** Cada acompanhante é processado em bloco isolado com `try-catch`. A eventual falha no cadastro de um acompanhante não interrompe nem invalida a liberação do titular e dos demais acompanhantes.
 
-### 2.3 Fallback Síncrono de CPF no WhatsApp
+### 2.4 Fallback Síncrono de CPF no WhatsApp
 * Se o CPF do paciente não estiver registrado no prontuário do Feegow nem for enviado pelo payload, o endpoint `/api/v1/access/blip/confirmation` retorna imediatamente `"requiresCpfFallback": true`. O bot do Blip direciona o usuário para o bloco de digitação do CPF antes de liberar a credencial da catraca.
 
 ---

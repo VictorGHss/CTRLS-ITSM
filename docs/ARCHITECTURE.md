@@ -116,6 +116,8 @@ O controle do schema do PostgreSQL 16 é efetuado de forma cronológica e imutá
 * **V47 (Constraint de Status de Agendamento):** Ajuste de constraints e suporte ao status `CONFIRMED`.
 * **V48 (Google Review URL):** Coluna `google_review_url` na tabela `doctor_configurations`.
 * **V49 (Higienização e Índices Finais):** Índices de alta performance em `appointment_sessions`, `notification_groups` e `doctor_configurations`.
+* **V50 (Canal do Discord por Médico):** Coluna `discord_channel_id` na tabela `doctor_configurations` para roteamento segmentado de alertas clínicos.
+* **V51 (Normalização de Médicos e Limpeza Legada):** Remoção de tabelas legadas e consolidação definitiva do catálogo em `doctor_configurations`.
 
 ---
 
@@ -159,6 +161,7 @@ O controle do schema do PostgreSQL 16 é efetuado de forma cronológica e imutá
 | `advance_notice_days` | `integer` | NOT NULL, default `1` | Dias de antecedência para disparo (ex: 2 para D+2) |
 | `time_shift_minutes` | `integer` | NOT NULL, default `0` | Deslocamento de instrução de chegada |
 | `google_review_url` | `varchar(500)` | NULLABLE | Link direto para avaliação no Google Meu Negócio |
+| `discord_channel_id`| `varchar(50)` | NULLABLE | ID do canal no Discord exclusivo para alertas deste médico (V50) |
 | `is_active` | `boolean` | NOT NULL, default `true` | Habilita/desabilita o motor para este médico |
 | `created_at` | `timestamp` | NOT NULL | Data de cadastro |
 
