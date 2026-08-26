@@ -7,7 +7,6 @@ import org.junit.jupiter.api.Test;
 import static org.mockito.Mockito.mock;
 
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentSessionRepositoryPort;
-import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentTemplateMappingRepositoryPort;
 import br.dev.ctrls.inovareti.modules.appointment.infrastructure.adapter.output.client.BlipLIMEClient;
 import br.dev.ctrls.inovareti.modules.appointment.infrastructure.config.AppointmentMotorProperties;
 
@@ -19,7 +18,7 @@ public class BlipNotificationServiceTest {
     @BeforeEach
     public void setUp() {
         BlipLIMEClient limeClient = mock(BlipLIMEClient.class);
-        AppointmentTemplateMappingRepositoryPort templateMappingRepository = mock(AppointmentTemplateMappingRepositoryPort.class);
+        BlipTemplateParameterResolver templateParameterResolver = mock(BlipTemplateParameterResolver.class);
         properties = new AppointmentMotorProperties();
         BlipPayloadBuilder payloadBuilder = mock(BlipPayloadBuilder.class);
         BlipContextService contextService = mock(BlipContextService.class);
@@ -28,7 +27,7 @@ public class BlipNotificationServiceTest {
 
         service = new BlipNotificationService(
                 limeClient,
-                templateMappingRepository,
+                templateParameterResolver,
                 properties,
                 payloadBuilder,
                 contextService,

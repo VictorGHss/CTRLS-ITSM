@@ -20,6 +20,7 @@ public class BlipContextService {
     private final org.springframework.core.task.AsyncTaskExecutor applicationTaskExecutor;
     private final BlipIdentityReconciler blipIdentityReconciler;
     private final br.dev.ctrls.inovareti.modules.appointment.infrastructure.config.BlipProperties blipProperties;
+    private final BlipDeskGuardService blipDeskGuardService;
 
     @org.springframework.beans.factory.annotation.Value("${APP_BLIP_APPOINTMENT_ID:}")
     private String blipAppointmentId;
@@ -29,12 +30,14 @@ public class BlipContextService {
             com.fasterxml.jackson.databind.ObjectMapper objectMapper, 
             org.springframework.core.task.AsyncTaskExecutor applicationTaskExecutor,
             BlipIdentityReconciler blipIdentityReconciler,
-            br.dev.ctrls.inovareti.modules.appointment.infrastructure.config.BlipProperties blipProperties) {
+            br.dev.ctrls.inovareti.modules.appointment.infrastructure.config.BlipProperties blipProperties,
+            BlipDeskGuardService blipDeskGuardService) {
         this.limeClient = limeClient;
         this.objectMapper = objectMapper;
         this.applicationTaskExecutor = applicationTaskExecutor;
         this.blipIdentityReconciler = blipIdentityReconciler;
         this.blipProperties = blipProperties;
+        this.blipDeskGuardService = blipDeskGuardService;
     }
 
     public String resolveMasterIdentity(String userIdentity) {
@@ -545,99 +548,18 @@ public class BlipContextService {
 
     /**
      * Verifica se o contato possui um ticket de atendimento humano ativo ou aberto no Desk (live chat) do Blip.
-     * Útil como barreira de segurança para pausar/abortar nudges automáticos durante atendimento humano.
+     * Delegado ao BlipDeskGuardService (Attendance Guard).
      */
     public boolean hasActiveTicket(String userIdentity) {
-        return hasActiveTicket(userIdentity, null);
+        return blipDeskGuardService.hasActiveTicket(userIdentity);
     }
 
     /**
      * Verifica se o contato possui um ticket de atendimento humano ativo/aberto recente no Desk (live chat) do Blip.
-     * Considera ativo apenas se criado/atualizado nas últimas 12 horas ou após a última notificação enviada.
+     * Delegado ao BlipDeskGuardService (Attendance Guard).
      */
     public boolean hasActiveTicket(String userIdentity, LocalDateTime lastNotificationSentAt) {
-        if (userIdentity == null || userIdentity.isBlank()) return false;
-        
-        String masterIdentity = resolveMasterIdentity(userIdentity);
-        String tunnelIdentity = resolveTunnelIdentity(userIdentity);
-
-        if (checkActiveTicketForIdentity(masterIdentity)) {
-            return true;
-        }
-        if (tunnelIdentity != null && !tunnelIdentity.equalsIgnoreCase(masterIdentity)) {
-            if (checkActiveTicketForIdentity(tunnelIdentity)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private boolean checkActiveTicketForIdentity(String identity) {
-        if (identity == null || identity.isBlank()) return false;
-        String normalizedIdentity = limeClient.normalizeUserIdentity(identity);
-
-        Map<String, Object> command = Map.of(
-            "id", UUID.randomUUID().toString(),
-            "to", "postmaster@desk.msging.net",
-            "method", "get",
-            "uri", "/tickets?$filter=customerIdentity eq '" + normalizedIdentity + "' and (status eq 'Open' or status eq 'Waiting')"
-        );
-
-        try {
-            Map<String, Object> response = limeClient.executeCommand(command, br.dev.ctrls.inovareti.modules.appointment.infrastructure.adapter.output.client.BlipLIMEClient.AuthorizationScope.ROUTER);
-            if (response == null) return false;
-            Object resourceNode = response.get("resource");
-            if (resourceNode instanceof Map<?, ?> resourceMap) {
-                Object itemsNode = resourceMap.get("items");
-                if (itemsNode == null) itemsNode = resourceMap.get("tickets");
-                if (itemsNode == null) itemsNode = resourceMap.get("data");
-
-                if (itemsNode instanceof java.util.Collection<?> itemsList) {
-                    boolean hasActive = false;
-
-                    for (Object itemObj : itemsList) {
-                        if (itemObj instanceof Map<?, ?> itemMap) {
-                            Object customerVal = itemMap.get("customerIdentity");
-                            if (customerVal == null) customerVal = itemMap.get("customerInput");
-                            if (customerVal == null) customerVal = itemMap.get("identity");
-
-                            if (customerVal != null && !customerVal.toString().isBlank()) {
-                                String ticketCustomer = limeClient.normalizeUserIdentity(customerVal.toString().trim());
-                                String reqUserDigits = normalizedIdentity.contains("@") 
-                                    ? normalizedIdentity.substring(0, normalizedIdentity.indexOf('@')).replaceAll("\\D", "") 
-                                    : normalizedIdentity.replaceAll("\\D", "");
-                                String ticketUserDigits = ticketCustomer.contains("@") 
-                                    ? ticketCustomer.substring(0, ticketCustomer.indexOf('@')).replaceAll("\\D", "") 
-                                    : ticketCustomer.replaceAll("\\D", "");
-
-                                if (!reqUserDigits.isEmpty() && !ticketUserDigits.isEmpty() && !reqUserDigits.equals(ticketUserDigits)) {
-                                    // O ticket pertence a outro paciente retornado pela API do Desk. Ignora.
-                                    continue;
-                                }
-                            }
-
-                            Object statusVal = itemMap.get("status");
-                            if (statusVal != null) {
-                                String status = statusVal.toString().trim();
-                                if ("Open".equalsIgnoreCase(status) || "Waiting".equalsIgnoreCase(status)) {
-                                    hasActive = true;
-                                    log.info("[ATTENDANCE-GUARD] Contato {} possui ticket ativo no Desk (status='{}'). Pausando nudges automáticos.", normalizedIdentity, status);
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                    if (hasActive) {
-                        log.info("[ATTENDANCE-GUARD] Contato {} possui tickets de live chat ativos e recentes no Desk.", normalizedIdentity);
-                    }
-                    return hasActive;
-                }
-            }
-            return false;
-        } catch (Exception ex) {
-            log.warn("[ATTENDANCE-GUARD] Falha ao verificar ticket ativo no Desk para {}: {}", normalizedIdentity, ex.getMessage());
-            return false; // Fail-open para não travar os nudges normais em caso de falha de rede/autorização
-        }
+        return blipDeskGuardService.hasActiveTicket(userIdentity, lastNotificationSentAt);
     }
 
     /**

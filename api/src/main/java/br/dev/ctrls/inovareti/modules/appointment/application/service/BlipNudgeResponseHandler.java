@@ -9,6 +9,7 @@ import org.springframework.transaction.TransactionException;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.client.RestClientException;
 import br.dev.ctrls.inovareti.modules.appointment.domain.model.AppointmentSession;
+import br.dev.ctrls.inovareti.modules.appointment.domain.model.FeegowAppointmentStatus;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentExternalPort;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentSessionRepositoryPort;
 import br.dev.ctrls.inovareti.modules.appointment.infrastructure.config.BlipProperties;
@@ -90,7 +91,10 @@ public class BlipNudgeResponseHandler {
                         appointmentSessionRepository.save(lockedSession);
                     }
                 });
-                appointmentExternalPort.updateAppointmentStatus(session.getFeegowAppointmentId(), "7");
+                appointmentExternalPort.updateAppointmentStatus(
+                    session.getFeegowAppointmentId(),
+                    String.valueOf(FeegowAppointmentStatus.MARCADO_CONFIRMADO.getId())
+                );
             } else {
                 log.info("[WEBHOOK-NUDGE] Paciente solicitou cancelamento via WhatsApp. Atualizando sessão local para CANCELED para suspender lembretes automáticos sem remover da agenda Feegow. sessionId={}, feegowAppointmentId={}",
                     session.getId(), session.getFeegowAppointmentId());
