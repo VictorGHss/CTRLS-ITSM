@@ -2,33 +2,44 @@ package br.dev.ctrls.inovareti.modules.appointment.infrastructure.adapter.input.
 
 import io.micrometer.observation.annotation.Observed;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.env.Environment;
 import org.springframework.core.env.Profiles;
-import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.util.ContentCachingRequestWrapper;
 
 import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import br.dev.ctrls.inovareti.config.security.WebhookSignatureValidator;
-import br.dev.ctrls.inovareti.modules.appointment.application.service.BlipWebhookInboundService;
-import br.dev.ctrls.inovareti.modules.appointment.application.usecase.HandleBlipWebhookUseCase;
 import br.dev.ctrls.inovareti.core.shared.domain.model.exception.NotFoundException;
+import br.dev.ctrls.inovareti.modules.appointment.application.service.BlipContextService;
+import br.dev.ctrls.inovareti.modules.appointment.application.service.BlipNotificationService;
+import br.dev.ctrls.inovareti.modules.appointment.application.service.BlipWebhookIdempotencyService;
+import br.dev.ctrls.inovareti.modules.appointment.application.service.BlipWebhookInboundService;
+import br.dev.ctrls.inovareti.modules.appointment.application.service.BlipWebhookIntentMatcher;
+import br.dev.ctrls.inovareti.modules.appointment.application.usecase.HandleBlipWebhookUseCase;
+import br.dev.ctrls.inovareti.modules.appointment.infrastructure.config.BlipProperties;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -45,13 +56,14 @@ public class BlipWebhookController {
 
     private final HandleBlipWebhookUseCase handleBlipWebhookUseCase;
     private final BlipWebhookInboundService blipWebhookInboundService;
+    private final BlipWebhookIdempotencyService idempotencyService;
+    private final BlipWebhookIntentMatcher intentMatcher;
     private final ObjectMapper objectMapper;
     private final WebhookSignatureValidator webhookSignatureValidator;
-    private final ObjectProvider<StringRedisTemplate> redisTemplateProvider;
     private final Environment env;
-    private final br.dev.ctrls.inovareti.modules.appointment.application.service.BlipContextService blipContextService;
-    private final br.dev.ctrls.inovareti.modules.appointment.application.service.BlipNotificationService blipNotificationService;
-    private final br.dev.ctrls.inovareti.modules.appointment.infrastructure.config.BlipProperties blipProperties;
+    private final BlipContextService blipContextService;
+    private final BlipNotificationService blipNotificationService;
+    private final BlipProperties blipProperties;
 
     @Value("${blip.webhook.secret}")
     private String blipWebhookSecret;
@@ -59,36 +71,27 @@ public class BlipWebhookController {
     @Value("${blip.webhook.token:}")
     private String blipWebhookToken;
 
-    // Cache local em memória concorrente com expiração para garantir resiliência caso o Redis esteja indisponível
-    private final Map<String, Long> processedEventsCache = new java.util.concurrent.ConcurrentHashMap<>();
-
-    // Cache de idempotência estrita de 5 segundos para blindagem anti-loop
-    private final Map<String, Long> strictIdempotencyCache = new java.util.concurrent.ConcurrentHashMap<>();
-
-    // Cache de rate limit de 30 segundos para orientação de estado
-    private final Map<String, Long> lastOrientationSentCache = new java.util.concurrent.ConcurrentHashMap<>();
-
     @Operation(
         summary = "Recebe e processa webhooks enviados pelo Blip",
         description = "Este endpoint recebe as mensagens enviadas pela plataforma Blip, executa a validação de assinatura criptográfica HMAC-SHA256 (X-Blip-Signature) para atestar a autenticidade e aplica controle de idempotência de eventos."
     )
     @PostMapping(value = {"/v1/webhook/blip", "/webhooks/blip"})
     public ResponseEntity<?> blipWebhook(
-            @org.springframework.web.bind.annotation.RequestHeader(value = "X-Inovare-Token", required = false) String inovareToken,
-            @org.springframework.web.bind.annotation.RequestHeader(value = "X-Blip-Signature", required = false) String blipSignature,
-            jakarta.servlet.http.HttpServletRequest request,
+            @RequestHeader(value = "X-Inovare-Token", required = false) String inovareToken,
+            @RequestHeader(value = "X-Blip-Signature", required = false) String blipSignature,
+            HttpServletRequest request,
             @RequestBody(required = false) String rawJson) {
 
         log.debug("Recebido POST em /api/v1/webhook/blip. Payload bruto: {}", rawJson);
         log.debug("[ALERTA REDE] Requisição bruta da Take Blip ACABOU de tocar o Tomcat na porta 8085!");
 
-        // 1. VALIDAÇÃO DE ASSINATURA CRIPTOGRÁFICA (HMAC-SHA256) E TOKENS DE SEGURANÇA IMEDIATA (Antes de qualquer processamento)
+        // 1. VALIDAÇÃO DE ASSINATURA CRIPTOGRÁFICA (HMAC-SHA256) E TOKENS DE SEGURANÇA IMEDIATA
         byte[] bodyBytes = null;
-        if (request instanceof org.springframework.web.util.ContentCachingRequestWrapper wrappedRequest) {
+        if (request instanceof ContentCachingRequestWrapper wrappedRequest) {
             bodyBytes = wrappedRequest.getContentAsByteArray();
         }
         if (bodyBytes == null || bodyBytes.length == 0) {
-            bodyBytes = (rawJson != null) ? rawJson.getBytes(java.nio.charset.StandardCharsets.UTF_8) : new byte[0];
+            bodyBytes = (rawJson != null) ? rawJson.getBytes(StandardCharsets.UTF_8) : new byte[0];
         }
 
         boolean isSignatureValid = webhookSignatureValidator.isValid(bodyBytes, blipSignature, blipWebhookSecret);
@@ -101,15 +104,12 @@ public class BlipWebhookController {
             && StringUtils.hasText(expectedToken)
             && secureCompare(expectedToken, inovareToken);
 
-        // O bypass de assinatura por token é aceito quando o token confiável confere,
-        // mesmo em produção. Em local/default, aceita qualquer token não vazio.
         boolean isBypassProfile = env.acceptsProfiles(Profiles.of("local", "default"));
-        boolean isBypassEnabled = hasTokenMatch
-            || (isBypassProfile && StringUtils.hasText(inovareToken));
+        boolean isBypassEnabled = hasTokenMatch || (isBypassProfile && StringUtils.hasText(inovareToken));
 
         if (!isSignatureValid && !isBypassEnabled) {
             log.warn("[ACESSO NEGADO] Assinatura do webhook inválida ou ausente. Bypass por token inativo no perfil de produção.");
-            return ResponseEntity.status(org.springframework.http.HttpStatus.UNAUTHORIZED).body(Map.of(
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of(
                 "status", "error",
                 "reason", "unauthorized",
                 "message", "Assinatura HMAC ou Token de seguranca invalido."
@@ -120,299 +120,48 @@ public class BlipWebhookController {
             log.debug("[BYPASS] Assinatura ausente ou inválida, mas acesso liberado por token confiável configurado.");
         }
 
-        if (rawJson == null || rawJson.isBlank()) {
-            log.warn("Blip webhook recebido sem corpo no payload em /v1/webhook/blip.");
-            return ResponseEntity.ok(Map.of(
-                    "status", "ignored",
-                    "reason", "body-empty"));
-        }
-
-        // 2. FAST-FAIL GUARD (Early Return): Validação estrutural genérica por padrões
-        String rawLower = rawJson.toLowerCase();
-
-        // Compila uma Regex genérica para capturar QUALQUER UUID presente no JSON bruto (usando (?s) para suportar múltiplas linhas)
-        boolean containsAnyUuid = rawLower.matches("(?s).*[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}.*");
-
-        boolean hasActionKeyword = containsAnyUuid
-                || rawLower.contains("confirm_")
-                || rawLower.contains("alter_")
-                || rawLower.contains("cancel_")
-                || rawLower.contains("confirmar")
-                || rawLower.contains("alterar")
-                || rawLower.contains("cancelar")
-                || rawLower.contains("ver agendamentos")
-                || rawLower.contains("ver_agendamentos")
-                || rawLower.contains("group_view_fallback")
-                || rawLower.contains("preparar_atendimento")
-                || rawLower.contains("exibir_agenda")
-                || rawLower.contains("failed");
-
-        if (!hasActionKeyword) {
-            return ResponseEntity.ok(Map.of(
-                "status", "ignored",
-                "reason", "no-action-keyword"
-            )); // Ignora spams irrelevantes de forma segura e veloz
-        }
-
+        // 2. PARSER DO PAYLOAD
         Map<String, Object> payload;
         try {
-            @SuppressWarnings("unchecked")
-            Map<String, Object> map = objectMapper.readValue(rawJson, Map.class);
-            payload = map != null ? map : Map.of();
-        } catch (com.fasterxml.jackson.core.JsonProcessingException | IllegalArgumentException e) {
-            log.error("Erro ao realizar o parse do JSON do webhook da Blip", e);
+            payload = (rawJson != null && !rawJson.isBlank())
+                ? objectMapper.readValue(rawJson, new TypeReference<Map<String, Object>>() {})
+                : Map.of();
+        } catch (Exception e) {
+            log.error("Erro ao converter payload do webhook em Map", e);
             return ResponseEntity.badRequest().body(Map.of(
-                "status", "ignored",
-                "reason", "invalid-json"
+                "status", "error",
+                "reason", "invalid_payload",
+                "message", "Formato de payload invalido."
             ));
         }
 
-        // Ignora notificações de status de entrega/leitura do Blip (received, consumed, etc.), exceto falhas (failed)
-        String messageType = payload.get("type") != null ? payload.get("type").toString() : "";
-        boolean hasEventField = payload.containsKey("event");
-        String event = hasEventField ? Objects.toString(payload.get("event"), "") : "";
-        boolean isLimeNotification = messageType.toLowerCase().contains("notification") 
-            || hasEventField 
-            || (payload.get("content") instanceof Map<?, ?> contentMap && contentMap.containsKey("event"));
-
-        if (isLimeNotification) {
-            // Se for especificamente uma notificação de falha de entrega (failed), processamos o erro
-            if ("failed".equalsIgnoreCase(event)) {
-                log.info("[WEBHOOK] Notificação de falha de entrega do Blip recebida. Processando...");
-                try {
-                    // Executa o parsing específico da falha
-                    BlipWebhookInboundService.ParsedFailure failure = blipWebhookInboundService.parseFailure(payload);
-                    String traceId = org.slf4j.MDC.get("traceId");
-                    if (traceId == null || traceId.isBlank()) {
-                        traceId = org.slf4j.MDC.get("trace_id");
-                    }
-                    if (traceId == null || traceId.isBlank()) {
-                        traceId = UUID.randomUUID().toString();
-                    }
-
-                    // Constrói o comando de falha
-                    HandleBlipWebhookUseCase.BlipDeliveryFailureCommand command =
-                            new HandleBlipWebhookUseCase.BlipDeliveryFailureCommand(
-                                    failure.messageId(),
-                                    failure.appointmentId(),
-                                    failure.errorCode(),
-                                    failure.errorMessage(),
-                                    traceId
-                            );
-
-                    // Delega o processamento ao Caso de Uso
-                    handleBlipWebhookUseCase.executeNotificationFailure(command);
-                } catch (Exception e) {
-                    log.error("[WEBHOOK-ERROR] Erro ao processar webhook de falha de entrega do Blip", e);
-                }
-                // Retorna 200 OK imediatamente para blindar contra retentativas do Blip
-                return ResponseEntity.ok(Map.of(
-                    "status", "processed",
-                    "reason", "delivery-failure-processed"
-                ));
-            }
-
-            log.debug("[NOTIFICATION] Ignorando notificação de status/sistema do Blip. type='{}', event='{}'", messageType, event);
-            return ResponseEntity.ok(Map.of(
-                "status", "ignored",
-                "reason", "notification-ignored"
-            ));
+        if (payload == null || payload.isEmpty()) {
+            return ResponseEntity.ok(Map.of("status", "processed", "reason", "empty-payload"));
         }
 
         BlipWebhookInboundService.ParsedInbound parsed = blipWebhookInboundService.parse(payload);
 
-        String from = parsed.from();
-        String action = parsed.action();
         String messageId = parsed.messageId();
-        if (messageId == null || messageId.isBlank()) {
-            if (payload.get("id") != null) {
-                messageId = payload.get("id").toString();
-            } else if (payload.get("wamid") != null) {
-                messageId = payload.get("wamid").toString();
-            }
-        }
         String appointmentId = parsed.appointmentId();
+        String action = parsed.action();
+        String from = parsed.from();
         Object content = parsed.content();
 
-        if ("Verificar_Acompanhante".equalsIgnoreCase(action)) {
-            log.info("Tratando requisição de verificação de acompanhante de forma segura. De: {} | ID: {}", from, messageId);
-            return ResponseEntity.ok(Map.of());
-        }
+        // BLINDAGEM STATE-LOCK: Se o paciente estiver no fluxo de confirmação e mandar texto livre
+        String isConfirmingAgenda = (from != null && !from.isBlank())
+                ? blipContextService.getUserContext(from, "isConfirmingAgenda")
+                : null;
 
-        // 1. Blindagem Anti-Loop (Ignora mensagens originadas do próprio robô/outbound)
-        if (parsed.isOutbound() || (from != null && (from.contains("roteadorprincipal57@msging.net") || from.toLowerCase().startsWith("roteadorprincipal")))) {
-            log.debug("[ANTI-LOOP] Ignorando mensagem outbound/robô: {}", from);
-            return ResponseEntity.ok().build();
-        }
-
-        // 2. Idempotência estrita local de 10 segundos (Operação atômica thread-safe)
-        if (messageId != null && !messageId.isBlank()) {
-            long now = System.currentTimeMillis();
-            java.util.concurrent.atomic.AtomicBoolean isDuplicate = new java.util.concurrent.atomic.AtomicBoolean(false);
-            strictIdempotencyCache.compute(messageId, (key, lastProcessed) -> {
-                if (lastProcessed != null && (now - lastProcessed) < 10000L) {
-                    isDuplicate.set(true);
-                    return lastProcessed;
-                }
-                return now;
-            });
-
-            if (isDuplicate.get()) {
-                log.debug("[ANTI-LOOP] [IDEMPOTÊNCIA ESTRITA] Evento processado muito recentemente (menos de 10s). Ignorando messageId='{}'", messageId);
-                return ResponseEntity.ok(Map.of(
-                    "status", "processed",
-                    "reason", "strict-duplicate-ignored"
-                ));
-            }
-
-            if (strictIdempotencyCache.size() > 5000) {
-                java.util.concurrent.CompletableFuture.runAsync(() -> {
-                    long currentTime = System.currentTimeMillis();
-                    strictIdempotencyCache.entrySet().removeIf(entry -> entry.getValue() < currentTime - 10000L);
-                });
-            }
-        }
-
-        // --- SAFETY-GUARD DE SEGURANí‡A ESTRUTURAL (REJEITA PAYLOADS MALFORMADOS COM 400 BAD REQUEST) ---
-        if (!StringUtils.hasText(from) || !StringUtils.hasText(messageId)) {
-            log.warn("[SAFETY-GUARD] Payload Blip/LIME estruturalmente inválido. from={}, messageId={}", from, messageId);
-            return ResponseEntity.badRequest().body(Map.of(
-                "status", "error",
-                "reason", "bad-request",
-                "message", "Envelope LIME estruturalmente invalido: 'from' e 'id' sao obrigatorios."
-            ));
-        }
-        // -----------------------------------------------------------------------------------------------
-
-        String category = null;
-        if (payload.get("category") != null) {
-            category = payload.get("category").toString();
-        } else if (payload.get("resource") instanceof Map<?, ?> resMap && resMap.get("category") != null) {
-            category = resMap.get("category").toString();
-        }
-        boolean isInternalFlow = "flow".equalsIgnoreCase(category);
-
-        // Lock de estado: se o paciente estiver no fluxo de confirmacao e digitar texto livre, ignoramos e orientamos
-        boolean isConfirming = false;
-        if (!isInternalFlow) {
-            try {
-                String isConfirmingStr = blipContextService.getUserContext(from, "isConfirmingAgenda");
-                isConfirming = "true".equalsIgnoreCase(isConfirmingStr);
-            } catch (Exception e) {
-                log.warn("Erro ao buscar isConfirmingAgenda no contexto para {}: {}", from, e.getMessage());
-            }
-        }
-
-        if (isConfirming) {
-            // GUARDA DE ATENDIMENTO HUMANO / DESK:
-            // Se o contato estiver em atendimento humano ou com ticket aberto no Desk, desativa o State-Lock imediatamente
-            boolean inHumanAttendance = false;
-            try {
-                inHumanAttendance = blipContextService.isInHumanAttendance(from);
-            } catch (Exception ex) {
-                log.warn("[STATE-LOCK] Erro ao verificar atendimento humano para {}: {}", from, ex.getMessage());
-            }
-
-            if (inHumanAttendance) {
-                log.info("[STATE-LOCK-BYPASS] Paciente {} está em atendimento humano ativo ou fila do Desk. Desativando State-Lock e limpando contexto de confirmação.", from);
-                blipContextService.clearConfirmationContext(from);
-                isConfirming = false;
-            }
-        }
-
-        if (isConfirming) {
+        if ("true".equalsIgnoreCase(isConfirmingAgenda)) {
+            String rawText = action != null ? action.trim() : "";
             String actionValue = action != null ? action.trim() : "";
-            String rawText = actionValue + " " + (content != null ? content.toString() : "");
-            String rawActionTextLower = rawText.toLowerCase();
+            String rawActionTextLower = (rawText + " " + actionValue).toLowerCase();
 
-            // Bloqueio de falsos positivos: Ações disparadas internamente por blocos do Builder nunca acionam State-Lock
-            boolean isInternalBotBlockAction = rawActionTextLower.contains("exceç")
-                || rawActionTextLower.contains("excec")
-                || rawActionTextLower.contains("erro padrão")
-                || rawActionTextLower.contains("erro padrao")
-                || rawActionTextLower.contains("contador de erros")
-                || rawActionTextLower.contains("cutucada")
-                || rawActionTextLower.contains("menu de setores")
-                || rawActionTextLower.contains("pré-atendimento")
-                || rawActionTextLower.contains("pre-atendimento")
-                || rawActionTextLower.contains("aviso para usuário em erros")
-                || rawActionTextLower.contains("menu decisão")
-                || rawActionTextLower.contains("menu decisao")
-                || rawActionTextLower.contains("voltar ao menu");
-
-            if (isInternalBotBlockAction) {
-                log.debug("[STATE-LOCK-SKIP] Ação interna de bloco do Builder '{}' ignorada para {}.", actionValue, from);
-                return ResponseEntity.ok(Map.of(
-                    "status", "processed",
-                    "reason", "internal-block-action-ignored"
-                ));
-            }
-
-            String prepararUuid = blipProperties.getBlocks().getPrepararAtendimento();
-            String exibirUuid = blipProperties.getBlocks().getExibirAgenda();
-
-            boolean isPrepararAtendimento = "preparar_atendimento".equalsIgnoreCase(actionValue)
-                || (prepararUuid != null && java.util.regex.Pattern.compile("\\b" + java.util.regex.Pattern.quote(prepararUuid.toLowerCase()) + "\\b").matcher(rawActionTextLower).find());
-            boolean isExibirAgenda = "exibir_agenda".equalsIgnoreCase(actionValue)
-                || (exibirUuid != null && java.util.regex.Pattern.compile("\\b" + java.util.regex.Pattern.quote(exibirUuid.toLowerCase()) + "\\b").matcher(rawActionTextLower).find());
-
-            boolean isHumanAttendantRequest = rawActionTextLower.contains("atendimento humano")
-                || rawActionTextLower.contains("falar com atendente")
-                || rawActionTextLower.contains("atendente")
-                || rawActionTextLower.contains("recepção")
-                || rawActionTextLower.contains("recepcao")
-                || rawActionTextLower.contains("suporte");
-
-            boolean isBypassExplicit = rawActionTextLower.contains("ver agendamentos")
-                || rawActionTextLower.contains("ver agenda")
-                || rawActionTextLower.contains("ver_agenda")
-                || rawActionTextLower.contains("confirm_group_")
-                || rawActionTextLower.contains("confirmar_tudo")
-                || rawActionTextLower.contains("confirmar presença")
-                || rawActionTextLower.contains("confirmar presenca")
-                || rawActionTextLower.contains("confirmar")
-                || rawActionTextLower.contains("confirmo")
-                || rawActionTextLower.contains("alter_group_")
-                || rawActionTextLower.contains("preciso_alterar")
-                || rawActionTextLower.contains("solicitar alteração")
-                || rawActionTextLower.contains("solicitar alteracao")
-                || rawActionTextLower.contains("alterar")
-                || isHumanAttendantRequest
-                || isConfirmationOrAlterationIntentText(actionValue)
-                || isConfirmationOrAlterationIntentText(rawText);
-
-            boolean isNullOrEmpty = action == null || action.isBlank() || "null".equalsIgnoreCase(action.trim());
-            boolean isButtonClick = isNullOrEmpty || isBypassExplicit || (action != null && (
-                action.toLowerCase().startsWith("confirm_") ||
-                action.toLowerCase().startsWith("alter_") ||
-                action.toLowerCase().startsWith("group_") ||
-                action.toLowerCase().startsWith("ver_agenda_") ||
-                action.toLowerCase().contains("confirmar") ||
-                action.toLowerCase().contains("alterar") ||
-                action.toLowerCase().contains("ver agendamento") ||
-                "group_view_fallback".equalsIgnoreCase(action) ||
-                "Verificar_Acompanhante".equalsIgnoreCase(action) ||
-                "Integrar_GerAcesso".equalsIgnoreCase(action) ||
-                "Não".equalsIgnoreCase(action) ||
-                "Finalizar_Agendamento".equalsIgnoreCase(action) ||
-                isPrepararAtendimento ||
-                isExibirAgenda
-            ));
+            boolean isButtonClick = intentMatcher.isButtonClickOrExplicitIntent(action, actionValue, rawActionTextLower, rawText);
 
             if (!isButtonClick) {
-                long now = System.currentTimeMillis();
-                java.util.concurrent.atomic.AtomicBoolean shouldSend = new java.util.concurrent.atomic.AtomicBoolean(false);
-                lastOrientationSentCache.compute(from, (key, lastSent) -> {
-                    if (lastSent == null || (now - lastSent) >= 30000L) {
-                        shouldSend.set(true);
-                        return now;
-                    }
-                    return lastSent;
-                });
-
                 log.info("[STATE-LOCK] Paciente {} enviou texto livre '{}' durante fluxo de confirmacao de agenda. Ignorando entrada.", from, action);
                 
-                // Congela/reset o Master State no Blip para evitar queda no onboarding ("Me informe seu nome completo")
                 try {
                     String parkingBlockId = blipProperties.getBlocks().getWaitingResponse();
                     if (parkingBlockId == null || parkingBlockId.isBlank()) {
@@ -426,7 +175,7 @@ public class BlipWebhookController {
                     log.warn("[STATE-LOCK] Falha ao congelar Master State para {}: {}", from, ex.getMessage());
                 }
 
-                if (shouldSend.get()) {
+                if (idempotencyService.shouldSendOrientation(from)) {
                     try {
                         blipNotificationService.sendPlainTextMessage(from, "Por favor, utilize os botões acima para confirmar ou alterar seu agendamento.");
                         log.info("[STATE-LOCK] Enviada mensagem de orientação para o paciente {}.", from);
@@ -446,7 +195,7 @@ public class BlipWebhookController {
 
         // 3. IDEMPOTÊNCIA (Prevenção de Duplicidade): Early Return 200 se for duplicado
         boolean isNotification = payload.containsKey("event");
-        if (!isNotification && !isFirstTimeProcessing(messageId)) {
+        if (!isNotification && !idempotencyService.isFirstTimeProcessing(messageId)) {
             log.debug("[IDEMPOTÊNCIA] Evento duplicado ignorado. messageId='{}'", messageId);
             return ResponseEntity.ok(Map.of(
                     "status", "processed",
@@ -454,7 +203,7 @@ public class BlipWebhookController {
             ));
         }
 
-        Map<String, Object> metadata = new java.util.HashMap<>(extractMetadata(payload));
+        Map<String, Object> metadata = new java.util.HashMap<>(intentMatcher.extractMetadata(payload));
         if (parsed.rawFrom() != null) {
             metadata.put("rawFrom", parsed.rawFrom());
         }
@@ -466,10 +215,8 @@ public class BlipWebhookController {
         }
 
         if (action != null && (action.startsWith("confirm_") || action.startsWith("alter_"))) {
-            // Limpa o flag isConfirmingAgenda de forma assíncrona para não bloquear o processamento principal.
-            // Essa chamada HTTP ao Blip não precisa completar antes de invocar o handleBlipWebhookUseCase.
             final String phoneForClear = from;
-            java.util.concurrent.CompletableFuture.runAsync(() -> {
+            CompletableFuture.runAsync(() -> {
                 try {
                     blipContextService.setUserContextForUser(phoneForClear, "isConfirmingAgenda", "false");
                 } catch (Exception e) {
@@ -498,7 +245,6 @@ public class BlipWebhookController {
             ));
         } catch (Throwable ex) {
             log.error("[WEBHOOK-CRITICAL] Erro inesperado ao processar webhook do Blip para messageId='{}', action='{}'", messageId, action, ex);
-            // Retorna 200 OK com fallback seguro para evitar propagar erro 500 para o Blip / WhatsApp
             return ResponseEntity.ok(Map.of(
                 "status", "error",
                 "reason", "internal-fallback-handled",
@@ -546,7 +292,7 @@ public class BlipWebhookController {
     @PreAuthorize("hasRole('ADMIN')")
     @PostMapping(value = "/webhooks/blip/manual-trigger", consumes = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> manualTrigger(
-            @org.springframework.web.bind.annotation.RequestHeader(value = "X-Inovare-Token", required = false) String inovareToken,
+            @RequestHeader(value = "X-Inovare-Token", required = false) String inovareToken,
             @RequestBody ManualTriggerRequest body) {
         if (body == null
                 || !StringUtils.hasText(body.identity())
@@ -588,85 +334,8 @@ public class BlipWebhookController {
         return ResponseEntity.ok(Map.of());
     }
 
-    /**
-     * Verifica e registra o processamento do evento para garantir idempotência de forma resiliente.
-     *
-     * @param messageId ID único do evento/mensagem
-     * @return true se for o primeiro processamento (deve processar), false se for duplicado (deve ignorar)
-     */
-    private boolean isFirstTimeProcessing(String messageId) {
-        if (!StringUtils.hasText(messageId)) {
-            return true; // Fail-open para mensagens sem identificação
-        }
-
-        String cacheKey = "webhook:idempotency:blip:" + messageId.trim();
-        StringRedisTemplate redis = redisTemplateProvider.getIfAvailable();
-
-        if (redis != null) {
-            try {
-                // Tenta registrar no Redis de forma atômica com expiração de 24 horas
-                Boolean success = redis.opsForValue().setIfAbsent(cacheKey, "1", java.time.Duration.ofHours(24));
-                if (success != null) {
-                    return success;
-                }
-            } catch (Exception ex) {
-                log.warn("Redis indisponível para registro de idempotência. Ativando fallback em memória local: {}", ex.getMessage());
-            }
-        }
-
-        // Fallback em memória
-        long now = System.currentTimeMillis();
-        long expirationTime = now + 3600_000L;
-
-        // Evita vazamento de memória do cache local se o mapa crescer além do limite de 10.000 entradas
-        if (processedEventsCache.size() > 10000) {
-            java.util.concurrent.CompletableFuture.runAsync(() -> {
-                long currentTime = System.currentTimeMillis();
-                processedEventsCache.entrySet().removeIf(entry -> entry.getValue() < currentTime);
-            });
-        }
-
-        // Operação atômica thread-safe utilizando compute
-        java.util.concurrent.atomic.AtomicBoolean isFirst = new java.util.concurrent.atomic.AtomicBoolean(false);
-        processedEventsCache.compute(messageId, (key, currentVal) -> {
-            if (currentVal == null || currentVal <= now) {
-                isFirst.set(true);
-                return expirationTime;
-            }
-            return currentVal;
-        });
-
-        return isFirst.get();
-    }
-
-    @SuppressWarnings("unchecked")
-    private Map<String, Object> extractMetadata(Map<String, Object> payload) {
-        if (payload == null) {
-            return Map.of();
-        }
-        Object metadataObj = payload.get("metadata");
-        if (metadataObj == null) {
-            Object messageObj = payload.get("message");
-            if (messageObj instanceof Map<?, ?> msgMap) {
-                metadataObj = msgMap.get("metadata");
-            }
-        }
-        if (metadataObj == null) {
-            Object resourceObj = payload.get("resource");
-            if (resourceObj instanceof Map<?, ?> resMap) {
-                metadataObj = resMap.get("metadata");
-                if (metadataObj == null) {
-                    Object innerMsg = resMap.get("message");
-                    if (innerMsg instanceof Map<?, ?> innerMsgMap) {
-                        metadataObj = innerMsgMap.get("metadata");
-                    }
-                }
-            }
-        }
-        if (metadataObj instanceof Map<?, ?> metaMap) {
-            return (Map<String, Object>) metaMap;
-        }
-        return Map.of();
+    public static boolean isConfirmationOrAlterationIntentText(String text) {
+        return BlipWebhookIntentMatcher.isConfirmationOrAlterationIntentText(text);
     }
 
     public record ManualTriggerRequest(
@@ -688,45 +357,13 @@ public class BlipWebhookController {
         }
     }
 
-    public static boolean isConfirmationOrAlterationIntentText(String text) {
-        if (text == null || text.isBlank()) return false;
-
-        String rawTrimmed = text.trim().toLowerCase();
-        String cleaned = rawTrimmed.replaceAll("[^a-z0-9áàâãéèêíïóôõöúçñ\\s]", " ").replaceAll("\\s+", " ").trim();
-
-        // 1. Regra de Tamanho: Se o texto tiver mais de 25 caracteres ou mais de 3 palavras -> false
-        if (cleaned.length() > 25) return false;
-        String[] words = cleaned.split(" ");
-        if (words.length > 3) return false;
-
-        // 2. Guarda de Negação/Condicional: Se o texto contiver palavras de negação ou condição -> false
-        for (String w : words) {
-            if (w.equals("não") || w.equals("nao") || w.equals("nunca") || w.equals("nem") ||
-                w.equals("se") || w.equals("caso") || w.equals("depois")) {
-                return false;
-            }
-        }
-
-        // 3. Casamento Estrito (Exact Match)
-        return switch (cleaned) {
-            case "sim", "confirmar", "confirmo", "confirmado", "confirma",
-                 "presença", "presenca", "confirmar presença", "confirmar presenca", "sim confirmo",
-                 "alterar", "remarcar", "trocar",
-                 "solicitar alteração", "solicitar alteracao", "preciso alterar", "quero remarcar", "quero alterar",
-                 "cancelar", "cancel" -> true;
-            default -> false;
-        };
-    }
-
     private boolean secureCompare(String a, String b) {
         if (a == null || b == null) {
             return false;
         }
-        return java.security.MessageDigest.isEqual(
-            a.getBytes(java.nio.charset.StandardCharsets.UTF_8),
-            b.getBytes(java.nio.charset.StandardCharsets.UTF_8)
+        return MessageDigest.isEqual(
+            a.getBytes(StandardCharsets.UTF_8),
+            b.getBytes(StandardCharsets.UTF_8)
         );
     }
 }
-
-
