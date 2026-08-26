@@ -51,12 +51,17 @@ O Feegow ERP é o sistema central de prontuários médicos da clínica. A comuni
   }
   ```
 * **FEEGOW-STATUS-GUARD:** O adaptador impede regressão indevida para status 7 caso o paciente já esteja em estado avançado (`2, 3, 4, 5, 6, 7, 11, 16, 101, 103, 105`).
+* **Preservação de Agenda em Cancelamentos:** Ao receber intenção de cancelamento pelo WhatsApp, a API **não chama `/appointment/cancel`**. A consulta permanece intacta na grade da clínica e a conversa é roteada para a recepção no Blip Desk para remanejamento manual seguro.
 
 ---
 
 ## 2. Integração com Take Blip (WhatsApp Cloud & Blip Desk)
 
-A integração com o Take Blip utiliza comandos LIME e webhooks para automação e transbordo para secretárias.
+A integração com o Take Blip utiliza a API Active Campaign (`/campaign/full`), comandos LIME e webhooks para automação e transbordo para secretárias.
+
+### 2.0 Suporte a Templates Estáticos (0 Parâmetros - WhatsApp Meta)
+* Templates sem variáveis no corpo (ex: `aviso_agendamento_grupo`) são identificados por `isStaticZeroParamTemplate`.
+* O backend **omite totalmente o array `messageParams`** no JSON enviado para a Take Blip, cumprindo a validação da Meta e prevenindo erros `Code 81 - #132000`.
 
 ```mermaid
 sequenceDiagram
