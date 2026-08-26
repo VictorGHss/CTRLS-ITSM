@@ -1,7 +1,6 @@
 package br.dev.ctrls.inovareti.modules.appointment.application.service;
 
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -13,8 +12,6 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 
 import br.dev.ctrls.inovareti.modules.appointment.application.dto.AppointmentTemplateData;
 import br.dev.ctrls.inovareti.modules.appointment.application.dto.BlipTemplateDto;
-import br.dev.ctrls.inovareti.modules.appointment.domain.model.AppointmentTemplateMapping;
-import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentTemplateMappingRepositoryPort;
 import br.dev.ctrls.inovareti.modules.appointment.infrastructure.adapter.output.client.BlipLIMEClient;
 import br.dev.ctrls.inovareti.modules.appointment.infrastructure.config.AppointmentMotorProperties;
 import io.micrometer.observation.annotation.Observed;
@@ -26,7 +23,7 @@ import lombok.extern.slf4j.Slf4j;
 public class BlipNotificationService {
 
     private final BlipLIMEClient limeClient;
-    private final AppointmentTemplateMappingRepositoryPort templateMappingRepository;
+    private final BlipTemplateParameterResolver blipTemplateParameterResolver;
     private final AppointmentMotorProperties motorProperties;
     private final BlipPayloadBuilder blipPayloadBuilder;
     private final BlipContextService blipContextService;
@@ -70,14 +67,14 @@ public class BlipNotificationService {
 
     public BlipNotificationService(
             BlipLIMEClient limeClient,
-            AppointmentTemplateMappingRepositoryPort templateMappingRepository,
+            BlipTemplateParameterResolver blipTemplateParameterResolver,
             AppointmentMotorProperties motorProperties,
             BlipPayloadBuilder blipPayloadBuilder,
             BlipContextService blipContextService,
             br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentSessionRepositoryPort appointmentSessionRepository,
             BlipAppointmentFormatter blipAppointmentFormatter) {
         this.limeClient = limeClient;
-        this.templateMappingRepository = templateMappingRepository;
+        this.blipTemplateParameterResolver = blipTemplateParameterResolver;
         this.motorProperties = motorProperties;
         this.blipPayloadBuilder = blipPayloadBuilder;
         this.blipContextService = blipContextService;
@@ -153,7 +150,7 @@ public class BlipNotificationService {
             return;
         }
 
-        List<Map<String, String>> parameters = buildDynamicParameters(templateName, appointmentData);
+        List<Map<String, String>> parameters = blipTemplateParameterResolver.buildDynamicParameters(templateName, appointmentData);
         String appointmentId = appointmentData == null ? "" : Objects.toString(appointmentData.appointmentId(), "");
 
         log.info("[PARAMS TEMPLATE] destination={}, template={}, params={}", recipientE164, templateName, parameters);
@@ -242,97 +239,6 @@ public class BlipNotificationService {
         if (templateName == null || templateName.isBlank()) return false;
         String norm = templateName.trim().toLowerCase().replace(" ", "_");
         return "aviso_agendamento_grupo".equals(norm);
-    }
-
-    private List<Map<String, String>> buildDynamicParameters(String templateName, AppointmentTemplateData appointmentData) {
-        if (isStaticZeroParamTemplate(templateName)) {
-            log.info("[TEMPLATE MAPPING] Template estático '{}' configurado para 0 parâmetros na Meta.", templateName);
-            return List.of();
-        }
-
-        List<AppointmentTemplateMapping> mappings = templateMappingRepository
-            .findByTemplateNameIgnoreCaseOrderByPlaceholderIndexAsc(templateName);
-
-        if (mappings.isEmpty()) {
-            log.info("[TEMPLATE MAPPING] Nenhum mapeamento no banco para '{}'. Aplicando fallback automático (paciente, médico, horário).", templateName);
-            String pName = appointmentData != null ? appointmentData.patientName() : "Paciente";
-            String dName = appointmentData != null ? appointmentData.doctorName() : "Clínica Inovare";
-            String aTime = appointmentData != null ? appointmentData.appointmentTime() : "horário agendado";
-
-            pName = br.dev.ctrls.inovareti.modules.appointment.infrastructure.utils.StringSanitizer.sanitize(pName != null && !pName.isBlank() ? pName : "Paciente");
-            dName = br.dev.ctrls.inovareti.modules.appointment.infrastructure.utils.StringSanitizer.sanitize(dName != null && !dName.isBlank() ? dName : "Clínica Inovare");
-            aTime = br.dev.ctrls.inovareti.modules.appointment.infrastructure.utils.StringSanitizer.sanitize(aTime != null && !aTime.isBlank() ? aTime : "horário agendado");
-
-            List<Map<String, String>> fallbackParams = new ArrayList<>();
-            fallbackParams.add(Map.of("type", "text", "text", pName));
-            fallbackParams.add(Map.of("type", "text", "text", dName));
-            fallbackParams.add(Map.of("type", "text", "text", aTime));
-            return fallbackParams;
-        }
-
-        List<Map<String, String>> parameters = new ArrayList<>();
-        mappings.stream()
-            .sorted(Comparator.comparing(mapping -> mapping.getPlaceholderIndex()))
-            .forEach(mapping -> {
-                String fieldName = mapping.getFeegowFieldName();
-                String value = resolveDynamicFieldValue(appointmentData, fieldName);
-                
-                String safeValue = "Recepção";
-                if (value != null && !value.isBlank() && !"null".equalsIgnoreCase(value.trim()) && !"Informação não disponível".equalsIgnoreCase(value.trim())) {
-                    safeValue = value.trim();
-                } else {
-                    if (fieldName != null) {
-                        if (fieldName.toLowerCase().contains("profissional") || fieldName.toLowerCase().contains("doctor") || fieldName.toLowerCase().contains("medico")) {
-                            safeValue = "Clínica Inovare";
-                        } else if (fieldName.toLowerCase().contains("patient") || fieldName.toLowerCase().contains("paciente")) {
-                            safeValue = "Paciente";
-                        }
-                    }
-                }
-                
-                safeValue = br.dev.ctrls.inovareti.modules.appointment.infrastructure.utils.StringSanitizer.sanitize(safeValue);
-                parameters.add(Map.of("type", "text", "text", safeValue));
-            });
-
-        log.debug("[PARAMS] Template [{}]: {} parâmetro(s) mapeados", templateName, parameters.size());
-        return parameters;
-    }
-
-    private String resolveDynamicFieldValue(AppointmentTemplateData data, String fieldName) {
-        if (data == null || fieldName == null || fieldName.isBlank()) return null;
-
-        // Mapa explícito: nome do campo no banco â†’ extrator do record.
-        // Aceita tanto snake_case quanto camelCase para resiliência.
-        String key = fieldName.trim().toLowerCase();
-        return switch (key) {
-            // Paciente
-            case "patientname", "patient_name", "nome_paciente", "paciente"   -> data.patientName();
-            case "patientphone", "patient_phone", "telefone_paciente"          -> data.patientPhone();
-            case "patientid", "patient_id"                                     -> data.patientId();
-
-            // Médico â€” usa o doctorName JA resolvido no SendAppointmentTemplateUseCase
-            case "doctorname", "doctor_name",
-                 "profissionalnome", "profissional_nome",
-                 "nome_medico", "medico", "professional_name"                  -> data.doctorName();
-            case "doctorid", "doctor_id", "profissional_id"                    -> data.doctorId();
-            case "specialty", "especialidade"                                  -> data.specialty();
-
-            // Agenda
-            case "appointmentdate", "appointment_date", "data_consulta",
-                 "data"                                                         -> data.appointmentDate();
-            case "appointmentdateshort", "appointment_date_short", "data_curta" -> data.appointmentDateShort();
-            case "appointmenttime", "appointment_time", "hora", "hora_consulta" -> data.appointmentTime();
-            case "appointmentdatetime", "appointment_date_time", "data_hora"    -> data.appointmentDateTime();
-            case "appointmentid", "appointment_id"                             -> data.appointmentId();
-
-            // Unidade
-            case "unitname", "unit_name", "unidade", "local"                   -> data.unitName();
-
-            default -> {
-                log.warn("[FIELD MAPPING] Campo '{}' não mapeado em AppointmentTemplateData. Revise a tabela appointment_template_mapping.", fieldName);
-                yield null;
-            }
-        };
     }
 
     public void sendGroupTemplateMessage(String destination, String templateName, java.util.UUID groupId, String patientName) {
@@ -474,8 +380,22 @@ public class BlipNotificationService {
             return;
         }
 
-        List<Map<String, String>> parameters = buildDynamicParameters(templateName, appointmentData);
+        List<Map<String, String>> parameters = blipTemplateParameterResolver.buildDynamicParameters(templateName, appointmentData);
         String appointmentId = appointmentData == null ? "" : Objects.toString(appointmentData.appointmentId(), "");
+
+        log.info("[PARAMS TEMPLATE] destination={}, template={}, params={}", recipientE164, templateName, parameters);
+
+        if (parameters.isEmpty()) {
+            if (!isStaticZeroParamTemplate(templateName)) {
+                log.error("[ABORT] Parâmetros vazios para o template dinâmico '{}'. Envio cancelado para evitar mensagem sem conteúdo. destination={}",
+                    templateName, recipientE164);
+                return;
+            }
+            log.info("[MENSAGERIA] Template estático de 0 parâmetros '{}' validado. Prosseguindo com envio.", templateName);
+        }
+
+        String targetBot = "agendamento@msging.net";
+        String stateIdPrepararAtendimento = "a0776d9c-6486-42f3-8a4f-2706f0185908";
 
         Map<String, String> messageParamValues = new java.util.LinkedHashMap<>();
         List<String> messageParamKeys = new ArrayList<>();
@@ -488,32 +408,33 @@ public class BlipNotificationService {
         }
 
         String uniqueSuffix = UUID.randomUUID().toString().substring(0, 8);
-        String campaignName = "Notificacao Consulta - " + (appointmentId.isBlank() ? uniqueSuffix : appointmentId + " - " + uniqueSuffix);
+        String campaignName = "Disparo Consulta - " + (appointmentId.isBlank() ? uniqueSuffix : appointmentId + " - " + uniqueSuffix);
 
         Map<String, Object> commandPayload = blipPayloadBuilder.buildActiveCampaignCommandPayload(
             campaignName,
             recipientE164,
             templateName,
-            messageParamValues,
-            messageParamKeys,
-            null,
-            null,
-            null
+            isStaticZeroParamTemplate(templateName) ? null : messageParamValues,
+            isStaticZeroParamTemplate(templateName) ? null : messageParamKeys,
+            targetBot,
+            stateIdPrepararAtendimento,
+            targetBot
         );
 
+        log.info("Transmitindo template '{}' via Active Campaign (/campaign/full). destination={}", templateName, recipientE164);
         try {
             var response = limeClient.executeCommand(commandPayload, BlipLIMEClient.AuthorizationScope.ROUTER);
             validateBlipResponse(response, templateName, recipientE164);
-            log.info("Template simples enviado via Active Campaign (/campaign/full). destination={}, template={}, status={}", recipientE164, templateName, response != null ? response.get("status") : "success");
+            log.info("Template enviado via Active Campaign. destination={}, template={}, status={}", recipientE164, templateName, response != null ? response.get("status") : "success");
         } catch (Exception e) {
             String errMsg = e.getMessage() != null ? e.getMessage() : "";
-            if (errMsg.contains("131008")) {
-                log.warn("[AUTOCORRECAO-TEMPLATE] Meta recusou disparo de '{}' sem parâmetros (131008). Reenviando com parâmetro 1 (nome do paciente)...", templateName);
+            if (errMsg.contains("131008") || errMsg.contains("number of localizable_params (0) does not match the expected number of params (1)")) {
+                log.warn("[AUTOCORRECAO-TEMPLATE] Meta indicou que o template '{}' requer 1 parâmetro (131008). Reenviando com parâmetro 1 (nome do paciente)...", templateName);
                 String safePatientName = (appointmentData != null && appointmentData.patientName() != null) ? appointmentData.patientName() : "Paciente";
                 try {
                     Map<String, Object> retryPayload = blipPayloadBuilder.buildActiveCampaignCommandPayload(
-                            "Notificacao Retry 131008 - " + UUID.randomUUID().toString().substring(0, 8), recipientE164, templateName,
-                            Map.of("1", safePatientName), List.of("1"), null, null, null
+                            "Disparo Retry 131008 - " + UUID.randomUUID().toString().substring(0, 8), recipientE164, templateName,
+                            Map.of("1", safePatientName), List.of("1"), targetBot, stateIdPrepararAtendimento, targetBot
                     );
                     var retryResponse = limeClient.executeCommand(retryPayload, BlipLIMEClient.AuthorizationScope.ROUTER);
                     validateBlipResponse(retryResponse, templateName, recipientE164);
@@ -522,12 +443,12 @@ public class BlipNotificationService {
                 } catch (Exception retryEx) {
                     log.error("[AUTOCORRECAO-TEMPLATE] Falha no reenvio com parâmetro 1: {}", retryEx.getMessage());
                 }
-            } else if (errMsg.contains("132000")) {
-                log.warn("[AUTOCORRECAO-TEMPLATE] Meta recusou disparo de '{}' com parâmetros (132000). Reenviando estaticamente com 0 parâmetros...", templateName);
+            } else if (errMsg.contains("132000") || errMsg.contains("number of localizable_params (1) does not match the expected number of params (0)")) {
+                log.warn("[AUTOCORRECAO-TEMPLATE] Meta indicou que o template '{}' não aceita parâmetros (132000). Reenviando com 0 parâmetros...", templateName);
                 try {
                     Map<String, Object> retryPayload = blipPayloadBuilder.buildActiveCampaignCommandPayload(
-                            "Notificacao Retry 132000 - " + UUID.randomUUID().toString().substring(0, 8), recipientE164, templateName,
-                            Map.of(), List.of(), null, null, null
+                            "Disparo Retry 132000 - " + UUID.randomUUID().toString().substring(0, 8), recipientE164, templateName,
+                            null, null, targetBot, stateIdPrepararAtendimento, targetBot
                     );
                     var retryResponse = limeClient.executeCommand(retryPayload, BlipLIMEClient.AuthorizationScope.ROUTER);
                     validateBlipResponse(retryResponse, templateName, recipientE164);

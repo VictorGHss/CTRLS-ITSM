@@ -22,6 +22,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import br.dev.ctrls.inovareti.config.security.WebhookSignatureValidator;
 import br.dev.ctrls.inovareti.modules.appointment.application.service.BlipContextService;
+import br.dev.ctrls.inovareti.modules.appointment.application.service.BlipDeskGuardService;
 import br.dev.ctrls.inovareti.modules.appointment.application.service.BlipIdentityReconciler;
 import br.dev.ctrls.inovareti.modules.appointment.application.service.BlipNotificationService;
 import br.dev.ctrls.inovareti.modules.appointment.application.service.BlipWebhookInboundService;
@@ -55,12 +56,15 @@ class BlipHumanAttendanceGuardTest {
         blipProperties.getBlocks().setExibirAgenda("exibir-agenda-uuid");
         blipProperties.getBlocks().setWaitingResponse("waiting-response-uuid");
 
+        BlipDeskGuardService blipDeskGuardService = new BlipDeskGuardService(limeClient);
+
         blipContextService = new BlipContextService(
                 limeClient,
                 objectMapper,
                 new SimpleAsyncTaskExecutor(),
                 reconciler,
-                blipProperties
+                blipProperties,
+                blipDeskGuardService
         );
 
         handleBlipWebhookUseCase = mock(HandleBlipWebhookUseCase.class);
