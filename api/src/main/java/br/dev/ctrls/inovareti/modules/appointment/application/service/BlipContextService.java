@@ -1,43 +1,59 @@
 package br.dev.ctrls.inovareti.modules.appointment.application.service;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
-import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.task.AsyncTaskExecutor;
+import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClientException;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import br.dev.ctrls.inovareti.modules.appointment.application.dto.AppointmentPayload;
 import br.dev.ctrls.inovareti.modules.appointment.application.dto.BlipContactUpdateCommand;
 import br.dev.ctrls.inovareti.modules.appointment.infrastructure.adapter.output.client.BlipLIMEClient;
+import br.dev.ctrls.inovareti.modules.appointment.infrastructure.config.BlipProperties;
 import io.micrometer.observation.annotation.Observed;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-@org.springframework.stereotype.Service
+@Service
 @Observed
 public class BlipContextService {
 
     private final BlipLIMEClient limeClient;
-    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
-    private final org.springframework.core.task.AsyncTaskExecutor applicationTaskExecutor;
+    private final ObjectMapper objectMapper;
+    private final AsyncTaskExecutor applicationTaskExecutor;
     private final BlipIdentityReconciler blipIdentityReconciler;
-    private final br.dev.ctrls.inovareti.modules.appointment.infrastructure.config.BlipProperties blipProperties;
+    private final BlipProperties blipProperties;
     private final BlipDeskGuardService blipDeskGuardService;
+    private final BlipContextPayloadFactory blipContextPayloadFactory;
 
-    @org.springframework.beans.factory.annotation.Value("${APP_BLIP_APPOINTMENT_ID:}")
+    @Value("${APP_BLIP_APPOINTMENT_ID:}")
     private String blipAppointmentId;
 
     public BlipContextService(
             BlipLIMEClient limeClient, 
-            com.fasterxml.jackson.databind.ObjectMapper objectMapper, 
-            org.springframework.core.task.AsyncTaskExecutor applicationTaskExecutor,
+            ObjectMapper objectMapper, 
+            AsyncTaskExecutor applicationTaskExecutor,
             BlipIdentityReconciler blipIdentityReconciler,
-            br.dev.ctrls.inovareti.modules.appointment.infrastructure.config.BlipProperties blipProperties,
-            BlipDeskGuardService blipDeskGuardService) {
+            BlipProperties blipProperties,
+            BlipDeskGuardService blipDeskGuardService,
+            BlipContextPayloadFactory blipContextPayloadFactory) {
         this.limeClient = limeClient;
         this.objectMapper = objectMapper;
         this.applicationTaskExecutor = applicationTaskExecutor;
         this.blipIdentityReconciler = blipIdentityReconciler;
         this.blipProperties = blipProperties;
         this.blipDeskGuardService = blipDeskGuardService;
+        this.blipContextPayloadFactory = blipContextPayloadFactory;
     }
 
     public String resolveMasterIdentity(String userIdentity) {
@@ -89,8 +105,8 @@ public class BlipContextService {
             return;
         }
         log.debug("[LIME-PARALLEL] Configurando contexto LIME em paralelo para target: {}. Campos: {}", userIdentity, fields.keySet());
-        java.util.List<java.util.concurrent.CompletableFuture<Void>> futures = fields.entrySet().stream()
-            .map(entry -> java.util.concurrent.CompletableFuture.runAsync(() -> {
+        List<CompletableFuture<Void>> futures = fields.entrySet().stream()
+            .map(entry -> CompletableFuture.runAsync(() -> {
                 try {
                     setUserContext(userIdentity, entry.getKey(), entry.getValue());
                 } catch (Exception e) {
@@ -99,7 +115,7 @@ public class BlipContextService {
             }, applicationTaskExecutor))
             .toList();
         try {
-            java.util.concurrent.CompletableFuture.allOf(futures.toArray(java.util.concurrent.CompletableFuture[]::new)).join();
+            CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new)).join();
         } catch (Exception e) {
             log.error("Erro ao aguardar configuração de contexto para {}", userIdentity, e);
         }
@@ -109,12 +125,7 @@ public class BlipContextService {
         if (userIdentity == null || userIdentity.isBlank() || key == null || key.isBlank()) return null;
         String normalizedIdentity = limeClient.normalizeUserIdentity(userIdentity);
 
-        Map<String, Object> command = Map.of(
-            "id", UUID.randomUUID().toString(),
-            "to", BlipLIMEClient.MASTER_STATE_COMMAND_TO,
-            "method", "get",
-            "uri", "/contexts/" + normalizedIdentity + "/" + key
-        );
+        Map<String, Object> command = blipContextPayloadFactory.buildGetContextCommand(normalizedIdentity, key);
 
         try {
             Map<String, Object> response = limeClient.executeCommand(command, BlipLIMEClient.AuthorizationScope.ROUTER);
@@ -135,7 +146,7 @@ public class BlipContextService {
             String normalizedValue = value.trim();
             if (normalizedValue.isBlank() || "null".equalsIgnoreCase(normalizedValue)) return null;
             return normalizedValue;
-        } catch (org.springframework.web.client.RestClientException ex) {
+        } catch (RestClientException ex) {
             log.warn("Falha ao consultar contexto. identity={}, key={}", normalizedIdentity, key, ex);
             return null;
         }
@@ -147,17 +158,17 @@ public class BlipContextService {
         String masterIdentity = resolveMasterIdentity(userIdentity);
         String tunnelIdentity = resolveTunnelIdentity(userIdentity);
 
-        java.util.List<java.util.concurrent.CompletableFuture<Void>> futures = new java.util.ArrayList<>();
+        List<CompletableFuture<Void>> futures = new ArrayList<>();
         if (masterIdentity != null && !masterIdentity.isBlank()) {
-            futures.add(java.util.concurrent.CompletableFuture.runAsync(
+            futures.add(CompletableFuture.runAsync(
                 () -> sendSingleUserContext(masterIdentity, key, value), applicationTaskExecutor));
         }
         if (tunnelIdentity != null && !tunnelIdentity.isBlank() && !tunnelIdentity.equalsIgnoreCase(masterIdentity)) {
-            futures.add(java.util.concurrent.CompletableFuture.runAsync(
+            futures.add(CompletableFuture.runAsync(
                 () -> sendSingleUserContext(tunnelIdentity, key, value), applicationTaskExecutor));
         }
         try {
-            java.util.concurrent.CompletableFuture.allOf(futures.toArray(java.util.concurrent.CompletableFuture[]::new)).join();
+            CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new)).join();
         } catch (Exception ignored) {}
     }
 
@@ -166,9 +177,6 @@ public class BlipContextService {
     /**
      * Atualiza o estado do usuário no Blip (master-state) em escopo dual (Router + Túnel)
      * para transicionar a conversa para um bloco específico (ex: bloco silencioso terminal).
-     *
-     * @param userIdentity número/identidade do paciente no Blip
-     * @param stateId ID do bloco no Blip Builder (ex: STATE_REVIEW_FINISHED)
      */
     public void updateUserMasterState(String userIdentity, String stateId) {
         if (userIdentity == null || userIdentity.isBlank() || stateId == null || stateId.isBlank()) return;
@@ -177,7 +185,7 @@ public class BlipContextService {
         log.info("[LIME] Master-State atualizado para o bloco silencioso 'Fim - Avaliação Enviada' (stateId={}) para user={}", stateId, userIdentity);
     }
 
-    private final Map<String, Long> deduplicationCache = new java.util.concurrent.ConcurrentHashMap<>();
+    private final Map<String, Long> deduplicationCache = new ConcurrentHashMap<>();
 
     private boolean isRedundantContextCall(String deduplicationKey) {
         long now = System.currentTimeMillis();
@@ -199,20 +207,12 @@ public class BlipContextService {
             return;
         }
 
-        Map<String, Object> command = Map.of(
-            "id", UUID.randomUUID().toString(),
-            "to", "postmaster@msging.net",
-            "method", "set",
-            "uri", "/contexts/" + normalizedIdentity + "/" + key,
-            "type", "text/plain",
-            "metadata", Map.of("expiration", "86400"),
-            "resource", value
-        );
+        Map<String, Object> command = blipContextPayloadFactory.buildSetContextCommand(normalizedIdentity, key, value);
 
         try {
             limeClient.executeCommand(command, BlipLIMEClient.AuthorizationScope.ROUTER);
             log.info("Contexto configurado (escopo dual). identity={}, key={}", normalizedIdentity, key);
-        } catch (org.springframework.web.client.RestClientException ex) {
+        } catch (RestClientException ex) {
             log.warn("Falha ao configurar contexto. identity={}, key={}", normalizedIdentity, key, ex);
         }
     }
@@ -223,34 +223,29 @@ public class BlipContextService {
         String masterIdentity = resolveMasterIdentity(userIdentity);
         String tunnelIdentity = resolveTunnelIdentity(userIdentity);
 
-        java.util.List<java.util.concurrent.CompletableFuture<Void>> futures = new java.util.ArrayList<>();
+        List<CompletableFuture<Void>> futures = new ArrayList<>();
         if (masterIdentity != null && !masterIdentity.isBlank()) {
-            futures.add(java.util.concurrent.CompletableFuture.runAsync(
+            futures.add(CompletableFuture.runAsync(
                 () -> sendSingleDeleteUserContext(masterIdentity, key), applicationTaskExecutor));
         }
         if (tunnelIdentity != null && !tunnelIdentity.isBlank() && !tunnelIdentity.equalsIgnoreCase(masterIdentity)) {
-            futures.add(java.util.concurrent.CompletableFuture.runAsync(
+            futures.add(CompletableFuture.runAsync(
                 () -> sendSingleDeleteUserContext(tunnelIdentity, key), applicationTaskExecutor));
         }
         try {
-            java.util.concurrent.CompletableFuture.allOf(futures.toArray(java.util.concurrent.CompletableFuture[]::new)).join();
+            CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new)).join();
         } catch (Exception ignored) {}
     }
 
     private void sendSingleDeleteUserContext(String normalizedIdentity, String key) {
         if (normalizedIdentity == null || normalizedIdentity.isBlank() || key == null || key.isBlank()) return;
 
-        Map<String, Object> command = Map.of(
-            "id", UUID.randomUUID().toString(),
-            "to", BlipLIMEClient.MASTER_STATE_COMMAND_TO,
-            "method", "delete",
-            "uri", "/contexts/" + normalizedIdentity + "/" + key
-        );
+        Map<String, Object> command = blipContextPayloadFactory.buildDeleteContextCommand(normalizedIdentity, key);
 
         try {
             limeClient.executeCommand(command, BlipLIMEClient.AuthorizationScope.ROUTER);
             log.info("Contexto removido. identity={}, key={}", normalizedIdentity, key);
-        } catch (org.springframework.web.client.RestClientException ex) {
+        } catch (RestClientException ex) {
             log.warn("Falha ao remover contexto. identity={}, key={}", normalizedIdentity, key, ex);
         }
     }
@@ -265,21 +260,21 @@ public class BlipContextService {
         String masterIdentity = resolveMasterIdentity(userIdentity);
         String tunnelIdentity = resolveTunnelIdentity(userIdentity);
 
-        java.util.List<String> keys = java.util.List.of("isConfirmingAgenda", "isGroupFlow", "payloadclique", "requiresCpfFallback");
+        List<String> keys = List.of("isConfirmingAgenda", "isGroupFlow", "payloadclique", "requiresCpfFallback");
 
-        java.util.List<java.util.concurrent.CompletableFuture<Void>> futures = new java.util.ArrayList<>();
+        List<CompletableFuture<Void>> futures = new ArrayList<>();
         for (String key : keys) {
             if (masterIdentity != null && !masterIdentity.isBlank()) {
-                futures.add(java.util.concurrent.CompletableFuture.runAsync(
+                futures.add(CompletableFuture.runAsync(
                     () -> sendSingleDeleteUserContext(masterIdentity, key), applicationTaskExecutor));
             }
             if (tunnelIdentity != null && !tunnelIdentity.isBlank() && !tunnelIdentity.equalsIgnoreCase(masterIdentity)) {
-                futures.add(java.util.concurrent.CompletableFuture.runAsync(
+                futures.add(CompletableFuture.runAsync(
                     () -> sendSingleDeleteUserContext(tunnelIdentity, key), applicationTaskExecutor));
             }
         }
         try {
-            java.util.concurrent.CompletableFuture.allOf(futures.toArray(java.util.concurrent.CompletableFuture[]::new)).join();
+            CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new)).join();
             log.info("[BLIP-CONTEXT] Variáveis de confirmação removidas com sucesso (escopo dual) para {}: {}", userIdentity, keys);
         } catch (Exception ex) {
             log.warn("[BLIP-CONTEXT] Erro ao remover variáveis de confirmação para {}: {}", userIdentity, ex.getMessage());
@@ -290,9 +285,6 @@ public class BlipContextService {
      * Envia um contexto JSON ao Blip via comando LIME.
      * O resource é passado como Object (Map, record, etc.) e serializado para string JSON,
      * sendo enviado como type: "text/plain".
-     * Isso evita o erro Code 21 (quando enviado como application/json com string) AND
-     * evita o erro de [object Object] / Redirecionamento incorreto no Javascript do Blip
-     * (já que o Blip receberá e armazenará uma string JSON pura que o script consegue parsear).
      */
     public void setJsonContext(String userIdentity, String key, Object resourceObject) {
         if (userIdentity == null || userIdentity.isBlank() || resourceObject == null) return;
@@ -311,19 +303,11 @@ public class BlipContextService {
     private void sendSingleJsonContext(String normalizedIdentity, String key, Object resourceObject) {
         try {
             String jsonString = objectMapper.writeValueAsString(resourceObject);
-
-            java.util.LinkedHashMap<String, Object> command = new java.util.LinkedHashMap<>();
-            command.put("id", UUID.randomUUID().toString());
-            command.put("to", "postmaster@msging.net");
-            command.put("method", "set");
-            command.put("uri", "/contexts/" + normalizedIdentity + "/" + key);
-            command.put("type", "text/plain");
-            command.put("metadata", Map.of("expiration", "86400"));
-            command.put("resource", jsonString);
+            Map<String, Object> command = blipContextPayloadFactory.buildSetJsonContextCommand(normalizedIdentity, key, jsonString);
 
             limeClient.executeCommand(command, BlipLIMEClient.AuthorizationScope.ROUTER);
             log.info("[LIME] Contexto JSON configurado (escopo dual). identity={}, key={}", normalizedIdentity, key);
-        } catch (com.fasterxml.jackson.core.JsonProcessingException | org.springframework.web.client.RestClientException ex) {
+        } catch (com.fasterxml.jackson.core.JsonProcessingException | RestClientException ex) {
             log.warn("[LIME] Falha ao configurar contexto JSON. identity={}, key={}", normalizedIdentity, key, ex);
         }
     }
@@ -345,7 +329,6 @@ public class BlipContextService {
 
     private void sendSingleMasterState(String normalizedIdentity, String targetBot, String operation) {
         // SALVAGUARDA DESK: NUNCA enviar Master-State para desk@msging.net em identidades de túnel (@tunnel.msging.net).
-        // Isso evita a abertura de tickets duplicados/fantasmas com UUID na fila Default do Blip Desk!
         if ("desk@msging.net".equalsIgnoreCase(targetBot) && normalizedIdentity.contains("@tunnel.msging.net")) {
             log.info("[BLIP-CONTEXT-GUARD] Ignorado Master-State para desk@msging.net na identidade de túnel '{}' para evitar ticket duplicado no Desk.", normalizedIdentity);
             return;
@@ -355,25 +338,12 @@ public class BlipContextService {
             return;
         }
 
-        String stateId = operation != null && !operation.isBlank() ? operation : "stateid";
-        String flowId = targetBot.contains("@") ? targetBot.substring(0, targetBot.indexOf('@')) : targetBot;
-        String combined = stateId + "@" + flowId;
-        String encodedState = java.net.URLEncoder.encode(combined, java.nio.charset.StandardCharsets.UTF_8);
-
-        Map<String, Object> command = Map.of(
-            "id", UUID.randomUUID().toString(),
-            "to", BlipLIMEClient.MASTER_STATE_COMMAND_TO,
-            "method", "set",
-            "uri", "/contexts/" + normalizedIdentity + "/" + encodedState,
-            "type", "text/plain",
-            "metadata", Map.of("expiration", "86400"),
-            "resource", targetBot
-        );
+        Map<String, Object> command = blipContextPayloadFactory.buildMasterStateCommand(normalizedIdentity, targetBot, operation);
 
         try {
             limeClient.executeCommand(command, BlipLIMEClient.AuthorizationScope.ROUTER);
             log.info("Master-State atualizado. identity={}, operation={}, targetBot={}", normalizedIdentity, operation, targetBot);
-        } catch (org.springframework.web.client.RestClientException ex) {
+        } catch (RestClientException ex) {
             log.error("Erro ao atualizar Master-State. identity={}, operation={}", normalizedIdentity, operation, ex);
         }
     }
@@ -405,40 +375,24 @@ public class BlipContextService {
             return;
         }
 
-        Map<String, Object> command = Map.of(
-            "id", UUID.randomUUID().toString(),
-            "to", BlipLIMEClient.MASTER_STATE_COMMAND_TO,
-            "method", "set",
-            "uri", "/contexts/" + normalizedIdentity + "/master-state",
-            "type", "text/plain",
-            "metadata", Map.of("expiration", "86400"),
-            "resource", stateId
-        );
+        Map<String, Object> command = blipContextPayloadFactory.buildBuilderMasterStateCommand(normalizedIdentity, stateId);
 
         try {
             limeClient.executeCommand(command, BlipLIMEClient.AuthorizationScope.ROUTER);
             log.info("[LIME] Builder Master-State atualizado para o bloco stateId={}, user={}", stateId, normalizedIdentity);
-        } catch (org.springframework.web.client.RestClientException ex) {
+        } catch (RestClientException ex) {
             log.error("Erro ao atualizar Builder Master-State. stateId={}, user={}", stateId, normalizedIdentity, ex);
         }
     }
 
     public void setUserState(String userIdentity, String stateName) {
         String normalizedIdentity = limeClient.normalizeUserIdentity(userIdentity);
-
-        Map<String, Object> command = Map.of(
-                "id", UUID.randomUUID().toString(),
-                "to", BlipLIMEClient.MASTER_STATE_COMMAND_TO,
-                "method", "set",
-                "uri", "/contexts/" + normalizedIdentity + "/state",
-                "type", "text/plain",
-                "resource", stateName
-        );
+        Map<String, Object> command = blipContextPayloadFactory.buildUserStateCommand(normalizedIdentity, stateName);
 
         try {
             limeClient.executeCommand(command, BlipLIMEClient.AuthorizationScope.ROUTER);
             log.info("User State atualizado. stateName={}", stateName);
-        } catch (org.springframework.web.client.RestClientException ex) {
+        } catch (RestClientException ex) {
             log.error("Erro ao atualizar User State. stateName={}", stateName, ex);
         }
     }
@@ -457,13 +411,12 @@ public class BlipContextService {
                     masterIdentity = reconciledPhone.contains("@") ? reconciledPhone : reconciledPhone + "@wa.gw.msging.net";
                 }
             } else {
-                // Se for um telefone comum, normaliza normalmente
                 masterIdentity = limeClient.normalizeUserIdentity(userPhoneClean);
             }
 
             String resolvedQueue = resolveQueueName(payload.getQueue());
 
-            java.util.Map<String, String> extras = new java.util.HashMap<>();
+            Map<String, String> extras = new HashMap<>();
             extras.put("Medico", payload.getDoctorName());
             extras.put("fila", resolvedQueue);
             extras.put("deskFila", resolvedQueue);
@@ -476,96 +429,48 @@ public class BlipContextService {
                 extras.put("Nome", cleanPName);
             }
 
-            String blipBirthDate = convertBirthdateToBlipFormat(payload.getPatientBirthdate());
+            String blipBirthDate = blipContextPayloadFactory.convertBirthdateToBlipFormat(payload.getPatientBirthdate());
 
             // PASSO 1a: Atualiza os dados do Contato no Roteador (usando a identidade real master)
             if (masterIdentity != null && !masterIdentity.isBlank()) {
-                BlipContactUpdateCommand masterCommand = new BlipContactUpdateCommand();
-                BlipContactUpdateCommand.ContactResource masterResource = new BlipContactUpdateCommand.ContactResource();
-                masterResource.setIdentity(masterIdentity);
-                if (cleanPName != null) {
-                    masterResource.setName(cleanPName);
-                }
-                masterResource.setTaxDocument(payload.getPatientCPF());
-                masterResource.setBirthDate(blipBirthDate);
-                masterResource.setExtras(extras);
-                masterCommand.setResource(masterResource);
+                BlipContactUpdateCommand masterCommand = blipContextPayloadFactory.buildContactUpdateCommand(
+                        masterIdentity, cleanPName, payload.getPatientCPF(), blipBirthDate, extras);
 
                 log.info("[LIME PUSH] Atualizando contato no ROTEADOR para identity={}: Medico={}, fila={}, birthDate={}", 
                         masterIdentity, payload.getDoctorName(), resolvedQueue, blipBirthDate);
                 
                 @SuppressWarnings("unchecked")
-                java.util.Map<String, Object> masterMap = objectMapper.convertValue(masterCommand, java.util.Map.class);
+                Map<String, Object> masterMap = objectMapper.convertValue(masterCommand, Map.class);
                 limeClient.executeCommand(masterMap, BlipLIMEClient.AuthorizationScope.ROUTER);
             }
 
             // PASSO 1b: Atualiza os dados do Contato no Subbot/Desk (usando a identidade de túnel)
             if (tunnelIdentity != null && !tunnelIdentity.isBlank()) {
-                BlipContactUpdateCommand tunnelCommand = new BlipContactUpdateCommand();
-                BlipContactUpdateCommand.ContactResource tunnelResource = new BlipContactUpdateCommand.ContactResource();
-                tunnelResource.setIdentity(tunnelIdentity);
-                if (cleanPName != null) {
-                    tunnelResource.setName(cleanPName);
-                }
-                tunnelResource.setTaxDocument(payload.getPatientCPF());
-                tunnelResource.setBirthDate(blipBirthDate);
-                tunnelResource.setExtras(extras);
-                tunnelCommand.setResource(tunnelResource);
+                BlipContactUpdateCommand tunnelCommand = blipContextPayloadFactory.buildContactUpdateCommand(
+                        tunnelIdentity, cleanPName, payload.getPatientCPF(), blipBirthDate, extras);
 
                 log.info("[LIME PUSH] Atualizando contato no SUBBOT/DESK para identity={}: Medico={}, fila={}, birthDate={}", 
                         tunnelIdentity, payload.getDoctorName(), resolvedQueue, blipBirthDate);
                 
                 @SuppressWarnings("unchecked")
-                java.util.Map<String, Object> tunnelMap = objectMapper.convertValue(tunnelCommand, java.util.Map.class);
+                Map<String, Object> tunnelMap = objectMapper.convertValue(tunnelCommand, Map.class);
                 limeClient.executeCommand(tunnelMap, BlipLIMEClient.AuthorizationScope.DESK);
             }
 
-            // Roteamento delegado ao payload nativo do Blip Builder.
             log.info("[MENSAGERIA] Registro processado. Delegando roteamento ao payload nativo do Blip Builder para a identidade: {}", userPhoneClean);
         } catch (RuntimeException ex) {
             throw new RuntimeException("Falha ao executar orquestração de push no Blip", ex);
         }
     }
 
-    private String convertBirthdateToBlipFormat(String birthdate) {
-        if (birthdate == null || birthdate.isBlank()) {
-            return null;
-        }
-        String clean = birthdate.trim();
-        try {
-            if (clean.matches("\\d{2}/\\d{2}/\\d{4}")) {
-                java.time.LocalDate date = java.time.LocalDate.parse(clean, java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy"));
-                return date.format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd")) + "T00:00:00Z";
-            }
-            if (clean.matches("\\d{4}-\\d{2}-\\d{2}")) {
-                return clean + "T00:00:00Z";
-            }
-        } catch (Exception ex) {
-            log.warn("Falha ao converter data de nascimento para formato do Blip: {}", birthdate);
-        }
-        return null;
-    }
-
-    /**
-     * Verifica se o contato possui um ticket de atendimento humano ativo ou aberto no Desk (live chat) do Blip.
-     * Delegado ao BlipDeskGuardService (Attendance Guard).
-     */
     public boolean hasActiveTicket(String userIdentity) {
         return blipDeskGuardService.hasActiveTicket(userIdentity);
     }
 
-    /**
-     * Verifica se o contato possui um ticket de atendimento humano ativo/aberto recente no Desk (live chat) do Blip.
-     * Delegado ao BlipDeskGuardService (Attendance Guard).
-     */
     public boolean hasActiveTicket(String userIdentity, LocalDateTime lastNotificationSentAt) {
         return blipDeskGuardService.hasActiveTicket(userIdentity, lastNotificationSentAt);
     }
 
-    /**
-     * Verifica se o contato está em atendimento humano ativo ou na fila do Blip Desk.
-     * Avalia tanto o master-state quanto tickets ativos/em espera na API do Desk.
-     */
     public boolean isInHumanAttendance(String userIdentity) {
         if (userIdentity == null || userIdentity.isBlank()) return false;
         try {
@@ -590,12 +495,11 @@ public class BlipContextService {
         if (queueNameOrId == null) return "Recepção Geral";
         String resolvedQueueName = queueNameOrId;
 
-        // Se o valor de entrada parecer com a estrutura de um UUID de fila, realiza a tradução dinâmica
         if (queueNameOrId.trim().matches("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")) {
             String uuid = queueNameOrId.trim();
             log.info("[QUEUE-RESOLVER] Detectado UUID de fila '{}'. Buscando nome descritivo correspondente na API do Blip...", uuid);
             try {
-                java.util.List<br.dev.ctrls.inovareti.modules.appointment.domain.port.output.BlipClientPort.BlipQueue> queues = limeClient.listBlipQueues();
+                var queues = limeClient.listBlipQueues();
                 String foundName = null;
                 if (queues != null) {
                     for (var q : queues) {
@@ -643,11 +547,9 @@ public class BlipContextService {
         String tunnelIdentity = resolveTunnelIdentity(userIdentity);
         String queueValueForRedirect = safeQueueName;
 
-        // Disparo assíncrono em background para que o endpoint do webhook responda ao Blip em <50ms
-        java.util.concurrent.CompletableFuture.runAsync(() -> {
+        CompletableFuture.runAsync(() -> {
             try {
-                // 1. Agrupa todas as variáveis em um único payload de extras no contato
-                Map<String, String> extras = new java.util.LinkedHashMap<>();
+                Map<String, String> extras = new LinkedHashMap<>();
                 extras.put("attendanceQueueToRedirect", queueValueForRedirect);
                 extras.put("attendanceQueueNameToRedirect", safeQueueName);
                 extras.put("fila", safeQueueName);
@@ -657,7 +559,6 @@ public class BlipContextService {
                 }
                 updateContactExtras(userIdentity, extras);
 
-                // 2. Atualiza contextos do usuário em paralelo
                 Map<String, String> contextFields = Map.of(
                     "attendanceQueueToRedirect", queueValueForRedirect,
                     "attendanceQueueNameToRedirect", safeQueueName,
@@ -685,7 +586,7 @@ public class BlipContextService {
         String masterIdentity = resolveMasterIdentity(userIdentity);
         String tunnelIdentity = resolveTunnelIdentity(userIdentity);
 
-        java.util.concurrent.CompletableFuture.runAsync(() -> {
+        CompletableFuture.runAsync(() -> {
             if (masterIdentity != null && !masterIdentity.isBlank()) {
                 deleteUserContext(masterIdentity, "attendanceQueueToRedirect");
             }
@@ -712,12 +613,7 @@ public class BlipContextService {
     }
 
     public String cleanQueueName(String queueName) {
-        if (queueName == null) return "";
-        String cleaned = queueName.replace("\u200E", "");
-        cleaned = cleaned.replaceAll("(?i)null", "");
-        cleaned = cleaned.replaceAll("\\s+", " ");
-        cleaned = cleaned.trim();
-        return cleaned;
+        return blipContextPayloadFactory.cleanQueueName(queueName);
     }
 
     public void setVariable(String userIdentity, String key, String value) {
@@ -736,7 +632,7 @@ public class BlipContextService {
     public void updateContactExtras(String userIdentity, String queueName, String blipQueueId) {
         if (userIdentity == null || userIdentity.isBlank()) return;
 
-        Map<String, String> extras = new java.util.HashMap<>();
+        Map<String, String> extras = new HashMap<>();
         if (queueName != null && !queueName.isBlank()) {
             String clean = cleanQueueName(queueName);
             extras.put("fila", clean);
@@ -758,9 +654,9 @@ public class BlipContextService {
             String masterIdentity = resolveMasterIdentity(userIdentity);
             String tunnelIdentity = resolveTunnelIdentity(userIdentity);
 
-            java.util.List<java.util.concurrent.CompletableFuture<Void>> futures = new java.util.ArrayList<>();
+            List<CompletableFuture<Void>> futures = new ArrayList<>();
             if (masterIdentity != null && !masterIdentity.isBlank()) {
-                futures.add(java.util.concurrent.CompletableFuture.runAsync(() -> {
+                futures.add(CompletableFuture.runAsync(() -> {
                     try {
                         limeClient.mergeContactExtras(masterIdentity, extras, BlipLIMEClient.AuthorizationScope.ROUTER);
                     } catch (Exception ex) {
@@ -769,7 +665,7 @@ public class BlipContextService {
                 }, applicationTaskExecutor));
             }
             if (tunnelIdentity != null && !tunnelIdentity.isBlank() && !tunnelIdentity.equalsIgnoreCase(masterIdentity)) {
-                futures.add(java.util.concurrent.CompletableFuture.runAsync(() -> {
+                futures.add(CompletableFuture.runAsync(() -> {
                     try {
                         limeClient.mergeContactExtras(tunnelIdentity, extras, BlipLIMEClient.AuthorizationScope.DESK);
                     } catch (Exception ex) {
@@ -777,11 +673,10 @@ public class BlipContextService {
                     }
                 }, applicationTaskExecutor));
             }
-            java.util.concurrent.CompletableFuture.allOf(futures.toArray(java.util.concurrent.CompletableFuture[]::new)).join();
+            CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new)).join();
             log.info("[BLIP-CONTEXT] Extras do contato atualizados em escopo duplo para {}: {}", userIdentity, extras.keySet());
         } catch (Exception ex) {
             log.warn("[BLIP-CONTEXT] Falha ao atualizar extras do contato em escopo duplo para {}: {}", userIdentity, ex.getMessage());
         }
     }
 }
-
