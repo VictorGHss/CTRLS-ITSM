@@ -326,10 +326,12 @@ public class BlipWebhookInboundService {
     }
 
     private String extractMessageId(Map<String, Object> payload) {
-        return firstNonBlank(
+        String id = firstNonBlank(
                 asText(getNested(payload, "id")),
                 asText(getNested(payload, "message", "id")),
+                asText(getNested(payload, "resource", "id")),
                 UUID.randomUUID().toString());
+        return BlipWebhookIdempotencyService.normalizeMessageId(id);
     }
 
     private String extractAppointmentId(Map<String, Object> payload) {
@@ -353,7 +355,7 @@ public class BlipWebhookInboundService {
 
         String breadcrumbId = blipContextService.getUserContext(from, LAST_PENDING_APPOINTMENT_ID_CONTEXT_KEY);
         if (!StringUtils.hasText(breadcrumbId)) {
-            log.warn("[WEBHOOK] Contexto '{}' não encontrado para {}", LAST_PENDING_APPOINTMENT_ID_CONTEXT_KEY, from);
+            log.debug("[WEBHOOK] Contexto '{}' não encontrado para {}", LAST_PENDING_APPOINTMENT_ID_CONTEXT_KEY, from);
             return null;
         }
         return breadcrumbId.trim();
