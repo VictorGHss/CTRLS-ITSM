@@ -2,23 +2,21 @@ package br.dev.ctrls.inovareti.modules.appointment.application.service;
 
 import io.micrometer.observation.annotation.Observed;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
 
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.RestClientException;
 
-import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentDoctorMappingRepositoryPort;
-import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.BlipUserIdentityReconciliationRepositoryPort;
-
+import br.dev.ctrls.inovareti.modules.appointment.application.dto.AppointmentPayload;
 import br.dev.ctrls.inovareti.modules.appointment.domain.model.AppointmentSession;
-import br.dev.ctrls.inovareti.modules.appointment.domain.model.NotificationGroup;
-import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.PatientExternalPort;
-import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.FeegowPatient;
+import br.dev.ctrls.inovareti.modules.appointment.domain.model.BlipUserIdentityReconciliation;
+import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentDoctorMappingRepositoryPort;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentExternalPort;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentSessionRepositoryPort;
-import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.NotificationGroupRepositoryPort;
+import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.BlipUserIdentityReconciliationRepositoryPort;
+import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.FeegowPatient;
+import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.PatientExternalPort;
 import br.dev.ctrls.inovareti.modules.appointment.infrastructure.config.AppointmentMotorProperties;
 import br.dev.ctrls.inovareti.modules.appointment.infrastructure.config.BlipProperties;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +24,7 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * Estratégia de processamento específica para a ação de confirmação de consulta ("confirm").
+ * Delega o processamento em lote/grupo para BlipGroupAppointmentConfirmationCoordinator.
  */
 @Slf4j
 @Component
@@ -36,690 +35,301 @@ public class ConfirmBlipWebhookActionHandler implements BlipWebhookActionHandler
     private final AppointmentExternalPort appointmentExternalPort;
     private final AppointmentMotorProperties appointmentMotorProperties;
     private final ConfirmationStateMachineService confirmationStateMachineService;
-    private final NotificationGroupRepositoryPort notificationGroupRepository;
     private final AppointmentSessionRepositoryPort appointmentSessionRepository;
     private final BlipContextService blipContextService;
     private final AppointmentDoctorMappingRepositoryPort appointmentDoctorMappingRepository;
     private final BlipUserIdentityReconciliationRepositoryPort blipUserIdentityReconciliationRepository;
     private final BlipProperties blipProperties;
     private final PatientExternalPort patientExternalPort;
-    private final br.dev.ctrls.inovareti.modules.appointment.domain.port.output.DoctorConfigurationRepository doctorConfigurationRepository;
+    private final BlipGroupAppointmentConfirmationCoordinator groupCoordinator;
 
     @Override
     public boolean supports(String actionType) {
         if (actionType == null || actionType.isBlank()) return false;
         String lower = actionType.trim().toLowerCase();
-        return "confirm".equals(lower) || lower.startsWith("confirm_group_") || "confirm_group".equals(lower) || "confirmar tudo".equals(lower) || "confirmar_tudo".equals(lower);
+        return "confirm".equals(lower) || groupCoordinator.isGroupAction(actionType);
     }
 
     @Override
     public void prePersistence(AppointmentSession session, String action, String fromIdentity) {
-        if (action != null && action.toLowerCase().startsWith("confirm_group_")) {
-            String groupIdStr = action.substring("confirm_group_".length()).trim();
-            try {
-                UUID groupId = UUID.fromString(groupIdStr);
-                List<NotificationGroup> groups = notificationGroupRepository.findByGroupId(groupId);
-                
-                String userPhone = session.getPhoneNumber();
-                java.util.Map<UUID, AppointmentSession> sessoesUnicas = new java.util.LinkedHashMap<>();
-                for (NotificationGroup group : groups) {
-                    appointmentSessionRepository.findById(group.getSessionId()).ifPresent(s -> sessoesUnicas.put(s.getId(), s));
-                }
-                if (userPhone != null && !userPhone.isBlank()) {
-                    List<AppointmentSession> activeContactSessions = appointmentSessionRepository.findActiveByPhoneNumber(userPhone);
-                    for (AppointmentSession s : activeContactSessions) {
-                        sessoesUnicas.put(s.getId(), s);
-                    }
-                }
-                if (session.getId() != null) {
-                    sessoesUnicas.put(session.getId(), session);
-                }
-                
-                List<AppointmentSession> listaSessoes = new ArrayList<>(sessoesUnicas.values());
-                
-                log.info("[CONFIRM-BATCH] Processando confirmação em lote para o grupo: {} / telefone: {}. Total de agendamentos: {}", groupId, userPhone, listaSessoes.size());
-                
-                // --- RESOLUÇÃO E CONFIGURAÇÃO IMEDIATA DA FILA DE REDIRECIONAMENTO (ANTI-CORRIDA) ---
-                String targetQueue = null;
-                for (AppointmentSession groupSession : listaSessoes) {
-                    var mappingOpt = appointmentDoctorMappingRepository.findByProfissionalId(groupSession.getDoctorProfissionalId());
-                    if (mappingOpt.isPresent()) {
-                        String queue = mappingOpt.get().getBlipQueueId();
-                        if (queue != null && !queue.isBlank() && !"null".equalsIgnoreCase(queue.trim())) {
-                            targetQueue = queue.trim();
-                            break;
-                        }
-                    }
-                }
-
-                if (targetQueue == null || targetQueue.isBlank()) {
-                    targetQueue = "Recepção Central / Suporte";
-                } else {
-                    targetQueue = blipContextService.resolveQueueName(targetQueue);
-                }
-
-                blipContextService.setQueueRedirect(userPhone, targetQueue);
-                if (fromIdentity != null && !fromIdentity.isBlank() && !fromIdentity.equalsIgnoreCase(userPhone)) {
-                    blipContextService.setQueueRedirect(fromIdentity, targetQueue);
-                }
-                // -----------------------------------------------------------------------------------
-
-                // --- ATUALIZAÇÃO IMEDIATA DO STATUS LOCAL (FIM DO LEMBRETE FANTASMA) ---
-                for (AppointmentSession groupSession : listaSessoes) {
-                    confirmationStateMachineService.markConfirmed(groupSession);
-                    try {
-                        appointmentSessionRepository.save(groupSession);
-                    } catch (Exception ex) {
-                        log.error("[CONFIRM-BATCH] Falha ao persistir status local CONFIRMED antes do Feegow para sessionId={}", groupSession.getId(), ex);
-                    }
-                }
-                // -----------------------------------------------------------------------
-
-                userPhone = session.getPhoneNumber();
-
-                // Configurar variável de contexto da fila, ID e CPF no Blip preventivamente
-                try {
-                    if (!listaSessoes.isEmpty()) {
-                        AppointmentSession firstSession = listaSessoes.get(0);
-                        String firstFeegowId = firstSession.getFeegowAppointmentId();
-                        blipContextService.setUserContextForUser(userPhone, "idAgendamentoFeegow", firstFeegowId);
-                        blipContextService.setUserContextForUser(userPhone, "appointmentId", firstFeegowId);
-                        blipContextService.setUserContext(userPhone, "hasActiveAppointment", "true");
-                        if (fromIdentity != null && !fromIdentity.isBlank() && !fromIdentity.equalsIgnoreCase(userPhone)) {
-                            blipContextService.setUserContextForUser(fromIdentity, "idAgendamentoFeegow", firstFeegowId);
-                            blipContextService.setUserContextForUser(fromIdentity, "appointmentId", firstFeegowId);
-                            blipContextService.setUserContext(fromIdentity, "hasActiveAppointment", "true");
-                        }
-                        log.info("[CONFIRM-BATCH] IDs e status de agendamento ativo salvos no contexto do Blip: {}", firstFeegowId);
-
-                        String requiresCpfFallback = "false";
-
-                        blipContextService.setVariable(userPhone, "requiresCpfFallback", requiresCpfFallback);
-                        blipContextService.setContactExtra(userPhone, "requiresCpfFallback", requiresCpfFallback);
-                        blipContextService.setVariable(userPhone, "hasActiveAppointment", "true");
-                        blipContextService.setContactExtra(userPhone, "hasActiveAppointment", "true");
-                        if (fromIdentity != null && !fromIdentity.isBlank() && !fromIdentity.equalsIgnoreCase(userPhone)) {
-                            blipContextService.setVariable(fromIdentity, "requiresCpfFallback", requiresCpfFallback);
-                            blipContextService.setContactExtra(fromIdentity, "requiresCpfFallback", requiresCpfFallback);
-                            blipContextService.setVariable(fromIdentity, "hasActiveAppointment", "true");
-                            blipContextService.setContactExtra(fromIdentity, "hasActiveAppointment", "true");
-                        }
-
-                        // Atualiza também a variável para as identidades de túnel no lote
-                        try {
-                            for (AppointmentSession groupSession : listaSessoes) {
-                                String guid = groupSession.getBlipGuid();
-                                if (guid == null || guid.isBlank()) {
-                                    guid = groupSession.getBsuid();
-                                }
-                                if (guid != null && !guid.isBlank()) {
-                                    if (guid.contains("@")) {
-                                        guid = guid.substring(0, guid.indexOf("@"));
-                                    }
-                                    guid = guid.trim();
-                                    if (guid.matches("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")) {
-                                        String tunnelIdentity = guid + "@tunnel.msging.net";
-                                        blipContextService.setVariable(tunnelIdentity, "requiresCpfFallback", requiresCpfFallback);
-                                        blipContextService.setContactExtra(tunnelIdentity, "requiresCpfFallback", requiresCpfFallback);
-                                    }
-                                }
-                            }
-                        } catch (Exception tunnelEx) {
-                            log.warn("[CONFIRM-BATCH] Falha ao atualizar requiresCpfFallback para identidades de túnel no lote: {}", tunnelEx.getMessage());
-                        }
-                    }
-                } catch (Exception ex) {
-                    log.warn("[CONFIRM-BATCH] Falha ao salvar ID ou verificar CPF no contexto: {}", ex.getMessage());
-                }
-
-                blipContextService.setQueueRedirect(userPhone, targetQueue);
-                if (fromIdentity != null && !fromIdentity.isBlank() && !fromIdentity.equalsIgnoreCase(userPhone)) {
-                    blipContextService.setQueueRedirect(fromIdentity, targetQueue);
-                }
- 
-                // Recupera dinamicamente a propriedade do bloco de sucesso
-                String confirmSuccessBlockId = blipProperties.getBlocks().getConfirmSuccess();
-                if (confirmSuccessBlockId == null || confirmSuccessBlockId.isBlank()) {
-                    confirmSuccessBlockId = "b3461299-9500-46b1-b423-12ffef3e1aba";
-                }
- 
-                String targetBot = "desk@msging.net";
-                if (!"644d54dd-aefd-478b-93eb-10081acdd387".equals(confirmSuccessBlockId)) {
-                    String builderBotId = appointmentMotorProperties.getBlipBuilderBotId();
-                    if (builderBotId != null && !builderBotId.isBlank()) {
-                        targetBot = builderBotId;
-                    }
-                }
- 
-                // Enviar redirecionamento de estado (Change State) para o bloco correspondente
-                blipContextService.setMasterState(userPhone, targetBot, confirmSuccessBlockId);
-                
-                // Atualiza também o Master-State com as identidades baseadas nos GUIDs das sessões do lote
-                try {
-                    for (AppointmentSession groupSession : listaSessoes) {
-                        String guid = groupSession.getBlipGuid();
-                        if (guid == null || guid.isBlank()) {
-                            guid = groupSession.getBsuid();
-                        }
-                        if (guid != null && !guid.isBlank()) {
-                            if (guid.contains("@")) {
-                                guid = guid.substring(0, guid.indexOf("@"));
-                            }
-                            guid = guid.trim();
-                            if (guid.matches("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")) {
-                                String tunnelIdentity = guid + "@tunnel.msging.net";
-                                blipContextService.setMasterState(tunnelIdentity, targetBot, confirmSuccessBlockId);
-                                log.info("[CONFIRM-BATCH] Master-State atualizado também para a identidade GUID do túnel no lote: {}", tunnelIdentity);
-                            }
-                        }
-                    }
-                } catch (Exception ex) {
-                    log.warn("[CONFIRM-BATCH] Falha ao atualizar Master-State para GUID do túnel no lote: {}", ex.getMessage());
-                }
-
-                if (fromIdentity != null && !fromIdentity.isBlank() && !fromIdentity.equalsIgnoreCase(userPhone)) {
-                    blipContextService.setMasterState(fromIdentity, targetBot, confirmSuccessBlockId);
-                }
- 
-                // Redirecionamento de estado nas identidades de túnel (deterministica e reconciliadas)
-                try {
-                    if (userPhone != null && !userPhone.isBlank()) {
-                        List<String> tunnelIdentities = new ArrayList<>();
-                        String subbotId = blipProperties.getSubbotId();
-                        String subbotLocalPart = null;
-                        if (subbotId != null && !subbotId.isBlank() && !subbotId.toLowerCase().contains("fluxov1")) {
-                            subbotLocalPart = subbotId.trim();
-                            if (subbotLocalPart.contains("@")) {
-                                subbotLocalPart = subbotLocalPart.substring(0, subbotLocalPart.indexOf('@'));
-                            }
-                        }
- 
-                        String phoneDigits = userPhone.trim();
-                        if (phoneDigits.contains("@")) {
-                            phoneDigits = phoneDigits.substring(0, phoneDigits.indexOf('@'));
-                        }
-                        phoneDigits = phoneDigits.replaceAll("\\D", "");
-                        if (!phoneDigits.startsWith("55") && !phoneDigits.isEmpty()) {
-                            phoneDigits = "55" + phoneDigits;
-                        }
- 
-                        if (subbotLocalPart != null) {
-                            String deterministicTunnel = phoneDigits + "." + subbotLocalPart + "@tunnel.msging.net";
-                            tunnelIdentities.add(deterministicTunnel);
-                        }
- 
-                        List<br.dev.ctrls.inovareti.modules.appointment.domain.model.BlipUserIdentityReconciliation> reconciliations = new ArrayList<>();
-                        reconciliations.addAll(blipUserIdentityReconciliationRepository.findByPhoneNumber(userPhone.trim()));
-                        String altPhone = userPhone.trim().startsWith("55") ? userPhone.trim().substring(2) : "55" + userPhone.trim();
-                        reconciliations.addAll(blipUserIdentityReconciliationRepository.findByPhoneNumber(altPhone));
- 
-                        for (var rec : reconciliations) {
-                            if (rec.getBlipGuid() != null && !rec.getBlipGuid().isBlank()) {
-                                String tunnelId = rec.getBlipGuid().trim() + "@tunnel.msging.net";
-                                if (!tunnelIdentities.contains(tunnelId) && !tunnelId.toLowerCase().contains("fluxov1")) {
-                                    tunnelIdentities.add(tunnelId);
-                                }
-                            }
-                        }
- 
-                        for (String tunnelId : tunnelIdentities) {
-                            if (!tunnelId.equalsIgnoreCase(userPhone) && !tunnelId.equalsIgnoreCase(fromIdentity)) {
-                                blipContextService.setQueueRedirect(tunnelId, targetQueue);
-                                blipContextService.setBuilderMasterState(tunnelId, confirmSuccessBlockId);
-                                try {
-                                    if (!listaSessoes.isEmpty()) {
-                                        blipContextService.setUserContextForUser(tunnelId, "idAgendamentoFeegow", listaSessoes.get(0).getFeegowAppointmentId());
-                                        blipContextService.setUserContextForUser(tunnelId, "appointmentId", listaSessoes.get(0).getFeegowAppointmentId());
-                                    }
-                                } catch (Exception ex) {
-                                    log.warn("[CONFIRM-BATCH] Falha ao salvar ID no túnel: {}", ex.getMessage());
-                                }
-                                log.info("[CONFIRM-BATCH] Aplicado redirecionamento e Builder Master-State na identidade de túnel: {}", tunnelId);
-                            }
-                        }
-                    }
-                } catch (Exception ex) {
-                    log.warn("[CONFIRM-BATCH] Falha ao aplicar redirecionamento retroativo em túneis: {}", ex.getMessage());
-                }
- 
-                log.info("[CONFIRM-BATCH] Redirecionamento de estado enviado para a Blip para o usuário {} (identidade webhook: {}). Fila: '{}', Bloco de destino dinâmico: '{}:{}'",
-                        userPhone, fromIdentity, targetQueue, targetBot, confirmSuccessBlockId);
-
-                // Push de extras preventivo
-                try {
-                    if (!listaSessoes.isEmpty()) {
-                        AppointmentSession firstSession = listaSessoes.get(0);
-                        FeegowPatient patient = patientExternalPort.patientInfo(firstSession.getPatientId());
-                        String patientName = (patient.name() == null || patient.name().isBlank()) ? "Paciente" : patient.name();
-                        String formattedBirthdate = formatBirthdate(patient.birthdate());
-                        
-                        String resolvedDoctorName = "Clínica Inovare";
-                        var mappingOpt = appointmentDoctorMappingRepository.findByProfissionalId(firstSession.getDoctorProfissionalId());
-                        if (mappingOpt.isPresent()) {
-                            String mappingName = mappingOpt.get().getProfissionalNome();
-                            if (mappingName != null && !mappingName.isBlank() && !"null".equalsIgnoreCase(mappingName.trim())) {
-                                resolvedDoctorName = mappingName.trim();
-                            }
-                        }
-                        
-                        br.dev.ctrls.inovareti.modules.appointment.application.dto.AppointmentPayload appointmentPayload = 
-                            br.dev.ctrls.inovareti.modules.appointment.application.dto.AppointmentPayload.builder()
-                                .action("confirm")
-                                .doctorName(resolvedDoctorName)
-                                .queue(targetQueue)
-                                .patientName(patientName)
-                                .patientCPF(patient.cpf())
-                                .patientBirthdate(formattedBirthdate)
-                                .build();
-                                
-                        blipContextService.processAppointmentPush(fromIdentity != null ? fromIdentity : userPhone, "confirm", appointmentPayload);
-                        log.info("[CONFIRM-BATCH] Push de extras de contato enviado preventivamente para a Blip.");
-                    }
-                } catch (Exception ex) {
-                    log.warn("[CONFIRM-BATCH] Falha ao enviar processAppointmentPush preventivo: {}", ex.getMessage());
-                }
-
-                // Log informativo de rastreio de ordem preventivo
-                log.info("[WEBHOOK-FLOW] Blip carimbado preventivamente antes da chamada síncrona do ERP Feegow.");
-
-                // Executa a chamada para a Feegow
-                String confirmedStatusId = resolveConfirmedStatusId();
-                for (AppointmentSession groupSession : listaSessoes) {
-                    if (!isDoctorAllowed(groupSession.getDoctorProfissionalId())) {
-                        log.warn("[WEBHOOK-BYPASS] Agendamento ID {} pertence ao médico ID {} (não listado na ENV de automação). Ignorando confirmação automática e liberando fluxo para atendimento manual/Blip.",
-                                groupSession.getFeegowAppointmentId(), groupSession.getDoctorProfissionalId());
-                        continue;
-                    }
-                    try {
-                        log.info("Enviando confirmação para Feegow: {}", groupSession.getFeegowAppointmentId());
-                        appointmentExternalPort.updateAppointmentStatus(groupSession.getFeegowAppointmentId(), confirmedStatusId);
-                        log.info("Resposta do Feegow: SUCCESS");
-                    } catch (RestClientException | IllegalStateException ex) {
-                        log.error("Resposta do Feegow: ERROR");
-                        log.error(
-                            "[CONFIRM-BATCH] Falha ao atualizar status na Feegow. appointmentId={}, erro={}",
-                            groupSession.getFeegowAppointmentId(),
-                            ex.getMessage(),
-                            ex);
-                    }
-                }
-
-            } catch (Exception e) {
-                log.error("[CONFIRM-BATCH] Erro no processamento em lote da Feegow para ação: " + action, e);
-            }
+        if (groupCoordinator.isGroupAction(action)) {
+            groupCoordinator.processPrePersistenceGroupConfirmation(session, action, fromIdentity);
         }
     }
 
     @Override
     public void applySessionState(AppointmentSession session, String action, String fromIdentity) {
-        if (action != null && action.toLowerCase().startsWith("confirm_group_")) {
-            String groupIdStr = action.substring("confirm_group_".length()).trim();
-            try {
-                UUID groupId = UUID.fromString(groupIdStr);
-                List<NotificationGroup> groups = notificationGroupRepository.findByGroupId(groupId);
-                
-                String userPhone = session.getPhoneNumber();
-                java.util.Map<UUID, AppointmentSession> sessoesUnicas = new java.util.LinkedHashMap<>();
-                for (NotificationGroup group : groups) {
-                    appointmentSessionRepository.findById(group.getSessionId()).ifPresent(s -> sessoesUnicas.put(s.getId(), s));
-                }
-                if (userPhone != null && !userPhone.isBlank()) {
-                    List<AppointmentSession> activeContactSessions = appointmentSessionRepository.findActiveByPhoneNumber(userPhone);
-                    for (AppointmentSession s : activeContactSessions) {
-                        sessoesUnicas.put(s.getId(), s);
-                    }
-                }
-                if (session.getId() != null) {
-                    sessoesUnicas.put(session.getId(), session);
-                }
+        if (groupCoordinator.isGroupAction(action)) {
+            groupCoordinator.processApplySessionStateGroupConfirmation(session, action, fromIdentity);
+            return;
+        }
 
-                for (AppointmentSession groupSession : sessoesUnicas.values()) {
-                    if (isDoctorAllowed(groupSession.getDoctorProfissionalId())) {
-                        confirmationStateMachineService.markConfirmed(groupSession);
-                        if (!groupSession.getId().equals(session.getId())) {
-                            appointmentSessionRepository.save(groupSession);
-                        }
-                    } else {
-                        log.warn("[WEBHOOK-BYPASS] Agendamento ID {} pertence ao médico ID {} (não listado na ENV de automação). Ignorando confirmação automática e liberando fluxo para atendimento manual/Blip.",
-                                groupSession.getFeegowAppointmentId(), groupSession.getDoctorProfissionalId());
-                    }
-                }
-                log.info("[CONFIRM-BATCH] Sessões do grupo {} / telefone {} atualizadas para CONFIRMED no banco local. Total: {}", groupId, userPhone, sessoesUnicas.size());
+        if (session == null) {
+            log.warn("[CONFIRM] Ação de confirmação ignorada pois a sessão fornecida é nula. De: {}", fromIdentity);
+            return;
+        }
 
-                try {
-                    blipContextService.setUserContextForUser(userPhone, "isConfirmingAgenda", "false");
-                    blipContextService.setUserContextForUser(userPhone, "hasActiveAppointment", "false");
-                    if (fromIdentity != null && !fromIdentity.isBlank() && !fromIdentity.equalsIgnoreCase(userPhone)) {
-                        blipContextService.setUserContextForUser(fromIdentity, "isConfirmingAgenda", "false");
-                        blipContextService.setUserContextForUser(fromIdentity, "hasActiveAppointment", "false");
-                    }
-                } catch (Exception ctxEx) {
-                    log.debug("[CONFIRM-BATCH] Falha ao limpar variáveis de contexto pós-confirmação: {}", ctxEx.getMessage());
-                }
-            } catch (Exception e) {
-                log.error("[CONFIRM-BATCH] Erro ao atualizar estados do grupo de sessões no banco local. grupo={}", groupIdStr, e);
+        // --- VALIDAÇÃO DE ORIGEM DE PAYLOAD (confirm_{id} vs "Confirmar Presença") ---
+        boolean isEmbeddedAction = action != null && (action.startsWith("confirm_") || action.contains("_"));
+        boolean isGenericAction = "confirm".equalsIgnoreCase(action) || "confirmar presença".equalsIgnoreCase(action) || "confirmar presenca".equalsIgnoreCase(action);
+
+        if (isGenericAction && !isEmbeddedAction) {
+            boolean isRecentSession = session.getLastInteractionAt() != null
+                    && session.getLastInteractionAt().isAfter(LocalDateTime.now().minusHours(48));
+
+            if (!isRecentSession) {
+                log.warn("[WEBHOOK-BLOQUEIO-ORIGEM] Ação de confirmação genérica ('{}') ignorada para o agendamento ID {} (tel={}) pois não é de sessão ativa recente (48h).",
+                        action, session.getFeegowAppointmentId(), fromIdentity);
+                return;
             }
+        }
+
+        // --- TRAVA DE SEGURANÇA MÉRITO/ELEGIBILIDADE DINÂMICA VIA ENV/BANCO ---
+        if (!groupCoordinator.isDoctorAllowed(session.getDoctorProfissionalId())) {
+            log.warn("[WEBHOOK-BYPASS] Agendamento ID {} pertence ao médico ID {} (não listado na ENV de automação). Ignorando confirmação automática e liberando fluxo para atendimento manual/Blip.",
+                    session.getFeegowAppointmentId(), session.getDoctorProfissionalId());
+            return;
+        }
+
+        // --- RESOLUÇÃO E CONFIGURAÇÃO IMEDIATA DA FILA DE REDIRECIONAMENTO (ANTI-CORRIDA) ---
+        String targetQueue = null;
+        var mappingOpt = appointmentDoctorMappingRepository.findByProfissionalId(session.getDoctorProfissionalId());
+        if (mappingOpt.isPresent()) {
+            String queue = mappingOpt.get().getBlipQueueId();
+            if (queue != null && !queue.isBlank() && !"null".equalsIgnoreCase(queue.trim())) {
+                targetQueue = queue.trim();
+            }
+        }
+        if (targetQueue == null || targetQueue.isBlank()) {
+            targetQueue = "Recepção Central / Suporte";
         } else {
-            if (session == null) {
-                log.warn("[CONFIRM] Ação de confirmação ignorada pois a sessão fornecida é nula. De: {}", fromIdentity);
-                return;
-            }
-
-            // --- VALIDAÇÃO DE ORIGEM DE PAYLOAD (confirm_{id} vs "Confirmar Presença") ---
-            boolean isEmbeddedAction = action != null && (action.startsWith("confirm_") || action.contains("_"));
-            boolean isGenericAction = "confirm".equalsIgnoreCase(action) || "confirmar presença".equalsIgnoreCase(action) || "confirmar presenca".equalsIgnoreCase(action);
-
-            if (isGenericAction && !isEmbeddedAction) {
-                boolean isRecentSession = session.getLastInteractionAt() != null 
-                        && session.getLastInteractionAt().isAfter(java.time.LocalDateTime.now().minusHours(48));
-
-                if (!isRecentSession) {
-                    log.warn("[WEBHOOK-BLOQUEIO-ORIGEM] Ação de confirmação genérica ('{}') ignorada para o agendamento ID {} (tel={}) pois não é proveniente de uma sessão ativa recente (48h) do motor Java.",
-                            action, session.getFeegowAppointmentId(), fromIdentity);
-                    return;
-                }
-            }
-
-            // --- TRAVA DE SEGURANÇA MÉRITO/ELEGIBILIDADE DINÂMICA VIA ENV ---
-            if (!isDoctorAllowed(session.getDoctorProfissionalId())) {
-                log.warn("[WEBHOOK-BYPASS] Agendamento ID {} pertence ao médico ID {} (não listado na ENV de automação). Ignorando confirmação automática e liberando fluxo para atendimento manual/Blip.",
-                        session.getFeegowAppointmentId(), session.getDoctorProfissionalId());
-                return;
-            }
-
-            // --- RESOLUÇÃO E CONFIGURAÇÃO IMEDIATA DA FILA DE REDIRECIONAMENTO (ANTI-CORRIDA) ---
-            String targetQueue = null;
-            var mappingOpt = appointmentDoctorMappingRepository.findByProfissionalId(session.getDoctorProfissionalId());
-            if (mappingOpt.isPresent()) {
-                String queue = mappingOpt.get().getBlipQueueId();
-                if (queue != null && !queue.isBlank() && !"null".equalsIgnoreCase(queue.trim())) {
-                    targetQueue = queue.trim();
-                }
-            }
-            if (targetQueue == null || targetQueue.isBlank()) {
-                targetQueue = "Recepção Central / Suporte";
-            } else {
-                targetQueue = blipContextService.resolveQueueName(targetQueue);
-            }
-
-            String userPhone = session.getPhoneNumber();
-            blipContextService.setQueueRedirect(userPhone, targetQueue);
-            if (fromIdentity != null && !fromIdentity.isBlank() && !fromIdentity.equalsIgnoreCase(userPhone)) {
-                blipContextService.setQueueRedirect(fromIdentity, targetQueue);
-            }
-            // -----------------------------------------------------------------------------------
-
-            final String requiresCpfFallback = "false";
-
-            // Salva o ID do agendamento, CPF e telefone no contexto do Blip para persistência e transição de blocos
-            try {
-                String rawPhoneDigits = userPhone != null ? userPhone.replaceAll("\\D", "") : "";
-                String plainPhone = (rawPhoneDigits.startsWith("55") && rawPhoneDigits.length() > 11) ? rawPhoneDigits.substring(2) : rawPhoneDigits;
-
-                blipContextService.setUserContextForUser(userPhone, "idAgendamentoFeegow", session.getFeegowAppointmentId());
-                blipContextService.setUserContextForUser(userPhone, "appointmentId", session.getFeegowAppointmentId());
-                blipContextService.setUserContextForUser(userPhone, "contact.phoneNumber", plainPhone);
-                blipContextService.setUserContextForUser(userPhone, "phoneNumber", plainPhone);
-                blipContextService.setVariable(userPhone, "requiresCpfFallback", requiresCpfFallback);
-                blipContextService.setContactExtra(userPhone, "requiresCpfFallback", requiresCpfFallback);
-                blipContextService.setContactExtra(userPhone, "phoneNumber", plainPhone);
-                blipContextService.setContactExtra(userPhone, "telefone", plainPhone);
-
-                if (fromIdentity != null && !fromIdentity.isBlank() && !fromIdentity.equalsIgnoreCase(userPhone)) {
-                    blipContextService.setUserContextForUser(fromIdentity, "idAgendamentoFeegow", session.getFeegowAppointmentId());
-                    blipContextService.setUserContextForUser(fromIdentity, "appointmentId", session.getFeegowAppointmentId());
-                    blipContextService.setUserContextForUser(fromIdentity, "contact.phoneNumber", plainPhone);
-                    blipContextService.setUserContextForUser(fromIdentity, "phoneNumber", plainPhone);
-                    blipContextService.setVariable(fromIdentity, "requiresCpfFallback", requiresCpfFallback);
-                    blipContextService.setContactExtra(fromIdentity, "requiresCpfFallback", requiresCpfFallback);
-                    blipContextService.setContactExtra(fromIdentity, "phoneNumber", plainPhone);
-                    blipContextService.setContactExtra(fromIdentity, "telefone", plainPhone);
-                }
-                log.info("[CONFIRM] ID do agendamento ({}), contact.phoneNumber ({}) e contexto salvos no Blip com sucesso.", session.getFeegowAppointmentId(), plainPhone);
-            } catch (Exception ex) {
-                log.warn("[CONFIRM] Falha ao salvar ID do agendamento ou telefone no contexto: {}", ex.getMessage());
-            }
-
-            // Recupera dinamicamente a propriedade do bloco de sucesso e aplica Master-State imediatamente
-            String confirmSuccessBlockId = blipProperties.getBlocks().getConfirmSuccess();
-            if (confirmSuccessBlockId == null || confirmSuccessBlockId.isBlank()) {
-                confirmSuccessBlockId = "b3461299-9500-46b1-b423-12ffef3e1aba";
-            }
-
-            String targetBot = "desk@msging.net";
-            if (!"644d54dd-aefd-478b-93eb-10081acdd387".equals(confirmSuccessBlockId)) {
-                String builderBotId = appointmentMotorProperties.getBlipBuilderBotId();
-                if (builderBotId != null && !builderBotId.isBlank()) {
-                    targetBot = builderBotId;
-                }
-            }
-
-            // Dispara setMasterState IMEDIATAMENTE antes das chamadas pesadas de REST (Feegow, túneis)
-            blipContextService.setMasterState(userPhone, targetBot, confirmSuccessBlockId);
-            if (fromIdentity != null && !fromIdentity.isBlank() && !fromIdentity.equalsIgnoreCase(userPhone)) {
-                blipContextService.setMasterState(fromIdentity, targetBot, confirmSuccessBlockId);
-            }
-            
-            // Reconcilia e atualiza também o Master-State com a identidade baseada no GUID do túnel
-            try {
-                String guid = null;
-                var dbSessionOpt = appointmentSessionRepository.findByFeegowAppointmentId(session.getFeegowAppointmentId());
-                if (dbSessionOpt.isPresent()) {
-                    guid = dbSessionOpt.get().getBlipGuid();
-                    if (guid == null || guid.isBlank()) {
-                        guid = dbSessionOpt.get().getBsuid();
-                    }
-                }
-                if (guid == null || guid.isBlank()) {
-                    guid = session.getBlipGuid();
-                }
-                if (guid == null || guid.isBlank()) {
-                    guid = session.getBsuid();
-                }
-
-                if (guid != null && !guid.isBlank()) {
-                    if (guid.contains("@")) {
-                        guid = guid.substring(0, guid.indexOf("@"));
-                    }
-                    guid = guid.trim();
-                    if (guid.matches("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")) {
-                        String tunnelIdentity = guid + "@tunnel.msging.net";
-                        blipContextService.setVariable(tunnelIdentity, "requiresCpfFallback", requiresCpfFallback);
-                        blipContextService.setContactExtra(tunnelIdentity, "requiresCpfFallback", requiresCpfFallback);
-                        log.info("[CONFIRM] requiresCpfFallback atualizado também para a identidade GUID do túnel: {}", tunnelIdentity);
-                    } else {
-                        log.debug("[CONFIRM] O guid '{}' não é um UUID/GUID válido.", guid);
-                    }
-                }
-            } catch (Exception ex) {
-                log.warn("[CONFIRM] Falha ao atualizar Master-State ou requiresCpfFallback para GUID do túnel: {}", ex.getMessage());
-            }
-
-            if (fromIdentity != null && !fromIdentity.isBlank() && !fromIdentity.equalsIgnoreCase(userPhone)) {
-                blipContextService.setMasterState(fromIdentity, targetBot, confirmSuccessBlockId);
-            }
- 
-            // Redirecionamento de estado nas identidades de túnel (deterministica e reconciliadas)
-            try {
-                if (userPhone != null && !userPhone.isBlank()) {
-                    List<String> tunnelIdentities = new ArrayList<>();
-                    String subbotId = blipProperties.getSubbotId();
-                    String subbotLocalPart = null;
-                    if (subbotId != null && !subbotId.isBlank() && !subbotId.toLowerCase().contains("fluxov1")) {
-                        subbotLocalPart = subbotId.trim();
-                        if (subbotLocalPart.contains("@")) {
-                            subbotLocalPart = subbotLocalPart.substring(0, subbotLocalPart.indexOf('@'));
-                        }
-                    }
- 
-                    String phoneDigits = userPhone.trim();
-                    if (phoneDigits.contains("@")) {
-                        phoneDigits = phoneDigits.substring(0, phoneDigits.indexOf('@'));
-                    }
-                    phoneDigits = phoneDigits.replaceAll("\\D", "");
-                    if (!phoneDigits.startsWith("55") && !phoneDigits.isEmpty()) {
-                        phoneDigits = "55" + phoneDigits;
-                    }
- 
-                    if (subbotLocalPart != null) {
-                        String deterministicTunnel = phoneDigits + "." + subbotLocalPart + "@tunnel.msging.net";
-                        tunnelIdentities.add(deterministicTunnel);
-                    }
- 
-                    List<br.dev.ctrls.inovareti.modules.appointment.domain.model.BlipUserIdentityReconciliation> reconciliations = new ArrayList<>();
-                    reconciliations.addAll(blipUserIdentityReconciliationRepository.findByPhoneNumber(userPhone.trim()));
-                    String altPhone = userPhone.trim().startsWith("55") ? userPhone.trim().substring(2) : "55" + userPhone.trim();
-                    reconciliations.addAll(blipUserIdentityReconciliationRepository.findByPhoneNumber(altPhone));
- 
-                    for (var rec : reconciliations) {
-                        if (rec.getBlipGuid() != null && !rec.getBlipGuid().isBlank()) {
-                            String tunnelId = rec.getBlipGuid().trim() + "@tunnel.msging.net";
-                            if (!tunnelIdentities.contains(tunnelId) && !tunnelId.toLowerCase().contains("fluxov1")) {
-                                tunnelIdentities.add(tunnelId);
-                            }
-                        }
-                    }
- 
-                    for (String tunnelId : tunnelIdentities) {
-                        if (!tunnelId.equalsIgnoreCase(userPhone) && !tunnelId.equalsIgnoreCase(fromIdentity)) {
-                            blipContextService.setQueueRedirect(tunnelId, targetQueue);
-                            try {
-                                blipContextService.setUserContextForUser(tunnelId, "idAgendamentoFeegow", session.getFeegowAppointmentId());
-                                blipContextService.setUserContextForUser(tunnelId, "appointmentId", session.getFeegowAppointmentId());
-                                blipContextService.setVariable(tunnelId, "requiresCpfFallback", requiresCpfFallback);
-                                blipContextService.setContactExtra(tunnelId, "requiresCpfFallback", requiresCpfFallback);
-                                blipContextService.setMasterState(tunnelId, targetBot, confirmSuccessBlockId);
-                            } catch (Exception ex) {
-                                log.warn("[CONFIRM] Falha ao salvar ID ou redirecionar no túnel: {}", ex.getMessage());
-                            }
-                            log.info("[CONFIRM] Salvo ID, CPF e redirecionado Master-State no túnel: {}", tunnelId);
-                        }
-                    }
-                }
-            } catch (Exception ex) {
-                log.warn("[CONFIRM] Falha ao aplicar redirecionamento retroativo em túneis: {}", ex.getMessage());
-            }
- 
-            log.info("[CONFIRM] Redirecionamento de estado enviado para a Blip para o usuário {} (identidade webhook: {}). Fila: '{}', Bloco de destino dinâmico: '{}:{}'",
-                    userPhone, fromIdentity, targetQueue, targetBot, confirmSuccessBlockId);
-
-            // Push de extras preventivo
-            try {
-                FeegowPatient patient = patientExternalPort.patientInfo(session.getPatientId());
-                String patientName = (patient.name() == null || patient.name().isBlank()) ? "Paciente" : patient.name();
-                String formattedBirthdate = formatBirthdate(patient.birthdate());
-                
-                String resolvedDoctorName = "Clínica Inovare";
-                var pushMappingOpt = appointmentDoctorMappingRepository.findByProfissionalId(session.getDoctorProfissionalId());
-                if (pushMappingOpt.isPresent()) {
-                    String mappingName = pushMappingOpt.get().getProfissionalNome();
-                    if (mappingName != null && !mappingName.isBlank() && !"null".equalsIgnoreCase(mappingName.trim())) {
-                        resolvedDoctorName = mappingName.trim();
-                    }
-                }
-                
-                br.dev.ctrls.inovareti.modules.appointment.application.dto.AppointmentPayload appointmentPayload = 
-                    br.dev.ctrls.inovareti.modules.appointment.application.dto.AppointmentPayload.builder()
-                        .action("confirm")
-                        .doctorName(resolvedDoctorName)
-                        .queue(targetQueue)
-                        .patientName(patientName)
-                        .patientCPF(patient.cpf())
-                        .patientBirthdate(formattedBirthdate)
-                        .build();
-                        
-                blipContextService.processAppointmentPush(fromIdentity != null ? fromIdentity : userPhone, "confirm", appointmentPayload);
-                log.info("[CONFIRM] Push de extras de contato enviado preventivamente para a Blip.");
-            } catch (Exception ex) {
-                log.warn("[CONFIRM] Falha ao enviar processAppointmentPush preventivo: {}", ex.getMessage());
-            }
-
-            // Log informativo de rastreio de ordem preventivo
-            log.info("[WEBHOOK-FLOW] Blip carimbado preventivamente antes da chamada síncrona do ERP Feegow.");
-
-            // Chamada Feegow pós-carimbo do Blip
-            String confirmedStatusId = resolveConfirmedStatusId();
-            log.info("Enviando confirmação para Feegow: {}", session.getFeegowAppointmentId());
-            try {
-                appointmentExternalPort.updateAppointmentStatus(session.getFeegowAppointmentId(), confirmedStatusId);
-                log.info("Resposta do Feegow: SUCCESS");
-            } catch (Exception ex) {
-                log.error("Resposta do Feegow: ERROR");
-                log.error("[CONFIRM] Falha ao atualizar status na Feegow para ID: {}. Detalhes: {}", 
-                    session.getFeegowAppointmentId(), ex.getMessage());
-                throw new RuntimeException("Falha na atualização do Feegow para o agendamento " + session.getFeegowAppointmentId() + ". Cancelando confirmação local (rollback).", ex);
-            }
-            confirmationStateMachineService.markConfirmed(session);
-
-            // Libera o estado do paciente no Blip para que não fique travado aguardando interação
-            try {
-                blipContextService.setUserContextForUser(userPhone, "isConfirmingAgenda", "false");
-                blipContextService.setUserContextForUser(userPhone, "hasActiveAppointment", "false");
-                if (fromIdentity != null && !fromIdentity.isBlank() && !fromIdentity.equalsIgnoreCase(userPhone)) {
-                    blipContextService.setUserContextForUser(fromIdentity, "isConfirmingAgenda", "false");
-                    blipContextService.setUserContextForUser(fromIdentity, "hasActiveAppointment", "false");
-                }
-            } catch (Exception ctxEx) {
-                log.debug("[CONFIRM] Falha ao limpar variáveis de contexto pós-confirmação: {}", ctxEx.getMessage());
-            }
+            targetQueue = blipContextService.resolveQueueName(targetQueue);
         }
-    }
 
-    private boolean isDoctorAllowed(String doctorId) {
-        String docId = doctorId != null ? doctorId.trim() : "";
-        if (docId.isBlank()) {
-            return false;
+        String userPhone = session.getPhoneNumber();
+        blipContextService.setQueueRedirect(userPhone, targetQueue);
+        if (fromIdentity != null && !fromIdentity.isBlank() && !fromIdentity.equalsIgnoreCase(userPhone)) {
+            blipContextService.setQueueRedirect(fromIdentity, targetQueue);
         }
-        if (appointmentMotorProperties.getTestDoctorIds().contains(docId)) {
-            return true;
-        }
-        if (appointmentMotorProperties.getActiveDoctorIds().contains(docId)) {
-            return true;
-        }
+
+        final String requiresCpfFallback = "false";
+
+        // Salva o ID do agendamento, CPF e telefone no contexto do Blip para persistência
         try {
-            Long id = Long.parseLong(docId);
-            var configOpt = doctorConfigurationRepository.findById(id);
-            if (configOpt.isPresent() && configOpt.get().isConfigActive()) {
-                return true;
+            String rawPhoneDigits = userPhone != null ? userPhone.replaceAll("\\D", "") : "";
+            String plainPhone = (rawPhoneDigits.startsWith("55") && rawPhoneDigits.length() > 11) ? rawPhoneDigits.substring(2) : rawPhoneDigits;
+
+            blipContextService.setUserContextForUser(userPhone, "idAgendamentoFeegow", session.getFeegowAppointmentId());
+            blipContextService.setUserContextForUser(userPhone, "appointmentId", session.getFeegowAppointmentId());
+            blipContextService.setUserContextForUser(userPhone, "contact.phoneNumber", plainPhone);
+            blipContextService.setUserContextForUser(userPhone, "phoneNumber", plainPhone);
+            blipContextService.setVariable(userPhone, "requiresCpfFallback", requiresCpfFallback);
+            blipContextService.setContactExtra(userPhone, "requiresCpfFallback", requiresCpfFallback);
+            blipContextService.setContactExtra(userPhone, "phoneNumber", plainPhone);
+            blipContextService.setContactExtra(userPhone, "telefone", plainPhone);
+
+            if (fromIdentity != null && !fromIdentity.isBlank() && !fromIdentity.equalsIgnoreCase(userPhone)) {
+                blipContextService.setUserContextForUser(fromIdentity, "idAgendamentoFeegow", session.getFeegowAppointmentId());
+                blipContextService.setUserContextForUser(fromIdentity, "appointmentId", session.getFeegowAppointmentId());
+                blipContextService.setUserContextForUser(fromIdentity, "contact.phoneNumber", plainPhone);
+                blipContextService.setUserContextForUser(fromIdentity, "phoneNumber", plainPhone);
+                blipContextService.setVariable(fromIdentity, "requiresCpfFallback", requiresCpfFallback);
+                blipContextService.setContactExtra(fromIdentity, "requiresCpfFallback", requiresCpfFallback);
+                blipContextService.setContactExtra(fromIdentity, "phoneNumber", plainPhone);
+                blipContextService.setContactExtra(fromIdentity, "telefone", plainPhone);
             }
-        } catch (Exception ignored) {}
-
-        return false;
-    }
-
-    private String formatBirthdate(String birthdate) {
-        if (birthdate == null || birthdate.isBlank()) {
-            return "";
+            log.info("[CONFIRM] ID do agendamento ({}), contact.phoneNumber ({}) e contexto salvos no Blip com sucesso.", session.getFeegowAppointmentId(), plainPhone);
+        } catch (Exception ex) {
+            log.warn("[CONFIRM] Falha ao salvar ID do agendamento ou telefone no contexto: {}", ex.getMessage());
         }
-        String clean = birthdate.trim();
-        if (clean.matches("\\d{2}/\\d{2}/\\d{4}")) {
-            return clean;
+
+        String confirmSuccessBlockId = blipProperties.getBlocks().getConfirmSuccess();
+        if (confirmSuccessBlockId == null || confirmSuccessBlockId.isBlank()) {
+            confirmSuccessBlockId = "b3461299-9500-46b1-b423-12ffef3e1aba";
         }
+
+        String targetBot = "desk@msging.net";
+        if (!"644d54dd-aefd-478b-93eb-10081acdd387".equals(confirmSuccessBlockId)) {
+            String builderBotId = appointmentMotorProperties.getBlipBuilderBotId();
+            if (builderBotId != null && !builderBotId.isBlank()) {
+                targetBot = builderBotId;
+            }
+        }
+
+        // Dispara setMasterState IMEDIATAMENTE
+        blipContextService.setMasterState(userPhone, targetBot, confirmSuccessBlockId);
+        if (fromIdentity != null && !fromIdentity.isBlank() && !fromIdentity.equalsIgnoreCase(userPhone)) {
+            blipContextService.setMasterState(fromIdentity, targetBot, confirmSuccessBlockId);
+        }
+
+        // Reconcilia e atualiza também o Master-State com a identidade baseada no GUID do túnel
+        syncSingleSessionTunnel(session, requiresCpfFallback);
+
+        if (fromIdentity != null && !fromIdentity.isBlank() && !fromIdentity.equalsIgnoreCase(userPhone)) {
+            blipContextService.setMasterState(fromIdentity, targetBot, confirmSuccessBlockId);
+        }
+
+        // Redirecionamento de estado nas identidades de túnel (deterministica e reconciliadas)
+        syncReconciledTunnels(userPhone, fromIdentity, targetQueue, targetBot, confirmSuccessBlockId, requiresCpfFallback, session.getFeegowAppointmentId());
+
+        log.info("[CONFIRM] Redirecionamento de estado enviado para a Blip para o usuário {} (identidade webhook: {}). Fila: '{}', Bloco: '{}:{}'",
+                userPhone, fromIdentity, targetQueue, targetBot, confirmSuccessBlockId);
+
+        // Push de extras preventivo
+        pushContactExtras(session, userPhone, fromIdentity, targetQueue);
+
+        log.info("[WEBHOOK-FLOW] Blip carimbado preventivamente antes da chamada síncrona do ERP Feegow.");
+
+        // Chamada Feegow pós-carimbo do Blip
+        String confirmedStatusId = groupCoordinator.resolveConfirmedStatusId();
+        log.info("Enviando confirmação para Feegow: {}", session.getFeegowAppointmentId());
         try {
-            java.time.LocalDate date;
-            if (clean.contains("-")) {
-                if (clean.indexOf('-') == 4) { // AAAA-MM-DD
-                    date = java.time.LocalDate.parse(clean);
-                } else { // DD-MM-AAAA
-                    date = java.time.LocalDate.parse(clean, java.time.format.DateTimeFormatter.ofPattern("dd-MM-yyyy"));
-                }
-                return date.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy"));
-            }
-        } catch (Exception e) {
-            log.warn("[FORMAT] Falha ao formatar data de nascimento: {}", birthdate);
+            appointmentExternalPort.updateAppointmentStatus(session.getFeegowAppointmentId(), confirmedStatusId);
+            log.info("Resposta do Feegow: SUCCESS");
+        } catch (Exception ex) {
+            log.error("Resposta do Feegow: ERROR");
+            log.error("[CONFIRM] Falha ao atualizar status na Feegow para ID: {}. Detalhes: {}", session.getFeegowAppointmentId(), ex.getMessage());
+            throw new RuntimeException("Falha na atualização do Feegow para o agendamento " + session.getFeegowAppointmentId() + ". Cancelando confirmação local.", ex);
         }
-        return clean;
+        confirmationStateMachineService.markConfirmed(session);
+
+        // Libera o estado do paciente no Blip
+        try {
+            blipContextService.setUserContextForUser(userPhone, "isConfirmingAgenda", "false");
+            blipContextService.setUserContextForUser(userPhone, "hasActiveAppointment", "false");
+            if (fromIdentity != null && !fromIdentity.isBlank() && !fromIdentity.equalsIgnoreCase(userPhone)) {
+                blipContextService.setUserContextForUser(fromIdentity, "isConfirmingAgenda", "false");
+                blipContextService.setUserContextForUser(fromIdentity, "hasActiveAppointment", "false");
+            }
+        } catch (Exception ctxEx) {
+            log.debug("[CONFIRM] Falha ao limpar variáveis de contexto pós-confirmação: {}", ctxEx.getMessage());
+        }
     }
 
-    private String resolveConfirmedStatusId() {
-        String configuredStatusId = appointmentMotorProperties.getFeegowConfirmedStatusId();
-        if (configuredStatusId == null || configuredStatusId.isBlank()) {
-            return "7";
+    private void syncSingleSessionTunnel(AppointmentSession session, String requiresCpfFallback) {
+        try {
+            String guid = null;
+            var dbSessionOpt = appointmentSessionRepository.findByFeegowAppointmentId(session.getFeegowAppointmentId());
+            if (dbSessionOpt.isPresent()) {
+                guid = dbSessionOpt.get().getBlipGuid();
+                if (guid == null || guid.isBlank()) {
+                    guid = dbSessionOpt.get().getBsuid();
+                }
+            }
+            if (guid == null || guid.isBlank()) {
+                guid = session.getBlipGuid();
+            }
+            if (guid == null || guid.isBlank()) {
+                guid = session.getBsuid();
+            }
+
+            if (guid != null && !guid.isBlank()) {
+                if (guid.contains("@")) {
+                    guid = guid.substring(0, guid.indexOf("@"));
+                }
+                guid = guid.trim();
+                if (guid.matches("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")) {
+                    String tunnelIdentity = guid + "@tunnel.msging.net";
+                    blipContextService.setVariable(tunnelIdentity, "requiresCpfFallback", requiresCpfFallback);
+                    blipContextService.setContactExtra(tunnelIdentity, "requiresCpfFallback", requiresCpfFallback);
+                    log.info("[CONFIRM] requiresCpfFallback atualizado também para a identidade GUID do túnel: {}", tunnelIdentity);
+                }
+            }
+        } catch (Exception ex) {
+            log.warn("[CONFIRM] Falha ao atualizar requiresCpfFallback para GUID do túnel: {}", ex.getMessage());
         }
-        String trimmed = configuredStatusId.trim();
-        if ("2".equals(trimmed)) {
-            return "7";
+    }
+
+    private void syncReconciledTunnels(String userPhone, String fromIdentity, String targetQueue, String targetBot,
+                                       String confirmSuccessBlockId, String requiresCpfFallback, String feegowAppointmentId) {
+        try {
+            if (userPhone != null && !userPhone.isBlank()) {
+                List<String> tunnelIdentities = new ArrayList<>();
+                String subbotId = blipProperties.getSubbotId();
+                String subbotLocalPart = null;
+                if (subbotId != null && !subbotId.isBlank() && !subbotId.toLowerCase().contains("fluxov1")) {
+                    subbotLocalPart = subbotId.trim();
+                    if (subbotLocalPart.contains("@")) {
+                        subbotLocalPart = subbotLocalPart.substring(0, subbotLocalPart.indexOf('@'));
+                    }
+                }
+
+                String phoneDigits = userPhone.trim();
+                if (phoneDigits.contains("@")) {
+                    phoneDigits = phoneDigits.substring(0, phoneDigits.indexOf('@'));
+                }
+                phoneDigits = phoneDigits.replaceAll("\\D", "");
+                if (!phoneDigits.startsWith("55") && !phoneDigits.isEmpty()) {
+                    phoneDigits = "55" + phoneDigits;
+                }
+
+                if (subbotLocalPart != null) {
+                    tunnelIdentities.add(phoneDigits + "." + subbotLocalPart + "@tunnel.msging.net");
+                }
+
+                List<BlipUserIdentityReconciliation> reconciliations = new ArrayList<>();
+                reconciliations.addAll(blipUserIdentityReconciliationRepository.findByPhoneNumber(userPhone.trim()));
+                String altPhone = userPhone.trim().startsWith("55") ? userPhone.trim().substring(2) : "55" + userPhone.trim();
+                reconciliations.addAll(blipUserIdentityReconciliationRepository.findByPhoneNumber(altPhone));
+
+                for (var rec : reconciliations) {
+                    if (rec.getBlipGuid() != null && !rec.getBlipGuid().isBlank()) {
+                        String tunnelId = rec.getBlipGuid().trim() + "@tunnel.msging.net";
+                        if (!tunnelIdentities.contains(tunnelId) && !tunnelId.toLowerCase().contains("fluxov1")) {
+                            tunnelIdentities.add(tunnelId);
+                        }
+                    }
+                }
+
+                for (String tunnelId : tunnelIdentities) {
+                    if (!tunnelId.equalsIgnoreCase(userPhone) && !tunnelId.equalsIgnoreCase(fromIdentity)) {
+                        blipContextService.setQueueRedirect(tunnelId, targetQueue);
+                        try {
+                            blipContextService.setUserContextForUser(tunnelId, "idAgendamentoFeegow", feegowAppointmentId);
+                            blipContextService.setUserContextForUser(tunnelId, "appointmentId", feegowAppointmentId);
+                            blipContextService.setVariable(tunnelId, "requiresCpfFallback", requiresCpfFallback);
+                            blipContextService.setContactExtra(tunnelId, "requiresCpfFallback", requiresCpfFallback);
+                            blipContextService.setMasterState(tunnelId, targetBot, confirmSuccessBlockId);
+                        } catch (Exception ex) {
+                            log.warn("[CONFIRM] Falha ao salvar ID ou redirecionar no túnel: {}", ex.getMessage());
+                        }
+                        log.info("[CONFIRM] Salvo ID, CPF e redirecionado Master-State no túnel: {}", tunnelId);
+                    }
+                }
+            }
+        } catch (Exception ex) {
+            log.warn("[CONFIRM] Falha ao aplicar redirecionamento retroativo em túneis: {}", ex.getMessage());
         }
-        return trimmed;
+    }
+
+    private void pushContactExtras(AppointmentSession session, String userPhone, String fromIdentity, String targetQueue) {
+        try {
+            FeegowPatient patient = patientExternalPort.patientInfo(session.getPatientId());
+            String patientName = (patient.name() == null || patient.name().isBlank()) ? "Paciente" : patient.name();
+            String formattedBirthdate = groupCoordinator.formatBirthdate(patient.birthdate());
+
+            String resolvedDoctorName = "Clínica Inovare";
+            var pushMappingOpt = appointmentDoctorMappingRepository.findByProfissionalId(session.getDoctorProfissionalId());
+            if (pushMappingOpt.isPresent()) {
+                String mappingName = pushMappingOpt.get().getProfissionalNome();
+                if (mappingName != null && !mappingName.isBlank() && !"null".equalsIgnoreCase(mappingName.trim())) {
+                    resolvedDoctorName = mappingName.trim();
+                }
+            }
+
+            AppointmentPayload appointmentPayload = AppointmentPayload.builder()
+                    .action("confirm")
+                    .doctorName(resolvedDoctorName)
+                    .queue(targetQueue)
+                    .patientName(patientName)
+                    .patientCPF(patient.cpf())
+                    .patientBirthdate(formattedBirthdate)
+                    .build();
+
+            blipContextService.processAppointmentPush(fromIdentity != null ? fromIdentity : userPhone, "confirm", appointmentPayload);
+            log.info("[CONFIRM] Push de extras de contato enviado preventivamente para a Blip.");
+        } catch (Exception ex) {
+            log.warn("[CONFIRM] Falha ao enviar processAppointmentPush preventivo: {}", ex.getMessage());
+        }
     }
 }
