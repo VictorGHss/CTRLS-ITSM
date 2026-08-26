@@ -40,6 +40,7 @@ import net.dv8tion.jda.api.interactions.components.ItemComponent;
 @Slf4j
 @Component
 @RequiredArgsConstructor
+@SuppressWarnings("null")
 public class DiscordTicketAdapter implements DiscordTicketPort {
 
     private final ObjectProvider<JDA> jdaProvider;

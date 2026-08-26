@@ -26,6 +26,7 @@ import net.dv8tion.jda.api.interactions.components.buttons.Button;
  */
 @Slf4j
 @Component
+@SuppressWarnings("null")
 public class DiscordTicketEmbedBuilder {
 
     public static final int CLINIC_BRAND_COLOR = 0xF97316; // Cor Laranja de Destaque Inovare TI (#F97316)
