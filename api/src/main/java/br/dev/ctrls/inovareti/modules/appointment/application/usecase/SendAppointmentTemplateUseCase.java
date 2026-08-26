@@ -102,8 +102,12 @@ public class SendAppointmentTemplateUseCase {
             String pendingAppointmentId = resolvePendingAppointmentId(ctx.feegowAppointmentId(), ctx.sessionId());
             blipContextService.setUserContextForUser(ctx.phoneNumber(), LAST_PENDING_APPOINTMENT_ID_CONTEXT_KEY, pendingAppointmentId);
 
-            // Limpa contexto de grupo e redireciona para Preparar_Atendimento de forma assíncrona
-            cleanGroupContextAndRedirectToPrepararAtendimentoAsync(ctx.phoneNumber());
+            // Limpa contexto de grupo e redireciona para Preparar_Atendimento de forma assíncrona SOMENTE para fluxos individuais
+            if (category != AppointmentCategory.GROUP_NOTIFICATION 
+                    && category != AppointmentCategory.GROUP_NUDGE_1 
+                    && category != AppointmentCategory.GROUP_NUDGE_FINAL) {
+                cleanGroupContextAndRedirectToPrepararAtendimentoAsync(ctx.phoneNumber());
+            }
 
             if (session != null) {
                 switch (category) {
@@ -206,8 +210,12 @@ public class SendAppointmentTemplateUseCase {
             String pendingAppointmentId = resolvePendingAppointmentId(session.getFeegowAppointmentId(), session.getId());
             blipContextService.setUserContextForUser(session.getPhoneNumber(), LAST_PENDING_APPOINTMENT_ID_CONTEXT_KEY, pendingAppointmentId);
 
-            // Limpa contexto de grupo e redireciona para Preparar_Atendimento de forma assíncrona
-            cleanGroupContextAndRedirectToPrepararAtendimentoAsync(session.getPhoneNumber());
+            // Limpa contexto de grupo e redireciona para Preparar_Atendimento de forma assíncrona SOMENTE para fluxos individuais
+            if (category != AppointmentCategory.GROUP_NOTIFICATION 
+                    && category != AppointmentCategory.GROUP_NUDGE_1 
+                    && category != AppointmentCategory.GROUP_NUDGE_FINAL) {
+                cleanGroupContextAndRedirectToPrepararAtendimentoAsync(session.getPhoneNumber());
+            }
 
             String cpf = "";
             try {

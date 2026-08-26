@@ -178,6 +178,16 @@ export default function PatientAccess() {
     }
   };
 
+  // Auto-foco imediato no primeiro dígito ao abrir o desafio de segurança
+  useEffect(() => {
+    if (!isVerified) {
+      const timer = setTimeout(() => {
+        inputRefs[0].current?.focus();
+      }, 150);
+      return () => clearTimeout(timer);
+    }
+  }, [isVerified]);
+
   useEffect(() => {
     const handleFullscreenChange = () => {
       if (!document.fullscreenElement) {
@@ -641,13 +651,21 @@ export default function PatientAccess() {
                     {/* Metade Superior: QR Code e Metadados do Acesso */}
                     <div className="flex flex-col items-center w-full">
                       {/* Tag de Tipo de Usuário no Topo do Cartão */}
-                      <span className={`text-[10px] font-extrabold uppercase px-3 py-1 rounded-full mb-4 tracking-wider ${
-                        cred.userType === 'PATIENT' 
-                          ? 'bg-brand-primary/10 text-brand-primary-dark border border-brand-primary/10' 
-                          : 'bg-indigo-50 text-indigo-700 border border-indigo-100'
-                      }`}>
-                        {cred.userType === 'PATIENT' ? 'Paciente Titular' : 'Acompanhante'}
-                      </span>
+                      <div className="flex items-center gap-2 mb-3">
+                        <span className={`text-[10px] font-extrabold uppercase px-3 py-1 rounded-full tracking-wider ${
+                          cred.userType === 'PATIENT' 
+                            ? 'bg-brand-primary/10 text-brand-primary-dark border border-brand-primary/10' 
+                            : 'bg-indigo-50 text-indigo-700 border border-indigo-100'
+                        }`}>
+                          {cred.userType === 'PATIENT' ? 'Paciente Titular' : 'Acompanhante'}
+                        </span>
+                        {cred.credentialCode !== 'BLOCKED_OUTSIDE_WINDOW' && cred.credentialCode !== 'CPF_MISSING' && (
+                          <span className="inline-flex items-center gap-1 bg-emerald-50 border border-emerald-200/80 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                            Liberado
+                          </span>
+                        )}
+                      </div>
 
                       {/* Bloco do QR Code */}
                       <div className="p-4 bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col items-center justify-center relative min-h-[184px] w-[184px]">
@@ -662,10 +680,11 @@ export default function PatientAccess() {
                         ) : (
                           <>
                             <QRCodeSVG 
-                              value={cred.credentialCode}
+                              value={cred.credentialCode} 
                               size={150} 
-                              fgColor="#0f172a"
+                              fgColor="#0f172a" 
                               bgColor="#ffffff"
+                              level="H"
                             />
                             <div className="absolute top-2 right-2 flex items-center justify-center">
                               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
@@ -675,8 +694,13 @@ export default function PatientAccess() {
                         )}
                       </div>
 
+                      {/* Dica de Distância do Leitor */}
+                      <p className="text-[10px] text-slate-400 font-medium mt-2 text-center">
+                        💡 Aproxime a 10–15 cm da câmera da catraca
+                      </p>
+
                       {/* Localizador Catraca Discreto */}
-                      <span className="text-[10.5px] font-bold text-slate-400 font-mono mt-3 uppercase tracking-wider">
+                      <span className="text-[10.5px] font-bold text-slate-400 font-mono mt-1 uppercase tracking-wider">
                         Ref: {cred.locator}
                       </span>
                     </div>
@@ -888,30 +912,36 @@ export default function PatientAccess() {
       {fullscreenData && (
         <div 
           ref={modalRef}
-          className="fixed inset-0 z-50 flex flex-col items-center justify-between p-8"
+          className="fixed inset-0 z-50 flex flex-col items-center justify-between p-6 sm:p-8"
           style={{ backgroundColor: '#ffffff' }}
         >
-          <div className="text-center mt-8">
-            <span className="text-[10px] font-bold tracking-wider text-brand-primary uppercase block">Catraca de Acesso</span>
-            <h4 className="text-lg font-bold text-slate-800 mt-1">{fullscreenData.title}</h4>
-            <p className="text-xs text-slate-400 mt-1">Brilho da tela aumentado para leitura na catraca</p>
+          <div className="text-center mt-6">
+            <span className="text-[11px] font-extrabold tracking-wider text-brand-primary uppercase block">Catraca de Acesso Físico</span>
+            <h4 className="text-lg sm:text-xl font-black text-slate-800 mt-1">{fullscreenData.title}</h4>
+            <div className="inline-flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 px-3 py-1 rounded-full text-[11px] font-bold mt-2 shadow-xs">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              Acesso Liberado para a Catraca
+            </div>
+            <p className="text-xs text-slate-500 mt-2 font-medium">💡 Mantenha o celular a cerca de <b>10 a 15 cm</b> da câmera da catraca</p>
           </div>
 
-          <div className="flex flex-col items-center justify-center flex-1 my-6 w-full max-w-sm">
-            <div className="p-4 bg-white border-2 border-brand-primary/30 rounded-3xl shadow-xl flex items-center justify-center">
+          <div className="flex flex-col items-center justify-center flex-1 my-4 w-full max-w-sm">
+            <div className="p-5 bg-white border-2 border-brand-primary/30 rounded-3xl shadow-2xl flex items-center justify-center">
               {/* QR Code ampliado com apenas o credentialCode puro */}
               <QRCodeSVG 
                 value={fullscreenData.value} 
-                size={320} 
+                size={300} 
                 fgColor="#0f172a" 
                 bgColor="#ffffff"
+                level="H"
               />
             </div>
+            <span className="text-[11px] font-mono text-slate-400 mt-3 font-semibold">Trava de brilho da tela ativada</span>
           </div>
 
           <button 
             onClick={closeFullscreen}
-            className="w-full max-w-sm py-4 bg-gradient-to-r from-brand-primary to-brand-primary-dark active:scale-[0.98] text-white rounded-2xl font-bold tracking-wide transition-all duration-300 shadow-lg shadow-brand-primary/20 cursor-pointer"
+            className="w-full max-w-sm py-4 bg-gradient-to-r from-brand-primary to-brand-primary-dark active:scale-[0.98] text-white rounded-2xl font-bold tracking-wide transition-all duration-300 shadow-lg shadow-brand-primary/20 cursor-pointer text-sm"
           >
             Fechar Tela Cheia
           </button>
