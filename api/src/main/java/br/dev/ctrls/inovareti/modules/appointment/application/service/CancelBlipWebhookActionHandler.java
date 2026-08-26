@@ -3,10 +3,8 @@ package br.dev.ctrls.inovareti.modules.appointment.application.service;
 import io.micrometer.observation.annotation.Observed;
 
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.RestClientException;
 
 import br.dev.ctrls.inovareti.modules.appointment.domain.model.AppointmentSession;
-import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentExternalPort;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -19,7 +17,6 @@ import lombok.extern.slf4j.Slf4j;
 @Observed
 public class CancelBlipWebhookActionHandler implements BlipWebhookActionHandler {
 
-    private final AppointmentExternalPort appointmentExternalPort;
     private final ConfirmationStateMachineService confirmationStateMachineService;
 
     @Override
