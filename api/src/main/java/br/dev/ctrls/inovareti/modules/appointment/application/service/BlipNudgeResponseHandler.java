@@ -92,7 +92,7 @@ public class BlipNudgeResponseHandler {
                 });
                 appointmentExternalPort.updateAppointmentStatus(session.getFeegowAppointmentId(), "7");
             } else {
-                log.info("[WEBHOOK-NUDGE] Cancelando sessão local e Feegow para sessionId={}, feegowAppointmentId={}",
+                log.info("[WEBHOOK-NUDGE] Paciente solicitou cancelamento via WhatsApp. Atualizando sessão local para CANCELED para suspender lembretes automáticos sem remover da agenda Feegow. sessionId={}, feegowAppointmentId={}",
                     session.getId(), session.getFeegowAppointmentId());
                 transactionTemplate.executeWithoutResult(status -> {
                     AppointmentSession lockedSession = appointmentSessionRepository.findByIdLocked(session.getId()).orElse(null);
@@ -101,7 +101,8 @@ public class BlipNudgeResponseHandler {
                         appointmentSessionRepository.save(lockedSession);
                     }
                 });
-                appointmentExternalPort.cancelAppointment(session.getFeegowAppointmentId(), "Paciente solicitou cancelamento respondendo ao Nudge do WhatsApp.");
+                // NÃO executa o cancelamento/desmarcação na API Feegow para manter o paciente visível na grade da agenda
+                // permitindo que as secretárias façam o contato, remanejamento ou cancelamento manual seguro.
             }
         } catch (TransactionException | RestClientException | DataAccessException ex) {
             log.error("[WEBHOOK-NUDGE] Falha ao atualizar sessão no lote. sessionId={}, erro={}",

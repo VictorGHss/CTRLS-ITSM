@@ -29,16 +29,7 @@ public class CancelBlipWebhookActionHandler implements BlipWebhookActionHandler 
 
     @Override
     public void prePersistence(AppointmentSession session, String action, String fromIdentity) {
-        log.info("[CANCEL] Paciente solicita cancelamento. Atualizando status na Feegow com código 100.");
-        try {
-            appointmentExternalPort.updateAppointmentStatus(session.getFeegowAppointmentId(), "100");
-        } catch (RestClientException | IllegalStateException ex) {
-            log.error(
-                "[CANCEL] Falha ao atualizar status na Feegow para cancelado. appointmentId={}, erro={}",
-                session.getFeegowAppointmentId(),
-                ex.getMessage(),
-                ex);
-        }
+        log.info("[CANCEL] Paciente solicita cancelamento no WhatsApp (sessionId={}). Mantendo agendamento na grade do Feegow para remanejamento humano.", session.getId());
     }
 
     @Override
