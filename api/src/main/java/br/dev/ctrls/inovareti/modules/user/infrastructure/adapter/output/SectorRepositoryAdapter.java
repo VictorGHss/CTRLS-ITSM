@@ -29,7 +29,7 @@ public class SectorRepositoryAdapter implements SectorRepositoryPort {
     @Override
     public List<Sector> findAll(String search) {
         if (search != null && !search.isBlank()) {
-            return repository.findByNameContainingIgnoreCase(search, org.springframework.data.domain.PageRequest.of(0, 15));
+            return repository.findByNameContainingIgnoreCase(search, org.springframework.data.domain.PageRequest.of(0, 1000));
         }
         return repository.findAll();
     }
@@ -57,7 +57,7 @@ public class SectorRepositoryAdapter implements SectorRepositoryPort {
     @Override
     public List<Sector> findByActiveTrue(String search) {
         if (search != null && !search.isBlank()) {
-            return repository.findByActiveTrueAndNameContainingIgnoreCase(search, org.springframework.data.domain.PageRequest.of(0, 15));
+            return repository.findByActiveTrueAndNameContainingIgnoreCase(search, org.springframework.data.domain.PageRequest.of(0, 1000));
         }
         return repository.findByActiveTrue();
     }

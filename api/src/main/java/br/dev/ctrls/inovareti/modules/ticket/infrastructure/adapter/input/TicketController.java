@@ -135,6 +135,7 @@ public class TicketController {
     public ResponseEntity<Page<TicketResponseDTO>> listAll(
             @RequestParam(required = false) List<UUID> tagIds,
             @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "15") int size,
             @RequestParam(required = false) String search,
             @RequestParam(required = false) TicketStatus status,
             @RequestParam(required = false) TicketPriority priority,
@@ -154,8 +155,10 @@ public class TicketController {
             return ResponseEntity.notFound().build();
         }
         
+        int safePage = Math.max(0, page);
+        int safeSize = Math.min(Math.max(1, size), 500);
         String sortProperty = "createdAt";
-        Pageable pageable = PageRequest.of(page, 15, Sort.by(Sort.Direction.DESC, sortProperty));
+        Pageable pageable = PageRequest.of(safePage, safeSize, Sort.by(Sort.Direction.DESC, sortProperty));
         
         return ResponseEntity.ok(listAllTicketsUseCase.execute(
                 userId,
@@ -386,9 +389,12 @@ public class TicketController {
     @GetMapping("/item/{itemId}")
     public ResponseEntity<Page<TicketResponseDTO>> getTicketsByItem(
             @PathVariable UUID itemId,
-            @RequestParam(defaultValue = "0") int page) {
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "15") int size) {
+        int safePage = Math.max(0, page);
+        int safeSize = Math.min(Math.max(1, size), 500);
         String sortProperty = "createdAt";
-        Pageable pageable = PageRequest.of(page, 15, Sort.by(Sort.Direction.DESC, sortProperty));
+        Pageable pageable = PageRequest.of(safePage, safeSize, Sort.by(Sort.Direction.DESC, sortProperty));
         return ResponseEntity.ok(fetchTicketsByItemUseCase.execute(itemId, pageable));
     }
 

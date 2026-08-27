@@ -24,7 +24,7 @@ export default defineConfig({
         entryFileNames: 'assets/[name]-[hash].js',
         manualChunks(id) {
           if (id.includes('node_modules')) {
-            if (id.includes('react') || id.includes('react-dom') || id.includes('react-router')) {
+            if (/[\\/]node_modules[\\/](react|react-dom|react-router|react-router-dom)[\\/]/.test(id)) {
               return 'vendor-react';
             }
             if (id.includes('recharts')) {
@@ -41,6 +41,12 @@ export default defineConfig({
             }
             if (id.includes('date-fns')) {
               return 'vendor-date-fns';
+            }
+            if (id.includes('@uiw') || id.includes('react-md-editor')) {
+              return 'vendor-editor';
+            }
+            if (id.includes('axios') || id.includes('sockjs-client') || id.includes('@stomp/stompjs')) {
+              return 'vendor-network';
             }
           }
         }

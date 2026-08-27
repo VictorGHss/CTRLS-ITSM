@@ -197,31 +197,33 @@ export default function SearchableDropdown({
           </div>
 
           {/* Lista de opções ordenada */}
-          <ul className="overflow-y-auto max-h-48 divide-y divide-slate-50">
+          <ul className="overflow-y-auto max-h-60 divide-y divide-slate-50">
             {filteredOptions.length === 0 ? (
               <li className="px-4 py-3 text-xs text-slate-400 text-center">
                 Nenhuma opção encontrada
               </li>
             ) : (
-              filteredOptions.map((opt) => {
-                const optId = getOptId(opt);
-                const optName = getOptName(opt);
-                return (
-                  <li key={optId}>
-                    <button
-                      type="button"
-                      onClick={() => handleSelect(optId)}
-                      className={`w-full text-left px-4 py-2.5 text-xs transition-colors hover:bg-brand-secondary/30 hover:text-brand-primary-dark ${
-                        (isMulti && selectedValues ? selectedValues.includes(optId) : optId === value)
-                          ? 'bg-brand-secondary/20 text-brand-primary-dark font-semibold'
-                          : 'text-slate-700'
-                      }`}
-                    >
-                      {optName}
-                    </button>
-                  </li>
-                );
-              })
+              <>
+                {filteredOptions.map((opt) => {
+                  const optId = getOptId(opt);
+                  const optName = getOptName(opt);
+                  return (
+                    <li key={optId}>
+                      <button
+                        type="button"
+                        onClick={() => handleSelect(optId)}
+                        className={`w-full text-left px-4 py-2.5 text-xs transition-colors hover:bg-brand-secondary/30 hover:text-brand-primary-dark ${
+                          (isMulti && selectedValues ? selectedValues.includes(optId) : optId === value)
+                            ? 'bg-brand-secondary/20 text-brand-primary-dark font-semibold'
+                            : 'text-slate-700'
+                        }`}
+                      >
+                        {optName}
+                      </button>
+                    </li>
+                  );
+                })}
+              </>
             )}
             {onAddNewClick && (
               <li className="p-2 border-t border-slate-100 bg-slate-50/50">
@@ -233,11 +235,16 @@ export default function SearchableDropdown({
                   }}
                   className="w-full text-center px-4 py-2 text-xs font-semibold text-brand-primary bg-brand-secondary/25 hover:bg-brand-secondary/40 rounded-lg transition-colors"
                 >
-                  ➕ Adicionar Novo Fornecedor {searchTerm ? `"${searchTerm}"` : ''}
+                  ➕ Adicionar {searchTerm ? `"${searchTerm}"` : ''}
                 </button>
               </li>
             )}
           </ul>
+          {filteredOptions.length > 5 && (
+            <div className="px-3 py-1 bg-slate-50 border-t border-slate-100 text-[10px] text-slate-400 text-right">
+              {filteredOptions.length} opções disponíveis
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -69,7 +69,8 @@ export default function Inventory() {
   const sortMenuRef = useRef<HTMLDivElement | null>(null);
   
   const [currentPage, setCurrentPage] = useState(0);
-  const [totalPages, setTotalPages] = useState(1);
+  const [totalPages, setTotalPages] = useState(0);
+  const [totalElements, setTotalElements] = useState(0);
 
   const lowStockOnly = searchParams.get('status') === LOW_STOCK_STATUS_PARAM;
 
@@ -89,18 +90,22 @@ export default function Inventory() {
           search: debouncedSearch,
         });
         setItems(data.content);
-        setTotalPages(data.totalPages);
+        setTotalPages(Number(data.totalPages ?? 0));
+        setTotalElements(Number(data.totalElements ?? data.content.length));
       } else {
         // Carrega somente os itens com obsolescência detectada (Fim de Vida Útil EOL)
         const data = await getObsoleteItems({
           page: currentPage,
         });
         setItems(data.content);
-        setTotalPages(data.totalPages);
+        setTotalPages(Number(data.totalPages ?? 0));
+        setTotalElements(Number(data.totalElements ?? data.content.length));
       }
     } catch {
       toast.error('Erro ao carregar itens do inventário.');
       setItems([]);
+      setTotalPages(0);
+      setTotalElements(0);
     } finally {
       setLoading(false);
     }
@@ -391,27 +396,38 @@ export default function Inventory() {
             </div>
 
             {/* Barra de Paginação */}
-            <div className="flex items-center justify-between border-t border-slate-100 pt-4 mt-2">
-              <button
-                type="button"
-                onClick={() => setCurrentPage((prev) => Math.max(0, prev - 1))}
-                disabled={currentPage === 0 || loading}
-                className="px-4 py-2 text-xs font-semibold text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-colors"
-              >
-                Anterior
-              </button>
-              <span className="text-xs text-slate-500 font-semibold">
-                Página {currentPage + 1} de {totalPages || 1}
-              </span>
-              <button
-                type="button"
-                onClick={() => setCurrentPage((prev) => Math.min(totalPages - 1, prev + 1))}
-                disabled={currentPage >= totalPages - 1 || loading}
-                className="px-4 py-2 text-xs font-semibold text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-colors"
-              >
-                Seguinte
-              </button>
-            </div>
+            {totalElements > 0 && (
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-slate-100 pt-4 mt-2">
+                <div className="text-xs text-slate-500 font-medium">
+                  Exibindo <span className="font-semibold text-slate-800">{items.length}</span> de{' '}
+                  <span className="font-semibold text-slate-800">{totalElements}</span> {totalElements !== 1 ? 'itens' : 'item'}
+                  {totalPages > 1 && (
+                    <> — Página <span className="font-semibold text-slate-800">{currentPage + 1}</span> de{' '}
+                    <span className="font-semibold text-slate-800">{totalPages}</span></>
+                  )}
+                </div>
+                {totalPages > 1 && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setCurrentPage((prev) => Math.max(0, prev - 1))}
+                      disabled={currentPage === 0 || loading}
+                      className="px-4 py-2 text-xs font-semibold text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-colors"
+                    >
+                      Anterior
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCurrentPage((prev) => Math.min(totalPages - 1, prev + 1))}
+                      disabled={currentPage >= totalPages - 1 || loading}
+                      className="px-4 py-2 text-xs font-semibold text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-colors"
+                    >
+                      Seguinte
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { Loader2, Save, Info } from 'lucide-react';
 import { toast } from 'react-toastify';
 import SearchableDropdown from '@/components/common/SearchableDropdown';
@@ -83,7 +83,7 @@ export default function ProfessionalMappingPanel() {
 
   const hasBlipQueues = blipQueues.length > 0;
 
-  async function loadData() {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
       const [pros, dbMappings, dbConfigs, queues] = await Promise.all([
@@ -117,8 +117,14 @@ export default function ProfessionalMappingPanel() {
         dbConfigs.forEach((c) => { if (c.feegowProfissionalId) allProIds.add(String(c.feegowProfissionalId)); });
       }
 
+      const proMap = new Map<string, FeegowProfessional>();
+      (Array.isArray(pros) ? pros : []).forEach((p) => {
+        const id = String(p.id ?? '').trim();
+        if (id && !proMap.has(id)) proMap.set(id, p);
+      });
+
       const merged: MergedDoctorMapping[] = Array.from(allProIds).map((proId) => {
-        const p = professionalsById.get(proId) || (Array.isArray(pros) ? (pros as FeegowProfessional[]).find(pr => String(pr.id) === proId) : undefined);
+        const p = proMap.get(proId);
         const m = mappingById.get(proId);
         const c = configById.get(proId);
 
@@ -144,11 +150,11 @@ export default function ProfessionalMappingPanel() {
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
 
   useEffect(() => {
     void loadData();
-  }, []);
+  }, [loadData]);
 
   async function handleSyncData() {
     try {

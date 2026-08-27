@@ -77,7 +77,7 @@ public class UserRepositoryAdapter implements UserRepositoryPort {
     public List<User> findAllWithSector(String search) {
         if (search != null && !search.isBlank()) {
             return repository.findByNameContainingIgnoreCaseOrEmailContainingIgnoreCase(
-                search, search, org.springframework.data.domain.PageRequest.of(0, 15)
+                search, search, org.springframework.data.domain.PageRequest.of(0, 1000)
             );
         }
         return repository.findAllWithSector();

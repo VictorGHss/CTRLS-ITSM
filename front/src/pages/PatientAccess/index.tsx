@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { Clock } from 'lucide-react';
 import api from '../../services/api';
@@ -16,12 +16,11 @@ export default function PatientAccess() {
   // --- Estados de controle do desafio de identidade (2FA por telefone) ---
   const [isVerified, setIsVerified] = useState<boolean>(false);
   const [digits, setDigits] = useState<string[]>(['', '', '', '']);
-  const inputRefs = [
-    useRef<HTMLInputElement>(null),
-    useRef<HTMLInputElement>(null),
-    useRef<HTMLInputElement>(null),
-    useRef<HTMLInputElement>(null)
-  ];
+  const inputRef0 = useRef<HTMLInputElement>(null);
+  const inputRef1 = useRef<HTMLInputElement>(null);
+  const inputRef2 = useRef<HTMLInputElement>(null);
+  const inputRef3 = useRef<HTMLInputElement>(null);
+  const inputRefs = useMemo(() => [inputRef0, inputRef1, inputRef2, inputRef3], []);
   const [challengeLoading, setChallengeLoading] = useState<boolean>(false);
   const [challengeError, setChallengeError] = useState<string | null>(null);
 
@@ -48,26 +47,24 @@ export default function PatientAccess() {
 
   // Screen Wake Lock API: impede que o ecrã do telemóvel apague enquanto o QR Code está em tela cheia
   useEffect(() => {
-    let activeLock: any = null;
+    let activeLock: WakeLockSentinel | null = null;
 
     const acquireLock = async () => {
-      if (fullscreenCard !== null && 'wakeLock' in navigator) {
+      if (fullscreenCard !== null && 'wakeLock' in navigator && navigator.wakeLock) {
         try {
-          activeLock = await (navigator as any).wakeLock.request('screen');
-          console.log('[WakeLock] Trava de brilho/tela ativada para leitura do QR Code.');
-        } catch (err) {
+          activeLock = await navigator.wakeLock.request('screen');
+        } catch (err: unknown) {
           console.warn('[WakeLock] Erro ao solicitar trava de tela:', err);
         }
       }
     };
 
-    acquireLock();
+    void acquireLock();
 
     return () => {
       if (activeLock) {
         activeLock.release()
-          .then(() => console.log('[WakeLock] Trava de tela liberada com sucesso.'))
-          .catch((err: any) => console.warn('[WakeLock] Erro ao liberar trava de tela:', err));
+          .catch((err: unknown) => console.warn('[WakeLock] Erro ao liberar trava de tela:', err));
       }
     };
   }, [fullscreenCard]);
@@ -154,7 +151,7 @@ export default function PatientAccess() {
       }, 150);
       return () => clearTimeout(timer);
     }
-  }, [isVerified]);
+  }, [isVerified, inputRefs]);
 
   const handleDigitChange = (index: number, val: string) => {
     setChallengeError(null);
@@ -250,7 +247,7 @@ export default function PatientAccess() {
         }
       );
       setCredentials(response.data || []);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[PatientAccess] Falha ao enviar CPF:', err);
       setCpfSubmitError('Ocorreu um erro ao salvar o CPF. Tente novamente.');
     } finally {
@@ -316,7 +313,7 @@ export default function PatientAccess() {
           scrollToCard(newCreds.length - 1);
         }, 150);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[PatientAccess] Falha ao cadastrar acompanhante:', err);
       setCompanionSubmitError('Erro ao cadastrar acompanhante nas catracas. Tente novamente.');
     } finally {

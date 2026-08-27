@@ -1,14 +1,15 @@
 import api from './api';
 import type { Page, PaginatedResponse, CreateTicketDto, ResolveTicketRequest, Ticket, TicketAttachment, TicketCategory, TicketComment, TicketTag } from '../types/models';
 
-// Busca todos os tickets do usuário autenticado (suporta filtro opcional por tags, paginação, pesquisa global, status, prioridade e categoria no servidor)
+// Busca todos os tickets do usuário autenticado (suporta filtro opcional por tags, paginação, tamanho de página, pesquisa global, status, prioridade e categoria no servidor)
 export async function getTickets(
   tagIds?: string[],
   page: number = 0,
   search?: string,
   status?: string,
   priority?: string,
-  categoryId?: string
+  categoryId?: string,
+  size?: number
 ): Promise<Page<Ticket>> {
   const safePage = isNaN(Number(page)) || page === undefined || page === null ? 0 : Math.max(0, Math.floor(Number(page)));
   const params = new URLSearchParams();
@@ -16,6 +17,9 @@ export async function getTickets(
     tagIds.forEach(id => params.append('tagIds', id));
   }
   params.append('page', String(safePage));
+  if (size !== undefined && size > 0) {
+    params.append('size', String(size));
+  }
   if (search && search.trim() !== '') {
     params.append('search', search.trim());
   }
@@ -28,20 +32,22 @@ export async function getTickets(
   if (categoryId && categoryId !== 'all') {
     params.append('categoryId', categoryId);
   }
-  const { data } = await api.get<any>('/tickets', { params });
+  const { data } = await api.get<Page<Ticket> | { data: Page<Ticket> }>('/tickets', { params });
 
-  const resData = data?.data && typeof data.data === 'object' && 'content' in data.data ? data.data : data;
-  const content = Array.isArray(resData?.content) ? resData.content : (Array.isArray(resData) ? resData : []);
-  const totalPages = Number(resData?.totalPages ?? 1);
+  const resData = (data && 'data' in data && typeof data.data === 'object' && data.data && 'content' in data.data)
+    ? data.data
+    : (data as Page<Ticket>);
+  const content = Array.isArray(resData?.content) ? resData.content : [];
+  const totalPages = Number(resData?.totalPages ?? (content.length > 0 ? 1 : 0));
   const totalElements = Number(resData?.totalElements ?? content.length);
-  const pageNumber = Number(resData?.number ?? resData?.pageable?.pageNumber ?? safePage);
+  const pageNumber = Number(resData?.number ?? safePage);
 
   return {
     content,
-    totalPages: isNaN(totalPages) || totalPages < 1 ? 1 : totalPages,
+    totalPages: isNaN(totalPages) || totalPages < 0 ? 0 : totalPages,
     totalElements: isNaN(totalElements) ? content.length : totalElements,
     number: isNaN(pageNumber) ? 0 : pageNumber,
-    size: Number(resData?.size ?? 15),
+    size: Number(resData?.size ?? (size ?? 15)),
     first: Boolean(resData?.first ?? (safePage === 0)),
     last: Boolean(resData?.last ?? (safePage >= totalPages - 1)),
   };
@@ -198,23 +204,27 @@ export async function getSimilarTickets(id: string): Promise<Ticket[]> {
  *
  * @param itemId O identificador único do item de inventário (UUID)
  * @param page O número da página (padrão: 0)
+ * @param size Quantidade de registros por página (padrão: 15)
  * @returns Promessa com o retorno paginado de chamados contendo a tipagem unificada
  */
-export async function getItemTickets(itemId: string, page: number = 0): Promise<PaginatedResponse<Ticket>> {
+export async function getItemTickets(itemId: string, page: number = 0, size: number = 15): Promise<PaginatedResponse<Ticket>> {
   const safePage = isNaN(Number(page)) || page === undefined || page === null ? 0 : Math.max(0, Math.floor(Number(page)));
-  const { data } = await api.get<any>(`/tickets/item/${itemId}`, {
-    params: { page: safePage, size: 15 }
+  const safeSize = Math.max(1, size);
+  const { data } = await api.get<Page<Ticket> | { data: Page<Ticket> }>(`/tickets/item/${itemId}`, {
+    params: { page: safePage, size: safeSize }
   });
-  const resData = data?.data && typeof data.data === 'object' && 'content' in data.data ? data.data : data;
-  const content = Array.isArray(resData?.content) ? resData.content : (Array.isArray(resData) ? resData : []);
-  const totalPages = Number(resData?.totalPages ?? 1);
+  const resData = (data && 'data' in data && typeof data.data === 'object' && data.data && 'content' in data.data)
+    ? data.data
+    : (data as Page<Ticket>);
+  const content = Array.isArray(resData?.content) ? resData.content : [];
+  const totalPages = Number(resData?.totalPages ?? (content.length > 0 ? 1 : 0));
   const totalElements = Number(resData?.totalElements ?? content.length);
   return {
     content,
-    totalPages: isNaN(totalPages) || totalPages < 1 ? 1 : totalPages,
+    totalPages: isNaN(totalPages) || totalPages < 0 ? 0 : totalPages,
     totalElements: isNaN(totalElements) ? content.length : totalElements,
     number: safePage,
-    size: 15,
+    size: safeSize,
     first: safePage === 0,
     last: safePage >= totalPages - 1
   };

@@ -70,9 +70,12 @@ public class AssetController {
             @RequestParam(defaultValue = "ALL") String status,
             @RequestParam(defaultValue = "createdAt") String sortBy,
             @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "15") int size,
             @RequestParam(required = false) String search
     ) {
-        Pageable pageable = PageRequest.of(page, 15);
+        int safePage = Math.max(0, page);
+        int safeSize = Math.min(Math.max(1, size), 1000);
+        Pageable pageable = PageRequest.of(safePage, safeSize);
         Page<AssetResponseDTO> response = assetQueryService.listAssets(categoryId, status, sortBy, search, pageable, assetRepository);
         return ResponseEntity.ok(response);
     }
