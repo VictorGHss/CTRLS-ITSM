@@ -1,14 +1,23 @@
 package br.dev.ctrls.inovareti.modules.ticket.infrastructure.adapter.input;
+
+import io.micrometer.observation.annotation.Observed;
+
 import java.io.IOException;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -19,6 +28,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+import br.dev.ctrls.inovareti.core.shared.domain.model.exception.NotFoundException;
 import br.dev.ctrls.inovareti.infrastructure.shared.storage.LocalFileStorageService;
 import br.dev.ctrls.inovareti.modules.ticket.application.dto.ResolveTicketDTO;
 import br.dev.ctrls.inovareti.modules.ticket.application.dto.TicketAttachmentResponseDTO;
@@ -26,9 +36,6 @@ import br.dev.ctrls.inovareti.modules.ticket.application.dto.TicketCommentReques
 import br.dev.ctrls.inovareti.modules.ticket.application.dto.TicketCommentResponseDTO;
 import br.dev.ctrls.inovareti.modules.ticket.application.dto.TicketRequestDTO;
 import br.dev.ctrls.inovareti.modules.ticket.application.dto.TicketResponseDTO;
-import br.dev.ctrls.inovareti.modules.ticket.application.usecase.LinkTicketUseCase;
-import jakarta.validation.Valid;
-
 import br.dev.ctrls.inovareti.modules.ticket.application.dto.UpdateSolutionTextDTO;
 import br.dev.ctrls.inovareti.modules.ticket.application.dto.UpdateTicketItemsDTO;
 import br.dev.ctrls.inovareti.modules.ticket.application.usecase.AddAdditionalUserUseCase;
@@ -40,6 +47,7 @@ import br.dev.ctrls.inovareti.modules.ticket.application.usecase.FetchTicketsByI
 import br.dev.ctrls.inovareti.modules.ticket.application.usecase.FindSimilarTicketsUseCase;
 import br.dev.ctrls.inovareti.modules.ticket.application.usecase.FindTicketByIdUseCase;
 import br.dev.ctrls.inovareti.modules.ticket.application.usecase.GetTicketCommentsUseCase;
+import br.dev.ctrls.inovareti.modules.ticket.application.usecase.LinkTicketUseCase;
 import br.dev.ctrls.inovareti.modules.ticket.application.usecase.ListAllTicketsUseCase;
 import br.dev.ctrls.inovareti.modules.ticket.application.usecase.ResolveTicketUseCase;
 import br.dev.ctrls.inovareti.modules.ticket.application.usecase.TransferTicketUseCase;
@@ -47,10 +55,14 @@ import br.dev.ctrls.inovareti.modules.ticket.application.usecase.UpdateSolutionT
 import br.dev.ctrls.inovareti.modules.ticket.application.usecase.UpdateTicketItemsUseCase;
 import br.dev.ctrls.inovareti.modules.ticket.domain.model.Ticket;
 import br.dev.ctrls.inovareti.modules.ticket.domain.model.TicketAttachment;
+import br.dev.ctrls.inovareti.modules.ticket.domain.model.TicketPriority;
+import br.dev.ctrls.inovareti.modules.ticket.domain.model.TicketStatus;
 import br.dev.ctrls.inovareti.modules.ticket.domain.port.output.TicketAttachmentRepositoryPort;
 import br.dev.ctrls.inovareti.modules.ticket.domain.port.output.TicketRepositoryPort;
+import br.dev.ctrls.inovareti.modules.user.domain.model.UserRole;
 import br.dev.ctrls.inovareti.modules.user.domain.port.output.UserRepositoryPort;
-import io.micrometer.observation.annotation.Observed;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -90,46 +102,42 @@ public class TicketController {
     private void checkTicketOwnershipOrStaff(UUID ticketId) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null || auth.getPrincipal() == null) {
-            throw new org.springframework.security.access.AccessDeniedException("Acesso negado: Usuário não autenticado.");
+            throw new AccessDeniedException("Acesso negado: Usuário não autenticado.");
         }
         
         UUID userId;
         try {
             userId = UUID.fromString(auth.getPrincipal().toString());
         } catch (Exception e) {
-            throw new org.springframework.security.access.AccessDeniedException("Acesso negado: Identificador de usuário inválido.");
+            throw new AccessDeniedException("Acesso negado: Identificador de usuário inválido.");
         }
 
         var user = userRepository.findById(userId)
-                .orElseThrow(() -> new org.springframework.security.access.AccessDeniedException("Acesso negado: Usuário não encontrado."));
+                .orElseThrow(() -> new AccessDeniedException("Acesso negado: Usuário não encontrado."));
 
-        if (user.getRole() == br.dev.ctrls.inovareti.modules.user.domain.model.UserRole.ADMIN 
-                || user.getRole() == br.dev.ctrls.inovareti.modules.user.domain.model.UserRole.TECHNICIAN) {
+        if (user.getRole() == UserRole.ADMIN || user.getRole() == UserRole.TECHNICIAN) {
             return;
         }
 
         var ticket = ticketRepository.findById(ticketId)
-                .orElseThrow(() -> new br.dev.ctrls.inovareti.core.shared.domain.model.exception.NotFoundException("Chamado não encontrado."));
+                .orElseThrow(() -> new NotFoundException("Chamado não encontrado."));
 
         if (!ticket.getRequester().getId().equals(userId)) {
-            throw new org.springframework.security.access.AccessDeniedException("Acesso negado: Você não é o proprietário deste chamado.");
+            throw new AccessDeniedException("Acesso negado: Você não é o proprietário deste chamado.");
         }
     }
 
     /**
-     * Lista todos os chamados com isolamento por role e suporte a pesquisa global.
-     * ADMIN/TECHNICIAN: ver todos os chamados
-     * USER: ver apenas seus próprios chamados
-     * Retorna 200 OK com a lista de chamados.
+     * Lista todos os chamados com isolamento por perfil (role) e suporte a filtros e pesquisa global.
+     * Administradores e técnicos visualizam todos os chamados; usuários comuns apenas os próprios.
      */
     @GetMapping
-    @SuppressWarnings("spring-data-string-property-reference")
-    public ResponseEntity<org.springframework.data.domain.Page<TicketResponseDTO>> listAll(
+    public ResponseEntity<Page<TicketResponseDTO>> listAll(
             @RequestParam(required = false) List<UUID> tagIds,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(required = false) String search,
-            @RequestParam(required = false) br.dev.ctrls.inovareti.modules.ticket.domain.model.TicketStatus status,
-            @RequestParam(required = false) br.dev.ctrls.inovareti.modules.ticket.domain.model.TicketPriority priority,
+            @RequestParam(required = false) TicketStatus status,
+            @RequestParam(required = false) TicketPriority priority,
             @RequestParam(required = false) UUID categoryId) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         UUID userId;
@@ -147,11 +155,7 @@ public class TicketController {
         }
         
         String sortProperty = "createdAt";
-        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(
-                page,
-                15,
-                org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, sortProperty)
-        );
+        Pageable pageable = PageRequest.of(page, 15, Sort.by(Sort.Direction.DESC, sortProperty));
         
         return ResponseEntity.ok(listAllTicketsUseCase.execute(
                 userId,
@@ -167,7 +171,6 @@ public class TicketController {
 
     /**
      * Retorna os dados de um único chamado pelo UUID.
-     * Retorna 200 OK ou 404 se não encontrado.
      */
     @GetMapping("/{id}")
     public ResponseEntity<TicketResponseDTO> findById(@PathVariable UUID id) {
@@ -176,8 +179,7 @@ public class TicketController {
     }
 
     /**
-     * Retorna chamados resolvidos/fechados que compartilham tags com o chamado atual,
-     * para atuar como base de conhecimento inline.
+     * Retorna chamados resolvidos/fechados que compartilham tags com o chamado atual (base de conhecimento inline).
      */
     @GetMapping("/{id}/similar")
     public ResponseEntity<List<TicketResponseDTO>> findSimilar(@PathVariable UUID id) {
@@ -187,8 +189,6 @@ public class TicketController {
 
     /**
      * Abre um novo chamado com status OPEN e slaDeadline calculado automaticamente.
-     * Retorna 201 Created com os dados do chamado.
-     * âœ… Acessível a todos os usuários autenticados (USER, TECHNICIAN e ADMIN).
      */
     @PostMapping
     public ResponseEntity<TicketResponseDTO> create(@Valid @RequestBody TicketRequestDTO request) {
@@ -197,8 +197,6 @@ public class TicketController {
 
     /**
      * Resolve um chamado existente com entrega opcional de equipamento ou item.
-     * Se entrega de equipamento ou item for especificada, executa o fulfillment atomicamente.
-     * Retorna 200 OK com os dados atualizados do chamado.
      */
     @PatchMapping("/{id}/resolve")
     public ResponseEntity<TicketResponseDTO> resolve(
@@ -228,7 +226,6 @@ public class TicketController {
 
     /**
      * Transfere um chamado para outro usuário.
-     * Se o chamado estiver ABERTO, o status é alterado para EM_PROGRESSO.
      */
     @PreAuthorize("hasAnyRole('ADMIN', 'TECHNICIAN')")
     @PatchMapping("/{id}/transfer/{userId}")
@@ -238,7 +235,6 @@ public class TicketController {
 
     /**
      * Upload de anexo para um chamado existente.
-     * Retorna 201 Created com os dados do anexo.
      */
     @PostMapping("/{id}/attachments")
     public ResponseEntity<TicketAttachmentResponseDTO> uploadAttachment(
@@ -247,7 +243,7 @@ public class TicketController {
         
         checkTicketOwnershipOrStaff(id);
         Ticket ticket = ticketRepository.findById(id)
-            .orElseThrow(() -> new RuntimeException("Chamado não encontrado"));
+            .orElseThrow(() -> new NotFoundException("Chamado não encontrado"));
 
         try {
             String storedFilename = fileStorageService.store(file);
@@ -261,7 +257,7 @@ public class TicketController {
             
             attachment = attachmentRepository.save(attachment);
             
-                log.info("Anexo enviado para chamado {}: {} (armazenado como: {})",
+            log.info("Anexo enviado para chamado {}: {} (armazenado como: {})",
                     id, file.getOriginalFilename(), storedFilename);
             
             TicketAttachmentResponseDTO response = new TicketAttachmentResponseDTO(
@@ -281,7 +277,6 @@ public class TicketController {
 
     /**
      * Lista todos os anexos de um chamado específico.
-     * Retorna 200 OK com a lista de anexos.
      */
     @GetMapping("/{id}/attachments")
     public ResponseEntity<List<TicketAttachmentResponseDTO>> listAttachments(@PathVariable UUID id) {
@@ -304,7 +299,6 @@ public class TicketController {
 
     /**
      * Adiciona um novo comentário a um chamado existente.
-     * Retorna 201 Created com os dados do comentário.
      */
     @PostMapping("/{id}/comments")
     public ResponseEntity<TicketCommentResponseDTO> addComment(
@@ -317,7 +311,6 @@ public class TicketController {
 
     /**
      * Lista todos os comentários de um chamado específico.
-     * Retorna 200 OK com a lista de comentários ordenados por data.
      */
     @GetMapping("/{id}/comments")
     public ResponseEntity<List<TicketCommentResponseDTO>> listComments(@PathVariable UUID id) {
@@ -327,9 +320,8 @@ public class TicketController {
 
     /**
      * Relaciona dois chamados de forma bidirecional.
-     * Retorna 200 OK com o chamado principal atualizado.
      */
-    @org.springframework.transaction.annotation.Transactional
+    @Transactional
     @PostMapping("/{id}/relate/{relatedId}")
     public ResponseEntity<TicketResponseDTO> relateTickets(
             @PathVariable UUID id,
@@ -338,10 +330,10 @@ public class TicketController {
         checkTicketOwnershipOrStaff(relatedId);
 
         Ticket ticket = ticketRepository.findById(id)
-                .orElseThrow(() -> new br.dev.ctrls.inovareti.core.shared.domain.model.exception.NotFoundException("Chamado principal não encontrado: " + id));
+                .orElseThrow(() -> new NotFoundException("Chamado principal não encontrado: " + id));
 
         Ticket relatedTicket = ticketRepository.findById(relatedId)
-                .orElseThrow(() -> new br.dev.ctrls.inovareti.core.shared.domain.model.exception.NotFoundException("Chamado relacionado não encontrado: " + relatedId));
+                .orElseThrow(() -> new NotFoundException("Chamado relacionado não encontrado: " + relatedId));
 
         ticket.getRelatedTickets().add(relatedTicket);
         relatedTicket.getRelatedTickets().add(ticket);
@@ -368,9 +360,6 @@ public class TicketController {
 
     /**
      * Altera a categoria de um chamado e recalcula o prazo de SLA.
-     * O novo {@code slaDeadline} é calculado somando {@code baseSlaHours} da nova categoria
-     * í  {@code createdAt} original do chamado.
-     * Restrito a ADMIN e TECHNICIAN.
      */
     @PreAuthorize("hasAnyRole('ADMIN', 'TECHNICIAN')")
     @PatchMapping("/{id}/category/{categoryId}")
@@ -382,8 +371,6 @@ public class TicketController {
 
     /**
      * Vincula um usuário adicional afetado ao chamado.
-     * O usuário é inserido na tabela {@code ticket_additional_users}.
-     * Restrito a ADMIN e TECHNICIAN.
      */
     @PreAuthorize("hasAnyRole('ADMIN', 'TECHNICIAN')")
     @PostMapping("/{id}/additional-users/{userId}")
@@ -395,61 +382,40 @@ public class TicketController {
 
     /**
      * Recupera de forma paginada todos os chamados que possuem vínculo com um item de inventário específico.
-     * Retorna 200 OK com a página de chamados associados.
-     *
-     * @param itemId O identificador único do item de inventário (UUID)
-     * @param page O número da página a ser retornada (padrão: 0)
-     * @return ResponseEntity contendo a página de chamados vinculados ao item
      */
     @GetMapping("/item/{itemId}")
-    public ResponseEntity<org.springframework.data.domain.Page<TicketResponseDTO>> getTicketsByItem(
+    public ResponseEntity<Page<TicketResponseDTO>> getTicketsByItem(
             @PathVariable UUID itemId,
             @RequestParam(defaultValue = "0") int page) {
         String sortProperty = "createdAt";
-        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(
-                page,
-                15,
-                org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, sortProperty)
-        );
+        Pageable pageable = PageRequest.of(page, 15, Sort.by(Sort.Direction.DESC, sortProperty));
         return ResponseEntity.ok(fetchTicketsByItemUseCase.execute(itemId, pageable));
     }
 
     /**
      * Atualiza a lista de itens de inventário vinculados a um chamado existente.
-     * Apenas o solicitante original ou membros da equipe de suporte (ADMIN/TECHNICIAN) podem realizar essa alteração.
-     * Retorna 200 OK com os dados atualizados do chamado.
-     *
-     * @param id O identificador único do chamado (UUID)
-     * @param request O DTO contendo a nova lista de itens e quantidades
-     * @return ResponseEntity contendo os dados atualizados do chamado
      */
     @PatchMapping("/{id}/items")
     public ResponseEntity<TicketResponseDTO> updateTicketItems(
             @PathVariable UUID id,
             @Valid @RequestBody UpdateTicketItemsDTO request) {
-        // Valida se o utilizador atual possui permissão de leitura/escrita no chamado correspondente
         checkTicketOwnershipOrStaff(id);
         return ResponseEntity.ok(updateTicketItemsUseCase.execute(id, request));
     }
 
     /**
      * Vincula um chamado filho a um chamado pai/mestre.
-     *
-     * @param id O identificador único do chamado filho (UUID)
-     * @param request O DTO contendo o ID do chamado pai
-     * @return ResponseEntity indicando sucesso
      */
     @PostMapping("/{id}/link")
     public ResponseEntity<TicketResponseDTO> linkTicket(
             @PathVariable UUID id,
             @Valid @RequestBody LinkTicketRequest request) {
-        // Valida se o utilizador atual possui permissão no chamado correspondente
         checkTicketOwnershipOrStaff(id);
         return ResponseEntity.ok(linkTicketUseCase.execute(id, request.parentTicketId()));
     }
 
     public record LinkTicketRequest(
-        @jakarta.validation.constraints.NotNull(message = "O ID do chamado pai é obrigatório")
+        @NotNull(message = "O ID do chamado pai é obrigatório")
         UUID parentTicketId
     ) {}
 }
