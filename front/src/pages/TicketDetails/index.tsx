@@ -190,7 +190,7 @@ export default function TicketDetails() {
                       <ReactMarkdown
                         remarkPlugins={[remarkGfm]}
                         components={{
-                          img: ({ node, src, alt, ...props }) => {
+                          img: ({ src, alt, ...props }) => {
                             const realSrc = src && src.includes('/uploads/tickets/') && !src.includes('/api/uploads/tickets/')
                               ? src.replace('/uploads/tickets/', '/api/uploads/tickets/')
                               : src;
@@ -205,7 +205,7 @@ export default function TicketDetails() {
                               </a>
                             );
                           },
-                          a: ({ node, href, children, ...props }) => {
+                          a: ({ href, children, ...props }) => {
                             const realHref = href && href.includes('/uploads/tickets/') && !href.includes('/api/uploads/tickets/')
                               ? href.replace('/uploads/tickets/', '/api/uploads/tickets/')
                               : href;

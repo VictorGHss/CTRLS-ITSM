@@ -2,7 +2,7 @@
 import { useState, useEffect, type FormEvent } from 'react';
 import { X } from 'lucide-react';
 import { toast } from 'react-toastify';
-import { addBatch, uploadBatchInvoice } from '../../services/inventoryService';
+import { addBatch, getItems, uploadBatchInvoice } from '../../services/inventoryService';
 import type { Item } from '../../types/models';
 import SearchableDropdown from '@/components/common/SearchableDropdown';
 
@@ -45,7 +45,19 @@ export default function AddBatchModal({
   const [suppliers, setSuppliers] = useState<string[]>([]);
   const [isAddingSupplier, setIsAddingSupplier] = useState(false);
   const [newSupplierName, setNewSupplierName] = useState('');
+  const [availableItems, setAvailableItems] = useState<Item[]>(items);
 
+  useEffect(() => {
+    if (isOpen) {
+      void getItems({ size: 1000 }).then((res) => {
+        if (res && Array.isArray(res.content) && res.content.length > 0) {
+          setAvailableItems(res.content);
+        }
+      }).catch(() => {
+        setAvailableItems(items);
+      });
+    }
+  }, [isOpen, items]);
 
   useEffect(() => {
     const stored = localStorage.getItem('inovareti_dynamic_suppliers');
@@ -83,8 +95,8 @@ export default function AddBatchModal({
     toast.success('Fornecedor adicionado com sucesso!');
   };
 
-  // Mapeia os itens para o formato do dropdown contendo a informação do stock
-  const itemOptions = items.map((item) => ({
+  // Mapeia todos os itens disponíveis para o formato do dropdown contendo a informação de estoque
+  const itemOptions = (availableItems.length > 0 ? availableItems : items).map((item) => ({
     id: item.id,
     name: `${item.name} (Estoque: ${item.currentStock})`,
   }));

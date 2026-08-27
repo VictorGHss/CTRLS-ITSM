@@ -87,8 +87,11 @@ public class ItemController {
             @RequestParam(defaultValue = "ASC") Sort.Direction sortDirection,
             @RequestParam(defaultValue = "false") boolean lowStockOnly,
             @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "15") int size,
             @RequestParam(required = false) String search) {
-        Pageable pageable = PageRequest.of(page, 15);
+        int safePage = Math.max(0, page);
+        int safeSize = Math.min(Math.max(1, size), 1000);
+        Pageable pageable = PageRequest.of(safePage, safeSize);
         
         if (search != null && !search.trim().isEmpty()) {
             Page<Item> itemsPage = itemRepository.findByNameContainingIgnoreCase(search.trim(), pageable);
@@ -237,8 +240,11 @@ public class ItemController {
      */
     @GetMapping("/obsolete")
     public ResponseEntity<Page<ItemResponseDTO>> listObsolete(
-            @RequestParam(defaultValue = "0") int page) {
-        Pageable pageable = PageRequest.of(page, 15);
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "15") int size) {
+        int safePage = Math.max(0, page);
+        int safeSize = Math.min(Math.max(1, size), 1000);
+        Pageable pageable = PageRequest.of(safePage, safeSize);
         Page<Item> itemsPage = itemRepository.findObsoleteItems(pageable);
         Page<ItemResponseDTO> pageResult = itemsPage.map(ItemResponseDTO::from);
         return ResponseEntity.ok(pageResult);

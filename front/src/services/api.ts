@@ -22,15 +22,17 @@ export function buildApiUrl(path: string): string {
   return `${apiBaseUrl}${path}`;
 }
 
-const getHeaderValue = (headers: any, name: string): any => {
-  if (!headers) return undefined;
+const getHeaderValue = (headers: unknown, name: string): unknown => {
+  if (!headers || typeof headers !== 'object') return undefined;
   const lowerName = name.toLowerCase();
-  if (typeof headers.get === 'function') {
-    return headers.get(name) || headers.get(lowerName);
+  const headersRecord = headers as Record<string, unknown>;
+  if (typeof (headers as { get?: (headerName: string) => unknown }).get === 'function') {
+    const getter = (headers as { get: (headerName: string) => unknown }).get;
+    return getter(name) || getter(lowerName);
   }
-  for (const key of Object.keys(headers)) {
+  for (const key of Object.keys(headersRecord)) {
     if (key.toLowerCase() === lowerName) {
-      return headers[key];
+      return headersRecord[key];
     }
   }
   return undefined;

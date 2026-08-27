@@ -31,7 +31,8 @@ export default function Tickets() {
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
   
   const [currentPage, setCurrentPage] = useState(0);
-  const [totalPages, setTotalPages] = useState(1);
+  const [totalPages, setTotalPages] = useState(0);
+  const [totalElements, setTotalElements] = useState(0);
 
   const isAdmin = user?.role === 'ADMIN' || user?.role === 'TECHNICIAN';
 
@@ -48,12 +49,13 @@ export default function Tickets() {
         selectedCategory
       );
       setTickets(Array.isArray(ticketsPage?.content) ? ticketsPage.content : []);
-      const parsedTotalPages = Number(ticketsPage?.totalPages);
-      setTotalPages(isNaN(parsedTotalPages) || parsedTotalPages < 1 ? 1 : parsedTotalPages);
+      setTotalPages(Number(ticketsPage?.totalPages ?? 0));
+      setTotalElements(Number(ticketsPage?.totalElements ?? 0));
     } catch {
       toast.error('Erro ao carregar chamados. Tente novamente.');
       setTickets([]);
-      setTotalPages(1);
+      setTotalPages(0);
+      setTotalElements(0);
     } finally {
       setLoading(false);
     }
@@ -363,33 +365,38 @@ export default function Tickets() {
         ) : (
           <>
             <TicketsTable tickets={sortedTickets} />
-            <div className="flex items-center justify-between border-t border-slate-100 pt-4 mt-2">
-              <button
-                type="button"
-                onClick={() => setCurrentPage((prev) => {
-                  const val = isNaN(Number(prev)) ? 0 : Number(prev);
-                  return Math.max(0, val - 1);
-                })}
-                disabled={(isNaN(Number(currentPage)) ? 0 : currentPage) <= 0 || loading}
-                className="px-4 py-2 text-xs font-semibold text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-colors"
-              >
-                Anterior
-              </button>
-              <span className="text-xs text-slate-500 font-semibold">
-                Página {(isNaN(Number(currentPage)) ? 0 : currentPage) + 1} de {totalPages || 1}
-              </span>
-              <button
-                type="button"
-                onClick={() => setCurrentPage((prev) => {
-                  const val = isNaN(Number(prev)) ? 0 : Number(prev);
-                  return Math.min(Math.max(0, totalPages - 1), val + 1);
-                })}
-                disabled={(isNaN(Number(currentPage)) ? 0 : currentPage) >= totalPages - 1 || loading}
-                className="px-4 py-2 text-xs font-semibold text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-colors"
-              >
-                Seguinte
-              </button>
-            </div>
+            {totalElements > 0 && (
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-slate-100 pt-4 mt-2">
+                <div className="text-xs text-slate-500 font-medium">
+                  Exibindo <span className="font-semibold text-slate-800">{sortedTickets.length}</span> de{' '}
+                  <span className="font-semibold text-slate-800">{totalElements}</span> chamado{totalElements !== 1 ? 's' : ''}
+                  {totalPages > 1 && (
+                    <> — Página <span className="font-semibold text-slate-800">{currentPage + 1}</span> de{' '}
+                    <span className="font-semibold text-slate-800">{totalPages}</span></>
+                  )}
+                </div>
+                {totalPages > 1 && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setCurrentPage((prev) => Math.max(0, prev - 1))}
+                      disabled={currentPage <= 0 || loading}
+                      className="px-4 py-2 text-xs font-semibold text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-colors"
+                    >
+                      Anterior
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCurrentPage((prev) => Math.min(totalPages - 1, prev + 1))}
+                      disabled={currentPage >= totalPages - 1 || loading}
+                      className="px-4 py-2 text-xs font-semibold text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-colors"
+                    >
+                      Seguinte
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </>
         )}
       </div>

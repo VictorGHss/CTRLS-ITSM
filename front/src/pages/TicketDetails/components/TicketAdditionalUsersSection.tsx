@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { Users, Plus, X } from 'lucide-react';
 import SearchableDropdown from '@/components/common/SearchableDropdown';
 import type { Ticket, User } from '../../../types/models';
@@ -54,19 +54,16 @@ export function TicketAdditionalUsersSection({
     });
   }, [availableUsers, sectorFilter, normalizedAdditionalQuery]);
 
-  useEffect(() => {
-    if (!selectedAdditionalUserId) return;
-    const stillAvailable = filteredAvailableUsers.some(
-      (user) => user.id === selectedAdditionalUserId,
-    );
-    if (!stillAvailable) {
-      setSelectedAdditionalUserId('');
-    }
+  const effectiveSelectedUserId = useMemo(() => {
+    if (!selectedAdditionalUserId) return '';
+    return filteredAvailableUsers.some((user) => user.id === selectedAdditionalUserId)
+      ? selectedAdditionalUserId
+      : '';
   }, [filteredAvailableUsers, selectedAdditionalUserId]);
 
   const handleConfirmAdditionalUser = async () => {
-    if (!selectedAdditionalUserId) return;
-    await onAddAdditionalUser(selectedAdditionalUserId);
+    if (!effectiveSelectedUserId) return;
+    await onAddAdditionalUser(effectiveSelectedUserId);
     setSelectedAdditionalUserId('');
     setShowAddAdditionalUser(false);
   };
