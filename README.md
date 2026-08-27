@@ -68,10 +68,10 @@ A API backend em **Java 21 / Spring Boot 3** é desenhada sob a **Arquitetura He
 
 | Documento | Descrição |
 | :--- | :--- |
-| 🏛️ [**Arquitetura e Modelo de Dados**](docs/ARCHITECTURE.md) | Padrão Hexagonal, divisão de camadas, histórico de 51 migrações do Flyway, dicionário completo de tabelas e diagrama ERD. |
-| ⚡ [**Catálogo de Funcionalidades e Regras**](docs/FEATURES.md) | Especificação das regras de negócio: Ingestão de consultas, esteira de nudges, janela de catracas, SLA de TI, parada crítica e FIFO de estoque. |
-| 🔌 [**Manual de Integrações e APIs**](docs/INTEGRATIONS.md) | Contratos de integração: Feegow ERP (13 status oficiais), Take Blip (Dual-Scope Router + Desk), GerAcesso, Conta Azul V2 e Discord JDA 5. |
-| 🛠️ [**Guia do Desenvolvedor e Operações**](docs/DEVELOPER_GUIDE.md) | Setup do ambiente local, dicionário de variáveis de ambiente (`.env`), observabilidade (Prometheus/Grafana) e runbooks de resolução de incidentes. |
+| 🏛️ [**Arquitetura e Modelo de Dados**](docs/ARCHITECTURE.md) | Padrão Hexagonal, divisão de camadas, histórico de 52 migrações do Flyway, dicionário completo de tabelas e diagrama ERD. |
+| ⚡ [**Catálogo de Funcionalidades e Regras**](docs/FEATURES.md) | Especificação das regras de negócio: Ingestão de consultas, confirmações em grupo com acumulador atômico, menus numéricos no WhatsApp, janela de catracas, SLA de TI, parada crítica e FIFO de estoque. |
+| 🔌 [**Manual de Integrações e APIs**](docs/INTEGRATIONS.md) | Contratos de integração: Feegow ERP (13 status oficiais), Take Blip (Dual-Scope Router + Desk + Menus Interativos), GerAcesso, Conta Azul V2 e Discord JDA 5. |
+| 🛠️ [**Guia do Desenvolvedor e Operações**](docs/DEVELOPER_GUIDE.md) | Setup do ambiente local, dicionário de variáveis de ambiente (`.env`), observabilidade (Prometheus/Grafana), linter/build do frontend e runbooks de resolução de incidentes. |
 
 ---
 

@@ -1,6 +1,6 @@
 # Arquitetura do Sistema e Modelo de Dados — Inovare TI
 
-Este documento descreve a arquitetura hexagonal (Ports & Adapters) adotada no backend Java 21 / Spring Boot 3, a modularização de serviços no frontend React e o dicionário de dados do banco de dados relacional PostgreSQL 16 com histórico completo de 49 migrações gerenciadas pelo Flyway.
+Este documento descreve a arquitetura hexagonal (Ports & Adapters) adotada no backend Java 21 / Spring Boot 3, a modularização de serviços no frontend React 19 e o dicionário de dados do banco de dados relacional PostgreSQL 16 com histórico completo de 52 migrações gerenciadas pelo Flyway.
 
 ---
 
@@ -8,9 +8,9 @@ Este documento descreve a arquitetura hexagonal (Ports & Adapters) adotada no ba
 
 O ecossistema Inovare TI é estruturado sob contêineres Docker independentes e escaláveis:
 
-1. **Frontend SPA (React + Vite + TypeScript):** Interface responsiva, com controle de estado local, navegação protegida por roles (`ADMIN`, `TECHNICIAN`, `USER`), renderização de QR Codes e dashboards executivos.
+1. **Frontend SPA (React 19 + Vite + TypeScript):** Interface moderna com `ErrorBoundary` nativo, Document Metadata declarativo, paginação totalizada dinâmica, `SearchableDropdown` com catálogo completo e particionamento inteligente de bundles (`vendor-react` com apenas 231 kB).
 2. **Backend API (Java 21 + Spring Boot 3):** Núcleo de alta performance utilizando **Virtual Threads (Project Loom)** para concorrência e I/O leve. Implementa o padrão de **Arquitetura Hexagonal (Ports & Adapters)** para isolar regras de negócio corporativas de dependências de frameworks.
-3. **Banco de Dados Relacional (PostgreSQL 16):** Armazenamento transacional com suporte a JSONB, integridade referencial com chaves estrangeiras e controle incremental de evolução de schema via **Flyway Migrations (V1 a V49)**.
+3. **Banco de Dados Relacional (PostgreSQL 16):** Armazenamento transacional com suporte a JSONB, integridade referencial com chaves estrangeiras indexadas e controle incremental de evolução de schema via **Flyway Migrations (V1 a V52)**.
 4. **Cache Distribuído & Rate Limiting (Redis):** Cache de tokens de alta frequência e limitador de taxa distribuído (`RedisRateLimiter`) com fallback síncrono em memória.
 5. **Observabilidade (Prometheus + Grafana):** Coleta de métricas Micrometer expostas no endpoint `/api/actuator/prometheus`.
 
@@ -19,6 +19,7 @@ O ecossistema Inovare TI é estruturado sob contêineres Docker independentes e 
 ### 1.1 Camada Backend: Arquitetura Hexagonal (Ports & Adapters)
 
 O código-fonte do backend está localizado em `api/src/main/java/br/dev/ctrls/inovareti/modules/`, dividido em 18 contextos delimitados:
+
 
 ```
 br.dev.ctrls.inovareti.modules.<modulo>/
@@ -118,6 +119,7 @@ O controle do schema do PostgreSQL 16 é efetuado de forma cronológica e imutá
 * **V49 (Higienização e Índices Finais):** Índices de alta performance em `appointment_sessions`, `notification_groups` e `doctor_configurations`.
 * **V50 (Canal do Discord por Médico):** Coluna `discord_channel_id` na tabela `doctor_configurations` para roteamento segmentado de alertas clínicos.
 * **V51 (Normalização de Médicos e Limpeza Legada):** Remoção de tabelas legadas e consolidação definitiva do catálogo em `doctor_configurations`.
+* **V52 (Restauração de Retry e Índices de FKs):** Restauração da tabela `processing_attempts` para controle de retries de notas fiscais Conta Azul, adição de 8 índices em Foreign Keys e índices de busca em `audit_logs` e `notification_groups`.
 
 ---
 
@@ -223,6 +225,18 @@ O controle do schema do PostgreSQL 16 é efetuado de forma cronológica e imutá
 | `is_new_acquisition` | `boolean` | NOT NULL, default `false` | Indica compra recente em homologação |
 | `specifications` | `text` | NULLABLE | Configurações de hardware (CPU, RAM, SSD) |
 | `created_at` | `timestamp` | NOT NULL | Data de registro patrimonial |
+
+---
+
+### 3.4 Módulo de Automação Financeira (Conta Azul V2)
+
+#### Tabela: `processing_attempts`
+| Coluna | Tipo | Restrições | Descrição |
+|---|---|---|---|
+| `id` | `uuid` | PK, default `gen_random_uuid()` | Identificador da tentativa |
+| `sale_id` | `varchar(120)` | NOT NULL, UNIQUE, INDEX | ID da venda/baixa no Conta Azul |
+| `attempts` | `integer` | NOT NULL, default `1` | Contador acumulado de tentativas de emissão do recibo |
+| `last_attempt_at` | `timestamp` | NOT NULL, default `NOW()` | Data e hora do último disparo de reprocessamento |
 
 ---
 
