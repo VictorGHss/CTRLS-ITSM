@@ -11,6 +11,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import br.dev.ctrls.inovareti.modules.appointment.application.usecase.HandleBlipWebhookUseCase;
 import br.dev.ctrls.inovareti.modules.appointment.domain.model.AppointmentDoctorMapping;
 import br.dev.ctrls.inovareti.modules.appointment.domain.model.AppointmentSession;
+import br.dev.ctrls.inovareti.modules.appointment.domain.model.BlipGroupAction;
 import br.dev.ctrls.inovareti.modules.appointment.domain.model.NotificationGroup;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentDoctorMappingRepositoryPort;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentSessionRepositoryPort;
@@ -70,52 +71,13 @@ public class BlipGroupActionHandler {
         }
 
         // Verifica se a ação corresponde a um evento legítimo do motor de grupo
-        boolean isGroupAction = lowerAction.startsWith("confirm_group_") ||
-                                lowerAction.startsWith("alter_group_") ||
-                                lowerAction.startsWith("ver_agenda_") ||
-                                lowerAction.startsWith("group_view_") ||
-                                "group_view_fallback".equalsIgnoreCase(action) ||
-                                isConfirmGroupText(lowerAction) ||
-                                isAlterGroupText(lowerAction) ||
-                                isGroupHelpOrNoButton(lowerAction);
-
-        if (!isGroupAction && parseUuid(action.trim()) == null) {
+        BlipGroupAction groupAction = resolveGroupAction(action, lowerAction, fromPhone, bsuid, metadata);
+        if (groupAction == null) {
             return null;
         }
 
-        UUID groupId;
-        String actionType = null;
-        
-        if (isGroupHelpOrNoButton(lowerAction)) {
-            actionType = "group_help";
-            groupId = resolveFallbackGroupId(fromPhone, bsuid, metadata);
-        } else if (lowerAction.startsWith("ver_agenda_")) {
-            actionType = "ver_agenda";
-            groupId = parseUuid(action.substring("ver_agenda_".length()).trim());
-        } else if (lowerAction.startsWith("confirm_group_")) {
-            actionType = "confirm_group";
-            groupId = parseUuid(action.substring("confirm_group_".length()).trim());
-        } else if (isConfirmGroupText(lowerAction)) {
-            actionType = "confirm_group";
-            groupId = resolveFallbackGroupId(fromPhone, bsuid, metadata);
-        } else if (lowerAction.startsWith("alter_group_")) {
-            actionType = "alter_group";
-            groupId = parseUuid(action.substring("alter_group_".length()).trim());
-        } else if (isAlterGroupText(lowerAction)) {
-            actionType = "alter_group";
-            groupId = resolveFallbackGroupId(fromPhone, bsuid, metadata);
-        } else if (lowerAction.startsWith("group_view_")) {
-            actionType = "group_view";
-            groupId = parseUuid(action.substring("group_view_".length()).trim());
-        } else if ("group_view_fallback".equalsIgnoreCase(action) || "group_view".equalsIgnoreCase(action.trim()) || "ver_agenda".equalsIgnoreCase(action.trim())) {
-            actionType = "group_view_fallback";
-            groupId = resolveFallbackGroupId(fromPhone, bsuid, metadata);
-        } else {
-            groupId = parseUuid(action.trim());
-            if (groupId != null) {
-                actionType = "group_view";
-            }
-        }
+        UUID groupId = extractGroupId(groupAction, fromPhone, bsuid, metadata);
+        String actionType = resolveActionTypeName(groupAction);
         
         String dbPhone = blipIdentityReconciler.resolveAndReconcileIdentity(fromPhone, bsuid);
         List<NotificationGroup> groups = null;
@@ -164,7 +126,7 @@ public class BlipGroupActionHandler {
                                 List<NotificationGroup> recoveredGroups = notificationGroupRepository.findBySessionId(session.getId());
                                 if (recoveredGroups != null && !recoveredGroups.isEmpty()) {
                                     groups = recoveredGroups;
-                                    groupId = recoveredGroups.get(0).getGroupId();
+                                    groupId = recoveredGroups.getFirst().getGroupId();
                                     log.info("[WEBHOOK] Recuperado grupo com sucesso via sessao ativa para o telefone={}. Novo groupId={}", dbPhone, groupId);
                                     break;
                                 }
@@ -207,7 +169,7 @@ public class BlipGroupActionHandler {
                         }
                         List<AppointmentSession> activeSessions = findActiveSessionsNormalized(purifiedPhone);
                         if (activeSessions != null && !activeSessions.isEmpty()) {
-                            AppointmentSession session = activeSessions.get(0);
+                            AppointmentSession session = activeSessions.getFirst();
                             String doctorId = session.getDoctorProfissionalId();
                             if (doctorId != null && !doctorId.isBlank()) {
                                 Optional<AppointmentDoctorMapping> doctorMappingOpt = appointmentDoctorMappingRepository.findByProfissionalId(doctorId);
@@ -257,10 +219,6 @@ public class BlipGroupActionHandler {
                 return null;
             }
         }
-        
-        if (actionType == null) {
-            return null;
-        }
 
         String rawFrom = null;
         if (metadata instanceof Map<?, ?> metadataMap) {
@@ -270,17 +228,67 @@ public class BlipGroupActionHandler {
             }
         }
 
-        switch (actionType) {
-            case "ver_agenda" -> handleVerAgenda(groupId, fromPhone, rawFrom);
-            case "confirm_group" -> handleConfirmGroup(groupId, fromPhone);
-            case "alter_group" -> handleAlterGroup(groupId, fromPhone);
-            case "group_view" -> handleGroupView(groupId, fromPhone, rawFrom);
-            case "group_view_fallback" -> handleGroupViewFallback(groupId, fromPhone, rawFrom);
-            case "group_help" -> handleGroupHelp(fromPhone, dbPhone);
-            default -> {}
+        // Execução tipada e exaustiva com Pattern Matching Switch (Java 21)
+        final String finalRawFrom = rawFrom;
+        final UUID finalGroupId = groupId;
+        switch (groupAction) {
+            case BlipGroupAction.ViewSchedule v -> handleVerAgenda(finalGroupId, fromPhone, finalRawFrom);
+            case BlipGroupAction.ConfirmGroup c -> handleConfirmGroup(finalGroupId, fromPhone);
+            case BlipGroupAction.AlterGroup a -> handleAlterGroup(finalGroupId, fromPhone);
+            case BlipGroupAction.GroupView g -> handleGroupView(finalGroupId, fromPhone, finalRawFrom);
+            case BlipGroupAction.GroupViewFallback f -> handleGroupViewFallback(finalGroupId, fromPhone, finalRawFrom);
+            case BlipGroupAction.GroupHelp h -> handleGroupHelp(fromPhone, dbPhone);
         }
         
         return new HandleBlipWebhookUseCase.WebhookResult("", "", "", "", "group_action_processed", "");
+    }
+
+    private BlipGroupAction resolveGroupAction(String action, String lowerAction, String fromPhone, String bsuid, Object metadata) {
+        if (isGroupHelpOrNoButton(lowerAction)) {
+            return new BlipGroupAction.GroupHelp();
+        } else if (lowerAction.startsWith("ver_agenda_")) {
+            return new BlipGroupAction.ViewSchedule(parseUuid(action.substring("ver_agenda_".length()).trim()));
+        } else if (lowerAction.startsWith("confirm_group_")) {
+            return new BlipGroupAction.ConfirmGroup(parseUuid(action.substring("confirm_group_".length()).trim()));
+        } else if (isConfirmGroupText(lowerAction)) {
+            return new BlipGroupAction.ConfirmGroup(resolveFallbackGroupId(fromPhone, bsuid, metadata));
+        } else if (lowerAction.startsWith("alter_group_")) {
+            return new BlipGroupAction.AlterGroup(parseUuid(action.substring("alter_group_".length()).trim()));
+        } else if (isAlterGroupText(lowerAction)) {
+            return new BlipGroupAction.AlterGroup(resolveFallbackGroupId(fromPhone, bsuid, metadata));
+        } else if (lowerAction.startsWith("group_view_")) {
+            return new BlipGroupAction.GroupView(parseUuid(action.substring("group_view_".length()).trim()));
+        } else if ("group_view_fallback".equalsIgnoreCase(action) || "group_view".equalsIgnoreCase(action.trim()) || "ver_agenda".equalsIgnoreCase(action.trim())) {
+            return new BlipGroupAction.GroupViewFallback(resolveFallbackGroupId(fromPhone, bsuid, metadata));
+        } else {
+            UUID parsed = parseUuid(action.trim());
+            if (parsed != null) {
+                return new BlipGroupAction.GroupView(parsed);
+            }
+        }
+        return null;
+    }
+
+    private UUID extractGroupId(BlipGroupAction groupAction, String fromPhone, String bsuid, Object metadata) {
+        return switch (groupAction) {
+            case BlipGroupAction.ConfirmGroup c -> c.groupId() != null ? c.groupId() : resolveFallbackGroupId(fromPhone, bsuid, metadata);
+            case BlipGroupAction.AlterGroup a -> a.groupId() != null ? a.groupId() : resolveFallbackGroupId(fromPhone, bsuid, metadata);
+            case BlipGroupAction.ViewSchedule v -> v.groupId();
+            case BlipGroupAction.GroupView g -> g.groupId();
+            case BlipGroupAction.GroupViewFallback f -> f.groupId() != null ? f.groupId() : resolveFallbackGroupId(fromPhone, bsuid, metadata);
+            case BlipGroupAction.GroupHelp h -> resolveFallbackGroupId(fromPhone, bsuid, metadata);
+        };
+    }
+
+    private String resolveActionTypeName(BlipGroupAction groupAction) {
+        return switch (groupAction) {
+            case BlipGroupAction.ConfirmGroup g -> "confirm_group";
+            case BlipGroupAction.AlterGroup g -> "alter_group";
+            case BlipGroupAction.ViewSchedule g -> "ver_agenda";
+            case BlipGroupAction.GroupView g -> "group_view";
+            case BlipGroupAction.GroupViewFallback g -> "group_view_fallback";
+            case BlipGroupAction.GroupHelp g -> "group_help";
+        };
     }
 
     private boolean isGroupHelpOrNoButton(String lower) {

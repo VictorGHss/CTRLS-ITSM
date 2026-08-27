@@ -8,8 +8,10 @@ import java.nio.file.StandardCopyOption;
 import java.util.Map;
 import java.util.UUID;
 
+import java.util.Set;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -21,7 +23,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Controller responsável pelo upload de mídias (imagens, GIFs) anexadas via Editor Markdown na solução de chamados.
+ * Controller responsável pelo upload de mídias (imagens, GIFs, PDFs) anexadas via Editor Markdown na solução de chamados.
  */
 @Slf4j
 @RestController
@@ -35,6 +37,14 @@ import lombok.extern.slf4j.Slf4j;
 public class TicketAttachmentController {
 
     private static final String DEFAULT_SERVER_HOST = "itsm-inovare.ctrls.dev.br";
+    
+    private static final Set<String> ALLOWED_EXTENSIONS = Set.of(
+            ".png", ".jpg", ".jpeg", ".gif", ".webp", ".pdf"
+    );
+
+    private static final Set<String> ALLOWED_MIME_TYPES = Set.of(
+            "image/png", "image/jpeg", "image/gif", "image/webp", "application/pdf"
+    );
 
     /**
      * Endpoint para upload de arquivos de imagem/GIF colados ou arrastados no editor Markdown.
@@ -43,6 +53,7 @@ public class TicketAttachmentController {
      * @param request HttpServletRequest para resolução da URL pública
      * @return JSON { "url": "https://itsm-inovare.ctrls.dev.br/uploads/tickets/uuid.ext" }
      */
+    @PreAuthorize("isAuthenticated()")
     @PostMapping("/upload")
     public ResponseEntity<Map<String, String>> uploadAttachment(
             @RequestParam("file") MultipartFile file,
@@ -56,8 +67,19 @@ public class TicketAttachmentController {
         String extension = "";
         if (originalFilename != null && originalFilename.contains(".")) {
             extension = originalFilename.substring(originalFilename.lastIndexOf('.')).toLowerCase();
-        } else {
-            extension = ".png";
+        }
+
+        if (extension.isBlank() || !ALLOWED_EXTENSIONS.contains(extension)) {
+            log.warn("[TICKET-ATTACHMENT] Tentativa de upload com extensão não permitida: '{}'", extension);
+            return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
+                    .body(Map.of("error", "Extensão de arquivo não permitida. Permitidos: " + String.join(", ", ALLOWED_EXTENSIONS)));
+        }
+
+        String contentType = file.getContentType();
+        if (contentType != null && !ALLOWED_MIME_TYPES.contains(contentType.toLowerCase())) {
+            log.warn("[TICKET-ATTACHMENT] Tentativa de upload com MIME type não permitido: '{}'", contentType);
+            return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
+                    .body(Map.of("error", "Tipo MIME de arquivo não permitido: " + contentType));
         }
 
         // Determina o diretório de destino: /mnt/data/uploads/tickets se acessível, senão ./uploads/tickets

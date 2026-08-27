@@ -240,7 +240,7 @@ public class FeegowAppointmentAdapter implements AppointmentExternalPort {
             ResponseEntity<String> response = appointmentClient.searchAppointments(uri, getAccessToken());
             List<FeegowSearchResponseDto.FeegowSearchAppointmentDto> searchItems = extractSearchItems(response.getBody());
             if (!searchItems.isEmpty()) {
-                return parseAppointment(searchItems.get(0));
+                return parseAppointment(searchItems.getFirst());
             }
         } catch (Exception ex) {
             log.warn("[FEEGOW] Falha ao consultar agendamento ID {}: {}", appointmentId, ex.getMessage());

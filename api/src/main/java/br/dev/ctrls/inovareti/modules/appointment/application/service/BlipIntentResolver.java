@@ -97,7 +97,7 @@ public class BlipIntentResolver {
         List<AppointmentSession> pendingSessions = findPendingSessionsByPhoneWithVariations(fromPhone, bsuid);
 
         if (pendingSessions.size() == 1) {
-            AppointmentSession singleSession = pendingSessions.get(0);
+            AppointmentSession singleSession = pendingSessions.getFirst();
             String feegowId = singleSession.getFeegowAppointmentId();
             log.info("[WEBHOOK-PHONE-RESOLVE] 1 agendamento pendente (Feegow ID: {}) encontrado por telefone para {}. Mapeando para {}_{}",
                     feegowId, fromPhone, intent.name().toLowerCase(), feegowId);
@@ -291,7 +291,7 @@ public class BlipIntentResolver {
                     appointmentSessionRepository.findActiveByPhoneNumber(finalPhone)
                 );
                 if (activeSessions != null && !activeSessions.isEmpty()) {
-                    resolvedId = activeSessions.get(0).getFeegowAppointmentId();
+                    resolvedId = activeSessions.getFirst().getFeegowAppointmentId();
                 }
             }
         }
