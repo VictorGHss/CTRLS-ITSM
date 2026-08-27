@@ -34,7 +34,6 @@ import lombok.extern.slf4j.Slf4j;
 public class NotificationService {
 
     private static final DateTimeFormatter BRAZILIAN_TIME = DateTimeFormatter.ofPattern("HH:mm");
-    private static final String DOCTOR_NAME_KEY = "MEDICO_NOME";
     private static final String DEFAULT_APPOINTMENT_HOUR = "--:--";
 
     private final RestTemplate restTemplate;
@@ -237,7 +236,7 @@ public class NotificationService {
 
         return appointmentDoctorMappingRepository
                 .findByProfissionalId(session.getDoctorProfissionalId().trim())
-                .map(AppointmentDoctorMapping::getProfissionalNome)
+                .map(m -> m != null ? m.getProfissionalNome() : null)
                 .filter(StringUtils::hasText)
                 .orElseGet(() -> "Profissional " + session.getDoctorProfissionalId().trim());
     }
