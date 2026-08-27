@@ -52,6 +52,8 @@ export default function Login() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-white to-brand-secondary/20 flex items-center justify-center px-4">
+      <title>Entrar — Inovare TI</title>
+      <meta name="description" content="Acesse o portal de TI e suporte da Clínica Inovare" />
       <div className="w-full max-w-sm">
         {/* Logo da clínica */}
         <div className="flex justify-center mb-8">

@@ -184,6 +184,8 @@ export default function Assets() {
 
   return (
     <main className="w-full max-w-full px-4 sm:px-6 lg:px-8 py-8">
+      <title>Ativos de TI (CMDB) — Inovare TI</title>
+      <meta name="description" content="Gestão patrimonial e inventário de equipamentos de TI" />
       <PageHero
         eyebrow="CMDB"
         title="Ativos (CMDB)"

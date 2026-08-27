@@ -96,6 +96,8 @@ export default function Dashboard() {
 
   return (
     <main className="w-full max-w-full px-4 sm:px-6 lg:px-8 py-8">
+      <title>Dashboard — Inovare TI</title>
+      <meta name="description" content="Painel de controle e indicadores operacionais de TI" />
       <PageHero
         eyebrow="Painel"
         title={isAdmin ? 'Visão Geral de Chamados' : 'Dashboard'}

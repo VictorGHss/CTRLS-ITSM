@@ -197,6 +197,8 @@ export default function Vault() {
 
   return (
     <main className="relative w-full max-w-full px-4 sm:px-6 lg:px-8 py-8">
+      <title>Cofre de Senhas — Inovare TI</title>
+      <meta name="description" content="Armazenamento seguro de credenciais, segredos e documentos de TI" />
       <PageHero
         eyebrow="Segurança"
         title="Cofre de Senhas e Documentos"

@@ -360,6 +360,8 @@ export default function PatientAccess() {
   // === TELA PRINCIPAL (CARROSSEL DE CREDENCIAIS / CONTINGÊNCIA) ===
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col justify-between font-sans antialiased">
+      <title>Acesso à Clínica — Inovare TI</title>
+      <meta name="description" content="Credencial de acesso e QR Code para entrada nas catracas da Clínica Inovare" />
       <div className="w-full max-w-md bg-white shadow-2xl shadow-brand-primary/5 border-x border-brand-secondary/35 flex flex-col min-h-screen mx-auto relative">
         
         {/* Header Superior */}

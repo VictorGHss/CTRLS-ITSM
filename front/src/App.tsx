@@ -86,10 +86,15 @@ const Financeiro = lazyWithRetry(() => import('./pages/Financeiro'));
 const PatientAccess = lazyWithRetry(() => import('./pages/PatientAccess'));
 const FinancialTwoFactorChallenge = lazyWithRetry(() => import('@/pages/Financeiro/components/FinancialTwoFactorChallenge'));
 
+import ErrorBoundary from './components/common/ErrorBoundary';
+
 function PageLoader() {
   return (
-    <div className="flex items-center justify-center w-full py-24 text-gray-500">
-      Carregando...
+    <div className="flex flex-col items-center justify-center w-full min-h-[50vh] py-24 gap-3">
+      <div className="h-8 w-8 animate-spin rounded-full border-3 border-brand-secondary border-t-brand-primary" />
+      <span className="text-xs font-semibold text-slate-400 animate-pulse tracking-wide">
+        Carregando interface...
+      </span>
     </div>
   );
 }
@@ -150,65 +155,67 @@ function FinancialGuardRoute({ children }: { children?: ReactElement }) {
 
 function AppRoutes() {
   return (
-    <Suspense fallback={<PageLoader />}>
-      <Routes>
-        <Route path="/login" element={<PageTransition><Login /></PageTransition>} />
-        <Route path="/primeiro-acesso" element={<PageTransition><PrimeiroAcesso /></PageTransition>} />
-        <Route path="/:appointmentId" element={<PageTransition><PatientAccess /></PageTransition>} />
-        {/* Rotas protegidas compartilham o DefaultLayout */}
-        <Route element={<PrivateLayoutRoute />}>
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/tickets" element={<Tickets />} />
-          <Route path="/tickets/new" element={<NewTicket />} />
-          {/* Rota de detalhes de chamado — :id é o UUID do chamado */}
-          <Route path="/tickets/:id" element={<TicketDetails />} />
-          {/* Rotas de inventário */}
-          <Route path="/inventory" element={<Inventory />} />
-          <Route path="/inventory/new" element={<NewItem />} />
-          {/* Rota de detalhes de item — :id é o UUID do item */}
-          <Route path="/inventory/:id" element={<ItemDetails />} />
-          {/* Rotas de ativos (CMDB) */}
-          <Route path="/assets" element={<Assets />} />
-          <Route path="/assets/:id" element={<AssetDetails />} />
-          <Route path="/profile" element={<Profile />} />
-          <Route path="/settings" element={<Settings />} />
-          {/* Rotas de gestão de pessoas (requerem ADMIN) */}
-          <Route path="/users" element={<Users />} />
-          <Route path="/sectors" element={<Sectors />} />
-          {/* Rotas da Base de Conhecimento */}
-          <Route path="/knowledge-base" element={<KnowledgeBase />} />
-          <Route path="/knowledge-base/new" element={<NewArticle />} />
-          <Route path="/knowledge-base/:id" element={<ArticleDetails />} />
-          <Route path="/knowledge-base/:id/edit" element={<EditArticle />} />
-          <Route
-            path="/vault"
-            element={(
-              <RoleRoute allowedRoles={['ADMIN', 'TECHNICIAN']}>
-                <Vault />
-              </RoleRoute>
-            )}
-          />
-          <Route
-            path="/system-logs"
-            element={(
-              <RoleRoute allowedRoles={['ADMIN']}>
-                <SystemLogs />
-              </RoleRoute>
-            )}
-          />
-          <Route
-            path="/financeiro"
-            element={(
-              <FinancialGuardRoute>
-                <Financeiro />
-              </FinancialGuardRoute>
-            )}
-          />
-        </Route>
-        {/* Redireciona a raiz para /login */}
-        <Route path="*" element={<Navigate to="/login" replace />} />
-      </Routes>
-    </Suspense>
+    <ErrorBoundary>
+      <Suspense fallback={<PageLoader />}>
+        <Routes>
+          <Route path="/login" element={<PageTransition><Login /></PageTransition>} />
+          <Route path="/primeiro-acesso" element={<PageTransition><PrimeiroAcesso /></PageTransition>} />
+          <Route path="/:appointmentId" element={<PageTransition><PatientAccess /></PageTransition>} />
+          {/* Rotas protegidas compartilham o DefaultLayout */}
+          <Route element={<PrivateLayoutRoute />}>
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/tickets" element={<Tickets />} />
+            <Route path="/tickets/new" element={<NewTicket />} />
+            {/* Rota de detalhes de chamado — :id é o UUID do chamado */}
+            <Route path="/tickets/:id" element={<TicketDetails />} />
+            {/* Rotas de inventário */}
+            <Route path="/inventory" element={<Inventory />} />
+            <Route path="/inventory/new" element={<NewItem />} />
+            {/* Rota de detalhes de item — :id é o UUID do item */}
+            <Route path="/inventory/:id" element={<ItemDetails />} />
+            {/* Rotas de ativos (CMDB) */}
+            <Route path="/assets" element={<Assets />} />
+            <Route path="/assets/:id" element={<AssetDetails />} />
+            <Route path="/profile" element={<Profile />} />
+            <Route path="/settings" element={<Settings />} />
+            {/* Rotas de gestão de pessoas (requerem ADMIN) */}
+            <Route path="/users" element={<Users />} />
+            <Route path="/sectors" element={<Sectors />} />
+            {/* Rotas da Base de Conhecimento */}
+            <Route path="/knowledge-base" element={<KnowledgeBase />} />
+            <Route path="/knowledge-base/new" element={<NewArticle />} />
+            <Route path="/knowledge-base/:id" element={<ArticleDetails />} />
+            <Route path="/knowledge-base/:id/edit" element={<EditArticle />} />
+            <Route
+              path="/vault"
+              element={(
+                <RoleRoute allowedRoles={['ADMIN', 'TECHNICIAN']}>
+                  <Vault />
+                </RoleRoute>
+              )}
+            />
+            <Route
+              path="/system-logs"
+              element={(
+                <RoleRoute allowedRoles={['ADMIN']}>
+                  <SystemLogs />
+                </RoleRoute>
+              )}
+            />
+            <Route
+              path="/financeiro"
+              element={(
+                <FinancialGuardRoute>
+                  <Financeiro />
+                </FinancialGuardRoute>
+              )}
+            />
+          </Route>
+          {/* Redireciona a raiz para /login */}
+          <Route path="*" element={<Navigate to="/login" replace />} />
+        </Routes>
+      </Suspense>
+    </ErrorBoundary>
   );
 }
 

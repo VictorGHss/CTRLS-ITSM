@@ -177,6 +177,8 @@ export default function Users() {
 
   return (
     <main className="w-full max-w-full px-4 sm:px-6 lg:px-8 py-8">
+      <title>Equipe e Usuários — Inovare TI</title>
+      <meta name="description" content="Gestão de usuários, permissões e acessos ao sistema Inovare TI" />
       <PageHero
         eyebrow="Administração"
         title="Equipe"
