@@ -5,7 +5,6 @@ import io.micrometer.observation.annotation.Observed;
 import br.dev.ctrls.inovareti.modules.appointment.domain.model.AppointmentDoctorMapping;
 import br.dev.ctrls.inovareti.modules.appointment.domain.model.AppointmentSession;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentDoctorMappingRepositoryPort;
-import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentVariableLogRepositoryPort;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.PatientExternalPort;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.FeegowPatient;
 import java.time.format.DateTimeFormatter;
@@ -40,7 +39,6 @@ public class NotificationService {
 
     private final RestTemplate restTemplate;
     private final PatientExternalPort patientExternalPort;
-    private final AppointmentVariableLogRepositoryPort appointmentVariableLogRepository;
     private final AppointmentDoctorMappingRepositoryPort appointmentDoctorMappingRepository;
     private final UserRepositoryPort userRepository;
 
@@ -233,18 +231,15 @@ public class NotificationService {
     }
 
     private String resolveDoctorName(AppointmentSession session) {
-        return appointmentVariableLogRepository
-                .findFirstBySessionIdAndDictionaryKeyOrderBySentAtDesc(session.getId(), DOCTOR_NAME_KEY)
-                .map(variableLog -> variableLog.getResolvedValue())
-                .filter(StringUtils::hasText)
-                .map(s -> s.trim())
-                .orElseGet(() -> {
-                    if (StringUtils.hasText(session.getDoctorProfissionalId())) {
-                        return "Profissional " + session.getDoctorProfissionalId().trim();
-                    }
+        if (session == null || !StringUtils.hasText(session.getDoctorProfissionalId())) {
+            return "Profissional";
+        }
 
-                    return "Profissional";
-                });
+        return appointmentDoctorMappingRepository
+                .findByProfissionalId(session.getDoctorProfissionalId().trim())
+                .map(AppointmentDoctorMapping::getProfissionalNome)
+                .filter(StringUtils::hasText)
+                .orElseGet(() -> "Profissional " + session.getDoctorProfissionalId().trim());
     }
 
     private String resolveAppointmentHour(AppointmentSession session) {
