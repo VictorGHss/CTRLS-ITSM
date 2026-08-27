@@ -1,7 +1,6 @@
 package br.dev.ctrls.inovareti.modules.audit.infrastructure.adapter.input;
 
 import java.time.LocalDateTime;
-import java.util.Optional;
 import java.util.UUID;
 
 import org.springframework.data.domain.Page;
@@ -53,8 +52,8 @@ public class AuditLogController {
     @PreAuthorize("hasRole('ADMIN')")
     @GetMapping
     public ResponseEntity<Page<AuditLogResponseDTO>> getAuditLogs(
-            @RequestParam(required = false) Optional<UUID> userId,
-            @RequestParam(required = false) Optional<AuditAction> action,
+            @RequestParam(required = false) UUID userId,
+            @RequestParam(required = false) AuditAction action,
             @RequestParam(required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
             @RequestParam(required = false)
@@ -63,8 +62,11 @@ public class AuditLogController {
             @RequestParam(defaultValue = "20") int size) {
         
         AuditLogSpecification spec = AuditLogSpecification.builder()
-            .userId(userId.orElse(null))
-            .action(action.orElse(null)).startDate(startDate).endDate(endDate).build();
+            .userId(userId)
+            .action(action)
+            .startDate(startDate)
+            .endDate(endDate)
+            .build();
 
         // Limita o tamanho máximo de página para evitar consultas excessivas
         int safeSize = Math.min(size, 100);
