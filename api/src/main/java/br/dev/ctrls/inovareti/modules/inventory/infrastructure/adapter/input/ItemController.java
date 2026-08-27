@@ -2,18 +2,13 @@ package br.dev.ctrls.inovareti.modules.inventory.infrastructure.adapter.input;
 
 import io.micrometer.observation.annotation.Observed;
 
-import br.dev.ctrls.inovareti.modules.inventory.domain.model.StockBatch;
-
-import br.dev.ctrls.inovareti.modules.inventory.domain.model.StockMovementType;
-
-import br.dev.ctrls.inovareti.modules.inventory.domain.port.output.StockBatchRepositoryPort;
-
-import br.dev.ctrls.inovareti.modules.inventory.domain.port.output.StockMovementRepositoryPort;
-
-
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -29,30 +24,33 @@ import org.springframework.web.multipart.MultipartFile;
 
 import br.dev.ctrls.inovareti.core.shared.domain.model.exception.BadRequestException;
 import br.dev.ctrls.inovareti.core.shared.domain.model.exception.NotFoundException;
+import br.dev.ctrls.inovareti.infrastructure.shared.storage.FileStorageService;
+import br.dev.ctrls.inovareti.infrastructure.shared.storage.InvoiceFileMetadata;
+import br.dev.ctrls.inovareti.modules.inventory.application.dto.AllocateConsumableRequestDTO;
 import br.dev.ctrls.inovareti.modules.inventory.application.dto.BatchResponseDTO;
+import br.dev.ctrls.inovareti.modules.inventory.application.dto.ItemAllocationResponseDTO;
 import br.dev.ctrls.inovareti.modules.inventory.application.dto.ItemRequestDTO;
 import br.dev.ctrls.inovareti.modules.inventory.application.dto.ItemResponseDTO;
+import br.dev.ctrls.inovareti.modules.inventory.application.dto.LinkComponentRequestDTO;
 import br.dev.ctrls.inovareti.modules.inventory.application.dto.StockBatchRequestDTO;
 import br.dev.ctrls.inovareti.modules.inventory.application.dto.StockBatchResponseDTO;
 import br.dev.ctrls.inovareti.modules.inventory.application.dto.StockMovementResponseDTO;
-import br.dev.ctrls.inovareti.modules.inventory.application.dto.LinkComponentRequestDTO;
-import br.dev.ctrls.inovareti.modules.inventory.application.dto.AllocateConsumableRequestDTO;
-import br.dev.ctrls.inovareti.modules.inventory.application.dto.ItemAllocationResponseDTO;
-import br.dev.ctrls.inovareti.modules.inventory.infrastructure.adapter.output.jpa.repository.ItemAllocationJpaRepository;
-import br.dev.ctrls.inovareti.modules.inventory.domain.model.ItemAllocationEntity;
-import java.util.stream.Collectors;
+import br.dev.ctrls.inovareti.modules.inventory.application.usecase.AllocateConsumableUseCase;
 import br.dev.ctrls.inovareti.modules.inventory.application.usecase.CreateItemUseCase;
 import br.dev.ctrls.inovareti.modules.inventory.application.usecase.FindItemByIdUseCase;
+import br.dev.ctrls.inovareti.modules.inventory.application.usecase.LinkAssetComponentUseCase;
 import br.dev.ctrls.inovareti.modules.inventory.application.usecase.ListAllItemsUseCase;
 import br.dev.ctrls.inovareti.modules.inventory.application.usecase.ListItemBatchesUseCase;
 import br.dev.ctrls.inovareti.modules.inventory.application.usecase.RegisterStockBatchUseCase;
-import br.dev.ctrls.inovareti.modules.inventory.application.usecase.LinkAssetComponentUseCase;
-import br.dev.ctrls.inovareti.modules.inventory.application.usecase.AllocateConsumableUseCase;
-import br.dev.ctrls.inovareti.infrastructure.shared.storage.FileStorageService;
-import br.dev.ctrls.inovareti.infrastructure.shared.storage.InvoiceFileMetadata;
-import jakarta.validation.Valid;
-import br.dev.ctrls.inovareti.modules.inventory.domain.port.output.ItemRepositoryPort;
 import br.dev.ctrls.inovareti.modules.inventory.domain.model.Item;
+import br.dev.ctrls.inovareti.modules.inventory.domain.model.ItemAllocationEntity;
+import br.dev.ctrls.inovareti.modules.inventory.domain.model.StockBatch;
+import br.dev.ctrls.inovareti.modules.inventory.domain.model.StockMovementType;
+import br.dev.ctrls.inovareti.modules.inventory.domain.port.output.ItemRepositoryPort;
+import br.dev.ctrls.inovareti.modules.inventory.domain.port.output.StockBatchRepositoryPort;
+import br.dev.ctrls.inovareti.modules.inventory.domain.port.output.StockMovementRepositoryPort;
+import br.dev.ctrls.inovareti.modules.inventory.infrastructure.adapter.output.jpa.repository.ItemAllocationJpaRepository;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
 /**
@@ -84,17 +82,17 @@ public class ItemController {
      * Todos os usuários autenticados podem ler (necessário para formulários de chamados).
      */
     @GetMapping
-    public ResponseEntity<org.springframework.data.domain.Page<ItemResponseDTO>> listAll(
+    public ResponseEntity<Page<ItemResponseDTO>> listAll(
             @RequestParam(defaultValue = "name") String sortField,
             @RequestParam(defaultValue = "ASC") Sort.Direction sortDirection,
             @RequestParam(defaultValue = "false") boolean lowStockOnly,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(required = false) String search) {
-        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(page, 15);
+        Pageable pageable = PageRequest.of(page, 15);
         
         if (search != null && !search.trim().isEmpty()) {
-            org.springframework.data.domain.Page<Item> itemsPage = itemRepository.findByNameContainingIgnoreCase(search.trim(), pageable);
-            org.springframework.data.domain.Page<ItemResponseDTO> pageResult = itemsPage.map(ItemResponseDTO::from);
+            Page<Item> itemsPage = itemRepository.findByNameContainingIgnoreCase(search.trim(), pageable);
+            Page<ItemResponseDTO> pageResult = itemsPage.map(ItemResponseDTO::from);
             return ResponseEntity.ok(pageResult);
         }
         
@@ -104,7 +102,6 @@ public class ItemController {
     /**
      * Busca um item de inventário específico por ID.
      * Retorna 200 OK com os dados do item ou 404 se não encontrado.
-     * Todos os usuários autenticados podem ler (necessário para visualização em chamados).
      */
     @GetMapping("/{id}")
     public ResponseEntity<ItemResponseDTO> findById(@PathVariable UUID id) {
@@ -114,8 +111,6 @@ public class ItemController {
     /**
      * Lista todos os lotes de estoque de um item específico.
      * Os lotes são retornados ordenados do mais recente para o mais antigo.
-     * Retorna 200 OK com a lista (vazia se não houver lotes).
-     * Todos os usuários autenticados podem ler informações de estoque.
      */
     @PreAuthorize("hasAnyRole('ADMIN', 'INVENTORY_MANAGER')")
     @GetMapping("/{id}/batches")
@@ -123,6 +118,9 @@ public class ItemController {
         return ResponseEntity.ok(listItemBatchesUseCase.execute(id));
     }
 
+    /**
+     * Lista as movimentações de saída de estoque para um item específico.
+     */
     @PreAuthorize("hasAnyRole('ADMIN', 'INVENTORY_MANAGER')")
     @GetMapping("/{id}/movements/out")
     public ResponseEntity<List<StockMovementResponseDTO>> listOutMovements(@PathVariable UUID id) {
@@ -136,7 +134,6 @@ public class ItemController {
 
     /**
      * Cria um novo item de inventário com estoque inicial zero.
-     * Retorna 201 Created com os dados do item.
      */
     @PreAuthorize("hasAnyRole('ADMIN', 'TECHNICIAN')")
     @PostMapping
@@ -146,8 +143,7 @@ public class ItemController {
 
     /**
      * Registra um lote de entrada de estoque para o item informado.
-     * Atualiza o currentStock do item atomicamente.
-     * Retorna 201 Created com os dados do lote.
+     * Atualiza o estoque atual do item atomicamente.
      */
     @PreAuthorize("hasAnyRole('ADMIN', 'TECHNICIAN')")
     @PostMapping("/{id}/batches")
@@ -155,7 +151,7 @@ public class ItemController {
             @PathVariable UUID id,
             @Valid @RequestBody StockBatchRequestDTO request) {
 
-        // Garante que o itemId do path e do body são consistentes
+        // Garante que o itemId do path e do body sejam consistentes
         StockBatchRequestDTO consistentRequest = new StockBatchRequestDTO(
                 id,
                 request.quantity(),
@@ -173,15 +169,6 @@ public class ItemController {
     /**
      * Upload de nota fiscal (PDF ou imagem) para um lote de estoque.
      * O arquivo é salvo em disco e os metadados são armazenados na entidade StockBatch.
-     *
-     * POST /api/items/{itemId}/batches/{batchId}/invoice
-     * Content-Type: multipart/form-data
-     * Form parameter: file (MultipartFile)
-     *
-     * @param itemId  UUID do Item
-     * @param batchId UUID do StockBatch
-     * @param file    Arquivo PDF ou Imagem (máx 5MB)
-     * @return        Lote atualizado com metadados da NF
      */
     @PreAuthorize("hasAnyRole('ADMIN', 'TECHNICIAN')")
     @PostMapping("/{itemId}/batches/{batchId}/invoice")
@@ -191,11 +178,11 @@ public class ItemController {
             @RequestParam("file") MultipartFile file) throws BadRequestException {
 
         StockBatch batch = stockBatchRepository.findById(batchId)
-                .orElseThrow(() -> new NotFoundException("Stock batch not found with id: " + batchId));
+                .orElseThrow(() -> new NotFoundException("Lote de estoque não encontrado com o id: " + batchId));
 
-        // Validar que o lote pertence ao item informado
+        // Valida que o lote pertence ao item informado
         if (!batch.getItem().getId().equals(itemId)) {
-            throw new BadRequestException("Stock batch does not belong to the specified item.");
+            throw new BadRequestException("O lote de estoque não pertence ao item informado.");
         }
 
         // Se já existe um arquivo anterior, remove-o do disco
@@ -217,12 +204,6 @@ public class ItemController {
 
     /**
      * Download de nota fiscal (PDF ou imagem) de um lote de estoque.
-     *
-     * GET /api/items/{itemId}/batches/{batchId}/invoice
-     *
-     * @param itemId  UUID do Item
-     * @param batchId UUID do StockBatch
-     * @return        Arquivo binário com headers apropriados (Content-Disposition, Content-Type)
      */
     @PreAuthorize("hasAnyRole('ADMIN', 'INVENTORY_MANAGER')")
     @GetMapping("/{itemId}/batches/{batchId}/invoice")
@@ -231,11 +212,11 @@ public class ItemController {
             @PathVariable UUID batchId) {
 
         StockBatch batch = stockBatchRepository.findById(batchId)
-                .orElseThrow(() -> new NotFoundException("Stock batch not found with id: " + batchId));
+                .orElseThrow(() -> new NotFoundException("Lote de estoque não encontrado com o id: " + batchId));
 
-        // Validar que o lote pertence ao item informado
+        // Valida que o lote pertence ao item informado
         if (!batch.getItem().getId().equals(itemId)) {
-            throw new BadRequestException("Stock batch does not belong to the specified item.");
+            throw new BadRequestException("O lote de estoque não pertence ao item informado.");
         }
 
         if (batch.getInvoiceFilePath() == null || batch.getInvoiceFilePath().isBlank()) {
@@ -253,25 +234,18 @@ public class ItemController {
 
     /**
      * Busca de forma paginada os itens que atingiram o fim de vida útil (obsolescência de hardware).
-     * Retorna 200 OK com os itens obsoletos.
      */
     @GetMapping("/obsolete")
-    public ResponseEntity<org.springframework.data.domain.Page<ItemResponseDTO>> listObsolete(
+    public ResponseEntity<Page<ItemResponseDTO>> listObsolete(
             @RequestParam(defaultValue = "0") int page) {
-        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(page, 15);
-        org.springframework.data.domain.Page<Item> itemsPage = itemRepository.findObsoleteItems(pageable);
-        org.springframework.data.domain.Page<ItemResponseDTO> pageResult = itemsPage.map(ItemResponseDTO::from);
+        Pageable pageable = PageRequest.of(page, 15);
+        Page<Item> itemsPage = itemRepository.findObsoleteItems(pageable);
+        Page<ItemResponseDTO> pageResult = itemsPage.map(ItemResponseDTO::from);
         return ResponseEntity.ok(pageResult);
     }
 
     /**
      * Acopla um ativo filho (componente) a um ativo principal (pai) no inventário.
-     *
-     * POST /items/{id}/components
-     *
-     * @param id      UUID do ativo principal (pai).
-     * @param request DTO contendo o ID do ativo filho a ser acoplado.
-     * @return        200 OK sem conteúdo.
      */
     @PreAuthorize("hasAnyRole('ADMIN', 'TECHNICIAN')")
     @PostMapping("/{id}/components")
@@ -284,12 +258,6 @@ public class ItemController {
 
     /**
      * Aloca um consumível ou periférico a um ativo principal, decrementando o estoque físico (FIFO).
-     *
-     * POST /items/{id}/allocations
-     *
-     * @param id      UUID do ativo principal que receberá a alocação.
-     * @param request DTO com o ID do consumível, a quantidade e opcionalmente o chamado associado.
-     * @return        200 OK sem conteúdo.
      */
     @PreAuthorize("hasAnyRole('ADMIN', 'TECHNICIAN')")
     @PostMapping("/{id}/allocations")
@@ -302,9 +270,6 @@ public class ItemController {
 
     /**
      * Retorna a lista de alocações vinculadas a este item de inventário.
-     * Pode filtrar onde o item é o ativo principal (asParent = true) ou o insumo alocado (asParent = false).
-     *
-     * GET /items/{id}/allocations
      */
     @PreAuthorize("hasAnyRole('ADMIN', 'TECHNICIAN')")
     @GetMapping("/{id}/allocations")
