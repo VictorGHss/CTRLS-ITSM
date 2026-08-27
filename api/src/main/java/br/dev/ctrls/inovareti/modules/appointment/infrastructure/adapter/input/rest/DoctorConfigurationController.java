@@ -28,7 +28,7 @@ import lombok.extern.slf4j.Slf4j;
 public class DoctorConfigurationController {
 
     private final DoctorConfigurationRepository doctorConfigurationRepository;
-    private final br.dev.ctrls.inovareti.modules.appointment.application.service.BlipNotificationService blipNotificationService;
+    private final br.dev.ctrls.inovareti.modules.appointment.application.service.BlipReviewNotificationService blipReviewNotificationService;
 
     @org.springframework.beans.factory.annotation.Value("${app.appointment.motor.active-doctor-ids:}")
     private String activeDoctorIds;
@@ -86,7 +86,7 @@ public class DoctorConfigurationController {
         log.info("[REST] Teste manual de disparo de avaliação Google para o telefone={}, paciente={}, medico={}, reviewParam={}",
                 phone, patientName, doctorName, reviewParam);
         
-        blipNotificationService.sendReviewTemplateMessage(phone, "pesquisa_avaliacao_google_itsm_v6", patientName, doctorName, reviewParam);
+        blipReviewNotificationService.sendReviewTemplateMessage(phone, "pesquisa_avaliacao_google_itsm_v6", patientName, doctorName, reviewParam);
         
         return ResponseEntity.ok(java.util.Map.of(
             "status", "success",

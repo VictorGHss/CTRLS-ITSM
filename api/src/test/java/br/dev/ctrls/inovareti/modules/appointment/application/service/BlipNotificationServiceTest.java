@@ -24,6 +24,7 @@ public class BlipNotificationServiceTest {
         BlipContextService contextService = mock(BlipContextService.class);
         AppointmentSessionRepositoryPort sessionRepository = mock(AppointmentSessionRepositoryPort.class);
         BlipAppointmentFormatter formatter = mock(BlipAppointmentFormatter.class);
+        BlipReviewNotificationService reviewNotificationService = mock(BlipReviewNotificationService.class);
 
         service = new BlipNotificationService(
                 limeClient,
@@ -32,7 +33,8 @@ public class BlipNotificationServiceTest {
                 payloadBuilder,
                 contextService,
                 sessionRepository,
-                formatter
+                formatter,
+                reviewNotificationService
         );
     }
 

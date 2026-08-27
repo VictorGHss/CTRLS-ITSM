@@ -35,7 +35,7 @@ public class SendPostAppointmentReviewUseCase {
     private final AppointmentSessionRepositoryPort appointmentSessionRepository;
     private final DoctorConfigurationRepository doctorConfigurationRepository;
     private final PatientExternalPort patientExternalPort;
-    private final BlipNotificationService blipNotificationService;
+    private final BlipReviewNotificationService blipReviewNotificationService;
     private final BlipContextService blipContextService;
 
     @org.springframework.beans.factory.annotation.Value("${app.appointment.motor.active-doctor-ids:}")
@@ -207,7 +207,7 @@ public class SendPostAppointmentReviewUseCase {
                 log.info("[GOOGLE-REVIEW] Enviando template '{}' para agendamento ID {} (Paciente: {}, Médico: {}, Telefone: {}, DoctorID Param: {})",
                         TEMPLATE_REVIEW_GOOGLE, feegowAppointmentId, patientName, doctorName, phone, doctorIdParam);
 
-                blipNotificationService.sendReviewTemplateMessage(phone, TEMPLATE_REVIEW_GOOGLE, patientName, doctorName, doctorIdParam);
+                blipReviewNotificationService.sendReviewTemplateMessage(phone, TEMPLATE_REVIEW_GOOGLE, patientName, doctorName, doctorIdParam);
                 if (blipContextService != null) {
                     blipContextService.updateUserMasterState(phone, STATE_REVIEW_FINISHED);
                 }

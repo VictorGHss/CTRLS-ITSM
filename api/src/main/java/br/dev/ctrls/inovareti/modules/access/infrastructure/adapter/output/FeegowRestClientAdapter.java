@@ -109,7 +109,6 @@ public class FeegowRestClientAdapter implements FeegowClientPort {
             );
 
             return Optional.of(info);
-
         } catch (Exception ex) {
             log.error("[FEEGOW-ACCESS] Erro ao buscar informações de acesso do agendamento {}: {}", appointmentId, ex.getMessage(), ex);
             return Optional.empty();

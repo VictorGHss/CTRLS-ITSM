@@ -29,6 +29,7 @@ public class BlipNotificationService {
     private final BlipContextService blipContextService;
     private final br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentSessionRepositoryPort appointmentSessionRepository;
     private final BlipAppointmentFormatter blipAppointmentFormatter;
+    private final BlipReviewNotificationService blipReviewNotificationService;
 
     @org.springframework.beans.factory.annotation.Value("${notification.blocked-doctor-ids:46}")
     private String rawBlockedDoctorIds = "46";
@@ -72,7 +73,8 @@ public class BlipNotificationService {
             BlipPayloadBuilder blipPayloadBuilder,
             BlipContextService blipContextService,
             br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentSessionRepositoryPort appointmentSessionRepository,
-            BlipAppointmentFormatter blipAppointmentFormatter) {
+            BlipAppointmentFormatter blipAppointmentFormatter,
+            BlipReviewNotificationService blipReviewNotificationService) {
         this.limeClient = limeClient;
         this.blipTemplateParameterResolver = blipTemplateParameterResolver;
         this.motorProperties = motorProperties;
@@ -80,6 +82,7 @@ public class BlipNotificationService {
         this.blipContextService = blipContextService;
         this.appointmentSessionRepository = appointmentSessionRepository;
         this.blipAppointmentFormatter = blipAppointmentFormatter;
+        this.blipReviewNotificationService = blipReviewNotificationService;
     }
 
     public List<BlipTemplateDto> fetchTemplatesFromBlip() {
@@ -640,100 +643,15 @@ public class BlipNotificationService {
     }
 
     /**
-     * Envia o template de pesquisa de avaliação do Google Review (pesquisa_avaliacao_google_itsm_v6)
-     * via mensagem LIME nativa com componentes WABA (WhatsApp Meta API) diretamente para o canal.
-     * Inclui os parâmetros de corpo (body: paciente e médico) e de botão (button: ID do médico).
+     * Envia o template de pesquisa de avaliação do Google Review delegando para o serviço especialista
+     * {@link BlipReviewNotificationService}.
      */
     public void sendReviewTemplateMessage(String destination, String templateName, String patientName, String doctorName, String doctorIdOrParam) {
-        String wabaDestination = ensureWabaIdentity(destination);
-        if (wabaDestination == null || !wabaDestination.contains("@")) {
-            log.warn("[TELEFONE-INVÁLIDO] Abortando envio do template de avaliação '{}'. Destino '{}' inválido.",
-                    templateName, destination);
-            return;
-        }
-
-        String safeDoctorIdParam = (doctorIdOrParam != null && !doctorIdOrParam.isBlank())
-                ? doctorIdOrParam.trim().replaceAll("\\s+", "")
-                : "default";
-
-        String safePatientName = "Paciente";
-        if (patientName != null && !patientName.isBlank() && !"null".equalsIgnoreCase(patientName.trim())) {
-            String trimmedP = patientName.trim();
-            boolean isInvalid = trimmedP.matches("(?i).*[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}.*")
-                || trimmedP.matches("^\\d+$")
-                || br.dev.ctrls.inovareti.modules.access.infrastructure.adapter.output.BlipContactClientAdapter.isInvalidName(trimmedP);
-            if (!isInvalid) {
-                safePatientName = trimmedP;
-            }
-        }
-
-        String safeDoctorName = "Clínica Inovare";
-        if (doctorName != null && !doctorName.isBlank() && !"null".equalsIgnoreCase(doctorName.trim())) {
-            String trimmedD = doctorName.trim();
-            if (!br.dev.ctrls.inovareti.modules.access.infrastructure.adapter.output.BlipContactClientAdapter.isInvalidName(trimmedD)) {
-                safeDoctorName = trimmedD;
-            }
-        }
-
-        String effectiveTemplateName = (templateName != null && !templateName.isBlank())
-                ? templateName.trim()
-                : "pesquisa_avaliacao_google_itsm_v6";
-
-        Map<String, Object> bodyParam1 = Map.of("type", "text", "text", safePatientName);
-        Map<String, Object> bodyParam2 = Map.of("type", "text", "text", safeDoctorName);
-
-        Map<String, Object> bodyComponent = Map.of(
-            "type", "body",
-            "parameters", List.of(bodyParam1, bodyParam2)
-        );
-
-        Map<String, Object> buttonParam = Map.of(
-            "type", "text",
-            "text", safeDoctorIdParam
-        );
-
-        Map<String, Object> buttonComponent = Map.of(
-            "type", "button",
-            "sub_type", "url",
-            "index", "0",
-            "parameters", List.of(buttonParam)
-        );
-
-        Map<String, Object> templateObj = Map.of(
-            "name", effectiveTemplateName,
-            "language", Map.of("code", "pt_BR"),
-            "components", List.of(bodyComponent, buttonComponent)
-        );
-
-        Map<String, Object> contentObj = Map.of(
-            "type", "template",
-            "template", templateObj
-        );
-
-        Map<String, Object> messagePayload = Map.of(
-            "id", UUID.randomUUID().toString(),
-            "to", wabaDestination,
-            "type", "application/json",
-            "content", contentObj
-        );
-
-        try {
-            var response = limeClient.executeMessage(messagePayload, BlipLIMEClient.AuthorizationScope.ROUTER);
-            Object status = response != null ? response.getOrDefault("status", "success") : "success";
-            log.info("[GOOGLE-REVIEW] Template nativo WABA '{}' enviado via LIME message. destination={}, patient={}, doctor={}, doctorId={}, status={}",
-                    effectiveTemplateName, wabaDestination, safePatientName, safeDoctorName, safeDoctorIdParam, status);
-
-            if (blipContextService != null) {
-                blipContextService.updateUserMasterState(wabaDestination, BlipContextService.STATE_REVIEW_FINISHED);
-            }
-        } catch (Exception e) {
-            log.error("[GOOGLE-REVIEW] Falha ao enviar template nativo WABA '{}' para {}: {}", effectiveTemplateName, wabaDestination, e.getMessage(), e);
-            throw new RuntimeException("Falha ao enviar avaliação nativa WABA no Blip para " + wabaDestination + ": " + e.getMessage(), e);
-        }
+        blipReviewNotificationService.sendReviewTemplateMessage(destination, templateName, patientName, doctorName, doctorIdOrParam);
     }
 
     public void sendReviewTemplateMessage(String destination, String templateName, String doctorIdOrParam) {
-        sendReviewTemplateMessage(destination, templateName, "Paciente", "Clínica Inovare", doctorIdOrParam);
+        blipReviewNotificationService.sendReviewTemplateMessage(destination, templateName, doctorIdOrParam);
     }
 }
 
