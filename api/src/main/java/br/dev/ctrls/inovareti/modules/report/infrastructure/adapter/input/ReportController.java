@@ -4,15 +4,18 @@ import io.micrometer.observation.annotation.Observed;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.time.LocalDate;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import org.springframework.core.io.InputStreamResource;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -22,6 +25,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import br.dev.ctrls.inovareti.modules.inventory.domain.model.StockBatch;
@@ -31,16 +35,20 @@ import br.dev.ctrls.inovareti.modules.report.application.service.TicketReportUse
 import br.dev.ctrls.inovareti.modules.ticket.domain.model.Ticket;
 import br.dev.ctrls.inovareti.modules.ticket.domain.port.output.TicketRepositoryPort;
 import br.dev.ctrls.inovareti.modules.user.domain.port.output.UserRepositoryPort;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Controlador REST para endpoints relacionados a relatórios.
+ * Controlador REST para geração e exportação de relatórios gerenciais e operacionais.
  */
 @Slf4j
 @RestController
 @RequestMapping("/reports")
+@RequiredArgsConstructor
 @Observed
 public class ReportController {
+
+    private static final String EXCEL_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
     private final ReportService reportService;
     private final TicketRepositoryPort ticketRepository;
@@ -48,34 +56,23 @@ public class ReportController {
     private final TicketReportUseCase ticketReportUseCase;
     private final UserRepositoryPort userRepository;
 
-    public ReportController(
-            ReportService reportService,
-            TicketRepositoryPort ticketRepository,
-            StockBatchRepositoryPort stockBatchRepository,
-            TicketReportUseCase ticketReportUseCase,
-            UserRepositoryPort userRepository) {
-        this.reportService = reportService;
-        this.ticketRepository = ticketRepository;
-        this.stockBatchRepository = stockBatchRepository;
-        this.ticketReportUseCase = ticketReportUseCase;
-        this.userRepository = userRepository;
-    }
-
+    /**
+     * GET /api/reports/tickets
+     * Exporta a listagem de chamados do período em planilha Excel.
+     */
     @GetMapping("/tickets")
     @PreAuthorize("hasAnyRole('ADMIN', 'TECHNICIAN')")
     public ResponseEntity<InputStreamResource> exportTickets(
-            @org.springframework.web.bind.annotation.RequestParam(required = false)
-            @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE)
-                LocalDate startDate,
-            @org.springframework.web.bind.annotation.RequestParam(required = false)
-            @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE)
-                LocalDate endDate) {
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
 
         LocalDateTime start = startDate != null ? startDate.atStartOfDay() : LocalDate.now().minusMonths(1).atStartOfDay();
         LocalDateTime end = endDate != null ? endDate.atTime(LocalTime.MAX) : LocalDate.now().atTime(LocalTime.MAX);
 
         List<Ticket> tickets = ticketRepository.findAllWithRelations().stream()
-                .filter(t -> t.getCreatedAt() != null && (t.getCreatedAt().isEqual(start) || t.getCreatedAt().isAfter(start)) && (t.getCreatedAt().isBefore(end) || t.getCreatedAt().isEqual(end)))
+                .filter(t -> t.getCreatedAt() != null 
+                        && (t.getCreatedAt().isEqual(start) || t.getCreatedAt().isAfter(start)) 
+                        && (t.getCreatedAt().isBefore(end) || t.getCreatedAt().isEqual(end)))
                 .toList();
 
         byte[] excelBytes = reportService.exportTicketsToExcel(tickets);
@@ -83,7 +80,7 @@ public class ReportController {
 
         HttpHeaders headers = new HttpHeaders();
         headers.add(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=chamados.xlsx");
-        headers.setContentType(MediaType.valueOf("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"));
+        headers.setContentType(MediaType.valueOf(EXCEL_CONTENT_TYPE));
 
         return ResponseEntity.ok()
                 .headers(headers)
@@ -93,7 +90,7 @@ public class ReportController {
     /**
      * GET /api/reports/tickets/export
      * Gera relatório de chamados em Excel com isolamento por perfil de usuário.
-     * USER exporta apenas seus chamados; ADMIN e TECHNICIAN exportam todos.
+     * Usuários comuns exportam apenas seus chamados; administradores e técnicos exportam todos.
      */
     @GetMapping("/tickets/export")
     public ResponseEntity<InputStreamResource> exportTicketsReport() throws IOException {
@@ -127,15 +124,15 @@ public class ReportController {
                 .body(new InputStreamResource(stream));
     }
 
+    /**
+     * GET /api/reports/inventory/entries
+     * Exporta entradas de estoque no período para planilha Excel com cálculo consolidado de custos.
+     */
     @GetMapping("/inventory/entries")
     @PreAuthorize("hasAnyRole('ADMIN', 'TECHNICIAN')")
     public ResponseEntity<InputStreamResource> exportInventoryEntries(
-            @org.springframework.web.bind.annotation.RequestParam(required = false)
-            @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE)
-                LocalDate startDate,
-            @org.springframework.web.bind.annotation.RequestParam(required = false)
-            @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE)
-                LocalDate endDate) {
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
 
         LocalDateTime start = startDate != null ? startDate.atStartOfDay() : LocalDate.now().minusMonths(1).atStartOfDay();
         LocalDateTime end = endDate != null ? endDate.atTime(LocalTime.MAX) : LocalDate.now().atTime(LocalTime.MAX);
@@ -159,7 +156,7 @@ public class ReportController {
                 })
                 .toList();
 
-        java.util.Map<UUID, BigDecimal> periodCosts = new java.util.HashMap<>();
+        Map<UUID, BigDecimal> periodCosts = new HashMap<>();
         for (StockBatch b : batches) {
             if (b.getInstallments() == null || b.getInstallments().isEmpty()) {
                 periodCosts.put(b.getId(), b.getUnitPrice().multiply(BigDecimal.valueOf(b.getOriginalQuantity())));
@@ -169,7 +166,7 @@ public class ReportController {
                                         (inst.getDueDate().isEqual(startDateLoc) || inst.getDueDate().isAfter(startDateLoc)) &&
                                         (inst.getDueDate().isBefore(endDateLoc) || inst.getDueDate().isEqual(endDateLoc)))
                         .map(inst -> inst.getAmount())
-                        .reduce(BigDecimal.ZERO, (sumAcc, installmentAmount) -> sumAcc.add(installmentAmount));
+                        .reduce(BigDecimal.ZERO, BigDecimal::add);
                 periodCosts.put(b.getId(), sum);
             }
         }
@@ -179,7 +176,7 @@ public class ReportController {
 
         HttpHeaders headers = new HttpHeaders();
         headers.add(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=entradas_estoque.xlsx");
-        headers.setContentType(MediaType.valueOf("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"));
+        headers.setContentType(MediaType.valueOf(EXCEL_CONTENT_TYPE));
 
         return ResponseEntity.ok()
                 .headers(headers)
@@ -187,38 +184,24 @@ public class ReportController {
     }
 
     /**
-     * Gera relatório de saídas de inventário.
-     * Suporta formato PDF e Excel.
+     * GET /api/reports/inventory/exits
+     * Gera relatório de saídas de inventário em PDF ou Excel.
      */
     @GetMapping("/inventory/exits")
     @PreAuthorize("hasAnyRole('ADMIN', 'TECHNICIAN')")
     public ResponseEntity<InputStreamResource> exportInventoryExits(
-            @org.springframework.web.bind.annotation.RequestParam(required = false)
-            @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE)
-                LocalDate startDate,
-            @org.springframework.web.bind.annotation.RequestParam(required = false)
-            @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE)
-                LocalDate endDate) {
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+            @RequestParam(defaultValue = "xlsx") String format) {
 
         LocalDateTime start = startDate != null ? startDate.atStartOfDay() : LocalDate.now().minusMonths(1).atStartOfDay();
         LocalDateTime end = endDate != null ? endDate.atTime(LocalTime.MAX) : LocalDate.now().atTime(LocalTime.MAX);
-
-        var format = "xlsx";
-        try {
-            var req = org.springframework.web.context.request.RequestContextHolder.getRequestAttributes();
-            if (req instanceof org.springframework.web.context.request.ServletRequestAttributes sra) {
-                var fp = sra.getRequest().getParameter("format");
-                if (fp != null && !fp.isBlank()) format = fp.toLowerCase();
-            }
-        } catch (Exception e) {
-            // Mantém default
-        }
 
         if ("pdf".equalsIgnoreCase(format)) {
             byte[] pdfBytes = reportService.exportInventoryExitsToPdf(start, end);
             ByteArrayInputStream pdfFile = new ByteArrayInputStream(pdfBytes);
 
-            String filename = String.format("saidas_estoque_%s_to_%s.pdf", start.toLocalDate().toString(), end.toLocalDate().toString());
+            String filename = String.format("saidas_estoque_%s_to_%s.pdf", start.toLocalDate(), end.toLocalDate());
 
             HttpHeaders headers = new HttpHeaders();
             headers.add(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + filename);
@@ -234,7 +217,7 @@ public class ReportController {
 
         HttpHeaders headers = new HttpHeaders();
         headers.add(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=saidas_estoque.xlsx");
-        headers.setContentType(MediaType.valueOf("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"));
+        headers.setContentType(MediaType.valueOf(EXCEL_CONTENT_TYPE));
 
         return ResponseEntity.ok()
                 .headers(headers)
