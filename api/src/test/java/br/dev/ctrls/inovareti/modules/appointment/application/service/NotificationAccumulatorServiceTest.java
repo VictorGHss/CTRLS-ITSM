@@ -1,6 +1,5 @@
 package br.dev.ctrls.inovareti.modules.appointment.application.service;
 
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
