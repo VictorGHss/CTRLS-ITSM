@@ -172,6 +172,13 @@ public class SendAppointmentTemplateUseCase {
                 session.setLastInteractionAt(LocalDateTime.now());
                 session.setLastNotificationSentAt(LocalDateTime.now());
                 saveWithRetry(session, null);
+
+                if (session.getCurrentGroupId() != null && 
+                    (category == AppointmentCategory.GROUP_NOTIFICATION || 
+                     category == AppointmentCategory.GROUP_NUDGE_1 || 
+                     category == AppointmentCategory.GROUP_NUDGE_FINAL)) {
+                    syncGroupSiblingSessions(session);
+                }
             }
 
             log.info("[MENSAGERIA] Template ativo disparado com sucesso no Blip para o agendamento ID {}. Sessão local salva no banco.", ctx.feegowAppointmentId());
@@ -267,6 +274,13 @@ public class SendAppointmentTemplateUseCase {
             session.setLastNotificationSentAt(LocalDateTime.now());
             saveWithRetry(session, null);
             
+            if (session.getCurrentGroupId() != null && 
+                (category == AppointmentCategory.GROUP_NOTIFICATION || 
+                 category == AppointmentCategory.GROUP_NUDGE_1 || 
+                 category == AppointmentCategory.GROUP_NUDGE_FINAL)) {
+                syncGroupSiblingSessions(session);
+            }
+
             log.info("[MENSAGERIA] Template ativo disparado com sucesso no Blip para o agendamento ID {}. Sessão local salva no banco.", session.getFeegowAppointmentId());
             return true;
         } catch (Exception ex) {
@@ -610,6 +624,33 @@ public class SendAppointmentTemplateUseCase {
                     phoneNumber, patientName, doctorName, resolvedQueueName);
         } catch (Exception ex) {
             log.warn("[INJEÇÃO-PREVENTIVA] Falha não impeditiva ao injetar metadados preventivos no Blip para phone={}: {}", phoneNumber, ex.getMessage());
+        }
+    }
+
+    /**
+     * Sincroniza atomicamente o timestamp de notificação e estado entre todas as sessões irmãs do mesmo grupo.
+     */
+    private void syncGroupSiblingSessions(AppointmentSession primarySession) {
+        if (primarySession.getCurrentGroupId() == null) {
+            return;
+        }
+        try {
+            transactionTemplate.executeWithoutResult(status -> {
+                List<AppointmentSession> siblings = appointmentSessionRepository.findByCurrentGroupId(primarySession.getCurrentGroupId());
+                if (siblings != null) {
+                    for (AppointmentSession sib : siblings) {
+                        if (!sib.getId().equals(primarySession.getId())) {
+                            sib.setStatus(primarySession.getStatus());
+                            sib.setLastInteractionAt(primarySession.getLastInteractionAt());
+                            sib.setLastNotificationSentAt(primarySession.getLastNotificationSentAt());
+                            saveWithRetry(sib, null);
+                        }
+                    }
+                }
+            });
+            log.info("[GRUPO-SYNC] Timestamp e status sincronizados com sucesso para todas as consultas irmãs do groupId={}", primarySession.getCurrentGroupId());
+        } catch (Exception ex) {
+            log.warn("[GRUPO-SYNC] Falha defensiva ao sincronizar consultas irmãs do groupId={}: {}", primarySession.getCurrentGroupId(), ex.getMessage());
         }
     }
 }

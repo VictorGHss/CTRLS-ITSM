@@ -86,6 +86,27 @@ public class NotificationAccumulatorService {
 
     private void processIndividualNotification(AppointmentSession session) {
         log.info("[ACÚMULO] Processando notificação individual para o agendamento Feegow ID: {}", session.getFeegowAppointmentId());
+
+        // Blindagem contra disparo solo de consultas que pertencem a um grupo de agendamentos
+        if (session.getCurrentGroupId() != null) {
+            List<AppointmentSession> groupSessions = appointmentSessionRepository.findByCurrentGroupId(session.getCurrentGroupId());
+            if (groupSessions != null && groupSessions.size() > 1) {
+                log.warn("[ACÚMULO-GUARD] Sessão {} (Feegow ID {}) pertence ao grupo {} que possui {} consultas. Ignorando disparo solo indevido e sincronizando timestamp.",
+                        session.getId(), session.getFeegowAppointmentId(), session.getCurrentGroupId(), groupSessions.size());
+                transactionTemplate.executeWithoutResult(status -> {
+                    LocalDateTime now = LocalDateTime.now();
+                    for (AppointmentSession s : groupSessions) {
+                        AppointmentSession locked = appointmentSessionRepository.findByIdLocked(s.getId()).orElse(null);
+                        if (locked != null && locked.getLastNotificationSentAt() == null) {
+                            locked.setLastNotificationSentAt(now);
+                            locked.setLastInteractionAt(now);
+                            appointmentSessionRepository.save(locked);
+                        }
+                    }
+                });
+                return;
+            }
+        }
         
         if (session.getPhoneNumber() != null && !session.getPhoneNumber().isBlank()) {
             if (blipContextService.hasActiveTicket(session.getPhoneNumber(), session.getLastNotificationSentAt())) {
@@ -141,11 +162,14 @@ public class NotificationAccumulatorService {
             transactionTemplate.executeWithoutResult(status -> {
                 notificationGroupRepository.saveAll(groupEntities);
                 
-                // Atualizar o lastNotificationSentAt para todas as sessões do grupo
+                // Atualizar o currentGroupId, lastNotificationSentAt e lastInteractionAt para todas as sessões do grupo
+                LocalDateTime now = LocalDateTime.now();
                 for (AppointmentSession session : sessions) {
                     AppointmentSession lockedSession = appointmentSessionRepository.findByIdLocked(session.getId()).orElse(null);
                     if (lockedSession != null) {
-                        lockedSession.setLastNotificationSentAt(LocalDateTime.now());
+                        lockedSession.setCurrentGroupId(groupId);
+                        lockedSession.setLastNotificationSentAt(now);
+                        lockedSession.setLastInteractionAt(now);
                         appointmentSessionRepository.save(lockedSession);
                     }
                 }

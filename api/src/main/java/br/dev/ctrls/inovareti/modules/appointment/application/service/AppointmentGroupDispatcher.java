@@ -249,6 +249,23 @@ public class AppointmentGroupDispatcher {
                     boolean success = sendAppointmentTemplateUseCase.execute(firstSession, AppointmentCategory.GROUP_NOTIFICATION);
                     if (success) {
                         sent.addAndGet(groupSize);
+
+                        // Sincroniza atomicamente lastNotificationSentAt e currentGroupId em TODAS as consultas do grupo
+                        LocalDateTime now = LocalDateTime.now();
+                        transactionTemplate.executeWithoutResult(status -> {
+                            for (AppointmentSession s : savedSessions) {
+                                AppointmentSession lockedSession = appointmentSessionRepository.findByIdLocked(s.getId()).orElse(null);
+                                if (lockedSession != null) {
+                                    lockedSession.setLastNotificationSentAt(now);
+                                    lockedSession.setLastInteractionAt(now);
+                                    lockedSession.setStatus(AppointmentSessionStatus.PENDING);
+                                    if (groupId != null) {
+                                        lockedSession.setCurrentGroupId(groupId);
+                                    }
+                                    appointmentSessionRepository.save(lockedSession);
+                                }
+                            }
+                        });
                     } else {
                         skipped.addAndGet(groupSize);
                     }
