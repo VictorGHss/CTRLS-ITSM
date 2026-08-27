@@ -166,7 +166,7 @@ public class ReportController {
                                         (inst.getDueDate().isEqual(startDateLoc) || inst.getDueDate().isAfter(startDateLoc)) &&
                                         (inst.getDueDate().isBefore(endDateLoc) || inst.getDueDate().isEqual(endDateLoc)))
                         .map(inst -> inst.getAmount())
-                        .reduce(BigDecimal.ZERO, BigDecimal::add);
+                        .reduce(BigDecimal.ZERO, (acc, val) -> acc.add(val));
                 periodCosts.put(b.getId(), sum);
             }
         }
