@@ -103,6 +103,10 @@ Para garantir que os dados do paciente e o roteamento de fila estejam disponíve
 * O resolvedor de filas (`BlipContextService.resolveQueueName`) traduz o UUID ou ID do médico para o nome exato da fila cadastrada no Blip Desk.
 * O comando `setQueueRedirect` injeta a variável de contexto `attendanceQueueToRedirect` no contato. No fluxo do Blip, o bloco de transbordo humano lê `{{contact.extras.fila}}` para direcionar a conversa à secretária responsável.
 
+### 2.3 Menus Interativos de Avaliação e CSAT (WhatsApp Meta)
+* As etapas de avaliação pós-consulta e pesquisa de satisfação utilizam mensagens estruturadas (`select+json` / menus interativos) com opções puramente numéricas (`1` a `5`).
+* Essa formatação cumpre a especificação da Meta para limites de caracteres em botões do WhatsApp e garante que as notas sejam capturadas com precisão pelo webhook da API.
+
 ---
 
 ## 3. Integração com Controle de Catracas Físicas (GerAcesso)

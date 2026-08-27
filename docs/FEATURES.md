@@ -58,6 +58,15 @@ stateDiagram-v2
 ### 1.6 Monetização Médica e Licenciamento
 * O motor valida a assinatura do profissional (`DoctorBilling/isLicensed`) antes de processar os agendamentos. Pautas de médicos inativos ou suspensos são ignoradas na ingestão.
 
+### 1.7 Acumulador Atômico de Agendamentos em Grupo (`NotificationAccumulatorService`)
+* **Agrupamento Familiar / Múltiplos Procedimentos:** Quando um paciente ou responsável possui dois ou mais agendamentos no mesmo dia (ex: irmãos consultando na mesma data ou exames sequenciais), o `NotificationAccumulatorService` consolida as sessões em um único registro em `notification_groups`.
+* **Disparo Exclusivo do Template de Grupo:** As sessões vinculadas a um grupo recebem o template consolidado `aviso_agendamento_grupo` e têm sua flag de notificação preenchida.
+* **Prevenção de Race Conditions:** O motor bloqueia o envio subsequente de templates individuais avulsos para consultas que já pertençam a um grupo ativo, evitando que mensagens isoladas sejam disparadas minutos depois e confundam o paciente.
+
+### 1.8 Pesquisa de Satisfação e CSAT no WhatsApp
+* Os fluxos de pesquisa e avaliação interativa utilizam menus com opções puramente numéricas (`1`, `2`, `3`, `4`, `5`).
+* Essa estrutura respeita rigorosamente o limite de caracteres de botões da Meta/WhatsApp e garante compatibilidade com o parser de respostas do backend.
+
 ---
 
 ## 2. Controle de Acesso Físico e Catracas (Módulo Access)
@@ -129,3 +138,26 @@ Quando um incidente impede o funcionamento de consultórios, exames ou sistemas 
 
 ### 5.2 Trilha de Auditoria Imutável (`audit_logs`)
 * Todas as ações sensíveis (acesso ao cofre, alterações de chamado, liberações de catraca, logins) publicam eventos assíncronos (`AuditEvent`) gravados com IP, data e correlation ID.
+
+---
+
+## 6. Frontend SPA & Experiência do Usuário (React 19 + TypeScript + Vite)
+
+### 6.1 Paginação Dinâmica e Totalizadores de Registros
+* **Navegação Precisa:** As listagens de **Chamados** (`/tickets`) e **Inventário** (`/inventory`) calculam e apresentam os totais reais de itens e páginas (`Exibindo X de Y itens — Página A de B`).
+* **Suporte a Tamanho Dinâmico:** Os endpoints REST do backend aceitam o parâmetro `size` configurável com limites seguros (`1..1000`), evitando truncamento forçado em 15 registros.
+
+### 6.2 Dropdown Pesquisável Autônomo (`SearchableDropdown`)
+* **Catálogo Completo:** Modais de entrada de estoque (`AddBatchModal`), requisição de itens e alocação carregam a totalidade dos itens cadastrados (`getItems({ size: 1000 })`), independentemente da página atual da tabela.
+* **Interface Aprimorada:** Altura de rolagem expandida (`max-h-60`) e indicador de contagem de opções disponíveis.
+
+### 6.3 Resiliência Global com Error Boundary
+* **Prevenção de Tela Branca:** O componente `ErrorBoundary` intercepta exceções não tratadas durante o ciclo de vida do React e exibe um card amigável de recuperação com opção de recarregar a interface ou retornar ao painel principal.
+
+### 6.4 Metadados Declarativos Nativos do React 19
+* Inserção nativa de `<title>` e `<meta name="description">` em todas as páginas da aplicação, fornecendo contexto e acessibilidade ao usuário sem necessidade de bibliotecas de terceiros.
+
+### 6.5 Otimização de Chunks no Build do Vite
+* Separação estrita de dependências em chunks isolados via Rollup:
+  * `vendor-react` isolado em apenas **231 kB** (redução de 83% no payload inicial).
+  * Editor pesado de Markdown (`@uiw/react-md-editor`) isolado em `vendor-editor`, carregado sob demanda apenas nas páginas de chamados.

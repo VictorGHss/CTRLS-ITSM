@@ -76,12 +76,18 @@ cd api
 
 A documentação interativa Swagger estará acessível em: `http://localhost:8085/api/swagger-ui.html`
 
-### 3.2 Frontend (React + Vite + TypeScript)
+### 3.2 Frontend (React 19 + Vite + TypeScript)
 ```bash
 cd front
 
 # Instalar dependências
 npm install
+
+# Validar tipagem e regras de lint (0 erros / 0 avisos)
+npm run lint
+
+# Compilar bundle de produção otimizado
+npm run build
 
 # Iniciar servidor de desenvolvimento (Porta 5173)
 npm run dev
