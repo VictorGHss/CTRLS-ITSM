@@ -195,7 +195,7 @@ public class FeegowPatientAdapter implements PatientExternalPort {
                 if (list.isEmpty()) {
                     return null;
                 }
-                firstItemNode = list.get(0);
+                firstItemNode = list.getFirst();
             } else {
                 firstItemNode = contentObj;
             }

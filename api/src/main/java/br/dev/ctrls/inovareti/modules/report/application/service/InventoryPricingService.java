@@ -118,7 +118,7 @@ public class InventoryPricingService {
             return BigDecimal.ZERO;
         }
 
-        BigDecimal unitPrice = batches.get(0).getUnitPrice();
+        BigDecimal unitPrice = batches.getFirst().getUnitPrice();
         return unitPrice.multiply(BigDecimal.valueOf(quantity));
     }
 }
