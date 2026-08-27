@@ -70,7 +70,7 @@ public class NotificationAccumulatorService {
             if (sessions.size() > 1) {
                 processGroupNotification(phoneNumber, sessions);
             } else {
-                processIndividualNotification(sessions.get(0));
+                processIndividualNotification(sessions.getFirst());
             }
 
             // Cadenciamento (staggered delay de 50ms) entre envios do lote para não sobrecarregar a API da Blip
@@ -119,7 +119,7 @@ public class NotificationAccumulatorService {
             groupId, phoneNumber, sessions.size());
 
         if (phoneNumber != null && !phoneNumber.isBlank()) {
-            LocalDateTime lastSent = sessions.isEmpty() ? null : sessions.get(0).getLastNotificationSentAt();
+            LocalDateTime lastSent = sessions.isEmpty() ? null : sessions.getFirst().getLastNotificationSentAt();
             if (blipContextService.hasActiveTicket(phoneNumber, lastSent)) {
                 log.info("[ATTENDANCE-GUARD] Contato {} possui ticket aberto no Desk. Ignorando disparo de notificação agrupada acumulada.", phoneNumber);
                 return;
@@ -158,7 +158,7 @@ public class NotificationAccumulatorService {
         // Buscar nome do paciente para personalizar o template (usando o primeiro da lista)
         String patientName = "Paciente";
         try {
-            FeegowPatient patientInfo = patientExternalPort.patientInfo(sessions.get(0).getPatientId());
+            FeegowPatient patientInfo = patientExternalPort.patientInfo(sessions.getFirst().getPatientId());
             if (patientInfo != null && patientInfo.name() != null && !patientInfo.name().isBlank()) {
                 patientName = patientInfo.name().trim();
             }

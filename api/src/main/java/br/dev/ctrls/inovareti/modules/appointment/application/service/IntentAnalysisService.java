@@ -172,7 +172,7 @@ public class IntentAnalysisService {
         }
 
         if (topMatches.size() == 1) {
-            DoctorCatalog bestMatch = topMatches.get(0);
+            DoctorCatalog bestMatch = topMatches.getFirst();
             boolean isInternal = "DESK".equalsIgnoreCase(bestMatch.getRoute());
             String queue = bestMatch.getQueue();
             boolean hasSpecificQueue = isInternal && queue != null && !queue.isBlank() && !"Atendimento Geral".equalsIgnoreCase(queue.trim());
@@ -299,7 +299,7 @@ public class IntentAnalysisService {
         }
 
         matchingCandidates.sort((c1, c2) -> Integer.compare(c2.score(), c1.score()));
-        int maxScore = matchingCandidates.get(0).score();
+        int maxScore = matchingCandidates.getFirst().score();
 
         return matchingCandidates.stream()
             .filter(c -> c.score() == maxScore)

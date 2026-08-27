@@ -27,9 +27,8 @@ import java.util.Map;
 public class BlipTokenSecurityFilter extends OncePerRequestFilter {
 
     public static final String HEADER_NAME = "X-Inovare-Token";
-    private static final String DEFAULT_TOKEN = "REMOVED_BLIP_TOKEN";
 
-    @Value("${blip.integration.token:REMOVED_BLIP_TOKEN}")
+    @Value("${blip.integration.token:${BLIP_INTEGRATION_TOKEN:}}")
     private String expectedToken;
 
     @Override
@@ -46,15 +45,19 @@ public class BlipTokenSecurityFilter extends OncePerRequestFilter {
         String method = request.getMethod();
         String headerValue = request.getHeader(HEADER_NAME);
 
-        String effectiveExpectedToken = (expectedToken != null && !expectedToken.isBlank())
-                ? expectedToken
-                : DEFAULT_TOKEN;
+        if (expectedToken == null || expectedToken.isBlank()) {
+            log.error("[BLIP-SECURITY] Variável 'blip.integration.token' não configurada no ambiente. Bloqueando requisição por segurança.");
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            response.setContentType("application/json;charset=UTF-8");
+            response.getWriter().write("{\"error\": \"Configuração de segurança de integração ausente no servidor.\"}");
+            return;
+        }
 
         boolean tokenMatches = false;
         if (headerValue != null && !headerValue.isBlank()) {
             tokenMatches = MessageDigest.isEqual(
-                    effectiveExpectedToken.getBytes(StandardCharsets.UTF_8),
-                    headerValue.getBytes(StandardCharsets.UTF_8)
+                    expectedToken.trim().getBytes(StandardCharsets.UTF_8),
+                    headerValue.trim().getBytes(StandardCharsets.UTF_8)
             );
         }
 

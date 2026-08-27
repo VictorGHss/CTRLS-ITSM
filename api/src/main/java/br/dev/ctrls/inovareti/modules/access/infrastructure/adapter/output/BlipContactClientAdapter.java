@@ -299,7 +299,7 @@ public class BlipContactClientAdapter implements BlipContactClientPort {
                         }
                     }
                     if (patientNames.size() == 1) {
-                        String singleName = patientNames.get(0);
+                        String singleName = patientNames.getFirst();
                         log.info("[BlipContact-Adapter] Nome do paciente único ('{}') recuperado via Feegow/Session para {}", singleName, normalizedIdentity);
                         return singleName;
                     } else if (patientNames.size() > 1) {

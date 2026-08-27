@@ -188,7 +188,7 @@ public class IntentAnalyzerService {
             selectedQueue = null;
         } else {
             intent = "AGENDAMENTO";
-            DoctorMatchDto bestMatch = allMatchDtos.get(0);
+            DoctorMatchDto bestMatch = allMatchDtos.getFirst();
             boolean isInternal = Boolean.TRUE.equals(bestMatch.getIsInternal());
             if (isInternal) {
                 String queue = bestMatch.getQueue();
@@ -304,7 +304,7 @@ public class IntentAnalyzerService {
                     )
             );
         } else if ("EXTERNAL".equalsIgnoreCase(routeType) && !allMatchDtos.isEmpty()) {
-            DoctorMatchDto singleDoc = allMatchDtos.get(0);
+            DoctorMatchDto singleDoc = allMatchDtos.getFirst();
             String docName = singleDoc.getDoctorName() != null ? singleDoc.getDoctorName().trim() : "Especialista";
             String spec = singleDoc.getSpecialty() != null ? singleDoc.getSpecialty().trim() : "";
             String link = singleDoc.getExternalLink() != null ? singleDoc.getExternalLink().trim() : "";

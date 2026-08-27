@@ -136,7 +136,7 @@ public class BlipPrepararExibirHandler {
                     }
                 }
 
-                AppointmentSession session = activeSessions.get(0);
+                AppointmentSession session = activeSessions.getFirst();
                 resolvedDoctorId = session.getDoctorProfissionalId();
                 if (resolvedDoctorId != null && !resolvedDoctorId.isBlank()) {
                     Optional<AppointmentDoctorMapping> doctorMappingOpt = appointmentDoctorMappingRepository.findByProfissionalId(resolvedDoctorId);
@@ -177,7 +177,7 @@ public class BlipPrepararExibirHandler {
                 for (AppointmentSession activeSession : activeSessions) {
                     List<NotificationGroup> groups = notificationGroupRepository.findBySessionId(activeSession.getId());
                     if (groups != null && !groups.isEmpty()) {
-                        return new GroupInfo(true, groups.get(0).getGroupId());
+                        return new GroupInfo(true, groups.getFirst().getGroupId());
                     }
                 }
             }

@@ -196,7 +196,7 @@ public class FeegowBulkIntegrationHandler {
         String targetQueue = "Recepção Central / Suporte";
         List<NotificationGroup> groups = notificationGroupRepository.findByGroupId(groupId);
         if (groups != null && !groups.isEmpty()) {
-            UUID firstSessionId = groups.get(0).getSessionId();
+            UUID firstSessionId = groups.getFirst().getSessionId();
             AppointmentSession firstSession = transactionTemplate.execute(status ->
                 appointmentSessionRepository.findById(firstSessionId).orElse(null)
             );
@@ -254,7 +254,7 @@ public class FeegowBulkIntegrationHandler {
             if (fromPhone != null && !fromPhone.isBlank()) {
                 // Sincroniza o ID do agendamento do grupo no contexto do Blip
                 if (!sessionList.isEmpty()) {
-                    String firstFeegowId = sessionList.get(0).getFeegowAppointmentId();
+                    String firstFeegowId = sessionList.getFirst().getFeegowAppointmentId();
                     blipContextService.setUserContextForUser(fromPhone.trim(), "idAgendamentoFeegow", firstFeegowId);
                     blipContextService.setUserContextForUser(fromPhone.trim(), "appointmentId", firstFeegowId);
                     blipContextService.setUserContext(fromPhone.trim(), "hasActiveAppointment", "true");

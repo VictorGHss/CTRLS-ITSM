@@ -70,8 +70,8 @@ public class FeegowRestClientAdapter implements FeegowClientPort {
                 return Optional.empty();
             }
 
-            // Obtém o primeiro agendamento retornado da busca
-            FeegowSearchResponseDto.FeegowSearchAppointmentDto appDto = appointments.get(0);
+            // Obtém o primeiro agendamento retornado da busca utilizando Sequenced Collections (Java 21)
+            FeegowSearchResponseDto.FeegowSearchAppointmentDto appDto = appointments.getFirst();
             String patientId = appDto.patientId();
 
             if (patientId == null || patientId.isBlank()) {

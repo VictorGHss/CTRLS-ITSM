@@ -3,6 +3,7 @@ package br.dev.ctrls.inovareti.modules.appointment.infrastructure.adapter.input.
 import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -23,6 +24,7 @@ import lombok.extern.slf4j.Slf4j;
 @RestController
 @RequestMapping("/v1/doctors/configurations")
 @RequiredArgsConstructor
+@PreAuthorize("hasAnyRole('USER', 'ADMIN')")
 public class DoctorConfigurationController {
 
     private final DoctorConfigurationRepository doctorConfigurationRepository;
@@ -51,6 +53,7 @@ public class DoctorConfigurationController {
     /**
      * Endpoint de teste para disparo manual da avaliação Google Review.
      */
+    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping("/test-review")
     public ResponseEntity<java.util.Map<String, Object>> testGoogleReview(
             @org.springframework.web.bind.annotation.RequestParam String phone,
@@ -101,6 +104,7 @@ public class DoctorConfigurationController {
      * @param config Dados da configuração a ser persistida.
      * @return A configuração salva com status 201 Created.
      */
+    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping
     public ResponseEntity<DoctorConfiguration> save(@RequestBody DoctorConfiguration config) {
         log.info("[REST] Salvando configuração do profissional ID: {}. Nome: {}", 
@@ -141,6 +145,7 @@ public class DoctorConfigurationController {
      * @param configs Lista de configurações a serem persistidas.
      * @return Lista das configurações salvas com status 200 OK.
      */
+    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping("/batch")
     public ResponseEntity<List<DoctorConfiguration>> saveBatch(@RequestBody List<DoctorConfiguration> configs) {
         log.info("[REST] Salvando em lote {} configurações de médicos.", configs != null ? configs.size() : 0);
@@ -160,6 +165,7 @@ public class DoctorConfigurationController {
      * @param payload Mapa contendo a nova googleReviewUrl.
      * @return Configuração atualizada do médico ou 404 Not Found.
      */
+    @PreAuthorize("hasRole('ADMIN')")
     @org.springframework.web.bind.annotation.PatchMapping("/{id}/google-review-url")
     public ResponseEntity<DoctorConfiguration> updateGoogleReviewUrl(
             @PathVariable Long id,
@@ -181,6 +187,7 @@ public class DoctorConfigurationController {
      * @param googleReviewUrlsMap Mapa com a chave = ID do profissional e valor = nova googleReviewUrl.
      * @return Resposta 200 OK com a quantidade de médicos atualizados.
      */
+    @PreAuthorize("hasRole('ADMIN')")
     @org.springframework.web.bind.annotation.PatchMapping("/google-review-url/batch")
     public ResponseEntity<java.util.Map<String, Object>> updateGoogleReviewUrlBatch(
             @RequestBody java.util.Map<Long, String> googleReviewUrlsMap) {
@@ -211,6 +218,7 @@ public class DoctorConfigurationController {
      * @param id ID do profissional Feegow.
      * @return Resposta 204 No Content.
      */
+    @PreAuthorize("hasRole('ADMIN')")
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteById(@PathVariable Long id) {
         log.info("[REST] Removendo configuração do profissional ID: {}", id);

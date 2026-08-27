@@ -207,8 +207,8 @@ public class MonitorAppointmentNudgesUseCase {
                 return false;
             }
 
-            String phoneNumber = groupSessions.get(0).getPhoneNumber();
-            LocalDateTime lastNotificationSentAt = groupSessions.get(0).getLastNotificationSentAt();
+            String phoneNumber = groupSessions.getFirst().getPhoneNumber();
+            LocalDateTime lastNotificationSentAt = groupSessions.getFirst().getLastNotificationSentAt();
             if (blipContextService.hasActiveTicket(phoneNumber, lastNotificationSentAt)) {
                 log.info("[ATTENDANCE-GUARD] Abortando/pausando nudge recorrente de grupo para {} devido a ticket de live chat ativo no Blip.", phoneNumber);
                 for (AppointmentSession s : groupSessions) {
@@ -273,7 +273,7 @@ public class MonitorAppointmentNudgesUseCase {
                 appointmentSessionRepository.findByCurrentGroupId(groupId)
             );
             if (activeSessions != null && !activeSessions.isEmpty()) {
-                String phoneNumber = activeSessions.get(0).getPhoneNumber();
+                String phoneNumber = activeSessions.getFirst().getPhoneNumber();
                 String templateId = transactionTemplate.execute(status ->
                     appointmentConfigRepository.findByCategory(AppointmentCategory.GROUP_NUDGE_1)
                         .map(config -> config.getTemplateId())
@@ -299,7 +299,7 @@ public class MonitorAppointmentNudgesUseCase {
 
                 try {
                     log.info("[NUDGE-SEND] Enviando nudge recorrente de grupo para paciente '{}' (ID {}) (Último envio: {}).",
-                            patientName, activeSessions.get(0).getId(), activeSessions.get(0).getLastNotificationSentAt());
+                            patientName, activeSessions.getFirst().getId(), activeSessions.getFirst().getLastNotificationSentAt());
                     log.info("[GRUPO-NUDGE] Enviando template de nudge recorrente '{}' para {} (paciente: '{}'). groupId={}", templateId, phoneNumber, patientName, groupId);
                     blipNotificationService.sendGroupTemplateMessage(phoneNumber, templateId, groupId, patientName);
                 } catch (Exception e) {

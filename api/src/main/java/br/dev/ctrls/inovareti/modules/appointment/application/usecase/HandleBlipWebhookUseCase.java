@@ -383,7 +383,7 @@ public class HandleBlipWebhookUseCase {
             String searchPhone = !dbPhone.isEmpty() ? dbPhone : fromPhone;
             List<AppointmentSession> activeSessions = appointmentSessionRepository.findActiveByPhoneNumber(searchPhone);
             if (activeSessions != null && !activeSessions.isEmpty()) {
-                AppointmentSession mainSession = activeSessions.get(0);
+                AppointmentSession mainSession = activeSessions.getFirst();
 
                 boolean isReviewSent = mainSession.getReviewRequestedAt() != null;
 

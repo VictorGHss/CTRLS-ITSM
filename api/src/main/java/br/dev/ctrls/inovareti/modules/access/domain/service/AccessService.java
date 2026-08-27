@@ -114,7 +114,7 @@ public class AccessService {
                 AccessCredential patientCred = patientCredOpt.get();
                 return new AccessValidationResult(true, patientCred.getName(), patientCred.getAccessCredential(), false, "Credencial resolvida com sucesso (recuperada do banco).");
             } else {
-                AccessCredential firstCred = existingList.get(0);
+                AccessCredential firstCred = existingList.getFirst();
                 return new AccessValidationResult(true, firstCred.getName(), firstCred.getAccessCredential(), false, "Credencial resolvida com sucesso (recuperada do banco).");
             }
         }

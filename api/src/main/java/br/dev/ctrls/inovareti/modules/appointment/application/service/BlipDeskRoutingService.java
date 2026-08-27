@@ -82,7 +82,7 @@ public class BlipDeskRoutingService {
             }
 
             if (activeSessions != null && !activeSessions.isEmpty()) {
-                AppointmentSession session = activeSessions.get(0);
+                AppointmentSession session = activeSessions.getFirst();
                 if (session.getDoctorProfissionalId() != null && !session.getDoctorProfissionalId().isBlank()) {
                     Optional<AppointmentDoctorMapping> doctorMappingOpt = appointmentDoctorMappingRepository.findByProfissionalId(session.getDoctorProfissionalId());
                     if (doctorMappingOpt.isPresent()) {

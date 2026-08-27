@@ -198,8 +198,8 @@ public class AppointmentGroupDispatcher {
 
         // 1 Consulta: Notificação Individual
         if (groupSize == 1) {
-            AppointmentSession singleSession = savedSessions.get(0);
-            FeegowAppointment appt = phoneAppointments.get(0);
+            AppointmentSession singleSession = savedSessions.getFirst();
+            FeegowAppointment appt = phoneAppointments.getFirst();
             FeegowPatient patient = patientDetailsMap.get(appt.patientId());
 
             String patientName = (patient != null && patient.name() != null) ? patient.name() : "Paciente";
@@ -235,8 +235,8 @@ public class AppointmentGroupDispatcher {
             boolean anyEligible = forceSend || savedSessions.stream().anyMatch(this::isEligibleForDispatch);
             if (anyEligible) {
                 try {
-                    AppointmentSession firstSession = savedSessions.get(0);
-                    FeegowAppointment firstAppt = phoneAppointments.get(0);
+                    AppointmentSession firstSession = savedSessions.getFirst();
+                    FeegowAppointment firstAppt = phoneAppointments.getFirst();
                     FeegowPatient patient = patientDetailsMap.get(firstAppt.patientId());
                     String patientName = (patient != null && patient.name() != null) ? patient.name() : "Paciente";
                     String patientCpf = (patient != null && patient.cpf() != null) ? patient.cpf() : "";
