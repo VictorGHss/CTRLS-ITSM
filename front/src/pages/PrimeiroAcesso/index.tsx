@@ -82,6 +82,8 @@ export default function PrimeiroAcesso() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-white to-brand-secondary/20 flex items-center justify-center px-4">
+      <title>Primeiro Acesso — Inovare TI</title>
+      <meta name="description" content="Definição de nova senha no primeiro acesso à plataforma" />
       <div className="w-full max-w-md">
         <div className="flex justify-center mb-8">
           <img src={LOGO_URL} alt="Inovare TI" className="h-16 object-contain" />

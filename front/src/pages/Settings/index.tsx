@@ -273,6 +273,8 @@ export default function Settings() {
 
   return (
     <main className="w-full max-w-full px-4 sm:px-6 lg:px-8 py-8">
+      <title>Configurações do Sistema — Inovare TI</title>
+      <meta name="description" content="Configurações globais, integrações e parâmetros da plataforma Inovare TI" />
       <PageHero
         eyebrow="Sistema"
         title="Configurações"

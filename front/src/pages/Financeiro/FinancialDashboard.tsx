@@ -95,6 +95,8 @@ export default function FinancialDashboard() {
 
   return (
     <main className="min-h-screen w-full max-w-full bg-slate-50/40 px-4 py-8 sm:px-6 lg:px-8">
+      <title>Dashboard Financeiro — Inovare TI</title>
+      <meta name="description" content="Gestão e controle financeiro de consumo interno e faturamento" />
       {/* ── Page Header ── */}
       <section className="mb-8 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
         <div>

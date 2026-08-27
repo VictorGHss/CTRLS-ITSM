@@ -168,6 +168,8 @@ export default function Inventory() {
 
   return (
     <main className="w-full max-w-full px-4 sm:px-6 lg:px-8 py-8">
+      <title>Inventário — Inovare TI</title>
+      <meta name="description" content="Gestão e controle de estoque de insumos e peças de TI" />
       <PageHero
         eyebrow="Suprimentos"
         title="Inventário"
