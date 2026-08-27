@@ -45,8 +45,9 @@ CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at
 CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id 
     ON audit_logs(user_id);
 
-CREATE INDEX IF NOT EXISTS idx_audit_logs_action_severity 
-    ON audit_logs(action, severity);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_action_resource 
+    ON audit_logs(action, resource_type);
 
-CREATE INDEX IF NOT EXISTS idx_notification_groups_phone_status 
-    ON notification_groups(phone_number, status);
+CREATE INDEX IF NOT EXISTS idx_notification_groups_phone 
+    ON notification_groups(phone_number);
+
