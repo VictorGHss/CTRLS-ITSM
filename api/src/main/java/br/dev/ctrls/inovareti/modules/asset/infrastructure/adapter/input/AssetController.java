@@ -106,7 +106,7 @@ public class AssetController {
     @PreAuthorize("hasAnyRole('ADMIN', 'TECHNICIAN')")
     @PostMapping
     public ResponseEntity<AssetResponseDTO> create(@Valid @RequestBody AssetRequestDTO request) {
-        Asset savedAsset = assetService.createAssets(request).get(0);
+        Asset savedAsset = assetService.createAssets(request).getFirst();
         return ResponseEntity.status(HttpStatus.CREATED).body(assetQueryService.toResponseDTO(savedAsset));
     }
 

@@ -157,7 +157,7 @@ public class DiscordSolicitarService {
                 if (matchedItem == null) {
                     List<Item> matches = itemRepository.findTop25ByNameContainingIgnoreCase(rawItem);
                     if (!matches.isEmpty()) {
-                        matchedItem = matches.get(0);
+                        matchedItem = matches.getFirst();
                     }
                 }
 
@@ -182,7 +182,7 @@ public class DiscordSolicitarService {
 
         String titulo;
         if (itemsRequested.size() == 1) {
-            ItemRequestOptionDTO single = itemsRequested.get(0);
+            ItemRequestOptionDTO single = itemsRequested.getFirst();
             String itemLabel = principalItemEstoque != null ? principalItemEstoque.getName() : single.itemNameOrId();
             titulo = "[DISCORD] Solicitação: " + single.quantity() + "x " + itemLabel;
         } else {
@@ -197,7 +197,7 @@ public class DiscordSolicitarService {
                 .requester(solicitante)
                 .category(categoria)
                 .requestedItem(principalItemEstoque)
-                .requestedQuantity(principalItemEstoque != null ? itemsRequested.get(0).quantity() : null)
+                .requestedQuantity(principalItemEstoque != null ? itemsRequested.getFirst().quantity() : null)
                 .slaDeadline(agora.plusHours(categoria.getBaseSlaHours()))
                 .createdAt(agora)
                 .build();
@@ -281,7 +281,7 @@ public class DiscordSolicitarService {
                         String cleanName = itemStr.replaceAll("(?i)^\\d+\\s*x\\s*", "").trim();
                         List<Item> matches = itemRepository.findTop25ByNameContainingIgnoreCase(cleanName);
                         if (!matches.isEmpty()) {
-                            itemEstoque = matches.get(0);
+                            itemEstoque = matches.getFirst();
                         }
                     }
                 }
@@ -289,7 +289,7 @@ public class DiscordSolicitarService {
                 // Item de texto livre único
                 List<Item> matches = itemRepository.findTop25ByNameContainingIgnoreCase(rawInput);
                 if (!matches.isEmpty()) {
-                    itemEstoque = matches.get(0);
+                    itemEstoque = matches.getFirst();
                     titulo = "[DISCORD] Solicitação: " + itemEstoque.getName();
                     descBuilder.append("[DISCORD] O usuário ").append(solicitante.getName())
                             .append(" solicitou ").append(quantidadePadrao).append(" unidade(s) de **")

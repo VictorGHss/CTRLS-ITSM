@@ -158,7 +158,7 @@ public class AssetService {
         // Se houver parcelas de financiamento fornecidas no registo do ativo,
         // prepara o envio para os contratos de sincronização da Conta Azul utilizando o serviço contábil para precisão exata.
         if (request.installments() != null && !request.installments().isEmpty()) {
-            BigDecimal totalAcquisitionValue = createdAssets.isEmpty() ? BigDecimal.ZERO : createdAssets.get(0).getAcquisitionValue();
+            BigDecimal totalAcquisitionValue = createdAssets.isEmpty() ? BigDecimal.ZERO : createdAssets.getFirst().getAcquisitionValue();
             if (totalAcquisitionValue == null) {
                 totalAcquisitionValue = BigDecimal.ZERO;
             }

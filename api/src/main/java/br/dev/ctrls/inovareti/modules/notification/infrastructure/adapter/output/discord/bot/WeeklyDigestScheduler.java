@@ -79,8 +79,8 @@ public class WeeklyDigestScheduler {
                     .setParameter("end", endOfWeek)
                     .getResultList();
 
-            String tagGargalo = activeTags.isEmpty() ? "Nenhuma tag ativa" : (String) activeTags.get(0)[0];
-            long tagGargaloQty = activeTags.isEmpty() ? 0 : ((Number) activeTags.get(0)[1]).longValue();
+            String tagGargalo = activeTags.isEmpty() ? "Nenhuma tag ativa" : (String) activeTags.getFirst()[0];
+            long tagGargaloQty = activeTags.isEmpty() ? 0 : ((Number) activeTags.getFirst()[1]).longValue();
 
             // 4. Setor Mais Impactado
             List<Object[]> sectorImpact = entityManager.createNativeQuery(
@@ -96,8 +96,8 @@ public class WeeklyDigestScheduler {
                     .setParameter("end", endOfWeek)
                     .getResultList();
 
-            String sectorMostImpacted = sectorImpact.isEmpty() ? "Nenhum setor impactado" : (String) sectorImpact.get(0)[0];
-            long sectorMostImpactedQty = sectorImpact.isEmpty() ? 0 : ((Number) sectorImpact.get(0)[1]).longValue();
+            String sectorMostImpacted = sectorImpact.isEmpty() ? "Nenhum setor impactado" : (String) sectorImpact.getFirst()[0];
+            long sectorMostImpactedQty = sectorImpact.isEmpty() ? 0 : ((Number) sectorImpact.getFirst()[1]).longValue();
 
             // Monta o Embed do JDA
             var embed = new EmbedBuilder()

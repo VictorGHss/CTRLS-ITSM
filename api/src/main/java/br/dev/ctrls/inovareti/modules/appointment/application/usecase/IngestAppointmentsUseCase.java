@@ -229,7 +229,7 @@ public class IngestAppointmentsUseCase {
                                     .doctorId(dId)
                                     .doctorName(docName)
                                     .discordChannelId(channelId)
-                                    .targetDate(targetDates.isEmpty() ? today : targetDates.get(0))
+                                    .targetDate(targetDates.isEmpty() ? today : targetDates.getFirst())
                                     .totalConsultas(totalAppointments)
                                     .totalDisparados(dispatched)
                                     .totalPreConfirmados(0)
