@@ -161,7 +161,7 @@ public class FinanceiroController {
         description = "Dispara de forma síncrona a busca e processamento de vendas quitadas em um período específico na Conta Azul."
     )
     @PreAuthorize("hasAnyRole('ADMIN', 'FINANCE_MANAGER')")
-    @PostMapping("/autonacao/executar")
+    @PostMapping({"/autonacao/executar", "/automacao/executar"})
     public ResponseEntity<AutomationExecutionResponseDTO> executeAutomationNow(
             @RequestParam LocalDate dataInicio,
             @RequestParam LocalDate dataFim) {
