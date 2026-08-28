@@ -192,8 +192,11 @@ public class AccessController {
 
         for (String id : appointmentIds) {
             List<AccessCredential> appCreds = accessCredentialRepositoryPort.findByAppointmentId(id);
-            if (appCreds.isEmpty()) {
-                log.info("[AccessControl] Credenciais não encontradas no banco para o agendamento ID: {}. Tentando gerar em tempo real...", id);
+            boolean hasOnlyContingency = !appCreds.isEmpty() && appCreds.stream()
+                    .allMatch(c -> c.getAccessCredential() != null && c.getAccessCredential().startsWith("CRED-"));
+
+            if (appCreds.isEmpty() || hasOnlyContingency) {
+                log.info("[AccessControl] Credenciais não encontradas ou contingenciais (CRED-) para o agendamento ID: {}. Tentando obter credencial real na GerAcesso...", id);
                 try {
                     AccessService.AccessValidationResult result = accessService.processAccessRequest(id, null, null);
                     if (result.authorized()) {
