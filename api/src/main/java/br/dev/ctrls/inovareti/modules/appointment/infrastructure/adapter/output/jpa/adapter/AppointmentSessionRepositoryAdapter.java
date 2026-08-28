@@ -93,6 +93,7 @@ public class AppointmentSessionRepositoryAdapter implements AppointmentSessionRe
     }
 
     @Override
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public List<AppointmentSession> findByStatusAndLastInteractionAtBefore(AppointmentSessionStatus status, LocalDateTime threshold) {
         return springDataRepository.findByStatusAndLastInteractionAtBefore(status, threshold).stream()
                 .map(entity -> entity.toDomain())
@@ -100,6 +101,7 @@ public class AppointmentSessionRepositoryAdapter implements AppointmentSessionRe
     }
 
     @Override
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public List<AppointmentSession> findByStatusAndLastNotificationSentAtBefore(AppointmentSessionStatus status, LocalDateTime threshold, LocalDateTime minAppointmentAt) {
         return springDataRepository.findByStatusAndLastNotificationSentAtBefore(status, threshold, minAppointmentAt).stream()
                 .map(entity -> entity.toDomain())
