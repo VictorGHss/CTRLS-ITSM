@@ -240,17 +240,20 @@ public class AccessService {
         log.info("[ACCESS-WINDOW] Janela GerAcesso calculada com base na data/hora do agendamento (não da resposta). Data consulta: {}, Horário consulta: {}, inicio_visita (2h antes): {}, fim_visita: {}.",
             appointmentDate, earliestTime, openingTime, closingTime);
 
-        // 7. Unificação de Credencial: verifica se já gerou uma credencial para este paciente/CPF hoje
+        // 7. Unificação de Credencial: verifica se já gerou uma credencial real para este paciente/CPF hoje
         List<AccessCredential> existingCredentials = accessCredentialRepositoryPort.findByCpf(finalCpf);
         Optional<AccessCredential> activeCredOpt = existingCredentials.stream()
-            .filter(c -> c.getCreatedAt().toLocalDate().equals(appointmentDate) && c.getUserType() == UserType.PATIENT)
+            .filter(c -> c.getCreatedAt().toLocalDate().equals(appointmentDate) 
+                      && c.getUserType() == UserType.PATIENT
+                      && c.getAccessCredential() != null
+                      && !c.getAccessCredential().startsWith("CRED-"))
             .findFirst();
 
         String token;
         String locator;
 
         if (activeCredOpt.isPresent()) {
-            // Reutiliza o token e localizador existente para o dia todo
+            // Reutiliza o token e localizador real existente para o dia todo
             AccessCredential existing = activeCredOpt.get();
             token = existing.getAccessCredential();
             locator = existing.getLocator();
@@ -326,6 +329,19 @@ public class AccessService {
 
                 accessCredentialRepositoryPort.save(credential);
                 log.info("[AccessService] Credencial associada e salva para o agendamento ID: {}", app.id());
+            } else {
+                // Se já existia e era uma credencial contingencial (CRED-), atualiza para a credencial real do GerAcesso
+                AccessCredential existingCred = savedList.get(0);
+                if (existingCred.getAccessCredential() != null 
+                        && existingCred.getAccessCredential().startsWith("CRED-") 
+                        && !token.startsWith("CRED-")) {
+                    existingCred.setCpf(finalCpf);
+                    existingCred.setAccessCredential(token);
+                    existingCred.setLocator(locator);
+                    existingCred.setCreatedAt(LocalDateTime.now());
+                    accessCredentialRepositoryPort.save(existingCred);
+                    log.info("[AccessService] Atualizando credencial contingencial para credencial GerAcesso real para o agendamento ID: {}", app.id());
+                }
             }
         }
 
