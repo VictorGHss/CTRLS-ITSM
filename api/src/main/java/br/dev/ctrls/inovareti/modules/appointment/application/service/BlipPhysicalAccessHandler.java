@@ -33,6 +33,65 @@ public class BlipPhysicalAccessHandler {
     private final DoctorConfigurationRepository doctorConfigurationRepository;
     private final AccessService accessService;
     private final BlipContextService blipContextService;
+    private final br.dev.ctrls.inovareti.modules.appointment.domain.port.output.PatientExternalPort patientExternalPort;
+
+    private String resolveAppointmentIdFallback(String fromPhone, String currentAppId) {
+        if (currentAppId != null && !currentAppId.isBlank() && !"null".equalsIgnoreCase(currentAppId.trim())) {
+            return currentAppId.trim();
+        }
+        if (fromPhone == null || fromPhone.isBlank()) {
+            return null;
+        }
+
+        String ctxAppId = blipContextService.getUserContext(fromPhone, "idAgendamentoFeegow");
+        if (ctxAppId != null && !ctxAppId.isBlank() && !"null".equalsIgnoreCase(ctxAppId.trim())) {
+            return ctxAppId.trim();
+        }
+        ctxAppId = blipContextService.getUserContext(fromPhone, "appointmentId");
+        if (ctxAppId != null && !ctxAppId.isBlank() && !"null".equalsIgnoreCase(ctxAppId.trim())) {
+            return ctxAppId.trim();
+        }
+
+        try {
+            List<AppointmentSession> activeSessions = appointmentSessionRepository.findActiveByPhoneNumber(fromPhone);
+            if (activeSessions != null && !activeSessions.isEmpty()) {
+                for (AppointmentSession s : activeSessions) {
+                    if (s.getFeegowAppointmentId() != null && !s.getFeegowAppointmentId().isBlank()) {
+                        log.info("[FALLBACK-APPID] Agendamento ID {} recuperado da sessão ativa para o telefone {}", s.getFeegowAppointmentId(), fromPhone);
+                        return s.getFeegowAppointmentId().trim();
+                    }
+                }
+            }
+        } catch (Exception ex) {
+            log.warn("[FALLBACK-APPID] Erro ao consultar sessão ativa por telefone: {}", ex.getMessage());
+        }
+
+        return null;
+    }
+
+    private String resolvePatientCpfFallback(String fromPhone, String appointmentId, String currentCpf) {
+        if (currentCpf != null && !currentCpf.isBlank() && !"null".equalsIgnoreCase(currentCpf.trim())) {
+            return currentCpf.trim();
+        }
+        if (appointmentId != null && !appointmentId.isBlank()) {
+            var sessionOpt = appointmentSessionRepository.findByFeegowAppointmentId(appointmentId);
+            if (sessionOpt.isPresent() && sessionOpt.get().getPatientId() != null) {
+                try {
+                    var patient = patientExternalPort.patientInfo(sessionOpt.get().getPatientId());
+                    if (patient != null && patient.cpf() != null && !patient.cpf().isBlank()) {
+                        return patient.cpf().trim();
+                    }
+                } catch (Exception ignored) {}
+            }
+        }
+        if (fromPhone != null) {
+            String ctxCpf = blipContextService.getUserContext(fromPhone, "cpf");
+            if (ctxCpf != null && !ctxCpf.isBlank() && !"null".equalsIgnoreCase(ctxCpf.trim())) {
+                return ctxCpf.trim();
+            }
+        }
+        return "";
+    }
 
     public WebhookResult handleIntegrarGerAcesso(BlipWebhookPayload payload, String fromPhone) {
         log.info("[WEBHOOK] Recebida ação Integrar_GerAcesso. De: {} | ID: {}", fromPhone, payload.messageId());
@@ -51,19 +110,18 @@ public class BlipPhysicalAccessHandler {
                 catracaCpf = cpfVal.toString().trim();
             }
         }
-        if (catracaAppId == null || catracaAppId.isBlank()) {
-            catracaAppId = blipContextService.getUserContext(fromPhone, "appointmentId");
-        }
-        if (catracaCpf == null || catracaCpf.isBlank()) {
-            catracaCpf = blipContextService.getUserContext(fromPhone, "cpf");
-        }
+
+        catracaAppId = resolveAppointmentIdFallback(fromPhone, catracaAppId);
+        catracaCpf = resolvePatientCpfFallback(fromPhone, catracaAppId, catracaCpf);
 
         if (catracaAppId != null && !catracaAppId.isBlank()) {
             try {
                 String token = accessService.generateAccessToken(catracaAppId, fromPhone);
                 String accessUrl = "https://itsm-inovare.ctrls.dev.br/" + catracaAppId + "?t=" + token;
+                blipContextService.setUserContextForUser(fromPhone, "idAgendamentoFeegow", catracaAppId);
                 blipContextService.setUserContextForUser(fromPhone, "tokenAcesso", token);
                 blipContextService.setUserContextForUser(fromPhone, "urlAcesso", accessUrl);
+                blipContextService.setContactExtra(fromPhone, "idAgendamentoFeegow", catracaAppId);
                 blipContextService.setContactExtra(fromPhone, "tokenAcesso", token);
                 blipContextService.setContactExtra(fromPhone, "urlAcesso", accessUrl);
             } catch (Exception ex) {
@@ -135,12 +193,10 @@ public class BlipPhysicalAccessHandler {
                 cpf = cpfVal.toString().trim();
             }
         }
-        if (appId == null || appId.isBlank()) {
-            appId = blipContextService.getUserContext(fromPhone, "appointmentId");
-        }
-        if (cpf == null || cpf.isBlank()) {
-            cpf = blipContextService.getUserContext(fromPhone, "cpf");
-        }
+
+        appId = resolveAppointmentIdFallback(fromPhone, appId);
+        cpf = resolvePatientCpfFallback(fromPhone, appId, cpf);
+
         if (appId != null && !appId.isBlank()) {
             try {
                 log.info("[WEBHOOK] Persistindo credenciais finais GerAcesso para agendamento ID: {} (sem acompanhantes). CPF: {}", appId, cpf);
@@ -197,19 +253,17 @@ public class BlipPhysicalAccessHandler {
             }
         }
 
-        if (targetAppId == null || targetAppId.isBlank()) {
-            targetAppId = blipContextService.getUserContext(fromPhone, "appointmentId");
-        }
-        if (patientCpf == null || patientCpf.isBlank()) {
-            patientCpf = blipContextService.getUserContext(fromPhone, "cpf");
-        }
+        targetAppId = resolveAppointmentIdFallback(fromPhone, targetAppId);
+        patientCpf = resolvePatientCpfFallback(fromPhone, targetAppId, patientCpf);
 
         if (targetAppId != null && !targetAppId.isBlank()) {
             try {
                 String token = accessService.generateAccessToken(targetAppId, fromPhone);
                 String accessUrl = "https://itsm-inovare.ctrls.dev.br/" + targetAppId + "?t=" + token;
+                blipContextService.setUserContextForUser(fromPhone, "idAgendamentoFeegow", targetAppId);
                 blipContextService.setUserContextForUser(fromPhone, "tokenAcesso", token);
                 blipContextService.setUserContextForUser(fromPhone, "urlAcesso", accessUrl);
+                blipContextService.setContactExtra(fromPhone, "idAgendamentoFeegow", targetAppId);
                 blipContextService.setContactExtra(fromPhone, "tokenAcesso", token);
                 blipContextService.setContactExtra(fromPhone, "urlAcesso", accessUrl);
             } catch (Exception ex) {
