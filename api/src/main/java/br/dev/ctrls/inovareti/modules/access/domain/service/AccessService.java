@@ -115,12 +115,14 @@ public class AccessService {
             Optional<AccessCredential> patientCredOpt = existingList.stream()
                 .filter(c -> c.getUserType() == UserType.PATIENT)
                 .findFirst();
+            String token = generateAccessToken(appointmentId, null);
+            String accessUrl = "https://itsm-inovare.ctrls.dev.br/" + appointmentId + "?t=" + token;
             if (patientCredOpt.isPresent()) {
                 AccessCredential patientCred = patientCredOpt.get();
-                return new AccessValidationResult(true, patientCred.getName(), patientCred.getAccessCredential(), false, "Credencial resolvida com sucesso (recuperada do banco).");
+                return new AccessValidationResult(true, patientCred.getName(), patientCred.getAccessCredential(), false, "Credencial resolvida com sucesso (recuperada do banco).", token, accessUrl);
             } else {
                 AccessCredential firstCred = existingList.getFirst();
-                return new AccessValidationResult(true, firstCred.getName(), firstCred.getAccessCredential(), false, "Credencial resolvida com sucesso (recuperada do banco).");
+                return new AccessValidationResult(true, firstCred.getName(), firstCred.getAccessCredential(), false, "Credencial resolvida com sucesso (recuperada do banco).", token, accessUrl);
             }
         }
 
@@ -134,7 +136,9 @@ public class AccessService {
             // Passando 'ex' como terceiro argumento do SLF4J para preservar o stacktrace completo nos logs de produção
             log.warn("[AccessService] ERP Feegow indisponível ao buscar agendamento {}. Ativando Fallback Seguro.",
                     appointmentId, ex);
-            return new AccessValidationResult(false, null, null, true, "ERP Feegow temporária e indisponível. Solicite o CPF ao paciente.");
+            String token = generateAccessToken(appointmentId, null);
+            String accessUrl = "https://itsm-inovare.ctrls.dev.br/" + appointmentId + "?t=" + token;
+            return new AccessValidationResult(false, null, null, true, "ERP Feegow temporária e indisponível. Solicite o CPF ao paciente.", token, accessUrl);
         }
         if (accessInfoOpt.isEmpty()) {
             log.warn("[AccessService] Não foi possível obter dados do agendamento {} na API Feegow.", appointmentId);
@@ -176,13 +180,17 @@ public class AccessService {
             resolvedCpf = cleanFeegowCpf;
         }
 
+        String targetPhone = mainPatient != null && mainPatient.phone() != null ? mainPatient.phone() : accessInfo.phone();
+
         // 3. Contingência de CPF Nulo ou Matematicamente Inválido:
         // Se o CPF for nulo, incompleto ou falhar na validação oficial da Receita Federal (Módulo 11),
         // ativamos a flag requiresCpfFallback para que a interface web ou chatbot exiba o campo de correção.
         if (resolvedCpf == null || resolvedCpf.isBlank() || !isValidCpf(resolvedCpf)) {
             log.warn("[AccessService] Prontuário Feegow sem CPF válido (valor Feegow: '{}', valor request: '{}') para o paciente ID: {}. Ativando flag 'requiresCpfFallback'.",
                     cleanFeegowCpf, cleanRequestCpf, accessInfo.patientId());
-            return new AccessValidationResult(false, null, null, true, "CPF ausente ou inválido. Por favor, confirme seu CPF para liberação da catraca.");
+            String token = generateAccessToken(appointmentId, targetPhone);
+            String accessUrl = "https://itsm-inovare.ctrls.dev.br/" + appointmentId + "?t=" + token;
+            return new AccessValidationResult(false, null, null, true, "CPF ausente ou inválido. Por favor, confirme seu CPF para liberação da catraca.", token, accessUrl);
         }
 
         // Usa o timezone local explícito da clínica para garantir que LocalDate.now() reflita
@@ -196,8 +204,6 @@ public class AccessService {
             resolvedAppointmentDate = LocalDate.now(CLINIC_ZONE);
         }
         final LocalDate appointmentDate = resolvedAppointmentDate;
-
-        String targetPhone = mainPatient != null ? mainPatient.phone() : null;
 
         // 4. Busca todos os agendamentos marcados daquela data para agrupamento
         log.info("[AccessService] Buscando pauta do dia {} no Feegow para agrupamento de consultas...", appointmentDate);
@@ -392,7 +398,9 @@ public class AccessService {
             log.info("[AccessService] Processamento assíncrono de acompanhantes finalizado.");
         }
 
-        return new AccessValidationResult(true, accessInfo.name(), token, false, "Credencial resolvida com sucesso.");
+        String magicToken = generateAccessToken(appointmentId, targetPhone);
+        String accessUrl = "https://itsm-inovare.ctrls.dev.br/" + appointmentId + "?t=" + magicToken;
+        return new AccessValidationResult(true, accessInfo.name(), token, false, "Credencial resolvida com sucesso.", magicToken, accessUrl);
     }
 
     /**
@@ -528,6 +536,73 @@ public class AccessService {
     }
 
     /**
+     * Gera um token determinístico e criptograficamente seguro (HMAC-SHA256) para o agendamento e telefone do paciente.
+     * Permite autenticação sem senhas (Magic Link) conforme os princípios de segurança e LGPD.
+     */
+    public String generateAccessToken(String appointmentId, String phone) {
+        if (appointmentId == null || appointmentId.isBlank()) {
+            return "";
+        }
+        try {
+            String cleanPhone = phone != null ? phone.replaceAll("\\D", "") : "";
+            if (cleanPhone.startsWith("55") && (cleanPhone.length() == 12 || cleanPhone.length() == 13)) {
+                cleanPhone = cleanPhone.substring(2);
+            }
+            String raw = appointmentId + ":" + cleanPhone;
+            String secret = "inovare_magic_access_token_secret_key_2026";
+            javax.crypto.Mac mac = javax.crypto.Mac.getInstance("HmacSHA256");
+            mac.init(new javax.crypto.spec.SecretKeySpec(secret.getBytes(java.nio.charset.StandardCharsets.UTF_8), "HmacSHA256"));
+            byte[] hash = mac.doFinal(raw.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < 8; i++) {
+                sb.append(String.format("%02x", hash[i]));
+            }
+            return sb.toString();
+        } catch (Exception ex) {
+            log.error("[AccessService] Erro ao gerar token de acesso HMAC", ex);
+            return "";
+        }
+    }
+
+    /**
+     * Valida o desafio de acesso seguro utilizando Magic Token (HMAC) ou os 4 dígitos do telefone.
+     */
+    public FeegowPatientAccessInfo validateAccessChallenge(String appointmentId, String phoneDigits, String token) {
+        log.info("[AccessService] Validando credenciais para o agendamento ID: {} (token={})", 
+                appointmentId, token != null && !token.isBlank() ? "presente" : "ausente");
+
+        Optional<FeegowPatientAccessInfo> accessInfoOpt = feegowClientPort.fetchPatientAccessInfo(appointmentId);
+        if (accessInfoOpt.isEmpty()) {
+            log.warn("[AccessService] Agendamento {} não encontrado para validação do desafio.", appointmentId);
+            throw new br.dev.ctrls.inovareti.core.shared.domain.model.exception.NotFoundException("Agendamento não encontrado.");
+        }
+
+        FeegowPatientAccessInfo accessInfo = accessInfoOpt.get();
+        FeegowPatient mainPatient = getPatientInfoWithCache(accessInfo.patientId());
+        String phone = mainPatient != null && mainPatient.phone() != null && !mainPatient.phone().isBlank()
+                ? mainPatient.phone()
+                : accessInfo.phone();
+
+        // 1. Validação prioritária por Magic Token criptográfico
+        if (token != null && !token.isBlank()) {
+            String expectedToken = generateAccessToken(appointmentId, phone);
+            if (expectedToken.equalsIgnoreCase(token.trim())) {
+                log.info("[AccessService] Magic Token criptográfico validado com sucesso para o agendamento {}", appointmentId);
+                return accessInfo;
+            }
+            log.warn("[AccessService] Token de acesso inválido para agendamento {}. Esperado: {}, Recebido: {}", 
+                    appointmentId, expectedToken, token);
+        }
+
+        // 2. Validação por 4 dígitos do telefone (fallback tradicional)
+        if (phoneDigits != null && !phoneDigits.isBlank()) {
+            return validatePhoneChallenge(appointmentId, phoneDigits);
+        }
+
+        throw new InvalidChallengeException("Identificação necessária. Por favor, utilize o link recebido no WhatsApp.");
+    }
+
+    /**
      * Valida o desafio dos 4 últimos dígitos do telefone do paciente cadastrado no prontuário.
      * Caso os dígitos não batam, lança InvalidChallengeException.
      * Comentários em PT-BR pelas Regras de Ouro.
@@ -547,7 +622,9 @@ public class AccessService {
         FeegowPatientAccessInfo accessInfo = accessInfoOpt.get();
         FeegowPatient mainPatient = getPatientInfoWithCache(accessInfo.patientId());
         
-        String phone = mainPatient != null ? mainPatient.phone() : null;
+        String phone = mainPatient != null && mainPatient.phone() != null && !mainPatient.phone().isBlank() 
+                ? mainPatient.phone() 
+                : accessInfo.phone();
         if (phone == null || phone.isBlank()) {
             log.warn("[AccessService] Paciente ID {} não possui telefone cadastrado no prontuário.", accessInfo.patientId());
             throw new InvalidChallengeException("Não há telefone cadastrado no prontuário do paciente.");
@@ -645,6 +722,12 @@ public class AccessService {
         String patientName,
         String accessCredential,
         boolean requiresCpfFallback,
-        String message
-    ) {}
+        String message,
+        String token,
+        String accessUrl
+    ) {
+        public AccessValidationResult(boolean authorized, String patientName, String accessCredential, boolean requiresCpfFallback, String message) {
+            this(authorized, patientName, accessCredential, requiresCpfFallback, message, null, null);
+        }
+    }
 }

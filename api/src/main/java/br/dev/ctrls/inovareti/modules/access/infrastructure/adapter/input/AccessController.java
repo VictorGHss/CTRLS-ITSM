@@ -9,6 +9,7 @@ import br.dev.ctrls.inovareti.modules.access.domain.service.AccessService;
 import br.dev.ctrls.inovareti.modules.access.infrastructure.adapter.input.dto.AccessCredentialResponse;
 import br.dev.ctrls.inovareti.modules.access.infrastructure.adapter.input.dto.AccessValidationRequest;
 import br.dev.ctrls.inovareti.modules.access.infrastructure.config.InovareMotorProperties;
+import br.dev.ctrls.inovareti.modules.access.domain.port.output.FeegowClientPort;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentSessionRepositoryPort;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -32,6 +33,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -53,6 +55,7 @@ public class AccessController {
     private final InovareMotorProperties inovareMotorProperties;
     private final AccessCredentialRepositoryPort accessCredentialRepositoryPort;
     private final AccessService accessService;
+    private final FeegowClientPort feegowClientPort;
     private final AppointmentSessionRepositoryPort appointmentSessionRepository;
 
     /**
@@ -147,11 +150,13 @@ public class AccessController {
     @GetMapping("/credentials/{idAgendamento}")
     public ResponseEntity<List<AccessCredentialResponse>> getCredentials(
             @PathVariable("idAgendamento") String idAgendamento,
-            @RequestParam("phoneDigits") String phoneDigits) {
-        log.info("[AccessControl] Consulta de credenciais para o agendamento ID: {} com validação de telefone", idAgendamento);
+            @RequestParam(value = "phoneDigits", required = false) String phoneDigits,
+            @RequestParam(value = "t", required = false) String token) {
+        log.info("[AccessControl] Consulta de credenciais para o agendamento ID: {} (token={}, phoneDigits={})", 
+                idAgendamento, token != null && !token.isBlank() ? "presente" : "ausente", phoneDigits);
 
-        // Executa a validação do desafio dos 4 dígitos do telefone cadastrado e obtém dados do Feegow
-        FeegowPatientAccessInfo accessInfo = accessService.validatePhoneChallenge(idAgendamento, phoneDigits);
+        // Executa a validação do desafio (por token criptográfico ou 4 dígitos do telefone)
+        FeegowPatientAccessInfo accessInfo = accessService.validateAccessChallenge(idAgendamento, phoneDigits, token);
 
         // Resolve todos os IDs de agendamento que pertencem ao mesmo grupo
         List<String> appointmentIds = new ArrayList<>();
@@ -202,7 +207,7 @@ public class AccessController {
                     if (result.authorized()) {
                         appCreds = accessCredentialRepositoryPort.findByAppointmentId(id);
                     } else if (result.requiresCpfFallback()) {
-                        var specificInfo = accessService.validatePhoneChallenge(id, phoneDigits);
+                        var specificInfo = accessService.validateAccessChallenge(id, phoneDigits, token);
                         AccessCredential ghost = AccessCredential.builder()
                                 .id(UUID.randomUUID())
                                 .appointmentId(id)
@@ -287,7 +292,7 @@ public class AccessController {
                     if (challengeCache.containsKey(c.getAppointmentId())) {
                         specificInfo = challengeCache.get(c.getAppointmentId());
                     } else {
-                        specificInfo = accessService.validatePhoneChallenge(c.getAppointmentId(), phoneDigits);
+                        specificInfo = accessService.validateAccessChallenge(c.getAppointmentId(), phoneDigits, token);
                         challengeCache.put(c.getAppointmentId(), specificInfo);
                     }
                     if (specificInfo.appointmentDate() != null) {
@@ -367,5 +372,24 @@ public class AccessController {
 
         log.info("[AccessControl] Retornando {} credencial(ais) para o agendamento ID: {}", response.size(), idAgendamento);
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Endpoint de geração/recuperação de Magic Token e URL direta de acesso para chatbots ou integrações.
+     */
+    @GetMapping("/token/{idAgendamento}")
+    public ResponseEntity<?> getAccessToken(@PathVariable("idAgendamento") String idAgendamento) {
+        Optional<FeegowPatientAccessInfo> accessInfoOpt = feegowClientPort.fetchPatientAccessInfo(idAgendamento);
+        if (accessInfoOpt.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        FeegowPatientAccessInfo accessInfo = accessInfoOpt.get();
+        String token = accessService.generateAccessToken(idAgendamento, accessInfo.phone());
+        String accessUrl = "https://itsm-inovare.ctrls.dev.br/" + idAgendamento + "?t=" + token;
+        return ResponseEntity.ok(Map.of(
+            "appointmentId", idAgendamento,
+            "token", token,
+            "accessUrl", accessUrl
+        ));
     }
 }

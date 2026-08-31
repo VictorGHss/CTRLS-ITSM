@@ -33,6 +33,7 @@ export default function PatientAccess() {
 
   // --- Fallback de CPF ---
   const [verifiedPhoneDigits, setVerifiedPhoneDigits] = useState<string>('');
+  const [verifiedToken, setVerifiedToken] = useState<string>('');
   const [cpfInput, setCpfInput] = useState<string>('');
   const [cpfSubmitLoading, setCpfSubmitLoading] = useState<boolean>(false);
   const [cpfSubmitError, setCpfSubmitError] = useState<string | null>(null);
@@ -68,6 +69,45 @@ export default function PatientAccess() {
       }
     };
   }, [fullscreenCard]);
+
+  // Desbloqueio automático via Magic Link (?t=...) ou parâmetro de telefone (?p=...)
+  useEffect(() => {
+    if (!appointmentId) return;
+    const params = new URLSearchParams(window.location.search);
+    const tokenParam = params.get('t') || params.get('token');
+    const phoneDigitsParam = params.get('p') || params.get('auth');
+
+    if (tokenParam || phoneDigitsParam) {
+      const autoUnlock = async () => {
+        setChallengeLoading(true);
+        setChallengeError(null);
+        try {
+          const query = tokenParam 
+            ? `t=${encodeURIComponent(tokenParam)}` 
+            : `phoneDigits=${encodeURIComponent(phoneDigitsParam!)}`;
+          
+          console.log('[PatientAccess] Autenticação automática via URL:', query);
+          const response = await api.get<AccessCredential[]>(
+            `/v1/access/credentials/${appointmentId}?${query}`,
+            {
+              headers: {
+                'X-Skip-Interceptor': 'true'
+              }
+            }
+          );
+          saveCredentialsWithOfflineCache(response.data || []);
+          if (tokenParam) setVerifiedToken(tokenParam);
+          if (phoneDigitsParam) setVerifiedPhoneDigits(phoneDigitsParam);
+        } catch (err: unknown) {
+          console.warn('[PatientAccess] Falha no auto-desbloqueio por URL:', err);
+          setIsVerified(false);
+        } finally {
+          setChallengeLoading(false);
+        }
+      };
+      void autoUnlock();
+    }
+  }, [appointmentId]);
 
   const openFullscreen = (index: number) => {
     if (credentials[index]?.credentialCode === 'BLOCKED_OUTSIDE_WINDOW') return;
@@ -112,22 +152,21 @@ export default function PatientAccess() {
     };
   }, []);
 
-  // Tenta restaurar credenciais salvas em cache local (localStorage) para suporte offline na recepção da clínica
+  // Recupera credenciais em cache local (PWA Offline-First)
   useEffect(() => {
-    if (appointmentId) {
-      try {
-        const cached = localStorage.getItem(`patient_access_credentials_${appointmentId}`);
-        if (cached) {
-          const parsed = JSON.parse(cached);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            setCredentials(parsed);
-            setIsVerified(true);
-            console.log('[PatientAccess] Credenciais e QR Code carregados do armazenamento offline (localStorage).');
-          }
+    if (!appointmentId) return;
+    try {
+      const cached = localStorage.getItem(`patient_access_credentials_${appointmentId}`);
+      if (cached) {
+        const parsed = JSON.parse(cached) as AccessCredential[];
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          console.log('[PatientAccess] Credenciais restauradas do cache offline');
+          setCredentials(parsed);
+          setIsVerified(true);
         }
-      } catch {
-        // Ignora erros no parsing do localStorage
       }
+    } catch {
+      // Ignora falhas de leitura do localStorage
     }
   }, [appointmentId]);
 
@@ -266,8 +305,12 @@ export default function PatientAccess() {
         return;
       }
 
+      const query = verifiedToken
+        ? `t=${encodeURIComponent(verifiedToken)}`
+        : `phoneDigits=${encodeURIComponent(verifiedPhoneDigits)}`;
+
       const response = await api.get<AccessCredential[]>(
-        `/v1/access/credentials/${appointmentId}?phoneDigits=${verifiedPhoneDigits}`,
+        `/v1/access/credentials/${appointmentId}?${query}`,
         {
           headers: {
             'X-Skip-Interceptor': 'true'
@@ -297,21 +340,13 @@ export default function PatientAccess() {
     setCompanionSubmitError(null);
 
     try {
-      const patientCpf = patientCredential?.cpf?.replace(/\D/g, '') || '';
       console.log('[PatientAccess] Cadastrando acompanhante:', companionName);
-      
       await api.post(
-        '/v1/access/validate',
+        `/v1/access/companions/${appointmentId}`,
         {
-          appointmentId,
-          cpf: patientCpf,
-          companions: [
-            {
-              name: companionName,
-              cpf: cleanCpf,
-              birthDate: companionBirthDate
-            }
-          ]
+          name: companionName.trim(),
+          cpf: cleanCpf,
+          birthDate: companionBirthDate || null
         },
         {
           headers: {
@@ -320,41 +355,29 @@ export default function PatientAccess() {
         }
       );
 
+      const query = verifiedToken
+        ? `t=${encodeURIComponent(verifiedToken)}`
+        : `phoneDigits=${encodeURIComponent(verifiedPhoneDigits)}`;
+
       const response = await api.get<AccessCredential[]>(
-        `/v1/access/credentials/${appointmentId}?phoneDigits=${verifiedPhoneDigits}`,
+        `/v1/access/credentials/${appointmentId}?${query}`,
         {
           headers: {
             'X-Skip-Interceptor': 'true'
           }
         }
       );
-      const newCreds = response.data || [];
-      setCredentials(newCreds);
-      
+      setCredentials(response.data || []);
       setIsCompanionModalOpen(false);
       setCompanionName('');
       setCompanionCpf('');
       setCompanionBirthDate('');
-
-      if (newCreds.length > 0) {
-        setTimeout(() => {
-          scrollToCard(newCreds.length - 1);
-        }, 150);
-      }
     } catch (err: unknown) {
       console.error('[PatientAccess] Falha ao cadastrar acompanhante:', err);
-      setCompanionSubmitError('Erro ao cadastrar acompanhante nas catracas. Tente novamente.');
+      setCompanionSubmitError('Ocorreu um erro ao cadastrar o acompanhante. Tente novamente.');
     } finally {
       setCompanionSubmitLoading(false);
     }
-  };
-
-  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
-    const container = e.currentTarget;
-    const scrollLeft = container.scrollLeft;
-    const width = container.clientWidth;
-    const index = Math.round(scrollLeft / (width * 0.85));
-    setActiveCardIndex(Math.min(Math.max(index, 0), credentials.length - 1));
   };
 
   const scrollToCard = (index: number) => {
@@ -366,6 +389,14 @@ export default function PatientAccess() {
       });
       setActiveCardIndex(index);
     }
+  };
+
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const container = e.currentTarget;
+    const scrollLeft = container.scrollLeft;
+    const width = container.clientWidth;
+    const index = Math.round(scrollLeft / (width * 0.85));
+    setActiveCardIndex(Math.min(Math.max(index, 0), credentials.length - 1));
   };
 
   // === TELA DE DESAFIO DE IDENTIDADE (2FA) ===
