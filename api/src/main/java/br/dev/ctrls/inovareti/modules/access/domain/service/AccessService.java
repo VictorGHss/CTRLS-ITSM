@@ -103,9 +103,14 @@ public class AccessService {
         log.info("[AccessService] Processando solicitação de acesso físico. Agendamento: {}", appointmentId);
 
         // 0. Verificação de Existência (Idempotência) antes de criar/salvar novas credenciais.
-        // Se já existem credenciais para este agendamento, retornamos imediatamente para evitar conflitos de concorrência e Optimistic Locking.
+        // Se já existem credenciais REAIS (não contingenciais CRED-) para este agendamento e nenhum novo CPF foi informado,
+        // retornamos imediatamente para evitar chamadas redundantes.
         List<AccessCredential> existingList = accessCredentialRepositoryPort.findByAppointmentId(appointmentId);
-        if (existingList != null && !existingList.isEmpty() && (companions == null || companions.isEmpty())) {
+        boolean hasOnlyContingency = existingList != null && !existingList.isEmpty() && existingList.stream()
+                .allMatch(c -> c.getAccessCredential() != null && c.getAccessCredential().startsWith("CRED-"));
+
+        if (existingList != null && !existingList.isEmpty() && !hasOnlyContingency 
+                && (requestCpf == null || requestCpf.isBlank()) && (companions == null || companions.isEmpty())) {
             log.info("[AccessService] Credenciais já existentes encontradas no banco para o agendamento ID: {}. Ignorando processamento redundante.", appointmentId);
             Optional<AccessCredential> patientCredOpt = existingList.stream()
                 .filter(c -> c.getUserType() == UserType.PATIENT)
@@ -143,40 +148,41 @@ public class AccessService {
         String patientName = mainPatient != null ? mainPatient.name() : null;
         String patientBirthdate = mainPatient != null ? mainPatient.birthdate() : null;
 
-        // 2. Resolve o CPF (priorizando o CPF do prontuário local/Feegow, com fallback para o do webhook apenas se for válido com 11 dígitos)
-        String resolvedCpf = accessInfo.cpf();
-        if (resolvedCpf == null || resolvedCpf.isBlank()) {
+        // 2. Resolve o CPF (priorizando o CPF do prontuário local/Feegow caso seja válido, com fallback para o da requisição)
+        String rawFeegowCpf = accessInfo.cpf();
+        if (rawFeegowCpf == null || rawFeegowCpf.isBlank()) {
             if (mainPatient != null && mainPatient.cpf() != null && !mainPatient.cpf().isBlank()) {
-                resolvedCpf = mainPatient.cpf();
+                rawFeegowCpf = mainPatient.cpf();
             }
         }
 
+        String cleanFeegowCpf = rawFeegowCpf != null ? rawFeegowCpf.replaceAll("\\D", "") : "";
         String cleanRequestCpf = "";
         if (requestCpf != null && !requestCpf.isBlank() && !requestCpf.contains("{{") && !requestCpf.equalsIgnoreCase("null")) {
             cleanRequestCpf = requestCpf.replaceAll("\\D", "");
         }
 
-        if (resolvedCpf == null || resolvedCpf.isBlank()) {
-            if (cleanRequestCpf.length() == 11) {
-                resolvedCpf = cleanRequestCpf;
-                try {
-                    log.info("[AccessService] Sincronizando CPF de volta com a Feegow para o paciente ID: {}", accessInfo.patientId());
-                    patientExternalPort.updatePatientCpf(accessInfo.patientId(), resolvedCpf, patientName, patientBirthdate);
-                } catch (Exception e) {
-                    log.error("[AccessService] Falha ao sincronizar CPF com a Feegow: {}", e.getMessage());
-                }
+        String resolvedCpf = null;
+        if (isValidCpf(cleanRequestCpf)) {
+            // Se o paciente acabou de submeter um CPF válido (via formulário web ou chat), usa-o com prioridade
+            resolvedCpf = cleanRequestCpf;
+            try {
+                log.info("[AccessService] Sincronizando CPF válido informado ({}) de volta com a Feegow para o paciente ID: {}", resolvedCpf, accessInfo.patientId());
+                patientExternalPort.updatePatientCpf(accessInfo.patientId(), resolvedCpf, patientName, patientBirthdate);
+            } catch (Exception e) {
+                log.error("[AccessService] Falha ao sincronizar CPF com a Feegow: {}", e.getMessage());
             }
+        } else if (isValidCpf(cleanFeegowCpf)) {
+            resolvedCpf = cleanFeegowCpf;
         }
 
-        // Limpa formatação do CPF para padronizar
-        if (resolvedCpf != null) {
-            resolvedCpf = resolvedCpf.replaceAll("\\D", "");
-        }
-
-        // 3. Contingência de CPF Nulo: se não existir CPF, sinaliza fallback do Blip (requiresCpfFallback = true)
-        if (resolvedCpf == null || resolvedCpf.isBlank()) {
-            log.warn("[AccessService] Prontuário Feegow e metadados do Blip sem CPF para o paciente ID: {}. Ativando flag 'requiresCpfFallback'.", accessInfo.patientId());
-            return new AccessValidationResult(false, null, null, true, "CPF ausente. Necessita redirecionar fluxo Blip.");
+        // 3. Contingência de CPF Nulo ou Matematicamente Inválido:
+        // Se o CPF for nulo, incompleto ou falhar na validação oficial da Receita Federal (Módulo 11),
+        // ativamos a flag requiresCpfFallback para que a interface web ou chatbot exiba o campo de correção.
+        if (resolvedCpf == null || resolvedCpf.isBlank() || !isValidCpf(resolvedCpf)) {
+            log.warn("[AccessService] Prontuário Feegow sem CPF válido (valor Feegow: '{}', valor request: '{}') para o paciente ID: {}. Ativando flag 'requiresCpfFallback'.",
+                    cleanFeegowCpf, cleanRequestCpf, accessInfo.patientId());
+            return new AccessValidationResult(false, null, null, true, "CPF ausente ou inválido. Por favor, confirme seu CPF para liberação da catraca.");
         }
 
         // Usa o timezone local explícito da clínica para garantir que LocalDate.now() reflita
