@@ -3,6 +3,7 @@ package br.dev.ctrls.inovareti.modules.appointment.application.dto;
 import java.util.List;
 
 import com.fasterxml.jackson.annotation.JsonAlias;
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
@@ -27,15 +28,25 @@ public class FeegowPatientDetailsDto {
     public static class PatientItem {
 
         @JsonProperty("id")
+        @JsonAlias({"id", "paciente_id", "patient_id", "id_paciente"})
         private String id;
 
         @JsonProperty("nome")
+        @JsonAlias({"Nome", "nome_completo", "name"})
         private String nome;
 
+        @JsonProperty("nome_social")
+        @JsonAlias({"NomeSocial", "nomeSocial"})
+        private String nomeSocial;
+
         @JsonProperty("celulares")
+        @JsonAlias({"Celulares", "celular", "Celular", "mobile", "phones"})
+        @JsonFormat(with = JsonFormat.Feature.ACCEPT_SINGLE_VALUE_AS_ARRAY)
         private List<String> celulares;
 
         @JsonProperty("telefones")
+        @JsonAlias({"Telefones", "telefone", "Telefone", "phone"})
+        @JsonFormat(with = JsonFormat.Feature.ACCEPT_SINGLE_VALUE_AS_ARRAY)
         private List<String> telefones;
 
         @JsonProperty("cpf")
