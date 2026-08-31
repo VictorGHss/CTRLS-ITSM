@@ -34,10 +34,11 @@ export const FullscreenQrModal: React.FC<FullscreenQrModalProps> = ({
         <div className="p-5 bg-white border-2 border-brand-primary/30 rounded-3xl shadow-2xl flex items-center justify-center">
           <QRCodeSVG 
             value={qrCodeValue} 
-            size={300} 
-            fgColor="#0f172a" 
+            size={280} 
+            fgColor="#000000" 
             bgColor="#ffffff"
-            level="H"
+            level="M"
+            marginSize={2}
           />
         </div>
         <span className="text-[11px] font-mono text-slate-400 mt-3 font-semibold">Trava de brilho da tela ativada</span>

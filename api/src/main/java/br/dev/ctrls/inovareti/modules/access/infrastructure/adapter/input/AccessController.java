@@ -8,6 +8,7 @@ import br.dev.ctrls.inovareti.modules.access.domain.port.output.AccessCredential
 import br.dev.ctrls.inovareti.modules.access.domain.service.AccessService;
 import br.dev.ctrls.inovareti.modules.access.infrastructure.adapter.input.dto.AccessCredentialResponse;
 import br.dev.ctrls.inovareti.modules.access.infrastructure.adapter.input.dto.AccessValidationRequest;
+import br.dev.ctrls.inovareti.modules.access.infrastructure.adapter.input.dto.CompanionRequest;
 import br.dev.ctrls.inovareti.modules.access.infrastructure.config.InovareMotorProperties;
 import br.dev.ctrls.inovareti.modules.access.domain.port.output.FeegowClientPort;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentSessionRepositoryPort;
@@ -137,6 +138,37 @@ public class AccessController {
         }
 
         return ResponseEntity.ok(result);
+    }
+
+    /**
+     * Endpoint de cadastro de acompanhante pelo portal web do paciente.
+     *
+     * @param appointmentId Identificador do agendamento principal.
+     * @param request Dados cadastrais do acompanhante (nome, CPF, nascimento).
+     * @return ResponseEntity contendo a credencial gerada para o acompanhante.
+     */
+    @PostMapping("/companions/{appointmentId}")
+    public ResponseEntity<?> registerCompanion(
+            @PathVariable("appointmentId") String appointmentId,
+            @RequestBody @Valid CompanionRequest request) {
+        log.info("[AccessControl] Cadastro de acompanhante pelo portal para o agendamento ID {}: {}", appointmentId, request.name());
+        try {
+            CompanionAccessInfo companionInfo = new CompanionAccessInfo(
+                request.name(),
+                request.cpf(),
+                request.phone(),
+                request.email(),
+                request.birthDate()
+            );
+            AccessCredential credential = accessService.registerCompanion(appointmentId, companionInfo);
+            return ResponseEntity.ok(credential);
+        } catch (Exception ex) {
+            log.error("[AccessControl] Erro ao cadastrar acompanhante para agendamento {}: {}", appointmentId, ex.getMessage(), ex);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
+                "status", "error",
+                "message", ex.getMessage() != null ? ex.getMessage() : "Erro ao cadastrar acompanhante."
+            ));
+        }
     }
 
     /**
