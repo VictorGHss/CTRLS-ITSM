@@ -86,10 +86,11 @@ export const CredentialsCarousel: React.FC<CredentialsCarouselProps> = ({
                   <>
                     <QRCodeSVG 
                       value={cred.credentialCode} 
-                      size={150} 
-                      fgColor="#0f172a" 
+                      size={160} 
+                      fgColor="#000000" 
                       bgColor="#ffffff"
-                      level="H"
+                      level="M"
+                      marginSize={2}
                     />
                     <div className="absolute top-2 right-2 flex items-center justify-center">
                       <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
