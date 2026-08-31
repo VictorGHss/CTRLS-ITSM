@@ -39,7 +39,7 @@ public class FeegowPatientDetailsDto {
         private List<String> telefones;
 
         @JsonProperty("cpf")
-        @JsonAlias({"CPF", "Cpf"})
+        @JsonAlias({"CPF", "Cpf", "cpf_cnpj", "num_cpf", "numero_cpf", "documento", "doc", "paciente_cpf"})
         private String cpf;
 
         @JsonProperty("nascimento")
@@ -47,7 +47,8 @@ public class FeegowPatientDetailsDto {
         private String nascimento;
 
         @JsonProperty("documentos")
-        private PatientDocs documentos;
+        @JsonAlias({"Documentos", "documents", "docs", "documento"})
+        private Object documentos;
 
         public String getId() {
             return id;
@@ -82,11 +83,37 @@ public class FeegowPatientDetailsDto {
         }
 
         public String getCpf() {
-            // Se o CPF direto for nulo, tenta buscar do objeto documentos
-            if (cpf == null && documentos != null) {
-                return documentos.getCpf();
+            if (cpf != null && !cpf.isBlank()) {
+                return cpf;
             }
-            return cpf;
+            if (documentos != null) {
+                if (documentos instanceof java.util.Map<?, ?> map) {
+                    for (java.util.Map.Entry<?, ?> entry : map.entrySet()) {
+                        String key = String.valueOf(entry.getKey()).toLowerCase();
+                        if (key.contains("cpf")) {
+                            Object val = entry.getValue();
+                            if (val instanceof java.util.Map<?, ?> subMap) {
+                                Object num = subMap.get("numero") != null ? subMap.get("numero") : subMap.get("val");
+                                if (num != null) return String.valueOf(num);
+                            }
+                            if (val != null) return String.valueOf(val);
+                        }
+                    }
+                } else if (documentos instanceof java.util.List<?> list) {
+                    for (Object item : list) {
+                        if (item instanceof java.util.Map<?, ?> map) {
+                            String tipo = String.valueOf(map.get("tipo") != null ? map.get("tipo") : map.get("type"));
+                            if (tipo.equalsIgnoreCase("cpf") || tipo.equalsIgnoreCase("1")) {
+                                Object num = map.get("numero") != null ? map.get("numero") : map.get("num");
+                                if (num != null) return String.valueOf(num);
+                            }
+                        }
+                    }
+                } else if (documentos instanceof String str && !str.isBlank()) {
+                    return str;
+                }
+            }
+            return null;
         }
 
         public void setCpf(String cpf) {
@@ -101,27 +128,12 @@ public class FeegowPatientDetailsDto {
             this.nascimento = nascimento;
         }
 
-        public PatientDocs getDocumentos() {
+        public Object getDocumentos() {
             return documentos;
         }
 
-        public void setDocumentos(PatientDocs documentos) {
+        public void setDocumentos(Object documentos) {
             this.documentos = documentos;
-        }
-    }
-
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    public static class PatientDocs {
-        @JsonProperty("cpf")
-        @JsonAlias({"CPF", "Cpf"})
-        private String cpf;
-
-        public String getCpf() {
-            return cpf;
-        }
-
-        public void setCpf(String cpf) {
-            this.cpf = cpf;
         }
     }
 }
