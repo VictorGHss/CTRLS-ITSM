@@ -59,6 +59,17 @@ public class BlipPhysicalAccessHandler {
         }
 
         if (catracaAppId != null && !catracaAppId.isBlank()) {
+            try {
+                String token = accessService.generateAccessToken(catracaAppId, fromPhone);
+                String accessUrl = "https://itsm-inovare.ctrls.dev.br/" + catracaAppId + "?t=" + token;
+                blipContextService.setUserContextForUser(fromPhone, "tokenAcesso", token);
+                blipContextService.setUserContextForUser(fromPhone, "urlAcesso", accessUrl);
+                blipContextService.setContactExtra(fromPhone, "tokenAcesso", token);
+                blipContextService.setContactExtra(fromPhone, "urlAcesso", accessUrl);
+            } catch (Exception ex) {
+                log.warn("[BlipPhysicalAccessHandler] Falha ao injetar token de acesso no contexto: {}", ex.getMessage());
+            }
+
             AppointmentSession session = appointmentSessionRepository.findByFeegowAppointmentId(catracaAppId).orElse(null);
             if (session == null) {
                 log.warn("[CATRACA-ALERTA] Sessão não encontrada para o agendamento ID: {}", catracaAppId);
@@ -194,6 +205,17 @@ public class BlipPhysicalAccessHandler {
         }
 
         if (targetAppId != null && !targetAppId.isBlank()) {
+            try {
+                String token = accessService.generateAccessToken(targetAppId, fromPhone);
+                String accessUrl = "https://itsm-inovare.ctrls.dev.br/" + targetAppId + "?t=" + token;
+                blipContextService.setUserContextForUser(fromPhone, "tokenAcesso", token);
+                blipContextService.setUserContextForUser(fromPhone, "urlAcesso", accessUrl);
+                blipContextService.setContactExtra(fromPhone, "tokenAcesso", token);
+                blipContextService.setContactExtra(fromPhone, "urlAcesso", accessUrl);
+            } catch (Exception ex) {
+                log.warn("[BlipPhysicalAccessHandler] Falha ao injetar token de acesso na finalização: {}", ex.getMessage());
+            }
+
             try {
                 log.info("[WEBHOOK] Persistindo credenciais finais GerAcesso para agendamento ID: {} com {} acompanhante(s). CPF: {}", targetAppId, companionsList.size(), patientCpf);
                 accessService.processAccessRequest(targetAppId, patientCpf, companionsList);

@@ -50,7 +50,7 @@ public class FeegowPatientDetailsDto {
         private List<String> telefones;
 
         @JsonProperty("cpf")
-        @JsonAlias({"CPF", "Cpf", "cpf_cnpj", "num_cpf", "numero_cpf", "documento", "doc", "paciente_cpf"})
+        @JsonAlias({"CPF", "Cpf", "cpf_cnpj", "num_cpf", "numero_cpf", "paciente_cpf", "doc_cpf"})
         private String cpf;
 
         @JsonProperty("nascimento")
@@ -94,8 +94,13 @@ public class FeegowPatientDetailsDto {
         }
 
         public String getCpf() {
+            String directCpf = null;
             if (cpf != null && !cpf.isBlank()) {
-                return cpf;
+                String clean = cpf.replaceAll("\\D", "");
+                if (clean.length() == 11) {
+                    return clean;
+                }
+                directCpf = cpf;
             }
             if (documentos != null) {
                 if (documentos instanceof java.util.Map<?, ?> map) {
@@ -105,26 +110,39 @@ public class FeegowPatientDetailsDto {
                             Object val = entry.getValue();
                             if (val instanceof java.util.Map<?, ?> subMap) {
                                 Object num = subMap.get("numero") != null ? subMap.get("numero") : subMap.get("val");
-                                if (num != null) return String.valueOf(num);
+                                if (num != null) {
+                                    String clean = String.valueOf(num).replaceAll("\\D", "");
+                                    if (clean.length() == 11) return clean;
+                                }
                             }
-                            if (val != null) return String.valueOf(val);
+                            if (val != null) {
+                                String clean = String.valueOf(val).replaceAll("\\D", "");
+                                if (clean.length() == 11) return clean;
+                            }
                         }
                     }
                 } else if (documentos instanceof java.util.List<?> list) {
                     for (Object item : list) {
                         if (item instanceof java.util.Map<?, ?> map) {
                             String tipo = String.valueOf(map.get("tipo") != null ? map.get("tipo") : map.get("type"));
-                            if (tipo.equalsIgnoreCase("cpf") || tipo.equalsIgnoreCase("1")) {
-                                Object num = map.get("numero") != null ? map.get("numero") : map.get("num");
-                                if (num != null) return String.valueOf(num);
+                            String tipoDoc = String.valueOf(map.get("tipo_documento") != null ? map.get("tipo_documento") : "");
+                            if (tipo.equalsIgnoreCase("cpf") || tipo.equalsIgnoreCase("1") || tipoDoc.equalsIgnoreCase("1") || tipoDoc.equalsIgnoreCase("cpf")) {
+                                Object num = map.get("numero") != null ? map.get("numero") : (map.get("num") != null ? map.get("num") : map.get("documento"));
+                                if (num != null) {
+                                    String clean = String.valueOf(num).replaceAll("\\D", "");
+                                    if (clean.length() == 11) return clean;
+                                }
                             }
                         }
                     }
                 } else if (documentos instanceof String str && !str.isBlank()) {
-                    return str;
+                    String clean = str.replaceAll("\\D", "");
+                    if (clean.length() == 11) {
+                        return clean;
+                    }
                 }
             }
-            return null;
+            return directCpf;
         }
 
         public void setCpf(String cpf) {

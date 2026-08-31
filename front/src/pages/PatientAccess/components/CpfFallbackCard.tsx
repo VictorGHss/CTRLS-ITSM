@@ -1,5 +1,5 @@
 import React from 'react';
-import { ShieldAlert, AlertTriangle, RefreshCw } from 'lucide-react';
+import { ShieldCheck, AlertTriangle, RefreshCw } from 'lucide-react';
 
 interface CpfFallbackCardProps {
   cpfInput: string;
@@ -17,14 +17,14 @@ export const CpfFallbackCard: React.FC<CpfFallbackCardProps> = ({
   onSubmit,
 }) => {
   return (
-    <div className="bg-white border border-slate-200 rounded-3xl p-6 space-y-5 shadow-sm text-center">
-      <div className="w-14 h-14 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto">
-        <ShieldAlert className="w-7 h-7" />
+    <div className="bg-white border border-slate-200/80 rounded-3xl p-6 space-y-5 shadow-sm text-center">
+      <div className="w-14 h-14 bg-brand-primary/10 text-brand-primary rounded-full flex items-center justify-center mx-auto">
+        <ShieldCheck className="w-7 h-7" />
       </div>
-      <div className="space-y-2">
-        <h3 className="text-md font-bold text-slate-800">Informe seu CPF</h3>
-        <p className="text-xs text-slate-500 leading-relaxed max-w-[280px] mx-auto">
-          Para validar sua identidade e liberar sua entrada nas catracas físicas da clínica, por favor informe seu CPF abaixo:
+      <div className="space-y-1.5">
+        <h3 className="text-md font-bold text-slate-800">Confirmação de Documento (CPF)</h3>
+        <p className="text-xs text-slate-500 leading-relaxed max-w-[290px] mx-auto">
+          Para liberar sua passagem na catraca física com total segurança, informe os 11 dígitos do seu CPF:
         </p>
       </div>
 

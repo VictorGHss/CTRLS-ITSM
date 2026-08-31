@@ -19,6 +19,7 @@ import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.FeegowPatie
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.PatientExternalPort;
 import br.dev.ctrls.inovareti.modules.appointment.infrastructure.config.AppointmentMotorProperties;
 import br.dev.ctrls.inovareti.modules.appointment.infrastructure.config.BlipProperties;
+import br.dev.ctrls.inovareti.modules.access.domain.service.AccessService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -42,6 +43,7 @@ public class ConfirmBlipWebhookActionHandler implements BlipWebhookActionHandler
     private final BlipProperties blipProperties;
     private final PatientExternalPort patientExternalPort;
     private final BlipGroupAppointmentConfirmationCoordinator groupCoordinator;
+    private final AccessService accessService;
 
     @Override
     public boolean supports(String actionType) {
@@ -118,27 +120,44 @@ public class ConfirmBlipWebhookActionHandler implements BlipWebhookActionHandler
         try {
             String rawPhoneDigits = userPhone != null ? userPhone.replaceAll("\\D", "") : "";
             String plainPhone = (rawPhoneDigits.startsWith("55") && rawPhoneDigits.length() > 11) ? rawPhoneDigits.substring(2) : rawPhoneDigits;
+            String appointmentId = session.getFeegowAppointmentId();
+            String tokenAcesso = "";
+            String accessUrl = "";
+            try {
+                tokenAcesso = accessService.generateAccessToken(appointmentId, userPhone);
+                accessUrl = "https://itsm-inovare.ctrls.dev.br/" + appointmentId + "?t=" + tokenAcesso;
+            } catch (Exception e) {
+                log.warn("[CONFIRM] Falha ao gerar Magic Token para agendamento {}: {}", appointmentId, e.getMessage());
+            }
 
-            blipContextService.setUserContextForUser(userPhone, "idAgendamentoFeegow", session.getFeegowAppointmentId());
-            blipContextService.setUserContextForUser(userPhone, "appointmentId", session.getFeegowAppointmentId());
+            blipContextService.setUserContextForUser(userPhone, "idAgendamentoFeegow", appointmentId);
+            blipContextService.setUserContextForUser(userPhone, "appointmentId", appointmentId);
             blipContextService.setUserContextForUser(userPhone, "contact.phoneNumber", plainPhone);
             blipContextService.setUserContextForUser(userPhone, "phoneNumber", plainPhone);
+            blipContextService.setUserContextForUser(userPhone, "tokenAcesso", tokenAcesso);
+            blipContextService.setUserContextForUser(userPhone, "urlAcesso", accessUrl);
             blipContextService.setVariable(userPhone, "requiresCpfFallback", requiresCpfFallback);
             blipContextService.setContactExtra(userPhone, "requiresCpfFallback", requiresCpfFallback);
             blipContextService.setContactExtra(userPhone, "phoneNumber", plainPhone);
             blipContextService.setContactExtra(userPhone, "telefone", plainPhone);
+            blipContextService.setContactExtra(userPhone, "tokenAcesso", tokenAcesso);
+            blipContextService.setContactExtra(userPhone, "urlAcesso", accessUrl);
 
             if (fromIdentity != null && !fromIdentity.isBlank() && !fromIdentity.equalsIgnoreCase(userPhone)) {
-                blipContextService.setUserContextForUser(fromIdentity, "idAgendamentoFeegow", session.getFeegowAppointmentId());
-                blipContextService.setUserContextForUser(fromIdentity, "appointmentId", session.getFeegowAppointmentId());
+                blipContextService.setUserContextForUser(fromIdentity, "idAgendamentoFeegow", appointmentId);
+                blipContextService.setUserContextForUser(fromIdentity, "appointmentId", appointmentId);
                 blipContextService.setUserContextForUser(fromIdentity, "contact.phoneNumber", plainPhone);
                 blipContextService.setUserContextForUser(fromIdentity, "phoneNumber", plainPhone);
+                blipContextService.setUserContextForUser(fromIdentity, "tokenAcesso", tokenAcesso);
+                blipContextService.setUserContextForUser(fromIdentity, "urlAcesso", accessUrl);
                 blipContextService.setVariable(fromIdentity, "requiresCpfFallback", requiresCpfFallback);
                 blipContextService.setContactExtra(fromIdentity, "requiresCpfFallback", requiresCpfFallback);
                 blipContextService.setContactExtra(fromIdentity, "phoneNumber", plainPhone);
                 blipContextService.setContactExtra(fromIdentity, "telefone", plainPhone);
+                blipContextService.setContactExtra(fromIdentity, "tokenAcesso", tokenAcesso);
+                blipContextService.setContactExtra(fromIdentity, "urlAcesso", accessUrl);
             }
-            log.info("[CONFIRM] ID do agendamento ({}), contact.phoneNumber ({}) e contexto salvos no Blip com sucesso.", session.getFeegowAppointmentId(), plainPhone);
+            log.info("[CONFIRM] ID do agendamento ({}), tokenAcesso ({}) e contexto salvos no Blip com sucesso.", appointmentId, tokenAcesso);
         } catch (Exception ex) {
             log.warn("[CONFIRM] Falha ao salvar ID do agendamento ou telefone no contexto: {}", ex.getMessage());
         }
@@ -285,10 +304,21 @@ public class ConfirmBlipWebhookActionHandler implements BlipWebhookActionHandler
                     if (!tunnelId.equalsIgnoreCase(userPhone) && !tunnelId.equalsIgnoreCase(fromIdentity)) {
                         blipContextService.setQueueRedirect(tunnelId, targetQueue);
                         try {
+                            String tokenAcesso = "";
+                            String accessUrl = "";
+                            try {
+                                tokenAcesso = accessService.generateAccessToken(feegowAppointmentId, userPhone);
+                                accessUrl = "https://itsm-inovare.ctrls.dev.br/" + feegowAppointmentId + "?t=" + tokenAcesso;
+                            } catch (Exception ignored) {}
+
                             blipContextService.setUserContextForUser(tunnelId, "idAgendamentoFeegow", feegowAppointmentId);
                             blipContextService.setUserContextForUser(tunnelId, "appointmentId", feegowAppointmentId);
+                            blipContextService.setUserContextForUser(tunnelId, "tokenAcesso", tokenAcesso);
+                            blipContextService.setUserContextForUser(tunnelId, "urlAcesso", accessUrl);
                             blipContextService.setVariable(tunnelId, "requiresCpfFallback", requiresCpfFallback);
                             blipContextService.setContactExtra(tunnelId, "requiresCpfFallback", requiresCpfFallback);
+                            blipContextService.setContactExtra(tunnelId, "tokenAcesso", tokenAcesso);
+                            blipContextService.setContactExtra(tunnelId, "urlAcesso", accessUrl);
                             blipContextService.setMasterState(tunnelId, targetBot, confirmSuccessBlockId);
                         } catch (Exception ex) {
                             log.warn("[CONFIRM] Falha ao salvar ID ou redirecionar no túnel: {}", ex.getMessage());
