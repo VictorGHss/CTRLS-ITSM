@@ -25,6 +25,7 @@ import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.Notificatio
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.PatientExternalPort;
 import br.dev.ctrls.inovareti.modules.appointment.infrastructure.config.AppointmentMotorProperties;
 import br.dev.ctrls.inovareti.modules.appointment.infrastructure.config.BlipProperties;
+import br.dev.ctrls.inovareti.modules.access.domain.service.AccessService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -47,6 +48,7 @@ public class BlipGroupAppointmentConfirmationCoordinator {
     private final BlipProperties blipProperties;
     private final PatientExternalPort patientExternalPort;
     private final DoctorConfigurationRepository doctorConfigurationRepository;
+    private final AccessService accessService;
 
     public boolean isGroupAction(String action) {
         if (action == null || action.isBlank()) return false;
@@ -206,23 +208,41 @@ public class BlipGroupAppointmentConfirmationCoordinator {
         String requiresCpfFallback = "false";
 
         try {
+            String tokenAcesso = "";
+            String accessUrl = "";
+            try {
+                tokenAcesso = accessService.generateAccessToken(firstFeegowId, userPhone);
+                accessUrl = "https://itsm-inovare.ctrls.dev.br/" + firstFeegowId + "?t=" + tokenAcesso;
+            } catch (Exception e) {
+                log.warn("[CONFIRM-BATCH] Falha ao gerar Magic Token para agendamento {}: {}", firstFeegowId, e.getMessage());
+            }
+
             blipContextService.setUserContextForUser(userPhone, "idAgendamentoFeegow", firstFeegowId);
             blipContextService.setUserContextForUser(userPhone, "appointmentId", firstFeegowId);
+            blipContextService.setUserContextForUser(userPhone, "tokenAcesso", tokenAcesso);
+            blipContextService.setUserContextForUser(userPhone, "urlAcesso", accessUrl);
             blipContextService.setUserContext(userPhone, "hasActiveAppointment", "true");
             blipContextService.setVariable(userPhone, "requiresCpfFallback", requiresCpfFallback);
             blipContextService.setContactExtra(userPhone, "requiresCpfFallback", requiresCpfFallback);
+            blipContextService.setContactExtra(userPhone, "tokenAcesso", tokenAcesso);
+            blipContextService.setContactExtra(userPhone, "urlAcesso", accessUrl);
             blipContextService.setVariable(userPhone, "hasActiveAppointment", "true");
             blipContextService.setContactExtra(userPhone, "hasActiveAppointment", "true");
 
             if (fromIdentity != null && !fromIdentity.isBlank() && !fromIdentity.equalsIgnoreCase(userPhone)) {
                 blipContextService.setUserContextForUser(fromIdentity, "idAgendamentoFeegow", firstFeegowId);
                 blipContextService.setUserContextForUser(fromIdentity, "appointmentId", firstFeegowId);
+                blipContextService.setUserContextForUser(fromIdentity, "tokenAcesso", tokenAcesso);
+                blipContextService.setUserContextForUser(fromIdentity, "urlAcesso", accessUrl);
                 blipContextService.setUserContext(fromIdentity, "hasActiveAppointment", "true");
                 blipContextService.setVariable(fromIdentity, "requiresCpfFallback", requiresCpfFallback);
                 blipContextService.setContactExtra(fromIdentity, "requiresCpfFallback", requiresCpfFallback);
+                blipContextService.setContactExtra(fromIdentity, "tokenAcesso", tokenAcesso);
+                blipContextService.setContactExtra(fromIdentity, "urlAcesso", accessUrl);
                 blipContextService.setVariable(fromIdentity, "hasActiveAppointment", "true");
                 blipContextService.setContactExtra(fromIdentity, "hasActiveAppointment", "true");
             }
+            log.info("[CONFIRM-BATCH] Contexto e Magic Token salvos no Blip para o primeiro agendamento: {}", firstFeegowId);
         } catch (Exception ex) {
             log.warn("[CONFIRM-BATCH] Falha ao salvar ID ou verificar CPF no contexto: {}", ex.getMessage());
         }
@@ -314,8 +334,23 @@ public class BlipGroupAppointmentConfirmationCoordinator {
                     if (!tunnelId.equalsIgnoreCase(userPhone) && !tunnelId.equalsIgnoreCase(fromIdentity)) {
                         blipContextService.setQueueRedirect(tunnelId, targetQueue);
                         blipContextService.setBuilderMasterState(tunnelId, confirmSuccessBlockId);
-                        blipContextService.setUserContextForUser(tunnelId, "idAgendamentoFeegow", firstFeegowId);
-                        blipContextService.setUserContextForUser(tunnelId, "appointmentId", firstFeegowId);
+                        try {
+                            String tokenAcesso = "";
+                            String accessUrl = "";
+                            try {
+                                tokenAcesso = accessService.generateAccessToken(firstFeegowId, userPhone);
+                                accessUrl = "https://itsm-inovare.ctrls.dev.br/" + firstFeegowId + "?t=" + tokenAcesso;
+                            } catch (Exception ignored) {}
+
+                            blipContextService.setUserContextForUser(tunnelId, "idAgendamentoFeegow", firstFeegowId);
+                            blipContextService.setUserContextForUser(tunnelId, "appointmentId", firstFeegowId);
+                            blipContextService.setUserContextForUser(tunnelId, "tokenAcesso", tokenAcesso);
+                            blipContextService.setUserContextForUser(tunnelId, "urlAcesso", accessUrl);
+                            blipContextService.setContactExtra(tunnelId, "tokenAcesso", tokenAcesso);
+                            blipContextService.setContactExtra(tunnelId, "urlAcesso", accessUrl);
+                        } catch (Exception ex) {
+                            log.warn("[CONFIRM-BATCH] Falha ao salvar token/id no túnel: {}", ex.getMessage());
+                        }
                     }
                 }
             }
