@@ -101,6 +101,34 @@ class AccessServiceMagicTokenTest {
     }
 
     @Test
+    @DisplayName("Deveria validar acesso mesmo se o token foi gerado com telefone do WhatsApp (+55 42 99915-3868)")
+    void shouldValidateAccessWhenTokenGeneratedWithWhatsAppPhone() {
+        String appointmentId = "3470556";
+        String whatsappPhone = "5542999153868@wa.gw.msging.net";
+        String feegowPhone = "(42) 99915-3868";
+        String validToken = accessService.generateAccessToken(appointmentId, whatsappPhone);
+
+        FeegowPatientAccessInfo accessInfo = new FeegowPatientAccessInfo(
+                appointmentId,
+                "310408",
+                "CACILDA BORGES DE RAMOS",
+                "79512046920",
+                LocalDate.now(),
+                LocalTime.of(14, 0),
+                "10",
+                "Dr. Teste",
+                feegowPhone
+        );
+
+        when(feegowClientPort.fetchPatientAccessInfo(appointmentId)).thenReturn(Optional.of(accessInfo));
+
+        FeegowPatientAccessInfo result = accessService.validateAccessChallenge(appointmentId, null, validToken);
+
+        assertThat(result).isNotNull();
+        assertThat(result.name()).isEqualTo("CACILDA BORGES DE RAMOS");
+    }
+
+    @Test
     @DisplayName("Deveria lançar exceção se o Magic Token for inválido e nenhum dígito for fornecido")
     void shouldRejectInvalidMagicToken() {
         String appointmentId = "3470556";

@@ -585,13 +585,19 @@ public class AccessService {
 
         // 1. Validação prioritária por Magic Token criptográfico
         if (token != null && !token.isBlank()) {
-            String expectedToken = generateAccessToken(appointmentId, phone);
-            if (expectedToken.equalsIgnoreCase(token.trim())) {
+            String trimmedToken = token.trim();
+            String expectedToken1 = generateAccessToken(appointmentId, phone);
+            String expectedToken2 = generateAccessToken(appointmentId, accessInfo.phone());
+            String expectedToken3 = generateAccessToken(appointmentId, "");
+
+            if (expectedToken1.equalsIgnoreCase(trimmedToken) 
+                    || expectedToken2.equalsIgnoreCase(trimmedToken) 
+                    || expectedToken3.equalsIgnoreCase(trimmedToken)) {
                 log.info("[AccessService] Magic Token criptográfico validado com sucesso para o agendamento {}", appointmentId);
                 return accessInfo;
             }
             log.warn("[AccessService] Token de acesso inválido para agendamento {}. Esperado: {}, Recebido: {}", 
-                    appointmentId, expectedToken, token);
+                    appointmentId, expectedToken1, token);
         }
 
         // 2. Validação por 4 dígitos do telefone (fallback tradicional)
