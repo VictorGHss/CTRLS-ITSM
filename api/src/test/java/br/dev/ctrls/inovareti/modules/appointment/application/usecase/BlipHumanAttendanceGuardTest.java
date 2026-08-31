@@ -86,6 +86,7 @@ class BlipHumanAttendanceGuardTest {
 
         BlipWebhookIdempotencyService idempotencyService = new BlipWebhookIdempotencyService(redisProvider);
         BlipWebhookIntentMatcher intentMatcher = new BlipWebhookIntentMatcher(blipProperties);
+        br.dev.ctrls.inovareti.modules.access.domain.service.AccessService accessService = mock(br.dev.ctrls.inovareti.modules.access.domain.service.AccessService.class);
 
         controller = new BlipWebhookController(
                 handleBlipWebhookUseCase,
@@ -97,7 +98,8 @@ class BlipHumanAttendanceGuardTest {
                 env,
                 blipContextService,
                 blipNotificationService,
-                blipProperties
+                blipProperties,
+                accessService
         );
     }
 

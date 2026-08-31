@@ -64,6 +64,7 @@ public class BlipWebhookController {
     private final BlipContextService blipContextService;
     private final BlipNotificationService blipNotificationService;
     private final BlipProperties blipProperties;
+    private final br.dev.ctrls.inovareti.modules.access.domain.service.AccessService accessService;
 
     @Value("${blip.webhook.secret}")
     private String blipWebhookSecret;
@@ -268,10 +269,14 @@ public class BlipWebhookController {
             if (resolvedId.isEmpty()) {
                 resolvedId = appointmentId != null ? appointmentId : "";
             }
+            String token = accessService.generateAccessToken(resolvedId, from);
+            String accessUrl = "https://itsm-inovare.ctrls.dev.br/" + resolvedId + "?t=" + token;
             return ResponseEntity.ok(Map.of(
                 "status", "ok",
                 "action", result.action(),
-                "appointmentId", resolvedId
+                "appointmentId", resolvedId,
+                "token", token,
+                "accessUrl", accessUrl
             ));
         }
 
