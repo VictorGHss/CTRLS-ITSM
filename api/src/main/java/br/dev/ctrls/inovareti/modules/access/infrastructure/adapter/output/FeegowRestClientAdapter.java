@@ -83,6 +83,18 @@ public class FeegowRestClientAdapter implements FeegowClientPort {
             log.info("[FEEGOW-ACCESS] Buscando prontuário do paciente ID: {}", patientId);
             FeegowPatient patient = patientExternalPort.patientInfo(patientId);
 
+            String resolvedCpf = (patient != null && patient.cpf() != null && !patient.cpf().isBlank())
+                    ? patient.cpf()
+                    : (appDto.patientCpf() != null ? appDto.patientCpf().replaceAll("\\D", "") : "");
+
+            String resolvedName = (patient != null && patient.name() != null && !patient.name().isBlank())
+                    ? patient.name()
+                    : (appDto.patientName() != null ? appDto.patientName().trim() : "");
+
+            String resolvedPhone = (patient != null && patient.phone() != null && !patient.phone().isBlank())
+                    ? patient.phone()
+                    : (appDto.patientPhone() != null ? appDto.patientPhone().trim() : "");
+
             // Realiza parse de data e hora do agendamento
             LocalDate date = null;
             if (appDto.appointmentDate() != null) {
@@ -99,13 +111,13 @@ public class FeegowRestClientAdapter implements FeegowClientPort {
             FeegowPatientAccessInfo info = new FeegowPatientAccessInfo(
                 appointmentId,
                 patientId,
-                patient.name(),
-                patient.cpf(),
+                resolvedName,
+                resolvedCpf,
                 date,
                 time,
                 doctorId,
                 doctorName,
-                patient.phone()
+                resolvedPhone
             );
 
             return Optional.of(info);
