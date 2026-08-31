@@ -215,7 +215,7 @@ public class HandleBlipWebhookUseCase {
                 log.info("[WEBHOOK] Agendamento já confirmado tratado amigavelmente para {}", fromPhone);
                 return new WebhookResult("", "", "", "", "already_confirmed_handled", "");
 
-            case "Sucesso_Confirmacao":
+            case "Sucesso_Confirmacao", "CONFIRMAR_AGENDAMENTO", "confirmar_agendamento", "Confirmar_Agendamento":
                 return handleSucessoConfirmacao(fromPhone, payload);
 
             case "Integrar_GerAcesso":

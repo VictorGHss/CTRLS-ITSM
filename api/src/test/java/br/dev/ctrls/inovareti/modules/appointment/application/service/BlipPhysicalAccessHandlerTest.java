@@ -54,6 +54,9 @@ class BlipPhysicalAccessHandlerTest {
     @Mock
     private BlipContextService blipContextService;
 
+    @Mock
+    private br.dev.ctrls.inovareti.modules.appointment.domain.port.output.PatientExternalPort patientExternalPort;
+
     @Captor
     private ArgumentCaptor<List<CompanionAccessInfo>> companionsCaptor;
 

@@ -64,6 +64,7 @@ public class BlipWebhookController {
     private final BlipContextService blipContextService;
     private final BlipNotificationService blipNotificationService;
     private final BlipProperties blipProperties;
+    private final br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentSessionRepositoryPort appointmentSessionRepository;
     private final br.dev.ctrls.inovareti.modules.access.domain.service.AccessService accessService;
 
     @Value("${blip.webhook.secret}")
@@ -266,8 +267,23 @@ public class BlipWebhookController {
 
         if ("Integrar_GerAcesso".equalsIgnoreCase(result.action()) || "Finalizar_Agendamento".equalsIgnoreCase(result.action())) {
             String resolvedId = result.patientCPF() != null ? result.patientCPF() : "";
-            if (resolvedId.isEmpty()) {
+            if (resolvedId.isEmpty() || "null".equalsIgnoreCase(resolvedId)) {
                 resolvedId = appointmentId != null ? appointmentId : "";
+            }
+            if ((resolvedId.isEmpty() || "null".equalsIgnoreCase(resolvedId)) && from != null && !from.isBlank()) {
+                try {
+                    var activeSessions = appointmentSessionRepository.findActiveByPhoneNumber(from);
+                    if (activeSessions != null && !activeSessions.isEmpty()) {
+                        for (var s : activeSessions) {
+                            if (s.getFeegowAppointmentId() != null && !s.getFeegowAppointmentId().isBlank()) {
+                                resolvedId = s.getFeegowAppointmentId().trim();
+                                break;
+                            }
+                        }
+                    }
+                } catch (Exception ex) {
+                    log.warn("[WEBHOOK] Falha defensiva ao resolver agendamento por telefone ativo: {}", ex.getMessage());
+                }
             }
             String token = accessService.generateAccessToken(resolvedId, from);
             String accessUrl = "https://itsm-inovare.ctrls.dev.br/" + resolvedId + "?t=" + token;
@@ -275,8 +291,11 @@ public class BlipWebhookController {
                 "status", "ok",
                 "action", result.action(),
                 "appointmentId", resolvedId,
+                "idAgendamentoFeegow", resolvedId,
                 "token", token,
-                "accessUrl", accessUrl
+                "tokenAcesso", token,
+                "accessUrl", accessUrl,
+                "urlAcesso", accessUrl
             ));
         }
 
