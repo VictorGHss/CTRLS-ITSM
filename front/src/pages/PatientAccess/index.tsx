@@ -47,6 +47,7 @@ export default function PatientAccess() {
   const [companionSubmitError, setCompanionSubmitError] = useState<string | null>(null);
 
   // Screen Wake Lock API: impede que o ecrã do telemóvel apague enquanto o QR Code está em tela cheia
+  // Screen Wake Lock API: impede que o ecrã do telemóvel apague enquanto o QR Code está em tela cheia
   useEffect(() => {
     let activeLock: WakeLockSentinel | null = null;
 
@@ -70,44 +71,136 @@ export default function PatientAccess() {
     };
   }, [fullscreenCard]);
 
+  const saveCredentialsWithOfflineCache = (
+    data: AccessCredential[],
+    authInfo?: { token?: string; phoneDigits?: string }
+  ) => {
+    setCredentials(data || []);
+    setIsVerified(true);
+    if (appointmentId && data && data.length > 0) {
+      try {
+        localStorage.setItem(`patient_access_credentials_${appointmentId}`, JSON.stringify(data));
+        if (authInfo?.token) {
+          localStorage.setItem(`patient_access_token_${appointmentId}`, authInfo.token);
+        }
+        if (authInfo?.phoneDigits) {
+          localStorage.setItem(`patient_access_phone_${appointmentId}`, authInfo.phoneDigits);
+        }
+      } catch {
+        // Ignora falhas de gravação do localStorage
+      }
+    }
+  };
+
+  const refreshCredentials = async (silent = false) => {
+    if (!appointmentId) return;
+    const params = new URLSearchParams(window.location.search);
+    const token = (params.get('t') || params.get('token') || verifiedToken || localStorage.getItem(`patient_access_token_${appointmentId}`) || '').trim();
+    const phoneDigits = (params.get('p') || params.get('auth') || verifiedPhoneDigits || localStorage.getItem(`patient_access_phone_${appointmentId}`) || '').trim();
+
+    if (!token && !phoneDigits) return;
+
+    if (!silent) setChallengeLoading(true);
+    try {
+      const query = token 
+        ? `t=${encodeURIComponent(token)}` 
+        : `phoneDigits=${encodeURIComponent(phoneDigits)}`;
+      
+      const response = await api.get<AccessCredential[]>(
+        `/v1/access/credentials/${appointmentId}?${query}`,
+        {
+          headers: {
+            'X-Skip-Interceptor': 'true'
+          }
+        }
+      );
+      if (response.data && response.data.length > 0) {
+        saveCredentialsWithOfflineCache(response.data, { token, phoneDigits });
+        if (token) setVerifiedToken(token);
+        if (phoneDigits) setVerifiedPhoneDigits(phoneDigits);
+      }
+    } catch (err: unknown) {
+      console.warn('[PatientAccess] Erro ao revalidar credenciais com o servidor:', err);
+    } finally {
+      if (!silent) setChallengeLoading(false);
+    }
+  };
+
   // Desbloqueio automático via Magic Link (?t=...) ou parâmetro de telefone (?p=...)
   useEffect(() => {
     if (!appointmentId) return;
     const params = new URLSearchParams(window.location.search);
-    const tokenParam = params.get('t') || params.get('token');
-    const phoneDigitsParam = params.get('p') || params.get('auth');
+    const tokenParam = (params.get('t') || params.get('token') || '').trim();
+    const phoneDigitsParam = (params.get('p') || params.get('auth') || '').trim();
 
     if (tokenParam || phoneDigitsParam) {
-      const autoUnlock = async () => {
-        setChallengeLoading(true);
-        setChallengeError(null);
-        try {
-          const query = tokenParam 
-            ? `t=${encodeURIComponent(tokenParam)}` 
-            : `phoneDigits=${encodeURIComponent(phoneDigitsParam!)}`;
-          
-          console.log('[PatientAccess] Autenticação automática via URL:', query);
-          const response = await api.get<AccessCredential[]>(
-            `/v1/access/credentials/${appointmentId}?${query}`,
-            {
-              headers: {
-                'X-Skip-Interceptor': 'true'
-              }
-            }
-          );
-          saveCredentialsWithOfflineCache(response.data || []);
-          if (tokenParam) setVerifiedToken(tokenParam);
-          if (phoneDigitsParam) setVerifiedPhoneDigits(phoneDigitsParam);
-        } catch (err: unknown) {
-          console.warn('[PatientAccess] Falha no auto-desbloqueio por URL:', err);
-          setIsVerified(false);
-        } finally {
-          setChallengeLoading(false);
-        }
-      };
-      void autoUnlock();
+      void refreshCredentials(false);
     }
   }, [appointmentId]);
+
+  // Recupera credenciais em cache local (PWA Offline-First) com Revalidação em Background
+  useEffect(() => {
+    if (!appointmentId) return;
+    try {
+      const cached = localStorage.getItem(`patient_access_credentials_${appointmentId}`);
+      if (cached) {
+        const parsed = JSON.parse(cached) as AccessCredential[];
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const hasBlocked = parsed.some(c => c.credentialCode === 'BLOCKED_OUTSIDE_WINDOW');
+          const savedToken = localStorage.getItem(`patient_access_token_${appointmentId}`);
+          const savedPhone = localStorage.getItem(`patient_access_phone_${appointmentId}`);
+          
+          if (savedToken) setVerifiedToken(savedToken);
+          if (savedPhone) setVerifiedPhoneDigits(savedPhone);
+
+          // Se tiver credenciais bloqueadas e não tiver credencial salva para revalidar, exige autenticação nova
+          if (hasBlocked && !savedToken && !savedPhone && !window.location.search.includes('t=') && !window.location.search.includes('p=')) {
+            console.log('[PatientAccess] Cache continha bloqueio antigo sem credencial salva. Solicitando desafio novamente.');
+            setIsVerified(false);
+          } else {
+            console.log('[PatientAccess] Credenciais restauradas do cache offline');
+            setCredentials(parsed);
+            setIsVerified(true);
+            // Revalida em background imediatamente para atualizar horários/bloqueios
+            if (navigator.onLine) {
+              void refreshCredentials(true);
+            }
+          }
+        }
+      }
+    } catch {
+      // Ignora falhas de leitura do localStorage
+    }
+  }, [appointmentId]);
+
+  // Auto-refresh inteligente: revalida quando o app volta para o primeiro plano ou quando há cartões bloqueados
+  useEffect(() => {
+    const hasBlocked = credentials.some(c => c.credentialCode === 'BLOCKED_OUTSIDE_WINDOW');
+    
+    // Polling a cada 20 segundos enquanto houver cartão bloqueado (para liberar automaticamente assim que entrar na janela de 2h)
+    let interval: ReturnType<typeof setInterval> | null = null;
+    if (hasBlocked && isVerified) {
+      interval = setInterval(() => {
+        if (navigator.onLine) {
+          void refreshCredentials(true);
+        }
+      }, 20000);
+    }
+
+    // Revalidar imediatamente quando o paciente desbloqueia o celular ou volta para a aba do navegador
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && navigator.onLine && isVerified) {
+        void refreshCredentials(true);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      if (interval) clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [credentials, isVerified, verifiedToken, verifiedPhoneDigits]);
 
   const openFullscreen = (index: number) => {
     if (credentials[index]?.credentialCode === 'BLOCKED_OUTSIDE_WINDOW') return;
@@ -151,36 +244,6 @@ export default function PatientAccess() {
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
     };
   }, []);
-
-  // Recupera credenciais em cache local (PWA Offline-First)
-  useEffect(() => {
-    if (!appointmentId) return;
-    try {
-      const cached = localStorage.getItem(`patient_access_credentials_${appointmentId}`);
-      if (cached) {
-        const parsed = JSON.parse(cached) as AccessCredential[];
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          console.log('[PatientAccess] Credenciais restauradas do cache offline');
-          setCredentials(parsed);
-          setIsVerified(true);
-        }
-      }
-    } catch {
-      // Ignora falhas de leitura do localStorage
-    }
-  }, [appointmentId]);
-
-  const saveCredentialsWithOfflineCache = (data: AccessCredential[]) => {
-    setCredentials(data || []);
-    setIsVerified(true);
-    if (appointmentId && data && data.length > 0) {
-      try {
-        localStorage.setItem(`patient_access_credentials_${appointmentId}`, JSON.stringify(data));
-      } catch {
-        // Ignora falhas de gravação do localStorage
-      }
-    }
-  };
 
   // Auto-foco imediato no primeiro dígito ao abrir o desafio de segurança
   useEffect(() => {
@@ -237,7 +300,7 @@ export default function PatientAccess() {
           }
         }
       );
-      saveCredentialsWithOfflineCache(response.data || []);
+      saveCredentialsWithOfflineCache(response.data || [], { phoneDigits });
       setVerifiedPhoneDigits(phoneDigits);
     } catch (err: unknown) {
       console.error('[PatientAccess] Falha no desafio de segurança:', err);
@@ -317,7 +380,7 @@ export default function PatientAccess() {
           }
         }
       );
-      setCredentials(response.data || []);
+      saveCredentialsWithOfflineCache(response.data || [], { token: verifiedToken, phoneDigits: verifiedPhoneDigits });
     } catch (err: unknown) {
       console.error('[PatientAccess] Falha ao enviar CPF:', err);
       setCpfSubmitError('Ocorreu um erro ao salvar o CPF. Tente novamente.');
@@ -367,7 +430,7 @@ export default function PatientAccess() {
           }
         }
       );
-      setCredentials(response.data || []);
+      saveCredentialsWithOfflineCache(response.data || [], { token: verifiedToken, phoneDigits: verifiedPhoneDigits });
       setIsCompanionModalOpen(false);
       setCompanionName('');
       setCompanionCpf('');
