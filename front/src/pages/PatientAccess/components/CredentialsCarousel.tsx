@@ -10,6 +10,8 @@ import {
 } from 'lucide-react';
 import { formatCpf } from '../types';
 import type { AccessCredential } from '../types';
+import type { ClinicTheme } from '../utils/clinicThemes';
+import { AddToCalendarMenu } from './AddToCalendarMenu';
 
 interface CredentialsCarouselProps {
   credentials: AccessCredential[];
@@ -19,6 +21,7 @@ interface CredentialsCarouselProps {
   scrollToCard: (index: number) => void;
   onOpenFullscreen: (index: number) => void;
   onOpenCompanionModal: () => void;
+  clinicTheme: ClinicTheme;
 }
 
 export const CredentialsCarousel: React.FC<CredentialsCarouselProps> = ({
@@ -29,6 +32,7 @@ export const CredentialsCarousel: React.FC<CredentialsCarouselProps> = ({
   scrollToCard,
   onOpenFullscreen,
   onOpenCompanionModal,
+  clinicTheme,
 }) => {
   return (
     <div className="space-y-3">
@@ -112,10 +116,10 @@ export const CredentialsCarousel: React.FC<CredentialsCarouselProps> = ({
             </div>
 
             {/* Divisor Tracejado Estilo Wallet */}
-            <div className="w-full border-t border-dashed border-slate-300 my-5"></div>
+            <div className="w-full border-t border-dashed border-slate-300 my-4"></div>
 
             {/* Metade Inferior: Dados da Consulta */}
-            <div className="w-full space-y-3.5 text-left mb-4">
+            <div className="w-full space-y-3 text-left mb-3">
               <div className="flex items-start gap-2.5 pb-2 border-b border-slate-200/40">
                 <User className="w-4 h-4 text-brand-primary shrink-0 mt-0.5" />
                 <div>
@@ -138,7 +142,7 @@ export const CredentialsCarousel: React.FC<CredentialsCarouselProps> = ({
                 <div className="flex items-start gap-2.5 pb-2 border-b border-slate-200/40">
                   <User className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
                   <div>
-                    <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block">Médico</span>
+                    <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block">Médico / Especialista</span>
                     <span className="text-xs font-semibold text-slate-700">{cred.doctorName}</span>
                   </div>
                 </div>
@@ -154,6 +158,18 @@ export const CredentialsCarousel: React.FC<CredentialsCarouselProps> = ({
                 </div>
               )}
             </div>
+
+            {/* Menu Adicionar à Agenda */}
+            {cred.appointmentDateTime && (
+              <div className="mb-3">
+                <AddToCalendarMenu
+                  doctorName={cred.doctorName}
+                  patientName={cred.name}
+                  dateTimeStr={cred.appointmentDateTime}
+                  clinicTheme={clinicTheme}
+                />
+              </div>
+            )}
 
             {/* Botão Ampliar QR Code para tela cheia */}
             <button 
@@ -189,7 +205,7 @@ export const CredentialsCarousel: React.FC<CredentialsCarouselProps> = ({
       )}
 
       {/* Botão de Cadastrar Acompanhante */}
-      <div className="pt-5 flex justify-center">
+      <div className="pt-4 flex justify-center">
         <button
           onClick={onOpenCompanionModal}
           className="w-full py-3 px-4 bg-white border border-brand-primary hover:border-brand-primary-dark text-brand-primary-dark hover:text-brand-primary rounded-2xl text-xs font-bold transition-all flex items-center justify-center gap-2 hover:bg-brand-secondary/10 active:scale-[0.98] shadow-sm cursor-pointer"
@@ -203,13 +219,16 @@ export const CredentialsCarousel: React.FC<CredentialsCarouselProps> = ({
       <div className="mt-4 bg-slate-50/50 backdrop-blur-sm border border-slate-200/50 shadow-md rounded-2xl p-5 flex flex-col space-y-3">
         <div className="flex items-center gap-2">
           <MapPin className="w-5 h-5 text-brand-primary" />
-          <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">Inovare Serviços de Saúde</h4>
+          <div>
+            <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">{clinicTheme.name}</h4>
+            <span className="text-[10px] text-slate-400 font-bold block">{clinicTheme.floorInfo}</span>
+          </div>
         </div>
-        <p className="text-xs font-semibold text-slate-655 leading-relaxed">
-          R. Carlos Osternack, 111 - Estrela, Ponta Grossa - PR, 84040-120
+        <p className="text-xs font-semibold text-slate-600 leading-relaxed">
+          {clinicTheme.address}
         </p>
         <a 
-          href="https://maps.app.goo.gl/S2BaxmJFgr4YAjRT7" 
+          href={clinicTheme.mapsUrl} 
           target="_blank" 
           rel="noopener noreferrer" 
           className="w-full py-3 bg-gradient-to-r from-brand-primary to-brand-primary-dark active:scale-[0.98] text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-sm cursor-pointer hover:opacity-95"
