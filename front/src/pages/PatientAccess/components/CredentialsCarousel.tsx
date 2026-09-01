@@ -6,7 +6,8 @@ import {
   ShieldCheck, 
   Calendar, 
   Maximize2, 
-  MapPin 
+  MapPin,
+  RefreshCw
 } from 'lucide-react';
 import { formatCpf } from '../types';
 import type { AccessCredential } from '../types';
@@ -22,6 +23,8 @@ interface CredentialsCarouselProps {
   scrollToCard: (index: number) => void;
   onOpenFullscreen: (index: number) => void;
   onOpenCompanionModal: () => void;
+  onReactivateAccess?: () => Promise<void>;
+  isReactivating?: boolean;
   clinicTheme: ClinicTheme;
 }
 
@@ -33,6 +36,8 @@ export const CredentialsCarousel: React.FC<CredentialsCarouselProps> = ({
   scrollToCard,
   onOpenFullscreen,
   onOpenCompanionModal,
+  onReactivateAccess,
+  isReactivating,
   clinicTheme,
 }) => {
   return (
@@ -214,8 +219,8 @@ export const CredentialsCarousel: React.FC<CredentialsCarouselProps> = ({
         </div>
       )}
 
-      {/* Botão de Cadastrar Acompanhante */}
-      <div className="pt-4 flex justify-center">
+      {/* Botões de Ação: Cadastrar Acompanhante e Reativar Acesso */}
+      <div className="pt-4 flex flex-col gap-2.5">
         <button
           onClick={onOpenCompanionModal}
           className="w-full py-3 px-4 bg-white border border-brand-primary hover:border-brand-primary-dark text-brand-primary-dark hover:text-brand-primary rounded-2xl text-xs font-bold transition-all flex items-center justify-center gap-2 hover:bg-brand-secondary/10 active:scale-[0.98] shadow-sm cursor-pointer"
@@ -223,6 +228,22 @@ export const CredentialsCarousel: React.FC<CredentialsCarouselProps> = ({
           <User className="w-4 h-4 text-brand-primary" />
           Cadastrar Acompanhante
         </button>
+
+        {onReactivateAccess && (
+          <div className="flex flex-col gap-1.5">
+            <button
+              onClick={onReactivateAccess}
+              disabled={isReactivating}
+              className="w-full py-3 px-4 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-700 rounded-2xl text-xs font-bold transition-all flex items-center justify-center gap-2 active:scale-[0.98] shadow-sm cursor-pointer disabled:opacity-60"
+            >
+              <RefreshCw className={`w-4 h-4 text-slate-500 ${isReactivating ? 'animate-spin' : ''}`} />
+              {isReactivating ? 'Gerando Novo QR Code...' : 'Reativar Acesso (Entrar Novamente)'}
+            </button>
+            <p className="text-[10px] text-slate-400 text-center font-medium leading-relaxed px-2">
+              💡 Precisou sair do prédio e vai entrar de novo? Clique acima para gerar um novo QR Code válido nas catracas.
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Card de Localização / Como Chegar */}
