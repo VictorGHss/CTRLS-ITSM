@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { Clock } from 'lucide-react';
 import api from '../../services/api';
 import type { AccessCredential } from './types';
+import { resolveClinicTheme } from './utils/clinicThemes';
 import { TwoFactorAuthChallenge } from './components/TwoFactorAuthChallenge';
 import { FullscreenQrModal } from './components/FullscreenQrModal';
 import { CompanionModal } from './components/CompanionModal';
@@ -12,6 +13,11 @@ import { PatientAccessFooter } from './components/PatientAccessFooter';
 
 export default function PatientAccess() {
   const { appointmentId } = useParams<{ appointmentId: string }>();
+
+  // --- Tema e Identidade Visual Dinâmica da Clínica ---
+  const clinicTheme = useMemo(() => {
+    return resolveClinicTheme(new URLSearchParams(window.location.search));
+  }, []);
 
   // --- Estados de controle do desafio de identidade (2FA por telefone) ---
   const [isVerified, setIsVerified] = useState<boolean>(false);
@@ -482,20 +488,26 @@ export default function PatientAccess() {
   // === TELA PRINCIPAL (CARROSSEL DE CREDENCIAIS / CONTINGÊNCIA) ===
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col justify-between font-sans antialiased">
-      <title>Acesso à Clínica — Inovare TI</title>
-      <meta name="description" content="Credencial de acesso e QR Code para entrada nas catracas da Clínica Inovare" />
+      <title>Acesso à Clínica — {clinicTheme.shortName}</title>
+      <meta name="description" content={`Credencial de acesso e QR Code para entrada nas catracas da ${clinicTheme.name}`} />
       <div className="w-full max-w-md bg-white shadow-2xl shadow-brand-primary/5 border-x border-brand-secondary/35 flex flex-col min-h-screen mx-auto relative">
         
         {/* Header Superior */}
         <header className="sticky top-0 bg-white/95 backdrop-blur-md border-b border-brand-secondary/30 px-6 py-4 flex items-center justify-center z-10">
-          <img 
-            src="/Logo.png" 
-            alt="Logo Inovare" 
-            className="h-9 w-auto object-contain mx-auto"
-            onError={(e) => {
-              e.currentTarget.src = 'https://placehold.co/120x40/feb56c/ffffff?text=Inovare+TI';
-            }}
-          />
+          {clinicTheme.id === 'imagem' ? (
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-black text-sky-700 tracking-wider">CLÍNICA IMAGEM</span>
+            </div>
+          ) : (
+            <img 
+              src="/Logo.png" 
+              alt="Logo Inovare" 
+              className="h-9 w-auto object-contain mx-auto"
+              onError={(e) => {
+                e.currentTarget.src = 'https://placehold.co/120x40/feb56c/ffffff?text=Inovare+TI';
+              }}
+            />
+          )}
         </header>
 
         {/* Conteúdo Principal */}
@@ -540,6 +552,7 @@ export default function PatientAccess() {
               scrollToCard={scrollToCard}
               onOpenFullscreen={openFullscreen}
               onOpenCompanionModal={() => setIsCompanionModalOpen(true)}
+              clinicTheme={clinicTheme}
             />
           )}
 
