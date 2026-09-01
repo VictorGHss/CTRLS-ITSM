@@ -655,6 +655,7 @@ export default function PatientAccess() {
           title={fullscreenData.title}
           qrCodeValue={fullscreenData.value}
           onClose={closeFullscreen}
+          clinicTheme={clinicTheme}
         />
       )}
 
@@ -676,6 +677,7 @@ export default function PatientAccess() {
           setCompanionCpf('');
           setCompanionBirthDate('');
         }}
+        clinicTheme={clinicTheme}
       />
     </div>
   );

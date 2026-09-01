@@ -1,5 +1,6 @@
 import React from 'react';
 import { User, AlertTriangle, RefreshCw } from 'lucide-react';
+import type { ClinicTheme } from '../utils/clinicThemes';
 
 interface CompanionModalProps {
   isOpen: boolean;
@@ -13,6 +14,7 @@ interface CompanionModalProps {
   onBirthDateChange: (val: string) => void;
   onSubmit: (e: React.FormEvent) => void;
   onClose: () => void;
+  clinicTheme?: ClinicTheme;
 }
 
 export const CompanionModal: React.FC<CompanionModalProps> = ({
@@ -27,16 +29,28 @@ export const CompanionModal: React.FC<CompanionModalProps> = ({
   onBirthDateChange,
   onSubmit,
   onClose,
+  clinicTheme,
 }) => {
   if (!isOpen) return null;
+
+  const primaryColor = clinicTheme?.primaryColor || '#00875F';
+  const primaryDarkColor = clinicTheme?.primaryDarkColor || '#00583F';
+  const secondaryColor = clinicTheme?.secondaryColor || '#E6F4EA';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
       <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl border border-slate-100 p-6 flex flex-col space-y-4 animate-in fade-in zoom-in-95 duration-200">
         <div className="text-center">
-          <div className="inline-flex items-center gap-1.5 bg-brand-secondary/30 border border-brand-primary/10 rounded-full px-3 py-1 mb-2">
-            <User className="w-4 h-4 text-brand-primary-dark" />
-            <span className="text-xs text-brand-primary-dark font-semibold">Novo Acompanhante</span>
+          <div 
+            className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 mb-2 border"
+            style={{
+              backgroundColor: secondaryColor,
+              color: primaryDarkColor,
+              borderColor: `${primaryColor}25`
+            }}
+          >
+            <User className="w-4 h-4" style={{ color: primaryColor }} />
+            <span className="text-xs font-semibold">Novo Acompanhante</span>
           </div>
           <h3 className="text-md font-bold text-slate-800">Cadastrar Acompanhante</h3>
           <p className="text-[11px] text-slate-500 leading-relaxed max-w-[280px] mx-auto mt-1">
@@ -56,7 +70,7 @@ export const CompanionModal: React.FC<CompanionModalProps> = ({
                 value={companionName}
                 onChange={(e) => onNameChange(e.target.value)}
                 disabled={companionSubmitLoading}
-                className="w-full py-3 px-4 border border-slate-200 rounded-xl focus:border-brand-primary focus:ring-4 focus:ring-brand-primary/10 transition-all text-xs font-semibold text-slate-700"
+                className="w-full py-3 px-4 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 transition-all text-xs font-semibold text-slate-700"
               />
             </div>
 
@@ -80,7 +94,7 @@ export const CompanionModal: React.FC<CompanionModalProps> = ({
                   onBirthDateChange(masked);
                 }}
                 disabled={companionSubmitLoading}
-                className="w-full py-3 px-4 border border-slate-200 rounded-xl focus:border-brand-primary focus:ring-4 focus:ring-brand-primary/10 transition-all text-xs font-semibold text-slate-700"
+                className="w-full py-3 px-4 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 transition-all text-xs font-semibold text-slate-700"
               />
             </div>
 
@@ -106,7 +120,7 @@ export const CompanionModal: React.FC<CompanionModalProps> = ({
                   onCpfChange(masked);
                 }}
                 disabled={companionSubmitLoading}
-                className="w-full py-3 px-4 border border-slate-200 rounded-xl focus:border-brand-primary focus:ring-4 focus:ring-brand-primary/10 transition-all text-xs font-mono font-semibold text-slate-700"
+                className="w-full py-3 px-4 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 transition-all text-xs font-mono font-semibold text-slate-700"
               />
             </div>
           </div>
@@ -140,9 +154,17 @@ export const CompanionModal: React.FC<CompanionModalProps> = ({
                 companionCpf.replace(/\D/g, '').length === 11 && 
                 companionBirthDate.replace(/\D/g, '').length === 8 && 
                 !companionSubmitLoading
-                  ? 'bg-gradient-to-r from-brand-primary to-brand-primary-dark text-white hover:scale-[1.01] active:scale-[0.99] cursor-pointer'
+                  ? 'text-white hover:scale-[1.01] active:scale-[0.99] cursor-pointer'
                   : 'bg-slate-100 text-slate-400 cursor-not-allowed shadow-none'
               }`}
+              style={
+                companionName && 
+                companionCpf.replace(/\D/g, '').length === 11 && 
+                companionBirthDate.replace(/\D/g, '').length === 8 && 
+                !companionSubmitLoading
+                  ? { backgroundImage: `linear-gradient(to right, ${primaryColor}, ${primaryDarkColor})` }
+                  : undefined
+              }
             >
               {companionSubmitLoading ? (
                 <>
