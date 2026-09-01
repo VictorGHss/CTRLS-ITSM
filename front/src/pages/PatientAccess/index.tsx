@@ -105,14 +105,33 @@ export default function PatientAccess() {
             localStorage.setItem(`patient_access_phone_${appointmentId}`, authInfo.phoneDigits);
           }
         }
-        // Se for Clínica da Imagem, salva também no cache permanente da Imagem
+        // Se for Clínica da Imagem, salva também no cache permanente da Imagem com a data de emissão
         if (clinicTheme.id === 'imagem' || appointmentId === 'imagem') {
-          localStorage.setItem('patient_access_imagem_last_credentials', JSON.stringify(normalizedData));
+          const todayStr = new Date().toLocaleDateString('sv-SE'); // 'YYYY-MM-DD'
+          localStorage.setItem('patient_access_imagem_last_credentials', JSON.stringify({
+            savedDate: todayStr,
+            credentials: normalizedData
+          }));
         }
       } catch {
         // Ignora falhas de gravação do localStorage
       }
     }
+  };
+
+  const handleResetAccess = () => {
+    try {
+      localStorage.removeItem('patient_access_imagem_last_credentials');
+      if (appointmentId && appointmentId !== 'imagem') {
+        localStorage.removeItem(`patient_access_credentials_${appointmentId}`);
+        localStorage.removeItem(`patient_access_token_${appointmentId}`);
+        localStorage.removeItem(`patient_access_phone_${appointmentId}`);
+      }
+    } catch {
+      // Ignora erro
+    }
+    setCredentials([]);
+    setIsVerified(false);
   };
 
   const refreshCredentials = async (silent = false) => {
@@ -165,34 +184,69 @@ export default function PatientAccess() {
   useEffect(() => {
     try {
       const isImagemRoute = clinicTheme.id === 'imagem' || appointmentId === 'imagem';
-      const key = (appointmentId && appointmentId !== 'imagem')
-        ? `patient_access_credentials_${appointmentId}`
-        : (isImagemRoute ? 'patient_access_imagem_last_credentials' : null);
+      const todayStr = new Date().toLocaleDateString('sv-SE'); // 'YYYY-MM-DD'
 
-      if (!key) return;
+      if (isImagemRoute) {
+        const cachedRaw = localStorage.getItem('patient_access_imagem_last_credentials');
+        if (cachedRaw) {
+          try {
+            const parsed = JSON.parse(cachedRaw);
+            let creds: AccessCredential[] = [];
+            let savedDate: string | null = null;
 
-      const cached = localStorage.getItem(key);
-      if (cached) {
-        const parsed = JSON.parse(cached) as AccessCredential[];
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          const hasBlocked = parsed.some(c => c.credentialCode === 'BLOCKED_OUTSIDE_WINDOW');
-          const savedToken = appointmentId ? localStorage.getItem(`patient_access_token_${appointmentId}`) : null;
-          const savedPhone = appointmentId ? localStorage.getItem(`patient_access_phone_${appointmentId}`) : null;
-          
-          if (savedToken) setVerifiedToken(savedToken);
-          if (savedPhone) setVerifiedPhoneDigits(savedPhone);
+            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && Array.isArray(parsed.credentials)) {
+              creds = parsed.credentials;
+              savedDate = parsed.savedDate;
+            } else if (Array.isArray(parsed)) {
+              creds = parsed;
+            }
 
-          // Se tiver credenciais bloqueadas e não tiver credencial salva para revalidar, exige autenticação nova
-          if (hasBlocked && !savedToken && !savedPhone && !window.location.search.includes('t=') && !window.location.search.includes('p=')) {
-            console.log('[PatientAccess] Cache continha bloqueio antigo sem credencial salva. Solicitando desafio novamente.');
-            setIsVerified(false);
-          } else {
-            console.log('[PatientAccess] Credenciais restauradas do cache offline');
-            setCredentials(parsed);
-            setIsVerified(true);
-            // Revalida em background imediatamente para atualizar horários/bloqueios
-            if (navigator.onLine && appointmentId && appointmentId !== 'imagem') {
-              void refreshCredentials(true);
+            // Se o cache for de um dia anterior, expira e limpa para exigir novo cadastro hoje
+            if (savedDate && savedDate !== todayStr) {
+              console.log(`[PatientAccess] Cache da Clínica da Imagem é de outro dia (${savedDate}). Expirando para nova emissão.`);
+              localStorage.removeItem('patient_access_imagem_last_credentials');
+              setCredentials([]);
+              setIsVerified(false);
+              return;
+            }
+
+            if (creds.length > 0) {
+              console.log('[PatientAccess] Credenciais da Clínica da Imagem de hoje restauradas do cache');
+              setCredentials(creds);
+              setIsVerified(true);
+            }
+          } catch {
+            localStorage.removeItem('patient_access_imagem_last_credentials');
+          }
+        }
+        return;
+      }
+
+      if (appointmentId && appointmentId !== 'imagem') {
+        const key = `patient_access_credentials_${appointmentId}`;
+        const cached = localStorage.getItem(key);
+        if (cached) {
+          const parsed = JSON.parse(cached) as AccessCredential[];
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            const hasBlocked = parsed.some(c => c.credentialCode === 'BLOCKED_OUTSIDE_WINDOW');
+            const savedToken = localStorage.getItem(`patient_access_token_${appointmentId}`);
+            const savedPhone = localStorage.getItem(`patient_access_phone_${appointmentId}`);
+            
+            if (savedToken) setVerifiedToken(savedToken);
+            if (savedPhone) setVerifiedPhoneDigits(savedPhone);
+
+            // Se tiver credenciais bloqueadas e não tiver credencial salva para revalidar, exige autenticação nova
+            if (hasBlocked && !savedToken && !savedPhone && !window.location.search.includes('t=') && !window.location.search.includes('p=')) {
+              console.log('[PatientAccess] Cache continha bloqueio antigo sem credencial salva. Solicitando desafio novamente.');
+              setIsVerified(false);
+            } else {
+              console.log('[PatientAccess] Credenciais restauradas do cache offline');
+              setCredentials(parsed);
+              setIsVerified(true);
+              // Revalida em background imediatamente para atualizar horários/bloqueios
+              if (navigator.onLine) {
+                void refreshCredentials(true);
+              }
             }
           }
         }
@@ -668,6 +722,7 @@ export default function PatientAccess() {
               onOpenFullscreen={openFullscreen}
               onOpenCompanionModal={() => setIsCompanionModalOpen(true)}
               onReactivateAccess={handleReactivateAccess}
+              onResetAccess={handleResetAccess}
               isReactivating={isReactivating}
               clinicTheme={clinicTheme}
             />
