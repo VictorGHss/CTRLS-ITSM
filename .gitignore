@@ -47,6 +47,7 @@ Thumbs.db
 logs/
 log_atual.txt
 log_*.txt
+log_*
 *.txt.log
 build_output.txt
 
