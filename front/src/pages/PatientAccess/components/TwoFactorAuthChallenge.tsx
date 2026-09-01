@@ -30,6 +30,8 @@ export const TwoFactorAuthChallenge: React.FC<TwoFactorAuthChallengeProps> = ({
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-brand-secondary/35 via-slate-50 to-white flex items-center justify-center p-4 font-sans antialiased">
+      <title>Pré-Cadastro — Inovare</title>
+      <meta name="description" content="Verificação de identidade e liberação de acesso às catracas físicas da Clínica Inovare" />
       <div className="w-full max-w-md bg-white/90 backdrop-blur-md rounded-3xl shadow-xl shadow-brand-primary/5 border border-white/60 p-8 flex flex-col justify-between min-h-[580px] transition-all">
         
         {/* Logo da Clínica */}
