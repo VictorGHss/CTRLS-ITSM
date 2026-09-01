@@ -56,9 +56,28 @@ public class BlipContextService {
         this.blipContextPayloadFactory = blipContextPayloadFactory;
     }
 
-    public String resolveMasterIdentity(String userIdentity) {
+    public String sanitizeRawIdentity(String userIdentity) {
         if (userIdentity == null || userIdentity.isBlank()) return null;
         String clean = userIdentity.trim();
+        if (clean.contains("/")) {
+            clean = clean.substring(0, clean.indexOf('/'));
+        }
+        if (clean.contains("@desk.msging.net")) {
+            int atIdx = clean.indexOf('@');
+            String localPart = clean.substring(0, atIdx);
+            try {
+                clean = java.net.URLDecoder.decode(localPart, java.nio.charset.StandardCharsets.UTF_8);
+            } catch (Exception ignored) {}
+            if (clean.contains("/")) {
+                clean = clean.substring(0, clean.indexOf('/'));
+            }
+        }
+        return clean;
+    }
+
+    public String resolveMasterIdentity(String userIdentity) {
+        String clean = sanitizeRawIdentity(userIdentity);
+        if (clean == null || clean.isBlank()) return null;
         if (clean.contains("@tunnel.msging.net")) {
             String reconciled = blipIdentityReconciler.resolveAndReconcileIdentity(clean, null);
             if (reconciled != null && !reconciled.isBlank()) {
@@ -77,8 +96,8 @@ public class BlipContextService {
     }
 
     public String resolveTunnelIdentity(String userIdentity) {
-        if (userIdentity == null || userIdentity.isBlank()) return null;
-        String clean = userIdentity.trim();
+        String clean = sanitizeRawIdentity(userIdentity);
+        if (clean == null || clean.isBlank()) return null;
         if (clean.contains("@tunnel.msging.net")) {
             return clean;
         }
