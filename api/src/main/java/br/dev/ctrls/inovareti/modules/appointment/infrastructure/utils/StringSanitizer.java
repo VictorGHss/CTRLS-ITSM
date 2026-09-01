@@ -51,14 +51,7 @@ public class StringSanitizer {
             digits = digits.substring(2);
         }
 
-        // 3. Auto-correção de números sem DDD (8 ou 9 dígitos -> prefixa DDD 42)
-        if (digits.length() == 9 && digits.startsWith("9")) {
-            digits = "42" + digits;
-        } else if (digits.length() == 8 && (digits.startsWith("8") || digits.startsWith("9") || digits.startsWith("7") || digits.startsWith("6"))) {
-            digits = "429" + digits;
-        }
-
-        // 4. Auto-correção do 9º dígito (10 dígitos -> 11 dígitos)
+        // 3. Auto-correção do 9º dígito (10 dígitos -> 11 dígitos)
         if (digits.length() == 10) {
             char firstNumDigit = digits.charAt(2);
             // Se o primeiro dígito do número (após o DDD) for 6, 7, 8 ou 9, insere o '9' do celular
