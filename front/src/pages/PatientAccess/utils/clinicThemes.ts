@@ -72,64 +72,82 @@ export function resolveClinicTheme(urlSearchParams?: URLSearchParams): ClinicThe
 }
 
 /**
- * Mapeamento oficial de localização por médico/especialista na Clínica Inovare.
+ * Mapeamento oficial e refinado de localização por médico/especialista na Clínica Inovare.
  */
 export const DOCTOR_LOCATIONS_MAP: Record<string, string> = {
-  "Vania Gulin": "Recepção do 2º Andar (Direita)",
-  "Anestesistas": "Recepção do 1º Andar (Direita)",
-  "Marcelo Valladão": "Recepção Central",
-  "Rubens Sirtoli": "Recepção Central",
+  // === 1º ANDAR — LADO DIREITO ===
   "Liliana Pilatti": "Recepção do 1º Andar (Direita)",
-  "Cesar Oda": "Recepção do 1º Andar (Esquerda)",
-  "Joelson Gulin": "Recepção do 2º Andar (Direita)",
-  "Daniel Oda": "Recepção Central",
   "Victor Mauro": "Recepção do 1º Andar (Direita)",
-  "Magno Zanellato": "Recepção do 1º Andar (Esquerda)",
   "Bruno Pançan": "Recepção do 1º Andar (Direita)",
   "Ricardo Zanetti": "Recepção do 1º Andar (Direita)",
   "Karen Miyabukuro": "Recepção do 1º Andar (Direita)",
+  "João Felipe Bueno": "Recepção do 1º Andar (Direita)",
+  "Roberto Kravchychyn": "Recepção do 1º Andar (Direita)",
+  "Anestesistas": "Recepção do 1º Andar (Direita)",
+
+  // === 1º ANDAR — LADO ESQUERDO ===
+  "Cesar Oda": "Recepção do 1º Andar (Esquerda)",
   "Irineu Zanellato": "Recepção do 1º Andar (Esquerda)",
+  "Marcelo Tessari": "Recepção do 1º Andar (Esquerda)",
+  "Alisson Fucio": "Recepção do 1º Andar (Esquerda)",
+  "Carlos Koga": "Recepção do 1º Andar (Esquerda)",
+  "Eduardo Bisinella": "Recepção do 1º Andar (Esquerda)",
+  "Ricardo Jeczmionski": "Recepção do 1º Andar (Esquerda)",
+
+  // === 2º ANDAR — LADO DIREITO ===
+  "Vania Gulin": "Recepção do 2º Andar (Direita)",
+  "Joelson Gulin": "Recepção do 2º Andar (Direita)",
   "Luiz Strack": "Recepção do 2º Andar (Direita)",
-  "Ana Paula": "Recepção do 1º Andar (Dra. Ana Paula)",
-  "Giuliano Campanari": "Recepção de Dermatologia (2º Andar)",
-  "Alexandre Acuña": "Recepção de Endocrinologia (1º Andar)",
-  "Clinica da Imagem": "Recepção Central",
-  "Clinipon": "Recepção Central",
-  "Marcos Marochi": "Recepção Central",
-  "Cíntia Cenovicz": "Recepção de Oftalmologia (Térreo / 1º Andar)",
-  "Claudio Solak": "Recepção Central",
-  "Danilo Saad": "Recepção Central",
-  "Caroline Saad": "Recepção Central",
+  "Carlos Henrique": "Recepção do 2º Andar (Direita)",
+  "Eduardo Mattos": "Recepção do 2º Andar (Direita)",
+  "Fabíola Moreira": "Recepção do 2º Andar (Direita)",
+  "Ana Paula": "Recepção do 2º Andar (Direita)",
+  "Giuliano Campanari": "Recepção do 2º Andar (Direita)",
+  "Kelly Melina": "Recepção do 2º Andar (Direita)",
+  "Thais Fernanda": "Recepção do 2º Andar (Direita)",
+
+  // === 2º ANDAR — LADO ESQUERDO ===
+  "Marcelo Valladão": "Recepção do 2º Andar (Esquerda)",
+  "Rubens Sirtoli": "Recepção do 2º Andar (Esquerda)",
+  "Marcelo Schafranski": "Recepção do 2º Andar (Esquerda)",
+  "Marcos Marochi": "Recepção do 2º Andar (Esquerda)",
+  "Alexandre Acuña": "Recepção do 2º Andar (Esquerda)",
+  "Claudio Solak": "Recepção do 2º Andar (Esquerda)",
+
+  // === 2º ANDAR — OFTALMOLOGIA ===
+  "Cíntia Cenovicz": "Recepção de Oftalmologia (2º Andar)",
+  "Marcelo Cenovicz": "Recepção de Oftalmologia (2º Andar)",
+  "Murilo Cenovicz": "Recepção de Oftalmologia (2º Andar)",
+  "Fernanda Cenovicz": "Recepção de Oftalmologia (2º Andar)",
+
+  // === 3º ANDAR — GINECOLOGIA ===
   "Carlos Batista": "Recepção de Ginecologia (3º Andar)",
-  "Eduardo Serman": "Recepção Central",
   "Brenda Aguiar": "Recepção de Ginecologia (3º Andar)",
   "Isabela Mongruel": "Recepção de Ginecologia (3º Andar)",
   "Lisa Paula Fernandes": "Recepção de Ginecologia (3º Andar)",
   "Tatyellen Dalzotto": "Recepção de Ginecologia (3º Andar)",
-  "João Felipe Bueno": "Recepção do 1º Andar (Direita)",
-  "Marcelo Tessari": "Recepção do 1º Andar (Esquerda)",
-  "Carlos Henrique": "Recepção do 2º Andar (Direita)",
-  "Roberto Kravchychyn": "Recepção do 1º Andar (Direita)",
-  "Marcelo Cenovicz": "Recepção de Oftalmologia (Térreo / 1º Andar)",
-  "Murilo Cenovicz": "Recepção de Oftalmologia (Térreo / 1º Andar)",
-  "Fernanda Cenovicz": "Recepção de Oftalmologia (Térreo / 1º Andar)",
-  "Carlos Miers": "Recepção de Ortopedia (3º Andar)",
-  "Cristiano Gatelli": "Recepção de Ortopedia (3º Andar)",
-  "Daniel Cartelli": "Recepção de Ortopedia (3º Andar)",
-  "Franklin Hilgemberg": "Recepção de Ortopedia (3º Andar)",
-  "Luis Felipe": "Recepção de Ortopedia (3º Andar)",
-  "Rafael Pançan": "Recepção de Ortopedia (3º Andar)",
-  "Rodrigo Fávaro": "Recepção de Ortopedia (3º Andar)",
-  "Marina Polydoro": "Recepção de Ortopedia (3º Andar)",
-  "Eduardo Mattos": "Recepção do 2º Andar (Direita)",
-  "Fabíola Moreira": "Recepção do 2º Andar (Direita)",
-  "Thais Fernanda": "Recepção de Saúde Mental (Psicologia / Psiquiatria)",
-  "Kelly Melina": "Recepção de Saúde Mental (Psicologia / Psiquiatria)",
-  "Marcelo Schafranski": "Recepção Central",
-  "Alisson Fucio": "Recepção do 1º Andar (Esquerda)",
-  "Carlos Koga": "Recepção do 1º Andar (Esquerda)",
-  "Eduardo Bisinella": "Recepção do 1º Andar (Esquerda)",
-  "Ricardo Jeczmionski": "Recepção do 1º Andar (Esquerda)"
+  "Edson Felipe Grudinski": "Recepção de Ginecologia (3º Andar)",
+  "Edson Felipe Grudinski Delfrate": "Recepção de Ginecologia (3º Andar)",
+  "Edson Delfrate": "Recepção de Ginecologia (3º Andar)",
+  "Eduardo Serman": "Recepção de Ginecologia (3º Andar)",
+
+  // === 3º ANDAR — ORTOPEDIA (DIREITA) ===
+  "Carlos Miers": "Recepção de Ortopedia (3º Andar - Direita)",
+  "Cristiano Gatelli": "Recepção de Ortopedia (3º Andar - Direita)",
+  "Daniel Cartelli": "Recepção de Ortopedia (3º Andar - Direita)",
+  "Franklin Hilgemberg": "Recepção de Ortopedia (3º Andar - Direita)",
+  "Luis Felipe": "Recepção de Ortopedia (3º Andar - Direita)",
+  "Rafael Pançan": "Recepção de Ortopedia (3º Andar - Direita)",
+  "Rodrigo Fávaro": "Recepção de Ortopedia (3º Andar - Direita)",
+  "Marina Polydoro": "Recepção de Ortopedia (3º Andar - Direita)",
+  "Magno Zanellato": "Recepção de Ortopedia (3º Andar - Direita)",
+
+  // === TÉRREO ===
+  "Daniel Oda": "Térreo — Endoscopia",
+  "Danilo Saad": "Térreo — Endoscopia",
+  "Caroline Saad": "Térreo — Endoscopia",
+  "Clinica da Imagem": "Térreo — Clínica da Imagem",
+  "Clinipon": "Térreo — Clinipon"
 };
 
 function normalizeName(str: string): string {
