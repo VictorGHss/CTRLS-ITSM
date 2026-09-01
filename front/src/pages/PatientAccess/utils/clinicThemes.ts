@@ -70,3 +70,91 @@ export function resolveClinicTheme(urlSearchParams?: URLSearchParams): ClinicThe
   }
   return CLINIC_THEMES.inovare;
 }
+
+/**
+ * Mapeamento oficial de localização por médico/especialista na Clínica Inovare.
+ */
+export const DOCTOR_LOCATIONS_MAP: Record<string, string> = {
+  "Vania Gulin": "Recepção do 2º Andar (Direita)",
+  "Anestesistas": "Recepção do 1º Andar (Direita)",
+  "Marcelo Valladão": "Recepção Central",
+  "Rubens Sirtoli": "Recepção Central",
+  "Liliana Pilatti": "Recepção do 1º Andar (Direita)",
+  "Cesar Oda": "Recepção do 1º Andar (Esquerda)",
+  "Joelson Gulin": "Recepção do 2º Andar (Direita)",
+  "Daniel Oda": "Recepção Central",
+  "Victor Mauro": "Recepção do 1º Andar (Direita)",
+  "Magno Zanellato": "Recepção do 1º Andar (Esquerda)",
+  "Bruno Pançan": "Recepção do 1º Andar (Direita)",
+  "Ricardo Zanetti": "Recepção do 1º Andar (Direita)",
+  "Karen Miyabukuro": "Recepção do 1º Andar (Direita)",
+  "Irineu Zanellato": "Recepção do 1º Andar (Esquerda)",
+  "Luiz Strack": "Recepção do 2º Andar (Direita)",
+  "Ana Paula": "Recepção do 1º Andar (Dra. Ana Paula)",
+  "Giuliano Campanari": "Recepção de Dermatologia (2º Andar)",
+  "Alexandre Acuña": "Recepção de Endocrinologia (1º Andar)",
+  "Clinica da Imagem": "Recepção Central",
+  "Clinipon": "Recepção Central",
+  "Marcos Marochi": "Recepção Central",
+  "Cíntia Cenovicz": "Recepção de Oftalmologia (Térreo / 1º Andar)",
+  "Claudio Solak": "Recepção Central",
+  "Danilo Saad": "Recepção Central",
+  "Caroline Saad": "Recepção Central",
+  "Carlos Batista": "Recepção de Ginecologia (3º Andar)",
+  "Eduardo Serman": "Recepção Central",
+  "Brenda Aguiar": "Recepção de Ginecologia (3º Andar)",
+  "Isabela Mongruel": "Recepção de Ginecologia (3º Andar)",
+  "Lisa Paula Fernandes": "Recepção de Ginecologia (3º Andar)",
+  "Tatyellen Dalzotto": "Recepção de Ginecologia (3º Andar)",
+  "João Felipe Bueno": "Recepção do 1º Andar (Direita)",
+  "Marcelo Tessari": "Recepção do 1º Andar (Esquerda)",
+  "Carlos Henrique": "Recepção do 2º Andar (Direita)",
+  "Roberto Kravchychyn": "Recepção do 1º Andar (Direita)",
+  "Marcelo Cenovicz": "Recepção de Oftalmologia (Térreo / 1º Andar)",
+  "Murilo Cenovicz": "Recepção de Oftalmologia (Térreo / 1º Andar)",
+  "Fernanda Cenovicz": "Recepção de Oftalmologia (Térreo / 1º Andar)",
+  "Carlos Miers": "Recepção de Ortopedia (3º Andar)",
+  "Cristiano Gatelli": "Recepção de Ortopedia (3º Andar)",
+  "Daniel Cartelli": "Recepção de Ortopedia (3º Andar)",
+  "Franklin Hilgemberg": "Recepção de Ortopedia (3º Andar)",
+  "Luis Felipe": "Recepção de Ortopedia (3º Andar)",
+  "Rafael Pançan": "Recepção de Ortopedia (3º Andar)",
+  "Rodrigo Fávaro": "Recepção de Ortopedia (3º Andar)",
+  "Marina Polydoro": "Recepção de Ortopedia (3º Andar)",
+  "Eduardo Mattos": "Recepção do 2º Andar (Direita)",
+  "Fabíola Moreira": "Recepção do 2º Andar (Direita)",
+  "Thais Fernanda": "Recepção de Saúde Mental (Psicologia / Psiquiatria)",
+  "Kelly Melina": "Recepção de Saúde Mental (Psicologia / Psiquiatria)",
+  "Marcelo Schafranski": "Recepção Central",
+  "Alisson Fucio": "Recepção do 1º Andar (Esquerda)",
+  "Carlos Koga": "Recepção do 1º Andar (Esquerda)",
+  "Eduardo Bisinella": "Recepção do 1º Andar (Esquerda)",
+  "Ricardo Jeczmionski": "Recepção do 1º Andar (Esquerda)"
+};
+
+function normalizeName(str: string): string {
+  return str
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/^(dr|dra|doutor|doutora)\.?\s+/i, '')
+    .trim();
+}
+
+/**
+ * Retorna o andar/localização exato do consultório baseado no nome do médico.
+ */
+export function resolveDoctorLocation(doctorName?: string, defaultFloor = '1º Andar - Lado Direito'): string {
+  if (!doctorName || !doctorName.trim()) return defaultFloor;
+
+  const normalizedInput = normalizeName(doctorName);
+  
+  for (const [key, location] of Object.entries(DOCTOR_LOCATIONS_MAP)) {
+    const normalizedKey = normalizeName(key);
+    if (normalizedInput.includes(normalizedKey) || normalizedKey.includes(normalizedInput)) {
+      return location;
+    }
+  }
+
+  return defaultFloor;
+}
