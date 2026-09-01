@@ -24,6 +24,7 @@ interface CredentialsCarouselProps {
   onOpenFullscreen: (index: number) => void;
   onOpenCompanionModal: () => void;
   onReactivateAccess?: () => Promise<void>;
+  onResetAccess?: () => void;
   isReactivating?: boolean;
   clinicTheme: ClinicTheme;
 }
@@ -37,6 +38,7 @@ export const CredentialsCarousel: React.FC<CredentialsCarouselProps> = ({
   onOpenFullscreen,
   onOpenCompanionModal,
   onReactivateAccess,
+  onResetAccess,
   isReactivating,
   clinicTheme,
 }) => {
@@ -266,6 +268,16 @@ export const CredentialsCarousel: React.FC<CredentialsCarouselProps> = ({
               💡 Precisou sair do prédio e vai entrar de novo? Clique acima para gerar um novo QR Code válido nas catracas.
             </p>
           </div>
+        )}
+
+        {onResetAccess && (
+          <button
+            type="button"
+            onClick={onResetAccess}
+            className="w-full py-2.5 px-4 text-slate-400 hover:text-slate-600 text-xs font-semibold transition-all flex items-center justify-center gap-1.5 cursor-pointer mt-0.5"
+          >
+            <span>Fazer novo cadastro ou trocar CPF</span>
+          </button>
         )}
       </div>
 
