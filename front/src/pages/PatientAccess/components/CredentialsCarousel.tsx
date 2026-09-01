@@ -138,18 +138,16 @@ export const CredentialsCarousel: React.FC<CredentialsCarouselProps> = ({
                 </div>
               )}
               
-              {cred.doctorName && (
-                <div className="flex items-start gap-2.5 pb-2 border-b border-slate-200/40">
-                  <User className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
-                  <div>
-                    <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block">Médico / Especialista</span>
-                    <span className="text-xs font-semibold text-slate-700">{cred.doctorName}</span>
-                  </div>
+              <div className="flex items-start gap-2.5 pb-2 border-b border-slate-200/40">
+                <User className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
+                <div>
+                  <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block">Médico / Especialista</span>
+                  <span className="text-xs font-bold text-slate-800">{cred.doctorName || 'Corpo Clínico Inovare'}</span>
                 </div>
-              )}
+              </div>
               
               {cred.appointmentDateTime && (
-                <div className="flex items-start gap-2.5">
+                <div className="flex items-start gap-2.5 pb-2 border-b border-slate-200/40">
                   <Calendar className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
                   <div>
                     <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block">Data e Horário</span>
@@ -157,6 +155,15 @@ export const CredentialsCarousel: React.FC<CredentialsCarouselProps> = ({
                   </div>
                 </div>
               )}
+
+              {/* Localização da Sala / Andar diretamente no cartão */}
+              <div className="flex items-start gap-2.5">
+                <MapPin className="w-4 h-4 text-brand-primary shrink-0 mt-0.5" />
+                <div>
+                  <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block">Local / Sala</span>
+                  <span className="text-xs font-bold text-slate-700">{clinicTheme.floorInfo}</span>
+                </div>
+              </div>
             </div>
 
             {/* Menu Adicionar à Agenda */}
@@ -219,10 +226,7 @@ export const CredentialsCarousel: React.FC<CredentialsCarouselProps> = ({
       <div className="mt-4 bg-slate-50/50 backdrop-blur-sm border border-slate-200/50 shadow-md rounded-2xl p-5 flex flex-col space-y-3">
         <div className="flex items-center gap-2">
           <MapPin className="w-5 h-5 text-brand-primary" />
-          <div>
-            <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">{clinicTheme.name}</h4>
-            <span className="text-[10px] text-slate-400 font-bold block">{clinicTheme.floorInfo}</span>
-          </div>
+          <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">{clinicTheme.name}</h4>
         </div>
         <p className="text-xs font-semibold text-slate-600 leading-relaxed">
           {clinicTheme.address}
