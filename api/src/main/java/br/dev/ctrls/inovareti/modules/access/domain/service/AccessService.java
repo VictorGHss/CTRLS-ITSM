@@ -830,16 +830,31 @@ public class AccessService {
             log.warn("[AccessService] Falha na integração GerAcesso para paciente Imagem (usando contingência): {}", ex.getMessage());
         }
 
-        AccessCredential patientCred = AccessCredential.builder()
-                .id(UUID.randomUUID())
-                .appointmentId(appointmentId)
-                .name(name.trim().toUpperCase())
-                .cpf(cleanCpf)
-                .userType(UserType.PATIENT)
-                .accessCredential(credentialValue)
-                .locator(locatorValue)
-                .createdAt(LocalDateTime.now(CLINIC_ZONE))
-                .build();
+        // 2. Persiste a credencial do paciente titular no banco
+        Optional<AccessCredential> existingPatientCredOpt = accessCredentialRepositoryPort
+                .findByAppointmentId(appointmentId).stream()
+                .filter(c -> c.getUserType() == UserType.PATIENT)
+                .findFirst();
+
+        AccessCredential patientCred;
+        if (existingPatientCredOpt.isPresent()) {
+            patientCred = existingPatientCredOpt.get();
+            patientCred.setName(name.trim().toUpperCase());
+            patientCred.setCpf(cleanCpf);
+            patientCred.setAccessCredential(credentialValue);
+            patientCred.setLocator(locatorValue);
+            patientCred.setCreatedAt(LocalDateTime.now(CLINIC_ZONE));
+        } else {
+            patientCred = AccessCredential.builder()
+                    .appointmentId(appointmentId)
+                    .name(name.trim().toUpperCase())
+                    .cpf(cleanCpf)
+                    .userType(UserType.PATIENT)
+                    .accessCredential(credentialValue)
+                    .locator(locatorValue)
+                    .createdAt(LocalDateTime.now(CLINIC_ZONE))
+                    .build();
+        }
 
         List<AccessCredential> resultList = new ArrayList<>();
         resultList.add(accessCredentialRepositoryPort.save(patientCred));

@@ -524,8 +524,8 @@ export default function PatientAccess() {
     if (clinicTheme.id === 'imagem' || appointmentId === 'imagem') {
       return (
         <div className="min-h-screen bg-slate-100 flex flex-col justify-between font-sans antialiased">
-          <title>Pré-Check-in — Clínica da Imagem</title>
-          <meta name="description" content="Pré-check-in e liberação de acesso às catracas físicas da Clínica da Imagem" />
+          <title>Pré-Cadastro — {clinicTheme.shortName}</title>
+          <meta name="description" content={`Pré-cadastro e liberação de acesso às catracas físicas da ${clinicTheme.name}`} />
           <div className="w-full max-w-md bg-white shadow-2xl flex flex-col min-h-screen mx-auto relative border-x border-slate-200/60">
             <header className="sticky top-0 bg-white/95 backdrop-blur-md border-b border-slate-100 px-6 py-4 flex items-center justify-center z-10">
               <img 
@@ -569,7 +569,7 @@ export default function PatientAccess() {
   // === TELA PRINCIPAL (CARROSSEL DE CREDENCIAIS / CONTINGÊNCIA) ===
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col justify-between font-sans antialiased">
-      <title>Acesso à Clínica — {clinicTheme.shortName}</title>
+      <title>Pré-Cadastro — {clinicTheme.shortName}</title>
       <meta name="description" content={`Credencial de acesso e QR Code para entrada nas catracas da ${clinicTheme.name}`} />
       <div className="w-full max-w-md bg-white shadow-2xl shadow-brand-primary/5 border-x border-brand-secondary/35 flex flex-col min-h-screen mx-auto relative">
         
