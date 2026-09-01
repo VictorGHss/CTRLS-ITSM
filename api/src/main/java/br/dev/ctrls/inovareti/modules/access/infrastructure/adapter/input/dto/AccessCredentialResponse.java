@@ -8,6 +8,7 @@ import br.dev.ctrls.inovareti.modules.access.domain.model.UserType;
  * Comentários mantidos em PT-BR.
  */
 public record AccessCredentialResponse(
+    String appointmentId,
     String name,
     UserType userType,
     String locator,
@@ -18,3 +19,4 @@ public record AccessCredentialResponse(
     String opensAt,
     String closesAt
 ) {}
+

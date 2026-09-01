@@ -416,8 +416,8 @@ public class AccessService {
 
         if (appointmentId != null && appointmentId.startsWith("IMG-")) {
             LocalDate date = LocalDate.now(CLINIC_ZONE);
-            LocalTime openingTime = LocalTime.of(7, 0);
-            LocalTime closingTime = LocalTime.of(21, 0);
+            LocalTime openingTime = LocalTime.of(6, 0);
+            LocalTime closingTime = LocalTime.of(23, 59);
             return registerCompanionAccess(companion, date, openingTime, closingTime, null, null, appointmentId, null);
         }
 

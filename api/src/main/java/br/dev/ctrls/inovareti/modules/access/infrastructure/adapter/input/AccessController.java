@@ -175,15 +175,16 @@ public class AccessController {
 
             List<AccessCredentialResponse> responseList = credentials.stream()
                 .map(cred -> new AccessCredentialResponse(
+                    cred.getAppointmentId(),
                     cred.getName(),
                     cred.getUserType() != null ? cred.getUserType() : UserType.PATIENT,
                     cred.getLocator(),
                     cred.getAccessCredential(),
                     cred.getCpf(),
-                    "Clínica da Imagem - Exames",
+                    "Clínica Da Imagem - Unidade Inovare",
                     "Hoje",
-                    "07:00",
-                    "21:00"
+                    "06:00",
+                    "23:59"
                 ))
                 .toList();
 
@@ -213,15 +214,16 @@ public class AccessController {
 
             List<AccessCredentialResponse> responseList = credentials.stream()
                 .map(cred -> new AccessCredentialResponse(
+                    cred.getAppointmentId(),
                     cred.getName(),
                     cred.getUserType() != null ? cred.getUserType() : UserType.PATIENT,
                     cred.getLocator(),
                     cred.getAccessCredential(),
                     cred.getCpf(),
-                    "Clínica da Imagem - Exames",
+                    "Clínica Da Imagem - Unidade Inovare",
                     "Hoje",
-                    "07:00",
-                    "21:00"
+                    "06:00",
+                    "23:59"
                 ))
                 .toList();
 
@@ -275,7 +277,9 @@ public class AccessController {
                     log.warn("[AccessControl] Não foi possível resolver dados do Feegow na reativação: {}", ex.getMessage());
                 }
             } else if (appointmentId != null && appointmentId.startsWith("IMG-")) {
-                doctorName = "Clínica da Imagem - Exames";
+                doctorName = "Clínica Da Imagem - Unidade Inovare";
+                opensAt = "06:00";
+                closesAt = "23:59";
             }
 
             final String finalDoctorName = doctorName;
@@ -285,6 +289,7 @@ public class AccessController {
 
             List<AccessCredentialResponse> responseList = credentials.stream()
                 .map(cred -> new AccessCredentialResponse(
+                    cred.getAppointmentId(),
                     cred.getName(),
                     cred.getUserType() != null ? cred.getUserType() : UserType.PATIENT,
                     cred.getLocator(),
@@ -375,19 +380,21 @@ public class AccessController {
         }
 
         // AUTO-DETECÇÃO DE SESSÃO ATIVA HOJE: inclui sessão atual do paciente caso o link seja histórico
-        try {
-            LocalDate today = LocalDate.now(CLINIC_ZONE);
-            var patientSessions = appointmentSessionRepository.findByPatientId(accessInfo.patientId());
-            for (var s : patientSessions) {
-                if (s.getCreatedAt() != null && s.getCreatedAt().toLocalDate().equals(today)) {
-                    if (s.getFeegowAppointmentId() != null && !appointmentIds.contains(s.getFeegowAppointmentId())) {
-                        appointmentIds.add(s.getFeegowAppointmentId());
-                        log.info("[AccessControl] Auto-detectado agendamento de hoje ({}) para o paciente ID: {}. Adicionado ao escopo de credenciamento.", s.getFeegowAppointmentId(), accessInfo.patientId());
+        if (accessInfo.patientId() != null) {
+            try {
+                LocalDate today = LocalDate.now(CLINIC_ZONE);
+                var patientSessions = appointmentSessionRepository.findByPatientId(accessInfo.patientId());
+                for (var s : patientSessions) {
+                    if (s.getCreatedAt() != null && s.getCreatedAt().toLocalDate().equals(today)) {
+                        if (s.getFeegowAppointmentId() != null && !appointmentIds.contains(s.getFeegowAppointmentId())) {
+                            appointmentIds.add(s.getFeegowAppointmentId());
+                            log.info("[AccessControl] Auto-detectado agendamento de hoje ({}) para o paciente ID: {}. Adicionado ao escopo de credenciamento.", s.getFeegowAppointmentId(), accessInfo.patientId());
+                        }
                     }
                 }
+            } catch (Exception ex) {
+                log.warn("[AccessControl] Erro ao auto-detectar sessões de hoje para o paciente: {}", ex.getMessage());
             }
-        } catch (Exception ex) {
-            log.warn("[AccessControl] Erro ao auto-detectar sessões de hoje para o paciente: {}", ex.getMessage());
         }
 
         List<AccessCredential> credentials = new ArrayList<>();
@@ -555,6 +562,7 @@ public class AccessController {
             }
 
             response.add(new AccessCredentialResponse(
+                    c.getAppointmentId(),
                     c.getName(),
                     c.getUserType(),
                     c.getLocator(),
