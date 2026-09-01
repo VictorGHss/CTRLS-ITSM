@@ -141,6 +141,99 @@ public class AccessController {
     }
 
     /**
+     * Endpoint de auto-cadastro público (Clínica da Imagem ou clínicas externas).
+     * Libera o acesso no GerAcesso e retorna credenciais com QR code.
+     */
+    @PostMapping("/self-registration")
+    public ResponseEntity<?> selfRegistration(@RequestBody @Valid br.dev.ctrls.inovareti.modules.access.infrastructure.adapter.input.dto.SelfRegistrationRequest request) {
+        log.info("[AccessControl] Auto-cadastro público recebido: Nome={}, CPF={}, Clínica={}", 
+                request.name(), request.cpf(), request.clinic());
+        try {
+            CompanionAccessInfo domainCompanion = null;
+            if (request.companion() != null && request.companion().name() != null && !request.companion().name().isBlank()) {
+                domainCompanion = new CompanionAccessInfo(
+                    request.companion().name(),
+                    request.companion().cpf(),
+                    request.companion().phone(),
+                    null,
+                    request.companion().birthDate()
+                );
+            }
+
+            List<AccessCredential> credentials = accessService.processSelfRegistration(
+                request.name(),
+                request.cpf(),
+                request.phone(),
+                request.birthDate(),
+                request.clinic(),
+                domainCompanion
+            );
+
+            if (credentials.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", "Falha ao gerar credencial"));
+            }
+
+            List<AccessCredentialResponse> responseList = credentials.stream()
+                .map(cred -> new AccessCredentialResponse(
+                    cred.getName(),
+                    cred.getUserType() != null ? cred.getUserType() : UserType.PATIENT,
+                    cred.getLocator(),
+                    cred.getAccessCredential(),
+                    cred.getCpf(),
+                    "Clínica da Imagem - Exames",
+                    "Hoje",
+                    "07:00",
+                    "21:00"
+                ))
+                .toList();
+
+            return ResponseEntity.ok(responseList);
+        } catch (IllegalArgumentException ex) {
+            log.warn("[AccessControl] Validação falhou no auto-cadastro: {}", ex.getMessage());
+            return ResponseEntity.badRequest().body(Map.of("message", ex.getMessage()));
+        } catch (Exception ex) {
+            log.error("[AccessControl] Erro inesperado no auto-cadastro: {}", ex.getMessage(), ex);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("message", "Erro ao processar cadastro. Tente novamente em instantes."));
+        }
+    }
+
+    /**
+     * Endpoint de consulta rápida de credenciais ativas pelo CPF.
+     */
+    @PostMapping("/lookup-by-cpf")
+    public ResponseEntity<?> lookupByCpf(@RequestBody @Valid br.dev.ctrls.inovareti.modules.access.infrastructure.adapter.input.dto.CpfLookupRequest request) {
+        log.info("[AccessControl] Busca de credenciais ativas por CPF: {}", request.cpf());
+        try {
+            List<AccessCredential> credentials = accessService.lookupCredentialsByCpf(request.cpf(), request.clinic());
+            if (credentials.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Nenhum cadastro ativo encontrado para este CPF hoje."));
+            }
+
+            List<AccessCredentialResponse> responseList = credentials.stream()
+                .map(cred -> new AccessCredentialResponse(
+                    cred.getName(),
+                    cred.getUserType() != null ? cred.getUserType() : UserType.PATIENT,
+                    cred.getLocator(),
+                    cred.getAccessCredential(),
+                    cred.getCpf(),
+                    "Clínica da Imagem - Exames",
+                    "Hoje",
+                    "07:00",
+                    "21:00"
+                ))
+                .toList();
+
+            return ResponseEntity.ok(responseList);
+        } catch (Exception ex) {
+            log.error("[AccessControl] Erro ao buscar por CPF: {}", ex.getMessage(), ex);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("message", "Erro ao consultar cadastro."));
+        }
+    }
+
+    /**
      * Endpoint de cadastro de acompanhante pelo portal web do paciente.
      *
      * @param appointmentId Identificador do agendamento principal.

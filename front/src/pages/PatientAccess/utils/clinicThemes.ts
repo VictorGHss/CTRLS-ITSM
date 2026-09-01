@@ -8,6 +8,7 @@ export interface ClinicTheme {
   shortName: string;
   subtitle: string;
   logoText: string;
+  logoUrl: string;
   primaryColor: string;
   primaryDarkColor: string;
   secondaryColor: string;
@@ -18,15 +19,21 @@ export interface ClinicTheme {
   address: string;
   mapsUrl: string;
   floorInfo: string;
+  phone: string;
+  openingHours: string;
+  instagramUrl: string;
+  facebookUrl: string;
+  whatsappUrl: string;
 }
 
 export const CLINIC_THEMES: Record<string, ClinicTheme> = {
   inovare: {
     id: 'inovare',
-    name: 'Clínica Inovare - Serviços de Saúde',
+    name: 'Inovare – Serviços de Saúde',
     shortName: 'Inovare',
     subtitle: 'Cartão de Acesso Digital & Recepção',
     logoText: 'INOVARE',
+    logoUrl: '/Logo.png',
     primaryColor: '#00875F',
     primaryDarkColor: '#00583F',
     secondaryColor: '#E6F4EA',
@@ -37,37 +44,53 @@ export const CLINIC_THEMES: Record<string, ClinicTheme> = {
     address: 'R. Carlos Osternack, 111 - 1º Andar, Estrela, Ponta Grossa - PR, 84040-120',
     mapsUrl: 'https://maps.app.goo.gl/S2BaxmJFgr4YAjRT7',
     floorInfo: '1º Andar - Lado Direito',
+    phone: '(42) 3026-2600',
+    openingHours: 'Segunda a sexta, 08h – 12h e 13h – 18h30',
+    instagramUrl: 'https://www.instagram.com/inovaress/',
+    facebookUrl: 'https://www.facebook.com/inovarepg',
+    whatsappUrl: 'https://wa.me/554230262601',
   },
   imagem: {
     id: 'imagem',
-    name: 'Clínica Imagem - Diagnóstico Médico',
-    shortName: 'Clínica Imagem',
-    subtitle: 'Cartão de Acesso Digital & Recepção',
-    logoText: 'CLÍNICA IMAGEM',
-    primaryColor: '#0284C7',
-    primaryDarkColor: '#0369A1',
-    secondaryColor: '#E0F2FE',
-    accentBgColor: 'bg-sky-50',
-    badgeBgColor: 'bg-sky-100/80',
-    badgeTextColor: 'text-sky-800',
-    buttonGradient: 'from-[#0284C7] to-[#0369A1]',
-    address: 'R. Carlos Osternack, 111 - Edifício Inovare, Ponta Grossa - PR, 84040-120',
-    mapsUrl: 'https://maps.app.goo.gl/S2BaxmJFgr4YAjRT7',
-    floorInfo: 'Edifício Inovare',
+    name: 'Clínica de Diagnóstico por Imagem',
+    shortName: 'Clínica da Imagem',
+    subtitle: 'Pré-Check-in & Cartão de Acesso Digital',
+    logoText: 'CLÍNICA DA IMAGEM',
+    logoUrl: '/logo-clinica-imagem.png',
+    primaryColor: '#B8004B',
+    primaryDarkColor: '#7A002E',
+    secondaryColor: '#FDF2F4',
+    accentBgColor: 'bg-rose-50',
+    badgeBgColor: 'bg-rose-100/80',
+    badgeTextColor: 'text-rose-800',
+    buttonGradient: 'from-[#B8004B] to-[#7A002E]',
+    address: 'R. Carlos Osternack, 111 - Centro - Ponta Grossa - PR - CEP 84040-120',
+    mapsUrl: 'https://share.google/2TuHlAGsINfBLh00P',
+    floorInfo: 'Térreo — Clínica da Imagem',
+    phone: '(42) 3026-2620',
+    openingHours: 'Segunda à sexta: 08h às 19h',
+    instagramUrl: 'https://www.instagram.com/clinicadaimagempg?utm_source=ig_web_button_share_sheet&igsi=ZDNlZDc0MzIxNw==',
+    facebookUrl: 'https://www.facebook.com/clinicadaimagempg?utm_source=ig&utm_medium=social&utm_content=link_in_bio',
+    whatsappUrl: 'https://wa.me/554230262620',
   },
 };
 
 /**
- * Resolve o tema ativo da clínica com base nos query parameters ou valor padrão (Inovare).
+ * Resolve o tema ativo da clínica com base nos query parameters, rota atual ou valor padrão (Inovare).
  */
-export function resolveClinicTheme(urlSearchParams?: URLSearchParams): ClinicTheme {
-  if (!urlSearchParams) {
-    return CLINIC_THEMES.inovare;
-  }
-  const clinicParam = (urlSearchParams.get('clinic') || urlSearchParams.get('c') || '').toLowerCase().trim();
-  if (clinicParam.includes('imagem')) {
+export function resolveClinicTheme(urlSearchParams?: URLSearchParams, pathname?: string): ClinicTheme {
+  const path = (pathname || window.location.pathname || '').toLowerCase();
+  if (path.includes('/imagem') || path === '/imagem') {
     return CLINIC_THEMES.imagem;
   }
+
+  if (urlSearchParams) {
+    const clinicParam = (urlSearchParams.get('clinic') || urlSearchParams.get('c') || '').toLowerCase().trim();
+    if (clinicParam.includes('imagem')) {
+      return CLINIC_THEMES.imagem;
+    }
+  }
+
   return CLINIC_THEMES.inovare;
 }
 

@@ -3,6 +3,7 @@
  */
 
 export interface AccessCredential {
+  appointmentId?: string;
   name: string;
   userType: 'PATIENT' | 'COMPANION';
   locator: string;
