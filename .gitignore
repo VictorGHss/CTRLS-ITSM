@@ -99,3 +99,10 @@ log_api.*
 *.log
 scratch/
 api/scratch/
+
+# ========================
+# Planilhas e Documentos Internos
+# ========================
+*.xlsx
+*.xls
+*.csv
