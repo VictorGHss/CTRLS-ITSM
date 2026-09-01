@@ -247,6 +247,42 @@ public class AccessController {
                         .body(Map.of("message", "Nenhuma credencial encontrada para reativar."));
             }
 
+            String doctorName = "Clínica Inovare";
+            String appointmentDateTime = "Hoje";
+            String opensAt = "07:00";
+            String closesAt = "23:00";
+
+            if (appointmentId != null && !appointmentId.startsWith("IMG-")) {
+                try {
+                    var accessInfo = accessService.validateAccessChallenge(appointmentId, null, null);
+                    if (accessInfo != null) {
+                        if (accessInfo.doctorName() != null && !accessInfo.doctorName().isBlank()) {
+                            doctorName = accessInfo.doctorName();
+                        }
+                        if (accessInfo.appointmentDate() != null) {
+                            if (accessInfo.appointmentTime() != null) {
+                                appointmentDateTime = LocalDateTime.of(accessInfo.appointmentDate(), accessInfo.appointmentTime())
+                                        .format(DATE_TIME_FORMATTER);
+                                LocalTime openingTime = accessInfo.appointmentTime().minusMinutes(120);
+                                opensAt = openingTime.format(TIME_FORMATTER);
+                            } else {
+                                appointmentDateTime = accessInfo.appointmentDate().format(DATE_FORMATTER);
+                                opensAt = "08:00";
+                            }
+                        }
+                    }
+                } catch (Exception ex) {
+                    log.warn("[AccessControl] Não foi possível resolver dados do Feegow na reativação: {}", ex.getMessage());
+                }
+            } else if (appointmentId != null && appointmentId.startsWith("IMG-")) {
+                doctorName = "Clínica da Imagem - Exames";
+            }
+
+            final String finalDoctorName = doctorName;
+            final String finalAppointmentDateTime = appointmentDateTime;
+            final String finalOpensAt = opensAt;
+            final String finalClosesAt = closesAt;
+
             List<AccessCredentialResponse> responseList = credentials.stream()
                 .map(cred -> new AccessCredentialResponse(
                     cred.getName(),
@@ -254,10 +290,10 @@ public class AccessController {
                     cred.getLocator(),
                     cred.getAccessCredential(),
                     cred.getCpf(),
-                    cred.getAppointmentId() != null && cred.getAppointmentId().startsWith("IMG-") ? "Clínica da Imagem - Exames" : "Clínica Inovare",
-                    "Hoje",
-                    "07:00",
-                    "23:00"
+                    finalDoctorName,
+                    finalAppointmentDateTime,
+                    finalOpensAt,
+                    finalClosesAt
                 ))
                 .toList();
 
