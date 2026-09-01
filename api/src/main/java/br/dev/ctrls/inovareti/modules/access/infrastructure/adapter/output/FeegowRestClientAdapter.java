@@ -3,6 +3,9 @@ package br.dev.ctrls.inovareti.modules.access.infrastructure.adapter.output;
 import br.dev.ctrls.inovareti.modules.access.domain.model.FeegowPatientAccessInfo;
 import br.dev.ctrls.inovareti.modules.access.domain.port.output.FeegowClientPort;
 import br.dev.ctrls.inovareti.modules.appointment.application.dto.FeegowSearchResponseDto;
+import br.dev.ctrls.inovareti.modules.appointment.domain.model.DoctorConfiguration;
+import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.DoctorConfigurationRepository;
+import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.ProfessionalExternalPort;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.FeegowPatient;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.PatientExternalPort;
 import br.dev.ctrls.inovareti.modules.appointment.infrastructure.adapter.output.client.FeegowAppointmentClient;
@@ -35,6 +38,8 @@ public class FeegowRestClientAdapter implements FeegowClientPort {
 
     private final FeegowAppointmentClient appointmentClient;
     private final PatientExternalPort patientExternalPort;
+    private final DoctorConfigurationRepository doctorConfigurationRepository;
+    private final ProfessionalExternalPort professionalExternalPort;
     private final AppointmentMotorProperties appointmentMotorProperties;
     private final FeegowProperties feegowProperties;
     private final ObjectMapper objectMapper;
@@ -107,6 +112,31 @@ public class FeegowRestClientAdapter implements FeegowClientPort {
 
             String doctorId = appDto.doctorId();
             String doctorName = appDto.doctorName() != null ? appDto.doctorName().trim() : "";
+
+            if ((doctorName == null || doctorName.isBlank()) && doctorId != null && !doctorId.isBlank()) {
+                // 1. Tenta buscar nas configurações locais de médicos cadastrados
+                try {
+                    Long docIdLong = Long.parseLong(doctorId.trim());
+                    Optional<DoctorConfiguration> docConfigOpt = doctorConfigurationRepository.findById(docIdLong);
+                    if (docConfigOpt.isPresent() && docConfigOpt.get().getDoctorName() != null && !docConfigOpt.get().getDoctorName().isBlank()) {
+                        doctorName = docConfigOpt.get().getDoctorName().trim();
+                    }
+                } catch (Exception ex) {
+                    log.debug("[FEEGOW-ACCESS] Erro ao buscar médico localmente por ID {}: {}", doctorId, ex.getMessage());
+                }
+
+                // 2. Se ainda não resolveu, busca na API de profissionais da Feegow (com cache Redis)
+                if ((doctorName == null || doctorName.isBlank()) && professionalExternalPort != null) {
+                    try {
+                        String resolved = professionalExternalPort.getProfessionalName(doctorId.trim());
+                        if (resolved != null && !resolved.isBlank()) {
+                            doctorName = resolved.trim();
+                        }
+                    } catch (Exception ex) {
+                        log.warn("[FEEGOW-ACCESS] Falha ao consultar nome do profissional ID {}: {}", doctorId, ex.getMessage());
+                    }
+                }
+            }
 
             FeegowPatientAccessInfo info = new FeegowPatientAccessInfo(
                 appointmentId,
