@@ -76,11 +76,12 @@ export const CompanionModal: React.FC<CompanionModalProps> = ({
 
             {/* Data de Nascimento */}
             <div>
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Data de Nascimento</label>
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                Data de Nascimento <span className="text-[9px] text-slate-400 font-normal">(Opcional)</span>
+              </label>
               <input
                 type="text"
                 inputMode="numeric"
-                required
                 placeholder="DD/MM/AAAA"
                 value={companionBirthDate}
                 onChange={(e) => {
@@ -100,7 +101,7 @@ export const CompanionModal: React.FC<CompanionModalProps> = ({
 
             {/* CPF */}
             <div>
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">CPF</label>
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">CPF *</label>
               <input
                 type="text"
                 inputMode="numeric"
@@ -145,22 +146,22 @@ export const CompanionModal: React.FC<CompanionModalProps> = ({
               type="submit"
               disabled={
                 companionSubmitLoading || 
-                !companionName || 
-                companionCpf.replace(/\D/g, '').length !== 11 || 
-                companionBirthDate.replace(/\D/g, '').length !== 8
+                !companionName.trim() || 
+                companionCpf.replace(/\D/g, '').length !== 11 ||
+                (companionBirthDate.replace(/\D/g, '').length > 0 && companionBirthDate.replace(/\D/g, '').length !== 8)
               }
               className={`flex-1 py-3 rounded-xl text-xs font-bold transition-all shadow-md flex items-center justify-center gap-2 ${
-                companionName && 
+                companionName.trim() && 
                 companionCpf.replace(/\D/g, '').length === 11 && 
-                companionBirthDate.replace(/\D/g, '').length === 8 && 
+                (companionBirthDate.replace(/\D/g, '').length === 0 || companionBirthDate.replace(/\D/g, '').length === 8) &&
                 !companionSubmitLoading
                   ? 'text-white hover:scale-[1.01] active:scale-[0.99] cursor-pointer'
                   : 'bg-slate-100 text-slate-400 cursor-not-allowed shadow-none'
               }`}
               style={
-                companionName && 
+                companionName.trim() && 
                 companionCpf.replace(/\D/g, '').length === 11 && 
-                companionBirthDate.replace(/\D/g, '').length === 8 && 
+                (companionBirthDate.replace(/\D/g, '').length === 0 || companionBirthDate.replace(/\D/g, '').length === 8) &&
                 !companionSubmitLoading
                   ? { backgroundImage: `linear-gradient(to right, ${primaryColor}, ${primaryDarkColor})` }
                   : undefined
