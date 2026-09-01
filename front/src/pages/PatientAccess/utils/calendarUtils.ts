@@ -82,9 +82,9 @@ export function generateGoogleCalendarUrl(event: CalendarEventDetails): string {
 }
 
 /**
- * Gera e dispara o download de um arquivo .ics (iCalendar / Apple / Outlook).
+ * Gera a string no padrão iCalendar RFC 5545 (.ics)
  */
-export function downloadIcsFile(event: CalendarEventDetails): void {
+export function buildIcsContent(event: CalendarEventDetails): string {
   const dates = parseAppointmentDate(event.dateTimeStr);
   const now = new Date();
   const dtStamp = formatDateToUtcString(now);
@@ -92,7 +92,7 @@ export function downloadIcsFile(event: CalendarEventDetails): void {
   const dtEnd = dates ? formatDateToUtcString(dates.end) : dtStamp;
   const uid = `inovare-app-${Date.now()}@itsm-inovare.ctrls.dev.br`;
 
-  const icsContent = [
+  return [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
     'PRODID:-//Inovare Servicos de Saude//ITSM Acesso//PT',
@@ -122,7 +122,43 @@ export function downloadIcsFile(event: CalendarEventDetails): void {
     'END:VEVENT',
     'END:VCALENDAR',
   ].join('\r\n');
+}
 
+/**
+ * Abre o evento diretamente no Calendário da Apple (iOS / iPhone / iPad / Mac)
+ * No Safari iOS, usar navegação direta por Data URI ou Blob URL sem o atributo 'download'
+ * faz o iOS abrir o modal nativo "Adicionar ao Calendário" em vez de salvar no app Arquivos.
+ */
+export function openAppleCalendar(event: CalendarEventDetails): void {
+  const icsContent = buildIcsContent(event);
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+  if (isIOS) {
+    // No iOS/Safari: disparar navegação direta para o data URI com MIME text/calendar
+    // O WebKit do iOS intercepta o MIME text/calendar e abre a tela nativa do app Calendário
+    const encoded = encodeURIComponent(icsContent);
+    const dataUri = `data:text/calendar;charset=utf-8,${encoded}`;
+    
+    // Tenta abrir direto no Safari
+    const tempLink = document.createElement('a');
+    tempLink.href = dataUri;
+    tempLink.target = '_self';
+    document.body.appendChild(tempLink);
+    tempLink.click();
+    document.body.removeChild(tempLink);
+    return;
+  }
+
+  // Se não for iOS, executa o download padrão do .ics
+  downloadIcsFile(event);
+}
+
+/**
+ * Gera e dispara o download de um arquivo .ics (iCalendar / Outlook / Desktop).
+ */
+export function downloadIcsFile(event: CalendarEventDetails): void {
+  const icsContent = buildIcsContent(event);
   const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
