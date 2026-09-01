@@ -443,10 +443,10 @@ public class BlipGroupActionHandler {
                 log.info("[WEBHOOK] Último grupo ativo encontrado: {} para telefone: {}", groupId, targetPhone);
                 return groupId;
             } else {
-                log.warn("[WEBHOOK] Nenhum grupo ativo encontrado para o telefone real: {}", targetPhone);
+                log.debug("[WEBHOOK] Nenhum grupo ativo encontrado para o telefone: {}", targetPhone);
             }
         } else {
-            log.warn("[WEBHOOK] Não foi possível resolver o telefone real do paciente.");
+            log.debug("[WEBHOOK] Não foi possível resolver o telefone real do paciente.");
         }
         return null;
     }
