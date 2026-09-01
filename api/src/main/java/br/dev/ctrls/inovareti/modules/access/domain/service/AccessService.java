@@ -414,6 +414,13 @@ public class AccessService {
     public AccessCredential registerCompanion(String appointmentId, CompanionAccessInfo companion) {
         log.info("[AccessService] Processando cadastro individual de acompanhante '{}' para agendamento {}", companion.name(), appointmentId);
 
+        if (appointmentId != null && appointmentId.startsWith("IMG-")) {
+            LocalDate date = LocalDate.now(CLINIC_ZONE);
+            LocalTime openingTime = LocalTime.of(7, 0);
+            LocalTime closingTime = LocalTime.of(21, 0);
+            return registerCompanionAccess(companion, date, openingTime, closingTime, null, null, appointmentId, null);
+        }
+
         Optional<FeegowPatientAccessInfo> accessInfoOpt = feegowClientPort.fetchPatientAccessInfo(appointmentId);
         if (accessInfoOpt.isEmpty()) {
             log.warn("[AccessService] Agendamento {} não encontrado para cadastrar acompanhante.", appointmentId);
@@ -571,6 +578,30 @@ public class AccessService {
         log.info("[AccessService] Validando credenciais para o agendamento ID: {} (token={})", 
                 appointmentId, token != null && !token.isBlank() ? "presente" : "ausente");
 
+        // Tratamento para auto-check-in da Clínica da Imagem
+        if (appointmentId != null && appointmentId.startsWith("IMG-")) {
+            List<AccessCredential> creds = accessCredentialRepositoryPort.findByAppointmentId(appointmentId);
+            if (creds == null || creds.isEmpty()) {
+                throw new br.dev.ctrls.inovareti.core.shared.domain.model.exception.NotFoundException("Credencial da Clínica da Imagem não encontrada.");
+            }
+            AccessCredential patient = creds.stream()
+                .filter(c -> c.getUserType() == UserType.PATIENT)
+                .findFirst()
+                .orElse(creds.get(0));
+
+            return new FeegowPatientAccessInfo(
+                patient.getAppointmentId(),
+                patient.getLocator(),
+                patient.getName(),
+                patient.getCpf(),
+                LocalDate.now(CLINIC_ZONE),
+                LocalTime.of(8, 0),
+                null,
+                "Clínica da Imagem",
+                ""
+            );
+        }
+
         Optional<FeegowPatientAccessInfo> accessInfoOpt = feegowClientPort.fetchPatientAccessInfo(appointmentId);
         if (accessInfoOpt.isEmpty()) {
             log.warn("[AccessService] Agendamento {} não encontrado para validação do desafio.", appointmentId);
@@ -718,6 +749,146 @@ public class AccessService {
         } catch (Exception e) {
             return false;
         }
+    }
+
+    /**
+     * Processa o auto-cadastro público da Clínica da Imagem (ou outras clínicas sem integração direta).
+     * Libera o acesso no GerAcesso para hoje e salva as credenciais no banco local.
+     */
+    public List<AccessCredential> processSelfRegistration(
+            String name, String rawCpf, String phone, String birthDate, String clinic, CompanionAccessInfo companion) {
+        if (name == null || name.isBlank()) {
+            throw new IllegalArgumentException("Nome do paciente é obrigatório.");
+        }
+        if (rawCpf == null || rawCpf.isBlank()) {
+            throw new IllegalArgumentException("CPF do paciente é obrigatório.");
+        }
+
+        String cleanCpf = rawCpf.replaceAll("\\D", "");
+        if (cleanCpf.length() != 11) {
+            throw new IllegalArgumentException("CPF inválido. Deve conter 11 dígitos.");
+        }
+
+        LocalDate today = LocalDate.now(CLINIC_ZONE);
+        String todayIdSuffix = today.format(DateTimeFormatter.ofPattern("yyyyMMdd"));
+        String appointmentId = "IMG-" + todayIdSuffix + "-" + cleanCpf;
+
+        // 1. Verifica se já existe credencial para este CPF hoje
+        List<AccessCredential> existing = accessCredentialRepositoryPort.findByAppointmentId(appointmentId);
+        if (existing != null && !existing.isEmpty()) {
+            log.info("[AccessService] Credencial já existente para auto-cadastro Imagem. CPF: {}, ID: {}", cleanCpf, appointmentId);
+            if (companion != null && companion.cpf() != null && !companion.cpf().isBlank()) {
+                String compCpf = companion.cpf().replaceAll("\\D", "");
+                boolean compExists = existing.stream().anyMatch(c -> c.getCpf() != null && c.getCpf().replaceAll("\\D", "").equals(compCpf));
+                if (!compExists) {
+                    registerCompanionAccess(
+                        companion,
+                        today,
+                        LocalTime.of(7, 0),
+                        LocalTime.of(21, 0),
+                        existing.get(0).getAccessCredential(),
+                        existing.get(0).getLocator(),
+                        appointmentId,
+                        null
+                    );
+                    return accessCredentialRepositoryPort.findByAppointmentId(appointmentId);
+                }
+            }
+            return existing;
+        }
+
+        // Janela de acesso para hoje (07:00 até 21:00)
+        LocalDateTime startWindow = LocalDateTime.of(today, LocalTime.of(7, 0));
+        LocalDateTime endWindow = LocalDateTime.of(today, LocalTime.of(21, 0));
+        String startDateFormatted = startWindow.format(GERACESSO_DATE_FORMATTER);
+        String endDateFormatted = endWindow.format(GERACESSO_DATE_FORMATTER);
+
+        // 2. Registra na GerAcesso
+        GerAcessoRequest gerAcessoRequest = GerAcessoRequest.builder()
+                .name(name.trim().toUpperCase())
+                .cpf(cleanCpf)
+                .startVisit(startDateFormatted)
+                .endVisit(endDateFormatted)
+                .phone(phone != null ? phone.replaceAll("\\D", "") : "")
+                .visitType(1)
+                .visitedRegistration("")
+                .visitedCpf("")
+                .build();
+
+        String credentialValue = "CRED-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+        String locatorValue = cleanCpf;
+        try {
+            Optional<GerAcessoResponse> gerResponseOpt = gerAcessoClientPort.registerAccess(gerAcessoRequest);
+            if (gerResponseOpt.isPresent() && gerResponseOpt.get().credential() != null && !gerResponseOpt.get().credential().isBlank()) {
+                credentialValue = gerResponseOpt.get().credential();
+                if (gerResponseOpt.get().locator() != null) {
+                    locatorValue = gerResponseOpt.get().locator();
+                }
+                log.info("[AccessService] Paciente Imagem cadastrado no GerAcesso com sucesso. CPF={}, Credential={}", cleanCpf, credentialValue);
+            }
+        } catch (Exception ex) {
+            log.warn("[AccessService] Falha na integração GerAcesso para paciente Imagem (usando contingência): {}", ex.getMessage());
+        }
+
+        AccessCredential patientCred = AccessCredential.builder()
+                .id(UUID.randomUUID())
+                .appointmentId(appointmentId)
+                .name(name.trim().toUpperCase())
+                .cpf(cleanCpf)
+                .userType(UserType.PATIENT)
+                .accessCredential(credentialValue)
+                .locator(locatorValue)
+                .createdAt(LocalDateTime.now(CLINIC_ZONE))
+                .build();
+
+        List<AccessCredential> resultList = new ArrayList<>();
+        resultList.add(accessCredentialRepositoryPort.save(patientCred));
+
+        // 3. Cadastra acompanhante se enviado
+        if (companion != null && companion.name() != null && !companion.name().isBlank()) {
+            try {
+                registerCompanionAccess(
+                    companion,
+                    today,
+                    LocalTime.of(7, 0),
+                    LocalTime.of(21, 0),
+                    credentialValue,
+                    locatorValue,
+                    appointmentId,
+                    null
+                );
+                List<AccessCredential> updatedList = accessCredentialRepositoryPort.findByAppointmentId(appointmentId);
+                if (updatedList != null && !updatedList.isEmpty()) {
+                    return updatedList;
+                }
+            } catch (Exception e) {
+                log.warn("[AccessService] Erro ao cadastrar acompanhante no auto-cadastro da Imagem: {}", e.getMessage());
+            }
+        }
+
+        return resultList;
+    }
+
+    /**
+     * Consulta credenciais ativas do dia associadas a um CPF.
+     */
+    public List<AccessCredential> lookupCredentialsByCpf(String rawCpf, String clinic) {
+        if (rawCpf == null || rawCpf.isBlank()) return List.of();
+        String cleanCpf = rawCpf.replaceAll("\\D", "");
+        if (cleanCpf.length() != 11) return List.of();
+
+        LocalDate today = LocalDate.now(CLINIC_ZONE);
+        String todayIdSuffix = today.format(DateTimeFormatter.ofPattern("yyyyMMdd"));
+        String appointmentId = "IMG-" + todayIdSuffix + "-" + cleanCpf;
+
+        List<AccessCredential> credentials = accessCredentialRepositoryPort.findByAppointmentId(appointmentId);
+        if (credentials != null && !credentials.isEmpty()) {
+            return credentials;
+        }
+
+        return accessCredentialRepositoryPort.findByCpf(cleanCpf).stream()
+                .filter(c -> c.getCreatedAt() != null && c.getCreatedAt().toLocalDate().isEqual(today))
+                .toList();
     }
 
     /**

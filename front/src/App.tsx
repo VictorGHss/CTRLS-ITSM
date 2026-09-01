@@ -160,6 +160,7 @@ function AppRoutes() {
         <Routes>
           <Route path="/login" element={<PageTransition><Login /></PageTransition>} />
           <Route path="/primeiro-acesso" element={<PageTransition><PrimeiroAcesso /></PageTransition>} />
+          <Route path="/imagem" element={<PageTransition><PatientAccess /></PageTransition>} />
           <Route path="/:appointmentId" element={<PageTransition><PatientAccess /></PageTransition>} />
           {/* Rotas protegidas compartilham o DefaultLayout */}
           <Route element={<PrivateLayoutRoute />}>
