@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { formatCpf } from '../types';
 import type { AccessCredential } from '../types';
+import { resolveDoctorLocation } from '../utils/clinicThemes';
 import type { ClinicTheme } from '../utils/clinicThemes';
 import { AddToCalendarMenu } from './AddToCalendarMenu';
 
@@ -161,7 +162,9 @@ export const CredentialsCarousel: React.FC<CredentialsCarouselProps> = ({
                 <MapPin className="w-4 h-4 text-brand-primary shrink-0 mt-0.5" />
                 <div>
                   <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block">Local / Sala</span>
-                  <span className="text-xs font-bold text-slate-700">{clinicTheme.floorInfo}</span>
+                  <span className="text-xs font-bold text-slate-700">
+                    {resolveDoctorLocation(cred.doctorName, clinicTheme.floorInfo)}
+                  </span>
                 </div>
               </div>
             </div>
