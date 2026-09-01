@@ -443,21 +443,32 @@ export default function PatientAccess() {
 
       const query = verifiedToken
         ? `t=${encodeURIComponent(verifiedToken)}`
-        : `phoneDigits=${encodeURIComponent(verifiedPhoneDigits)}`;
+        : verifiedPhoneDigits
+          ? `phoneDigits=${encodeURIComponent(verifiedPhoneDigits)}`
+          : '';
+
+      const url = query 
+        ? `/v1/access/credentials/${targetAppointmentId}?${query}`
+        : `/v1/access/credentials/${targetAppointmentId}`;
 
       const response = await api.get<AccessCredential[]>(
-        `/v1/access/credentials/${targetAppointmentId}?${query}`,
+        url,
         {
           headers: {
             'X-Skip-Interceptor': 'true'
           }
         }
       );
-      saveCredentialsWithOfflineCache(response.data || [], { token: verifiedToken, phoneDigits: verifiedPhoneDigits });
+      const newCreds = response.data || [];
+      saveCredentialsWithOfflineCache(newCreds, { token: verifiedToken, phoneDigits: verifiedPhoneDigits });
       setIsCompanionModalOpen(false);
       setCompanionName('');
       setCompanionCpf('');
       setCompanionBirthDate('');
+
+      if (newCreds.length > 1) {
+        setTimeout(() => scrollToCard(newCreds.length - 1), 300);
+      }
     } catch (err: unknown) {
       console.error('[PatientAccess] Falha ao cadastrar acompanhante:', err);
       setCompanionSubmitError('Ocorreu um erro ao cadastrar o acompanhante. Tente novamente.');
