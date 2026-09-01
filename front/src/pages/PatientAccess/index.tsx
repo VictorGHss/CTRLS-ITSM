@@ -466,6 +466,40 @@ export default function PatientAccess() {
     }
   };
 
+  const [isReactivating, setIsReactivating] = useState<boolean>(false);
+
+  const handleReactivateAccess = async () => {
+    const targetAppointmentId = (appointmentId && appointmentId !== 'imagem') 
+      ? appointmentId 
+      : credentials[0]?.appointmentId;
+
+    if (!targetAppointmentId) return;
+
+    setIsReactivating(true);
+    try {
+      console.log('[PatientAccess] Reativando acesso físico:', targetAppointmentId);
+      const response = await api.post<AccessCredential[]>(
+        `/v1/access/reactivate/${targetAppointmentId}`,
+        {},
+        {
+          headers: {
+            'X-Skip-Interceptor': 'true'
+          }
+        }
+      );
+
+      if (response.data && response.data.length > 0) {
+        saveCredentialsWithOfflineCache(response.data, { token: verifiedToken, phoneDigits: verifiedPhoneDigits });
+        alert('✅ Acesso reativado com sucesso! Seu novo QR Code já está pronto para passar na catraca.');
+      }
+    } catch (err: unknown) {
+      console.error('[PatientAccess] Falha ao reativar acesso:', err);
+      alert('Não foi possível reativar o acesso no momento. Por favor, tente novamente ou informe seu nome na recepção.');
+    } finally {
+      setIsReactivating(false);
+    }
+  };
+
   const scrollToCard = (index: number) => {
     if (scrollRef.current) {
       const width = scrollRef.current.clientWidth;
@@ -595,6 +629,8 @@ export default function PatientAccess() {
               scrollToCard={scrollToCard}
               onOpenFullscreen={openFullscreen}
               onOpenCompanionModal={() => setIsCompanionModalOpen(true)}
+              onReactivateAccess={handleReactivateAccess}
+              isReactivating={isReactivating}
               clinicTheme={clinicTheme}
             />
           )}

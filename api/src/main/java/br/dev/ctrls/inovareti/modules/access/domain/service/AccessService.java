@@ -892,6 +892,66 @@ public class AccessService {
     }
 
     /**
+     * Reativa o acesso físico de um paciente ou acompanhante, gerando uma nova credencial no GerAcesso
+     * para casos em que o paciente saiu do prédio e precisa retornar no mesmo dia (onde a catraca deu baixa na saída).
+     */
+    public List<AccessCredential> reactivateAccess(String appointmentId) {
+        log.info("[AccessService] Reativando acesso físico para o agendamento ID: {}", appointmentId);
+
+        List<AccessCredential> existingList = accessCredentialRepositoryPort.findByAppointmentId(appointmentId);
+        if (existingList == null || existingList.isEmpty()) {
+            throw new br.dev.ctrls.inovareti.core.shared.domain.model.exception.NotFoundException("Nenhuma credencial encontrada para reativação.");
+        }
+
+        LocalDate today = LocalDate.now(CLINIC_ZONE);
+        LocalDateTime startWindow = LocalDateTime.now(CLINIC_ZONE);
+        LocalDateTime endWindow = LocalDateTime.of(today, LocalTime.of(23, 0));
+        String startVisit = startWindow.format(GERACESSO_DATE_FORMATTER);
+        String endVisit = endWindow.format(GERACESSO_DATE_FORMATTER);
+
+        List<AccessCredential> updatedList = new ArrayList<>();
+
+        for (AccessCredential cred : existingList) {
+            String cleanCpf = cred.getCpf() != null ? cred.getCpf().replaceAll("\\D", "") : "";
+
+            GerAcessoRequest gerAcessoRequest = GerAcessoRequest.builder()
+                    .name(cred.getName())
+                    .cpf(cleanCpf)
+                    .startVisit(startVisit)
+                    .endVisit(endVisit)
+                    .phone("")
+                    .visitType(1)
+                    .visitedRegistration("")
+                    .visitedCpf("")
+                    .build();
+
+            String newCredentialValue = "CRED-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+            String newLocator = cred.getLocator();
+
+            try {
+                Optional<GerAcessoResponse> responseOpt = gerAcessoClientPort.registerAccess(gerAcessoRequest);
+                if (responseOpt.isPresent() && responseOpt.get().credential() != null && !responseOpt.get().credential().isBlank()) {
+                    newCredentialValue = responseOpt.get().credential().trim();
+                    if (responseOpt.get().locator() != null) {
+                        newLocator = responseOpt.get().locator().trim();
+                    }
+                    log.info("[AccessService] Acesso reativado na GerAcesso para '{}' ({}) com nova credencial: {}", 
+                            cred.getName(), cred.getUserType(), newCredentialValue);
+                }
+            } catch (Exception ex) {
+                log.warn("[AccessService] Falha ao reativar no GerAcesso para '{}' (usando contingência): {}", cred.getName(), ex.getMessage());
+            }
+
+            cred.setAccessCredential(newCredentialValue);
+            cred.setLocator(newLocator);
+            cred.setCreatedAt(LocalDateTime.now(CLINIC_ZONE));
+            updatedList.add(accessCredentialRepositoryPort.save(cred));
+        }
+
+        return updatedList;
+    }
+
+    /**
      * Classe de transporte de dados de validação de acesso.
      */
     public record AccessValidationResult(

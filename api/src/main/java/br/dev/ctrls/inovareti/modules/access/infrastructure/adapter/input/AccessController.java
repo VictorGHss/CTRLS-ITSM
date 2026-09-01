@@ -234,6 +234,42 @@ public class AccessController {
     }
 
     /**
+     * Endpoint de reativação de acesso para gerar uma nova credencial no GerAcesso
+     * caso o paciente/acompanhante tenha saído do prédio e precise entrar novamente.
+     */
+    @PostMapping("/reactivate/{appointmentId}")
+    public ResponseEntity<?> reactivateAccess(@PathVariable("appointmentId") String appointmentId) {
+        log.info("[AccessControl] Solicitação de reativação de acesso para agendamento: {}", appointmentId);
+        try {
+            List<AccessCredential> credentials = accessService.reactivateAccess(appointmentId);
+            if (credentials.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(Map.of("message", "Nenhuma credencial encontrada para reativar."));
+            }
+
+            List<AccessCredentialResponse> responseList = credentials.stream()
+                .map(cred -> new AccessCredentialResponse(
+                    cred.getName(),
+                    cred.getUserType() != null ? cred.getUserType() : UserType.PATIENT,
+                    cred.getLocator(),
+                    cred.getAccessCredential(),
+                    cred.getCpf(),
+                    cred.getAppointmentId() != null && cred.getAppointmentId().startsWith("IMG-") ? "Clínica da Imagem - Exames" : "Clínica Inovare",
+                    "Hoje",
+                    "07:00",
+                    "23:00"
+                ))
+                .toList();
+
+            return ResponseEntity.ok(responseList);
+        } catch (Exception ex) {
+            log.error("[AccessControl] Erro ao reativar acesso para {}: {}", appointmentId, ex.getMessage(), ex);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("message", "Erro ao reativar acesso. Tente novamente em instantes."));
+        }
+    }
+
+    /**
      * Endpoint de cadastro de acompanhante pelo portal web do paciente.
      *
      * @param appointmentId Identificador do agendamento principal.
