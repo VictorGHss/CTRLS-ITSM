@@ -797,9 +797,9 @@ public class AccessService {
             return existing;
         }
 
-        // Janela de acesso para hoje (07:00 até 21:00)
-        LocalDateTime startWindow = LocalDateTime.of(today, LocalTime.of(7, 0));
-        LocalDateTime endWindow = LocalDateTime.of(today, LocalTime.of(21, 0));
+        // Janela de acesso para hoje (06:00 até 23:59)
+        LocalDateTime startWindow = LocalDateTime.of(today, LocalTime.of(6, 0));
+        LocalDateTime endWindow = LocalDateTime.of(today, LocalTime.of(23, 59));
         String startDateFormatted = startWindow.format(GERACESSO_DATE_FORMATTER);
         String endDateFormatted = endWindow.format(GERACESSO_DATE_FORMATTER);
 
@@ -865,8 +865,8 @@ public class AccessService {
                 registerCompanionAccess(
                     companion,
                     today,
-                    LocalTime.of(7, 0),
-                    LocalTime.of(21, 0),
+                    LocalTime.of(6, 0),
+                    LocalTime.of(23, 59),
                     credentialValue,
                     locatorValue,
                     appointmentId,
@@ -920,7 +920,7 @@ public class AccessService {
 
         LocalDate today = LocalDate.now(CLINIC_ZONE);
         LocalDateTime startWindow = LocalDateTime.now(CLINIC_ZONE);
-        LocalDateTime endWindow = LocalDateTime.of(today, LocalTime.of(23, 0));
+        LocalDateTime endWindow = LocalDateTime.of(today, LocalTime.of(23, 59));
         String startVisit = startWindow.format(GERACESSO_DATE_FORMATTER);
         String endVisit = endWindow.format(GERACESSO_DATE_FORMATTER);
 

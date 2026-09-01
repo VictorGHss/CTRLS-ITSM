@@ -45,7 +45,13 @@ export const CredentialsCarousel: React.FC<CredentialsCarouselProps> = ({
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-bold text-slate-800">Cartões de Acesso (Catraca)</h3>
         {credentials.length > 1 && (
-          <span className="text-[10px] bg-brand-secondary/40 text-brand-primary-dark rounded-full px-2.5 py-0.5 font-bold">
+          <span 
+            className="text-[10px] rounded-full px-2.5 py-0.5 font-bold"
+            style={{
+              backgroundColor: clinicTheme.secondaryColor,
+              color: clinicTheme.primaryDarkColor
+            }}
+          >
             Deslize para o lado ({activeCardIndex + 1}/{credentials.length})
           </span>
         )}
@@ -67,11 +73,18 @@ export const CredentialsCarousel: React.FC<CredentialsCarouselProps> = ({
             <div className="flex flex-col items-center w-full">
               {/* Tag de Tipo de Usuário no Topo do Cartão */}
               <div className="flex items-center gap-2 mb-3">
-                <span className={`text-[10px] font-extrabold uppercase px-3 py-1 rounded-full tracking-wider ${
-                  cred.userType === 'PATIENT' 
-                    ? 'bg-brand-primary/10 text-brand-primary-dark border border-brand-primary/10' 
-                    : 'bg-indigo-50 text-indigo-700 border border-indigo-100'
-                }`}>
+                <span 
+                  className={`text-[10px] font-extrabold uppercase px-3 py-1 rounded-full tracking-wider border ${
+                    cred.userType === 'PATIENT' 
+                      ? '' 
+                      : 'bg-indigo-50 text-indigo-700 border-indigo-100'
+                  }`}
+                  style={cred.userType === 'PATIENT' ? {
+                    backgroundColor: clinicTheme.secondaryColor,
+                    color: clinicTheme.primaryDarkColor,
+                    borderColor: `${clinicTheme.primaryColor}30`
+                  } : undefined}
+                >
                   {cred.userType === 'PATIENT' ? 'Paciente Titular' : 'Acompanhante'}
                 </span>
                 {cred.credentialCode !== 'BLOCKED_OUTSIDE_WINDOW' && cred.credentialCode !== 'CPF_MISSING' && (
@@ -127,7 +140,7 @@ export const CredentialsCarousel: React.FC<CredentialsCarouselProps> = ({
             {/* Metade Inferior: Dados da Consulta */}
             <div className="w-full space-y-3 text-left mb-3">
               <div className="flex items-start gap-2.5 pb-2 border-b border-slate-200/40">
-                <User className="w-4 h-4 text-brand-primary shrink-0 mt-0.5" />
+                <User className="w-4 h-4 shrink-0 mt-0.5" style={{ color: clinicTheme.primaryColor }} />
                 <div>
                   <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block">Nome</span>
                   <span className="text-xs font-bold text-slate-700">{cred.name}</span>
@@ -136,7 +149,7 @@ export const CredentialsCarousel: React.FC<CredentialsCarouselProps> = ({
               
               {cred.cpf && (
                 <div className="flex items-start gap-2.5 pb-2 border-b border-slate-200/40">
-                  <ShieldCheck className="w-4 h-4 text-brand-primary shrink-0 mt-0.5" />
+                  <ShieldCheck className="w-4 h-4 shrink-0 mt-0.5" style={{ color: clinicTheme.primaryColor }} />
                   <div>
                     <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block">CPF</span>
                     <span className="text-xs font-semibold text-slate-700">{formatCpf(cred.cpf)}</span>
@@ -148,7 +161,7 @@ export const CredentialsCarousel: React.FC<CredentialsCarouselProps> = ({
                 <User className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
                 <div>
                   <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block">Médico / Especialista</span>
-                  <span className="text-xs font-bold text-slate-800">{cred.doctorName || 'Corpo Clínico Inovare'}</span>
+                  <span className="text-xs font-bold text-slate-800">{cred.doctorName || clinicTheme.name}</span>
                 </div>
               </div>
               
@@ -157,14 +170,14 @@ export const CredentialsCarousel: React.FC<CredentialsCarouselProps> = ({
                   <Calendar className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
                   <div>
                     <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block">Data e Horário</span>
-                    <span className="text-xs font-extrabold text-brand-primary-dark">{cred.appointmentDateTime}</span>
+                    <span className="text-xs font-extrabold" style={{ color: clinicTheme.primaryDarkColor }}>{cred.appointmentDateTime}</span>
                   </div>
                 </div>
               )}
 
               {/* Localização da Sala / Andar diretamente no cartão */}
               <div className="flex items-start gap-2.5">
-                <MapPin className="w-4 h-4 text-brand-primary shrink-0 mt-0.5" />
+                <MapPin className="w-4 h-4 shrink-0 mt-0.5" style={{ color: clinicTheme.primaryColor }} />
                 <div>
                   <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block">Local / Sala</span>
                   <span className="text-xs font-bold text-slate-700">
@@ -193,8 +206,11 @@ export const CredentialsCarousel: React.FC<CredentialsCarouselProps> = ({
               className={`w-full py-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-sm mt-auto ${
                 cred.credentialCode === 'BLOCKED_OUTSIDE_WINDOW'
                   ? 'bg-slate-100 text-slate-400 cursor-not-allowed shadow-none'
-                  : 'bg-gradient-to-r from-brand-primary to-brand-primary-dark hover:opacity-95 active:scale-[0.98] text-white cursor-pointer'
+                  : 'hover:opacity-95 active:scale-[0.98] text-white cursor-pointer'
               }`}
+              style={cred.credentialCode !== 'BLOCKED_OUTSIDE_WINDOW' ? {
+                backgroundImage: `linear-gradient(to right, ${clinicTheme.primaryColor}, ${clinicTheme.primaryDarkColor})`
+              } : undefined}
             >
               <Maximize2 className="w-3.5 h-3.5" />
               Ampliar QR Code
@@ -211,8 +227,11 @@ export const CredentialsCarousel: React.FC<CredentialsCarouselProps> = ({
               key={idx}
               onClick={() => scrollToCard(idx)}
               className={`h-2 rounded-full transition-all duration-300 ${
-                activeCardIndex === idx ? 'w-6 bg-brand-primary' : 'w-2 bg-slate-200'
+                activeCardIndex === idx ? 'w-6' : 'w-2 bg-slate-200'
               }`}
+              style={{
+                backgroundColor: activeCardIndex === idx ? clinicTheme.primaryColor : undefined
+              }}
               aria-label={`Ir para cartão ${idx + 1}`}
             />
           ))}
@@ -223,9 +242,13 @@ export const CredentialsCarousel: React.FC<CredentialsCarouselProps> = ({
       <div className="pt-4 flex flex-col gap-2.5">
         <button
           onClick={onOpenCompanionModal}
-          className="w-full py-3 px-4 bg-white border border-brand-primary hover:border-brand-primary-dark text-brand-primary-dark hover:text-brand-primary rounded-2xl text-xs font-bold transition-all flex items-center justify-center gap-2 hover:bg-brand-secondary/10 active:scale-[0.98] shadow-sm cursor-pointer"
+          className="w-full py-3 px-4 bg-white border rounded-2xl text-xs font-bold transition-all flex items-center justify-center gap-2 active:scale-[0.98] shadow-sm cursor-pointer"
+          style={{
+            borderColor: clinicTheme.primaryColor,
+            color: clinicTheme.primaryDarkColor
+          }}
         >
-          <User className="w-4 h-4 text-brand-primary" />
+          <User className="w-4 h-4" style={{ color: clinicTheme.primaryColor }} />
           Cadastrar Acompanhante
         </button>
 
@@ -249,7 +272,7 @@ export const CredentialsCarousel: React.FC<CredentialsCarouselProps> = ({
       {/* Card de Localização / Como Chegar */}
       <div className="mt-4 bg-slate-50/50 backdrop-blur-sm border border-slate-200/50 shadow-md rounded-2xl p-5 flex flex-col space-y-3">
         <div className="flex items-center gap-2">
-          <MapPin className="w-5 h-5 text-brand-primary" />
+          <MapPin className="w-5 h-5" style={{ color: clinicTheme.primaryColor }} />
           <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">{clinicTheme.name}</h4>
         </div>
         <p className="text-xs font-semibold text-slate-600 leading-relaxed">
@@ -259,7 +282,10 @@ export const CredentialsCarousel: React.FC<CredentialsCarouselProps> = ({
           href={clinicTheme.mapsUrl} 
           target="_blank" 
           rel="noopener noreferrer" 
-          className="w-full py-3 bg-gradient-to-r from-brand-primary to-brand-primary-dark active:scale-[0.98] text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-sm cursor-pointer hover:opacity-95"
+          className="w-full py-3 active:scale-[0.98] text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-sm cursor-pointer hover:opacity-95"
+          style={{
+            backgroundImage: `linear-gradient(to right, ${clinicTheme.primaryColor}, ${clinicTheme.primaryDarkColor})`
+          }}
         >
           <MapPin className="w-4 h-4 text-white" />
           Abrir no Google Maps
