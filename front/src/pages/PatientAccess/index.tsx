@@ -82,12 +82,22 @@ export default function PatientAccess() {
     data: AccessCredential[],
     authInfo?: { token?: string; phoneDigits?: string }
   ) => {
-    setCredentials(data || []);
+    // Garante que todas as credenciais possuam appointmentId definido
+    const normalizedData = (data || []).map(c => ({
+      ...c,
+      appointmentId: (c.appointmentId && c.appointmentId !== 'imagem')
+        ? c.appointmentId
+        : (appointmentId && appointmentId !== 'imagem')
+          ? appointmentId
+          : (c.cpf ? `IMG-${c.cpf.replace(/\D/g, '')}` : undefined)
+    }));
+
+    setCredentials(normalizedData);
     setIsVerified(true);
-    if (data && data.length > 0) {
+    if (normalizedData.length > 0) {
       try {
         if (appointmentId && appointmentId !== 'imagem') {
-          localStorage.setItem(`patient_access_credentials_${appointmentId}`, JSON.stringify(data));
+          localStorage.setItem(`patient_access_credentials_${appointmentId}`, JSON.stringify(normalizedData));
           if (authInfo?.token) {
             localStorage.setItem(`patient_access_token_${appointmentId}`, authInfo.token);
           }
@@ -97,7 +107,7 @@ export default function PatientAccess() {
         }
         // Se for Clínica da Imagem, salva também no cache permanente da Imagem
         if (clinicTheme.id === 'imagem' || appointmentId === 'imagem') {
-          localStorage.setItem('patient_access_imagem_last_credentials', JSON.stringify(data));
+          localStorage.setItem('patient_access_imagem_last_credentials', JSON.stringify(normalizedData));
         }
       } catch {
         // Ignora falhas de gravação do localStorage
@@ -408,13 +418,29 @@ export default function PatientAccess() {
     }
   };
 
+  const getActiveAppointmentId = (): string | undefined => {
+    if (appointmentId && appointmentId !== 'imagem') {
+      return appointmentId;
+    }
+    const fromCred = credentials.find(c => c.appointmentId && c.appointmentId !== 'imagem')?.appointmentId;
+    if (fromCred) return fromCred;
+    const patientCred = credentials.find(c => c.userType === 'PATIENT' && c.cpf) || credentials.find(c => c.cpf);
+    if (patientCred?.cpf) {
+      return `IMG-${patientCred.cpf.replace(/\D/g, '')}`;
+    }
+    return undefined;
+  };
+
   const handleCompanionSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const targetAppointmentId = (appointmentId && appointmentId !== 'imagem') 
-      ? appointmentId 
-      : credentials[0]?.appointmentId;
+    const targetAppointmentId = getActiveAppointmentId();
 
-    if (!targetAppointmentId || !companionName || !companionCpf) return;
+    if (!targetAppointmentId) {
+      setCompanionSubmitError('Não foi possível identificar o cadastro principal. Recarregue a página.');
+      return;
+    }
+
+    if (!companionName || !companionCpf) return;
 
     const cleanCpf = companionCpf.replace(/\D/g, '');
     if (!isValidCpf(cleanCpf)) {
@@ -426,7 +452,7 @@ export default function PatientAccess() {
     setCompanionSubmitError(null);
 
     try {
-      console.log('[PatientAccess] Cadastrando acompanhante:', companionName);
+      console.log('[PatientAccess] Cadastrando acompanhante:', companionName, 'para agendamento:', targetAppointmentId);
       await api.post(
         `/v1/access/companions/${targetAppointmentId}`,
         {
@@ -480,11 +506,12 @@ export default function PatientAccess() {
   const [isReactivating, setIsReactivating] = useState<boolean>(false);
 
   const handleReactivateAccess = async () => {
-    const targetAppointmentId = (appointmentId && appointmentId !== 'imagem') 
-      ? appointmentId 
-      : credentials[0]?.appointmentId;
+    const targetAppointmentId = getActiveAppointmentId();
 
-    if (!targetAppointmentId) return;
+    if (!targetAppointmentId) {
+      alert('Não foi possível identificar seu cadastro para reativação. Por favor, recarregue a página.');
+      return;
+    }
 
     setIsReactivating(true);
     try {
