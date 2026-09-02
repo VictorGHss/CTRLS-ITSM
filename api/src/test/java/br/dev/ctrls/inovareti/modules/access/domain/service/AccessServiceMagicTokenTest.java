@@ -44,6 +44,9 @@ class AccessServiceMagicTokenTest {
     @Mock
     private DoctorConfigurationRepository doctorConfigurationRepository;
 
+    @Mock
+    private br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentSessionRepositoryPort appointmentSessionRepository;
+
     private AccessService accessService;
 
     @BeforeEach
@@ -54,7 +57,8 @@ class AccessServiceMagicTokenTest {
                 patientExternalPort,
                 accessCredentialRepositoryPort,
                 gerAcessoClientPort,
-                doctorConfigurationRepository
+                doctorConfigurationRepository,
+                appointmentSessionRepository
         );
     }
 
