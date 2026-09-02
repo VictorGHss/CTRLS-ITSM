@@ -1,5 +1,5 @@
 import React from 'react';
-import { QRCodeSVG } from 'qrcode.react';
+import { QRCodeCanvas } from 'qrcode.react';
 import { 
   Lock, 
   User, 
@@ -7,7 +7,8 @@ import {
   Calendar, 
   Maximize2, 
   MapPin,
-  RefreshCw
+  RefreshCw,
+  Sun
 } from 'lucide-react';
 import { formatCpf } from '../types';
 import type { AccessCredential } from '../types';
@@ -97,8 +98,19 @@ export const CredentialsCarousel: React.FC<CredentialsCarouselProps> = ({
                 )}
               </div>
 
-              {/* Bloco do QR Code */}
-              <div className="p-4 bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col items-center justify-center relative min-h-[184px] w-[184px]">
+              {/* Bloco do QR Code protegido contra Force Dark Mode */}
+              <div 
+                className="p-4 rounded-2xl shadow-sm flex flex-col items-center justify-center relative min-h-[184px] w-[184px]"
+                style={{
+                  backgroundColor: '#ffffff',
+                  border: '1px solid #e2e8f0',
+                  colorScheme: 'light',
+                  forcedColorAdjust: 'none',
+                  filter: 'none',
+                  WebkitFilter: 'none',
+                  isolation: 'isolate'
+                }}
+              >
                 {cred.credentialCode === 'BLOCKED_OUTSIDE_WINDOW' ? (
                   <div className="flex flex-col items-center justify-center text-center p-2 space-y-2 select-none">
                     <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center text-slate-400">
@@ -109,15 +121,21 @@ export const CredentialsCarousel: React.FC<CredentialsCarouselProps> = ({
                   </div>
                 ) : (
                   <>
-                    <QRCodeSVG 
+                    <QRCodeCanvas 
                       value={cred.credentialCode} 
                       size={160} 
                       fgColor="#000000" 
                       bgColor="#ffffff"
                       level="M"
                       marginSize={2}
+                      style={{
+                        colorScheme: 'light',
+                        forcedColorAdjust: 'none',
+                        filter: 'none',
+                        WebkitFilter: 'none'
+                      }}
                     />
-                    <div className="absolute top-2 right-2 flex items-center justify-center">
+                    <div className="absolute top-2 right-2 flex items-center justify-center pointer-events-none">
                       <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
                       <span className="absolute w-2 h-2 rounded-full bg-emerald-500"></span>
                     </div>
@@ -125,10 +143,16 @@ export const CredentialsCarousel: React.FC<CredentialsCarouselProps> = ({
                 )}
               </div>
 
-              {/* Dica de Distância do Leitor */}
-              <p className="text-[10px] text-slate-400 font-medium mt-2 text-center">
-                💡 Aproxime a 10–15 cm da câmera da catraca
-              </p>
+              {/* Dica de Brilho e Distância da Catraca */}
+              <div className="flex flex-col items-center gap-1 mt-2.5 text-center">
+                <div className="inline-flex items-center gap-1.5 bg-amber-50 border border-amber-200/90 text-amber-800 px-2.5 py-1 rounded-full text-[10.5px] font-bold shadow-xs">
+                  <Sun className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                  <span>Aumente o brilho do celular</span>
+                </div>
+                <p className="text-[10px] text-slate-400 font-medium">
+                  💡 Aproxime a 10–15 cm da câmera da catraca
+                </p>
+              </div>
 
               {/* Localizador Catraca Discreto */}
               <span className="text-[10.5px] font-bold text-slate-400 font-mono mt-1 uppercase tracking-wider">
