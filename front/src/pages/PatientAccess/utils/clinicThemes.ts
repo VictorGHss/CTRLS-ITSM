@@ -206,3 +206,91 @@ export function resolveDoctorLocation(doctorName?: string, defaultFloor = '1º A
 
   return defaultFloor;
 }
+
+export interface DoctorSuggestion {
+  name: string;
+  location: string;
+  specialty?: string;
+}
+
+export const DOCTOR_SUGGESTIONS: DoctorSuggestion[] = [
+  // Ginecologia (3º Andar)
+  { name: "Dra. Brenda Aguiar", location: "Recepção de Ginecologia (3º Andar)", specialty: "Ginecologia" },
+  { name: "Dr. Carlos Batista", location: "Recepção de Ginecologia (3º Andar)", specialty: "Ginecologia" },
+  { name: "Dr. Edson Delfrate", location: "Recepção de Ginecologia (3º Andar)", specialty: "Ginecologia" },
+  { name: "Dr. Edson Felipe Grudinski", location: "Recepção de Ginecologia (3º Andar)", specialty: "Ginecologia" },
+  { name: "Dr. Eduardo Serman", location: "Recepção de Ginecologia (3º Andar)", specialty: "Ginecologia" },
+  { name: "Dra. Isabela Mongruel", location: "Recepção de Ginecologia (3º Andar)", specialty: "Ginecologia" },
+  { name: "Dra. Lisa Paula Fernandes", location: "Recepção de Ginecologia (3º Andar)", specialty: "Ginecologia" },
+  { name: "Dra. Tatyellen Dalzotto", location: "Recepção de Ginecologia (3º Andar)", specialty: "Ginecologia" },
+
+  // Ortopedia (3º Andar - Direita)
+  { name: "Dr. Carlos Miers", location: "Recepção de Ortopedia (3º Andar - Direita)", specialty: "Ortopedia" },
+  { name: "Dr. Cristiano Gatelli", location: "Recepção de Ortopedia (3º Andar - Direita)", specialty: "Ortopedia" },
+  { name: "Dr. Daniel Cartelli", location: "Recepção de Ortopedia (3º Andar - Direita)", specialty: "Ortopedia" },
+  { name: "Dr. Franklin Hilgemberg", location: "Recepção de Ortopedia (3º Andar - Direita)", specialty: "Ortopedia" },
+  { name: "Dr. Luis Felipe", location: "Recepção de Ortopedia (3º Andar - Direita)", specialty: "Ortopedia" },
+  { name: "Dr. Magno Zanellato", location: "Recepção de Ortopedia (3º Andar - Direita)", specialty: "Ortopedia" },
+  { name: "Dra. Marina Polydoro", location: "Recepção de Ortopedia (3º Andar - Direita)", specialty: "Ortopedia" },
+  { name: "Dr. Rafael Pançan", location: "Recepção de Ortopedia (3º Andar - Direita)", specialty: "Ortopedia" },
+  { name: "Dr. Rodrigo Fávaro", location: "Recepção de Ortopedia (3º Andar - Direita)", specialty: "Ortopedia" },
+
+  // Oftalmologia (2º Andar)
+  { name: "Dra. Cíntia Cenovicz", location: "Recepção de Oftalmologia (2º Andar)", specialty: "Oftalmologia" },
+  { name: "Dra. Fernanda Cenovicz", location: "Recepção de Oftalmologia (2º Andar)", specialty: "Oftalmologia" },
+  { name: "Dr. Marcelo Cenovicz", location: "Recepção de Oftalmologia (2º Andar)", specialty: "Oftalmologia" },
+  { name: "Dr. Murilo Cenovicz", location: "Recepção de Oftalmologia (2º Andar)", specialty: "Oftalmologia" },
+
+  // 2º Andar - Direita
+  { name: "Dra. Ana Paula", location: "Recepção do 2º Andar (Direita)" },
+  { name: "Dr. Carlos Henrique", location: "Recepção do 2º Andar (Direita)" },
+  { name: "Dr. Eduardo Mattos", location: "Recepção do 2º Andar (Direita)" },
+  { name: "Dra. Fabíola Moreira", location: "Recepção do 2º Andar (Direita)" },
+  { name: "Dr. Giuliano Campanari", location: "Recepção do 2º Andar (Direita)" },
+  { name: "Dr. Joelson Gulin", location: "Recepção do 2º Andar (Direita)" },
+  { name: "Dra. Kelly Melina", location: "Recepção do 2º Andar (Direita)" },
+  { name: "Dr. Luiz Strack", location: "Recepção do 2º Andar (Direita)" },
+  { name: "Dra. Thais Fernanda", location: "Recepção do 2º Andar (Direita)" },
+  { name: "Dra. Vania Gulin", location: "Recepção do 2º Andar (Direita)" },
+
+  // 2º Andar - Esquerda
+  { name: "Dr. Alexandre Acuña", location: "Recepção do 2º Andar (Esquerda)" },
+  { name: "Dr. Claudio Solak", location: "Recepção do 2º Andar (Esquerda)" },
+  { name: "Dr. Marcelo Schafranski", location: "Recepção do 2º Andar (Esquerda)" },
+  { name: "Dr. Marcelo Valladão", location: "Recepção do 2º Andar (Esquerda)" },
+  { name: "Dr. Marcos Marochi", location: "Recepção do 2º Andar (Esquerda)" },
+  { name: "Dr. Rubens Sirtoli", location: "Recepção do 2º Andar (Esquerda)" },
+
+  // 1º Andar - Direita
+  { name: "Anestesistas", location: "Recepção do 1º Andar (Direita)" },
+  { name: "Dr. Bruno Pançan", location: "Recepção do 1º Andar (Direita)" },
+  { name: "Dr. João Felipe Bueno", location: "Recepção do 1º Andar (Direita)" },
+  { name: "Dra. Karen Miyabukuro", location: "Recepção do 1º Andar (Direita)" },
+  { name: "Dra. Liliana Pilatti", location: "Recepção do 1º Andar (Direita)" },
+  { name: "Dr. Ricardo Zanetti", location: "Recepção do 1º Andar (Direita)" },
+  { name: "Dr. Roberto Kravchychyn", location: "Recepção do 1º Andar (Direita)" },
+  { name: "Dr. Victor Mauro", location: "Recepção do 1º Andar (Direita)" },
+
+  // 1º Andar - Esquerda
+  { name: "Dr. Alisson Fucio", location: "Recepção do 1º Andar (Esquerda)" },
+  { name: "Dr. Carlos Koga", location: "Recepção do 1º Andar (Esquerda)" },
+  { name: "Dr. Cesar Oda", location: "Recepção do 1º Andar (Esquerda)" },
+  { name: "Dr. Eduardo Bisinella", location: "Recepção do 1º Andar (Esquerda)" },
+  { name: "Dr. Irineu Zanellato", location: "Recepção do 1º Andar (Esquerda)" },
+  { name: "Dr. Marcelo Tessari", location: "Recepção do 1º Andar (Esquerda)" },
+  { name: "Dr. Ricardo Jeczmionski", location: "Recepção do 1º Andar (Esquerda)" },
+
+  // Térreo
+  { name: "Dr. Daniel Oda", location: "Térreo — Endoscopia", specialty: "Endoscopia" },
+  { name: "Dr. Danilo Saad", location: "Térreo — Endoscopia", specialty: "Endoscopia" },
+  { name: "Dra. Caroline Saad", location: "Térreo — Endoscopia", specialty: "Endoscopia" },
+  { name: "Clínica da Imagem", location: "Térreo — Clínica da Imagem" },
+  { name: "Clinipon", location: "Térreo — Clinipon" },
+
+  // Especialidades e Setores Gerais
+  { name: "Ginecologia", location: "Recepção de Ginecologia (3º Andar)" },
+  { name: "Ortopedia", location: "Recepção de Ortopedia (3º Andar - Direita)" },
+  { name: "Oftalmologia", location: "Recepção de Oftalmologia (2º Andar)" },
+  { name: "Endoscopia", location: "Térreo — Endoscopia" },
+  { name: "Recepção Geral / Central", location: "1º Andar - Lado Direito" }
+];
