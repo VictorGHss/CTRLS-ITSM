@@ -3,7 +3,6 @@ package br.dev.ctrls.inovareti.modules.appointment.application.service;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -180,10 +179,12 @@ public class BlipGroupAppointmentConfirmationCoordinator {
             sessoesUnicas.put(session.getId(), session);
         }
         List<AppointmentSession> result = new ArrayList<>(sessoesUnicas.values());
-        result.sort(Comparator.comparing(
-            AppointmentSession::getAppointmentAt,
-            Comparator.nullsLast(Comparator.naturalOrder())
-        ));
+        result.sort((a, b) -> {
+            if (a.getAppointmentAt() == null && b.getAppointmentAt() == null) return 0;
+            if (a.getAppointmentAt() == null) return 1;
+            if (b.getAppointmentAt() == null) return -1;
+            return a.getAppointmentAt().compareTo(b.getAppointmentAt());
+        });
         return result;
     }
 
