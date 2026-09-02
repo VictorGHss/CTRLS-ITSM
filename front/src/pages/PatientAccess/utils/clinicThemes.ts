@@ -128,12 +128,8 @@ export const DOCTOR_LOCATIONS_MAP: Record<string, string> = {
   "Eduardo Bisinella": "Recepção do 1º Andar (Esquerda)",
   "Ricardo Jeczmionski": "Recepção do 1º Andar (Esquerda)",
   "Ricardo Angelo Jeczmionski": "Recepção do 1º Andar (Esquerda)",
-  "Magno Zanellato": "Recepção do 1º Andar (Esquerda)",
   "Urologia": "Recepção do 1º Andar (Esquerda)",
   "Neurocirurgia": "Recepção do 1º Andar (Esquerda)",
-  "Cirurgia Torácica": "Recepção do 1º Andar (Esquerda)",
-  "Cirurgia Toracica": "Recepção do 1º Andar (Esquerda)",
-  "Pneumologia": "Recepção do 1º Andar (Esquerda)",
   "Cirurgia do Aparelho Digestivo": "Recepção do 1º Andar (Esquerda)",
   "Cirurgia do Ap Digestivo": "Recepção do 1º Andar (Esquerda)",
 
@@ -176,32 +172,32 @@ export const DOCTOR_LOCATIONS_MAP: Record<string, string> = {
   "Endocrinologia": "Recepção do 2º Andar (Esquerda)",
   "Reumatologia": "Recepção do 2º Andar (Esquerda)",
 
-  // === 2º ANDAR — OFTALMOLOGIA ===
-  "Cíntia Cenovicz": "Recepção de Oftalmologia (2º Andar)",
-  "Cintia Cenovicz": "Recepção de Oftalmologia (2º Andar)",
-  "Marcelo Cenovicz": "Recepção de Oftalmologia (2º Andar)",
-  "Murilo Cenovicz": "Recepção de Oftalmologia (2º Andar)",
-  "Fernanda Cenovicz": "Recepção de Oftalmologia (2º Andar)",
-  "Oftalmologia": "Recepção de Oftalmologia (2º Andar)",
-  "Fonoaudiologia": "Recepção de Oftalmologia (2º Andar)",
+  // === 2º ANDAR — OFTALMOLOGIA (ESQUERDA) ===
+  "Cíntia Cenovicz": "Recepção de Oftalmologia (2º Andar - Esquerda)",
+  "Cintia Cenovicz": "Recepção de Oftalmologia (2º Andar - Esquerda)",
+  "Marcelo Cenovicz": "Recepção de Oftalmologia (2º Andar - Esquerda)",
+  "Murilo Cenovicz": "Recepção de Oftalmologia (2º Andar - Esquerda)",
+  "Fernanda Cenovicz": "Recepção de Oftalmologia (2º Andar - Esquerda)",
+  "Oftalmologia": "Recepção de Oftalmologia (2º Andar - Esquerda)",
+  "Fonoaudiologia": "Recepção de Oftalmologia (2º Andar - Esquerda)",
 
-  // === 3º ANDAR — GINECOLOGIA ===
-  "Carlos Batista": "Recepção de Ginecologia (3º Andar)",
-  "Carlos Alberto Batista": "Recepção de Ginecologia (3º Andar)",
-  "Brenda Aguiar": "Recepção de Ginecologia (3º Andar)",
-  "Brenda de Almeida Aguiar": "Recepção de Ginecologia (3º Andar)",
-  "Isabela Mongruel": "Recepção de Ginecologia (3º Andar)",
-  "Isabela Baumel Mongruel": "Recepção de Ginecologia (3º Andar)",
-  "Lisa Paula Fernandes": "Recepção de Ginecologia (3º Andar)",
-  "Tatyellen Dalzotto": "Recepção de Ginecologia (3º Andar)",
-  "Tatyelen Dalzotto": "Recepção de Ginecologia (3º Andar)",
-  "Edson Felipe Grudinski": "Recepção de Ginecologia (3º Andar)",
-  "Edson Felipe Grudinski Delfrate": "Recepção de Ginecologia (3º Andar)",
-  "Edson Delfrate": "Recepção de Ginecologia (3º Andar)",
-  "Eduardo Serman": "Recepção de Ginecologia (3º Andar)",
-  "Ginecologia": "Recepção de Ginecologia (3º Andar)",
-  "Obstetrícia": "Recepção de Ginecologia (3º Andar)",
-  "Obstetricia": "Recepção de Ginecologia (3º Andar)",
+  // === 3º ANDAR — GINECOLOGIA (ESQUERDA) ===
+  "Carlos Batista": "Recepção de Ginecologia (3º Andar - Esquerda)",
+  "Carlos Alberto Batista": "Recepção de Ginecologia (3º Andar - Esquerda)",
+  "Brenda Aguiar": "Recepção de Ginecologia (3º Andar - Esquerda)",
+  "Brenda de Almeida Aguiar": "Recepção de Ginecologia (3º Andar - Esquerda)",
+  "Isabela Mongruel": "Recepção de Ginecologia (3º Andar - Esquerda)",
+  "Isabela Baumel Mongruel": "Recepção de Ginecologia (3º Andar - Esquerda)",
+  "Lisa Paula Fernandes": "Recepção de Ginecologia (3º Andar - Esquerda)",
+  "Tatyellen Dalzotto": "Recepção de Ginecologia (3º Andar - Esquerda)",
+  "Tatyelen Dalzotto": "Recepção de Ginecologia (3º Andar - Esquerda)",
+  "Edson Felipe Grudinski": "Recepção de Ginecologia (3º Andar - Esquerda)",
+  "Edson Felipe Grudinski Delfrate": "Recepção de Ginecologia (3º Andar - Esquerda)",
+  "Edson Delfrate": "Recepção de Ginecologia (3º Andar - Esquerda)",
+  "Eduardo Serman": "Recepção de Ginecologia (3º Andar - Esquerda)",
+  "Ginecologia": "Recepção de Ginecologia (3º Andar - Esquerda)",
+  "Obstetrícia": "Recepção de Ginecologia (3º Andar - Esquerda)",
+  "Obstetricia": "Recepção de Ginecologia (3º Andar - Esquerda)",
 
   // === 3º ANDAR — ORTOPEDIA (DIREITA) ===
   "Carlos Miers": "Recepção de Ortopedia (3º Andar - Direita)",
@@ -214,6 +210,10 @@ export const DOCTOR_LOCATIONS_MAP: Record<string, string> = {
   "Rodrigo Fávaro": "Recepção de Ortopedia (3º Andar - Direita)",
   "Rodrigo Favaro": "Recepção de Ortopedia (3º Andar - Direita)",
   "Marina Polydoro": "Recepção de Ortopedia (3º Andar - Direita)",
+  "Magno Zanellato": "Recepção de Ortopedia (3º Andar - Direita)",
+  "Cirurgia Torácica": "Recepção de Ortopedia (3º Andar - Direita)",
+  "Cirurgia Toracica": "Recepção de Ortopedia (3º Andar - Direita)",
+  "Pneumologia": "Recepção de Ortopedia (3º Andar - Direita)",
   "Ortopedia": "Recepção de Ortopedia (3º Andar - Direita)",
 
   // === TÉRREO ===
@@ -318,15 +318,15 @@ export interface DoctorSuggestion {
 }
 
 export const DOCTOR_SUGGESTIONS: DoctorSuggestion[] = [
-  // Ginecologia (3º Andar)
-  { name: "Dra. Brenda Aguiar", location: "Recepção de Ginecologia (3º Andar)", specialty: "Ginecologia" },
-  { name: "Dr. Carlos Batista", location: "Recepção de Ginecologia (3º Andar)", specialty: "Ginecologia" },
-  { name: "Dr. Edson Delfrate", location: "Recepção de Ginecologia (3º Andar)", specialty: "Ginecologia" },
-  { name: "Dr. Edson Felipe Grudinski", location: "Recepção de Ginecologia (3º Andar)", specialty: "Ginecologia" },
-  { name: "Dr. Eduardo Serman", location: "Recepção de Ginecologia (3º Andar)", specialty: "Ginecologia" },
-  { name: "Dra. Isabela Mongruel", location: "Recepção de Ginecologia (3º Andar)", specialty: "Ginecologia" },
-  { name: "Dra. Lisa Paula Fernandes", location: "Recepção de Ginecologia (3º Andar)", specialty: "Ginecologia" },
-  { name: "Dra. Tatyellen Dalzotto", location: "Recepção de Ginecologia (3º Andar)", specialty: "Ginecologia" },
+  // Ginecologia (3º Andar - Esquerda)
+  { name: "Dra. Brenda Aguiar", location: "Recepção de Ginecologia (3º Andar - Esquerda)", specialty: "Ginecologia" },
+  { name: "Dr. Carlos Batista", location: "Recepção de Ginecologia (3º Andar - Esquerda)", specialty: "Ginecologia" },
+  { name: "Dr. Edson Delfrate", location: "Recepção de Ginecologia (3º Andar - Esquerda)", specialty: "Ginecologia" },
+  { name: "Dr. Edson Felipe Grudinski", location: "Recepção de Ginecologia (3º Andar - Esquerda)", specialty: "Ginecologia" },
+  { name: "Dr. Eduardo Serman", location: "Recepção de Ginecologia (3º Andar - Esquerda)", specialty: "Ginecologia" },
+  { name: "Dra. Isabela Mongruel", location: "Recepção de Ginecologia (3º Andar - Esquerda)", specialty: "Ginecologia" },
+  { name: "Dra. Lisa Paula Fernandes", location: "Recepção de Ginecologia (3º Andar - Esquerda)", specialty: "Ginecologia" },
+  { name: "Dra. Tatyellen Dalzotto", location: "Recepção de Ginecologia (3º Andar - Esquerda)", specialty: "Ginecologia" },
 
   // Ortopedia (3º Andar - Direita)
   { name: "Dr. Carlos Miers", location: "Recepção de Ortopedia (3º Andar - Direita)", specialty: "Ortopedia" },
@@ -334,15 +334,16 @@ export const DOCTOR_SUGGESTIONS: DoctorSuggestion[] = [
   { name: "Dr. Daniel Cartelli", location: "Recepção de Ortopedia (3º Andar - Direita)", specialty: "Ortopedia" },
   { name: "Dr. Franklin Hilgemberg", location: "Recepção de Ortopedia (3º Andar - Direita)", specialty: "Ortopedia" },
   { name: "Dr. Luis Felipe", location: "Recepção de Ortopedia (3º Andar - Direita)", specialty: "Ortopedia" },
+  { name: "Dr. Magno Zanellato", location: "Recepção de Ortopedia (3º Andar - Direita)", specialty: "Cirurgia Torácica e Pneumologia" },
   { name: "Dra. Marina Polydoro", location: "Recepção de Ortopedia (3º Andar - Direita)", specialty: "Ortopedia" },
   { name: "Dr. Rafael Pançan", location: "Recepção de Ortopedia (3º Andar - Direita)", specialty: "Ortopedia" },
   { name: "Dr. Rodrigo Fávaro", location: "Recepção de Ortopedia (3º Andar - Direita)", specialty: "Ortopedia" },
 
-  // Oftalmologia (2º Andar)
-  { name: "Dra. Cíntia Cenovicz", location: "Recepção de Oftalmologia (2º Andar)", specialty: "Fonoaudiologia" },
-  { name: "Dra. Fernanda Cenovicz", location: "Recepção de Oftalmologia (2º Andar)", specialty: "Oftalmologia" },
-  { name: "Dr. Marcelo Cenovicz", location: "Recepção de Oftalmologia (2º Andar)", specialty: "Oftalmologia" },
-  { name: "Dr. Murilo Cenovicz", location: "Recepção de Oftalmologia (2º Andar)", specialty: "Oftalmologia" },
+  // Oftalmologia (2º Andar - Esquerda)
+  { name: "Dra. Cíntia Cenovicz", location: "Recepção de Oftalmologia (2º Andar - Esquerda)", specialty: "Fonoaudiologia" },
+  { name: "Dra. Fernanda Cenovicz", location: "Recepção de Oftalmologia (2º Andar - Esquerda)", specialty: "Oftalmologia" },
+  { name: "Dr. Marcelo Cenovicz", location: "Recepção de Oftalmologia (2º Andar - Esquerda)", specialty: "Oftalmologia" },
+  { name: "Dr. Murilo Cenovicz", location: "Recepção de Oftalmologia (2º Andar - Esquerda)", specialty: "Oftalmologia" },
 
   // 2º Andar - Direita
   { name: "Dra. Ana Paula", location: "Recepção do 2º Andar (Direita)", specialty: "Clínica Geral" },
@@ -380,7 +381,6 @@ export const DOCTOR_SUGGESTIONS: DoctorSuggestion[] = [
   { name: "Dr. Cesar Oda", location: "Recepção do 1º Andar (Esquerda)", specialty: "Cirurgia do Ap Digestivo" },
   { name: "Dr. Eduardo Bisinella", location: "Recepção do 1º Andar (Esquerda)", specialty: "Urologia" },
   { name: "Dr. Irineu Zanellato", location: "Recepção do 1º Andar (Esquerda)", specialty: "Clínica Geral" },
-  { name: "Dr. Magno Zanellato", location: "Recepção do 1º Andar (Esquerda)", specialty: "Cirurgia Torácica e Pneumologia" },
   { name: "Dr. Marcelo Tessari", location: "Recepção do 1º Andar (Esquerda)", specialty: "Neurocirurgia" },
   { name: "Dr. Ricardo Jeczmionski", location: "Recepção do 1º Andar (Esquerda)", specialty: "Urologia" },
 
@@ -392,9 +392,9 @@ export const DOCTOR_SUGGESTIONS: DoctorSuggestion[] = [
   { name: "Clinipon", location: "Térreo — Clinipon", specialty: "Exames Laboratoriais" },
 
   // Especialidades e Setores Gerais
-  { name: "Ginecologia", location: "Recepção de Ginecologia (3º Andar)", specialty: "Ginecologia e Obstetrícia" },
+  { name: "Ginecologia", location: "Recepção de Ginecologia (3º Andar - Esquerda)", specialty: "Ginecologia e Obstetrícia" },
   { name: "Ortopedia", location: "Recepção de Ortopedia (3º Andar - Direita)", specialty: "Ortopedia e Traumatologia" },
-  { name: "Oftalmologia", location: "Recepção de Oftalmologia (2º Andar)", specialty: "Oftalmologia" },
+  { name: "Oftalmologia", location: "Recepção de Oftalmologia (2º Andar - Esquerda)", specialty: "Oftalmologia" },
   { name: "Endoscopia", location: "Térreo — Endoscopia", specialty: "Endoscopia Digestiva" },
   { name: "Recepção Geral / Central", location: "1º Andar - Lado Direito" }
 ];
