@@ -493,7 +493,7 @@ export default function PatientAccess() {
 
     try {
       console.log('[PatientAccess] Cadastrando acompanhante:', companionName, 'para agendamento:', targetAppointmentId);
-      await api.post(
+      const postResponse = await api.post<any>(
         `/v1/access/companions/${targetAppointmentId}`,
         {
           name: companionName.trim(),
@@ -507,36 +507,61 @@ export default function PatientAccess() {
         }
       );
 
-      const query = verifiedToken
-        ? `t=${encodeURIComponent(verifiedToken)}`
-        : verifiedPhoneDigits
-          ? `phoneDigits=${encodeURIComponent(verifiedPhoneDigits)}`
-          : '';
+      let updatedList: AccessCredential[] = [];
 
-      const url = query 
-        ? `/v1/access/credentials/${targetAppointmentId}?${query}` 
-        : `/v1/access/credentials/${targetAppointmentId}`;
+      // 1. Se a API já retornou a lista completa de credenciais atualizada
+      if (Array.isArray(postResponse.data) && postResponse.data.length > 0) {
+        updatedList = postResponse.data;
+      } else if (postResponse.data && (postResponse.data.accessCredential || postResponse.data.credentialCode)) {
+        // 2. Se retornou uma credencial avulsa criada, adiciona ao estado existente
+        const newComp: AccessCredential = {
+          appointmentId: targetAppointmentId,
+          name: companionName.trim().toUpperCase(),
+          userType: 'COMPANION',
+          locator: postResponse.data.locator || '',
+          credentialCode: postResponse.data.accessCredential || postResponse.data.credentialCode || '',
+          cpf: cleanCpf,
+          doctorName: credentials[0]?.doctorName || 'Clínica Inovare',
+          appointmentDateTime: credentials[0]?.appointmentDateTime || 'Hoje',
+          opensAt: '06:00',
+          closesAt: '23:00'
+        };
+        updatedList = [...credentials, newComp];
+      } else {
+        // 3. Fallback: tenta buscar via GET
+        try {
+          const query = verifiedToken
+            ? `t=${encodeURIComponent(verifiedToken)}`
+            : verifiedPhoneDigits
+              ? `phoneDigits=${encodeURIComponent(verifiedPhoneDigits)}`
+              : '';
 
-      const response = await api.get<AccessCredential[]>(
-        url,
-        {
-          headers: {
-            'X-Skip-Interceptor': 'true'
+          const url = query 
+            ? `/v1/access/credentials/${targetAppointmentId}?${query}` 
+            : `/v1/access/credentials/${targetAppointmentId}`;
+
+          const getResponse = await api.get<AccessCredential[]>(url, {
+            headers: { 'X-Skip-Interceptor': 'true' }
+          });
+          if (getResponse.data && getResponse.data.length > 0) {
+            updatedList = getResponse.data;
           }
+        } catch (getErr) {
+          console.warn('[PatientAccess] Fallback GET após cadastro:', getErr);
         }
-      );
+      }
 
-      if (response.data && response.data.length > 0) {
-        saveCredentialsWithOfflineCache(response.data, { token: verifiedToken, phoneDigits: verifiedPhoneDigits });
+      if (updatedList.length > 0) {
+        saveCredentialsWithOfflineCache(updatedList, { token: verifiedToken, phoneDigits: verifiedPhoneDigits });
         setIsCompanionModalOpen(false);
         setCompanionName('');
         setCompanionCpf('');
         setCompanionBirthDate('');
         setTimeout(() => {
-          scrollToCard(response.data.length - 1);
+          scrollToCard(updatedList.length - 1);
         }, 300);
       } else {
-        setCompanionSubmitError('Acompanhante cadastrado, mas não foi possível recarregar a lista.');
+        setIsCompanionModalOpen(false);
       }
     } catch (err: unknown) {
       console.error('[PatientAccess] Falha ao cadastrar acompanhante:', err);
