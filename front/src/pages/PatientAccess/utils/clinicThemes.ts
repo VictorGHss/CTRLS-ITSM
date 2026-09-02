@@ -41,7 +41,7 @@ export const CLINIC_THEMES: Record<string, ClinicTheme> = {
     badgeBgColor: 'bg-[#FFD2A5]/50',
     badgeTextColor: 'text-amber-950',
     buttonGradient: 'from-[#FFA145] to-[#E08328]',
-    address: 'R. Carlos Osternack, 111 - 1º Andar, Estrela, Ponta Grossa - PR, 84040-120',
+    address: 'R. Carlos Osternack, 111, Estrela, Ponta Grossa - PR, 84040-120',
     mapsUrl: 'https://maps.app.goo.gl/S2BaxmJFgr4YAjRT7',
     floorInfo: '1º Andar - Lado Direito',
     phone: '(42) 3026-2600',

@@ -64,6 +64,9 @@ public class AccessCredential {
     @Column(name = "cpf")
     private String cpf;
 
+    @Column(name = "phone")
+    private String phone;
+
     @NotNull
     @Enumerated(EnumType.STRING)
     @Column(name = "user_type", nullable = false)
