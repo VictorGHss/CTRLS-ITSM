@@ -17,6 +17,7 @@ public class DateParserUtils {
 
     private static final Pattern DATE_PATTERN_DAY_FIRST = Pattern.compile("^(\\d{1,2})[\\/\\-\\.\\s]+(\\d{1,2})[\\/\\-\\.\\s]+(\\d{2,4})$");
     private static final Pattern DATE_PATTERN_YEAR_FIRST = Pattern.compile("^(\\d{4})[\\/\\-\\.\\s]+(\\d{1,2})[\\/\\-\\.\\s]+(\\d{1,2})$");
+    private static final Pattern DATE_PATTERN_DIGITS_ONLY = Pattern.compile("^(\\d{2})(\\d{2})(\\d{2,4})$");
 
     private DateParserUtils() {
         // Construtor privado para classe utilitária
@@ -25,7 +26,7 @@ public class DateParserUtils {
     /**
      * Converte uma string de data arbitrária para o formato ISO (YYYY-MM-DD).
      *
-     * @param input text de data fornecido pelo usuário (ex: "15/08/1990", "15 08 90", "15.08.1990", "1990-08-15")
+     * @param input text de data fornecido pelo usuário (ex: "15/08/1990", "15081990", "15 08 90", "15.08.1990", "1990-08-15")
      * @return String formatada em ISO (YYYY-MM-DD)
      * @throws IllegalArgumentException se a data for nula, vazia ou inválida
      */
@@ -36,7 +37,7 @@ public class DateParserUtils {
 
         String cleaned = input.trim();
 
-        // 1. Tenta padronizar no formato Dia-Mês-Ano
+        // 1. Tenta padronizar no formato Dia-Mês-Ano com separadores
         Matcher dayMatcher = DATE_PATTERN_DAY_FIRST.matcher(cleaned);
         if (dayMatcher.matches()) {
             try {
@@ -52,7 +53,23 @@ public class DateParserUtils {
             }
         }
 
-        // 2. Tenta padronizar no formato Ano-Mês-Dia
+        // 2. Tenta padronizar no formato apenas números (ex: 25081990 ou 250890)
+        Matcher digitsMatcher = DATE_PATTERN_DIGITS_ONLY.matcher(cleaned.replaceAll("\\D", ""));
+        if (digitsMatcher.matches()) {
+            try {
+                int day = Integer.parseInt(digitsMatcher.group(1));
+                int month = Integer.parseInt(digitsMatcher.group(2));
+                int rawYear = Integer.parseInt(digitsMatcher.group(3));
+
+                int year = resolveYear(rawYear);
+                LocalDate date = LocalDate.of(year, month, day);
+                return date.format(DateTimeFormatter.ISO_LOCAL_DATE);
+            } catch (Exception ex) {
+                log.warn("[DATE-PARSER] Erro ao parsear data contínua '{}': {}", cleaned, ex.getMessage());
+            }
+        }
+
+        // 3. Tenta padronizar no formato Ano-Mês-Dia
         Matcher yearMatcher = DATE_PATTERN_YEAR_FIRST.matcher(cleaned);
         if (yearMatcher.matches()) {
             try {
