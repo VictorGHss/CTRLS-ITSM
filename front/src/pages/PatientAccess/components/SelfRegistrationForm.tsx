@@ -205,18 +205,8 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
 
   return (
     <div className="w-full max-w-md mx-auto">
-      {/* Header com Logo e Subtítulo */}
+      {/* Header com Título e Subtítulo */}
       <div className="text-center mb-6">
-        <div className="inline-flex items-center justify-center p-3 bg-white rounded-3xl shadow-sm border border-slate-100 mb-3">
-          <img
-            src={clinicTheme.logoUrl}
-            alt={clinicTheme.name}
-            className="h-10 object-contain"
-            onError={(e) => {
-              (e.target as HTMLElement).style.display = 'none';
-            }}
-          />
-        </div>
         <h2 className="text-xl font-black text-slate-800 tracking-tight">
           {clinicTheme.name}
         </h2>
