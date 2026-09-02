@@ -368,6 +368,7 @@ public class AccessService {
                 .name(accessInfo.name())
                 .cpf(finalCpf)
                 .phone(cleanPatientPhone)
+                .doctorName(accessInfo.doctorName())
                 .userType(UserType.PATIENT)
                 .accessCredential(token)
                 .locator(locator)
@@ -381,6 +382,9 @@ public class AccessService {
             AccessCredential existingCred = savedList.get(0);
             if (cleanPatientPhone != null && !cleanPatientPhone.isBlank()) {
                 existingCred.setPhone(cleanPatientPhone);
+            }
+            if (accessInfo.doctorName() != null && !accessInfo.doctorName().isBlank()) {
+                existingCred.setDoctorName(accessInfo.doctorName());
             }
             if (existingCred.getAccessCredential() != null 
                     && existingCred.getAccessCredential().startsWith("CRED-") 
@@ -415,7 +419,7 @@ public class AccessService {
                             if (alreadyRegisteredWithRealCred) {
                                 log.info("[AccessService] Acompanhante '{}' já possui credencial GerAcesso real cadastrada para o agendamento {}. Ignorando duplicata.", companion.name(), accessInfo.appointmentId());
                             } else {
-                                registerCompanionAccess(companion, appointmentDate, physicalOpeningTime, closingTime, finalToken, finalLocator, accessInfo.appointmentId(), accessInfo.doctorId());
+                                registerCompanionAccess(companion, appointmentDate, physicalOpeningTime, closingTime, finalToken, finalLocator, accessInfo.appointmentId(), accessInfo.doctorId(), accessInfo.doctorName());
                             }
                         } catch (Exception ex) {
                             log.error("[AccessService] Erro fatal no processamento assíncrono do acompanhante '{}': {}", 
@@ -457,7 +461,12 @@ public class AccessService {
             LocalDate date = LocalDate.now(CLINIC_ZONE);
             LocalTime openingTime = LocalTime.of(6, 0);
             LocalTime closingTime = LocalTime.of(23, 59);
-            return registerCompanionAccess(companion, date, openingTime, closingTime, null, null, appointmentId, null);
+            String docName = accessCredentialRepositoryPort.findByAppointmentId(appointmentId).stream()
+                    .filter(c -> c != null && c.getDoctorName() != null && !c.getDoctorName().isBlank())
+                    .map(c -> c.getDoctorName())
+                    .findFirst()
+                    .orElse(null);
+            return registerCompanionAccess(companion, date, openingTime, closingTime, null, null, appointmentId, null, docName);
         }
 
         Optional<FeegowPatientAccessInfo> accessInfoOpt = feegowClientPort.fetchPatientAccessInfo(appointmentId);
@@ -479,7 +488,7 @@ public class AccessService {
         LocalTime openingTime = LocalTime.of(6, 0);
         LocalTime closingTime = LocalTime.of(23, 0);
 
-        return registerCompanionAccess(companion, date, openingTime, closingTime, null, null, appointmentId, accessInfo.doctorId());
+        return registerCompanionAccess(companion, date, openingTime, closingTime, null, null, appointmentId, accessInfo.doctorId(), accessInfo.doctorName());
     }
 
     /**
@@ -493,7 +502,8 @@ public class AccessService {
             String patientToken,
             String patientLocator,
             String appointmentId,
-            String docId) {
+            String docId,
+            String doctorName) {
 
         String companionCpf = companion.cpf() != null ? companion.cpf().replaceAll("\\D", "") : "";
         // Reutiliza a constante estática imutável GERACESSO_DATE_FORMATTER
@@ -565,6 +575,9 @@ public class AccessService {
             if (cleanCompPhone != null) {
                 credential.setPhone(cleanCompPhone);
             }
+            if (doctorName != null && !doctorName.isBlank()) {
+                credential.setDoctorName(doctorName.trim());
+            }
             credential.setAccessCredential(companionToken);
             credential.setLocator(companionLocator);
             credential.setCreatedAt(LocalDateTime.now());
@@ -575,6 +588,7 @@ public class AccessService {
                 .name(companion.name())
                 .cpf(companionCpf.isEmpty() ? null : companionCpf)
                 .phone(cleanCompPhone)
+                .doctorName(doctorName != null ? doctorName.trim() : null)
                 .userType(UserType.COMPANION)
                 .accessCredential(companionToken)
                 .locator(companionLocator)
@@ -642,7 +656,9 @@ public class AccessService {
                 } catch (Exception ignored) {}
             }
 
-            String clinicName = appointmentId.startsWith("INOV-") ? "Inovare – Serviços de Saúde" : "Clínica Da Imagem - Unidade Inovare";
+            String docName = (patient.getDoctorName() != null && !patient.getDoctorName().isBlank())
+                    ? patient.getDoctorName()
+                    : (appointmentId.startsWith("INOV-") ? "Inovare – Serviços de Saúde" : "Clínica Da Imagem - Unidade Inovare");
 
             return new FeegowPatientAccessInfo(
                 patient.getAppointmentId(),
@@ -652,7 +668,7 @@ public class AccessService {
                 appDate,
                 LocalTime.of(8, 0),
                 null,
-                clinicName,
+                docName,
                 ""
             );
         }
@@ -874,7 +890,8 @@ public class AccessService {
                                 existing.get(0).getAccessCredential(),
                                 existing.get(0).getLocator(),
                                 appointmentId,
-                                null
+                                null,
+                                doctorName
                             );
                         }
                     }
@@ -937,6 +954,9 @@ public class AccessService {
             if (cleanSelfPhone != null) {
                 patientCred.setPhone(cleanSelfPhone);
             }
+            if (doctorName != null && !doctorName.isBlank()) {
+                patientCred.setDoctorName(doctorName.trim());
+            }
             patientCred.setAccessCredential(credentialValue);
             patientCred.setLocator(locatorValue);
             patientCred.setCreatedAt(LocalDateTime.now(CLINIC_ZONE));
@@ -946,6 +966,7 @@ public class AccessService {
                     .name(name.trim().toUpperCase())
                     .cpf(cleanCpf)
                     .phone(cleanSelfPhone)
+                    .doctorName(doctorName != null ? doctorName.trim() : null)
                     .userType(UserType.PATIENT)
                     .accessCredential(credentialValue)
                     .locator(locatorValue)
@@ -970,7 +991,8 @@ public class AccessService {
                             credentialValue,
                             locatorValue,
                             appointmentId,
-                            null
+                            null,
+                            doctorName
                         );
                     } catch (Exception e) {
                         log.warn("[AccessService] Erro ao cadastrar acompanhante '{}' no auto-cadastro {}: {}", comp.name(), clinic, e.getMessage());
