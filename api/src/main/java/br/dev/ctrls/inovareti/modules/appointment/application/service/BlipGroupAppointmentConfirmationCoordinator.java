@@ -178,7 +178,12 @@ public class BlipGroupAppointmentConfirmationCoordinator {
         if (session.getId() != null) {
             sessoesUnicas.put(session.getId(), session);
         }
-        return new ArrayList<>(sessoesUnicas.values());
+        List<AppointmentSession> result = new ArrayList<>(sessoesUnicas.values());
+        result.sort(Comparator.comparing(
+            AppointmentSession::getAppointmentAt,
+            Comparator.nullsLast(Comparator.naturalOrder())
+        ));
+        return result;
     }
 
     private String resolveTargetQueue(List<AppointmentSession> listaSessoes) {
