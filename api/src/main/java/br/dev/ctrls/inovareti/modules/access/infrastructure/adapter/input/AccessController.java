@@ -581,28 +581,35 @@ public class AccessController {
             String itemClosesAt = finalClosesAt;
 
             // Se for um agendamento diferente do principal, busca as informações específicas de data/hora/médico
-            if (!c.getAppointmentId().equalsIgnoreCase(idAgendamento) && !c.getAccessCredential().equals("CPF_MISSING")) {
+            if (!c.getAppointmentId().equalsIgnoreCase(idAgendamento) && !"CPF_MISSING".equals(c.getAccessCredential())) {
                 try {
-                    FeegowPatientAccessInfo specificInfo;
+                    FeegowPatientAccessInfo specificInfo = null;
                     if (challengeCache.containsKey(c.getAppointmentId())) {
                         specificInfo = challengeCache.get(c.getAppointmentId());
                     } else {
-                        specificInfo = accessService.validateAccessChallenge(c.getAppointmentId(), phoneDigits, token);
-                        challengeCache.put(c.getAppointmentId(), specificInfo);
-                    }
-                    if (specificInfo.appointmentDate() != null) {
-                        if (specificInfo.appointmentTime() != null) {
-                            itemAppointmentDateTime = LocalDateTime.of(specificInfo.appointmentDate(), specificInfo.appointmentTime())
-                                    .format(DATE_TIME_FORMATTER);
-                            LocalTime openingTime = specificInfo.appointmentTime().minusMinutes(120);
-                            itemOpensAt = openingTime.format(TIME_FORMATTER);
-                        } else {
-                            itemAppointmentDateTime = specificInfo.appointmentDate().format(DATE_FORMATTER);
-                            itemOpensAt = "08:00";
+                        // O paciente já está autenticado pelo agendamento principal da requisição.
+                        // Para os demais agendamentos do mesmo paciente, buscamos os dados no Feegow diretamente sem revalidar o Magic Token (que pertence ao agendamento principal).
+                        var optInfo = feegowClientPort.fetchPatientAccessInfo(c.getAppointmentId());
+                        if (optInfo.isPresent()) {
+                            specificInfo = optInfo.get();
+                            challengeCache.put(c.getAppointmentId(), specificInfo);
                         }
                     }
-                    if (specificInfo.doctorName() != null) {
-                        itemDoctorName = specificInfo.doctorName();
+                    if (specificInfo != null) {
+                        if (specificInfo.appointmentDate() != null) {
+                            if (specificInfo.appointmentTime() != null) {
+                                itemAppointmentDateTime = LocalDateTime.of(specificInfo.appointmentDate(), specificInfo.appointmentTime())
+                                        .format(DATE_TIME_FORMATTER);
+                                LocalTime openingTime = specificInfo.appointmentTime().minusMinutes(120);
+                                itemOpensAt = openingTime.format(TIME_FORMATTER);
+                            } else {
+                                itemAppointmentDateTime = specificInfo.appointmentDate().format(DATE_FORMATTER);
+                                itemOpensAt = "08:00";
+                            }
+                        }
+                        if (specificInfo.doctorName() != null && !specificInfo.doctorName().isBlank()) {
+                            itemDoctorName = specificInfo.doctorName();
+                        }
                     }
                 } catch (Exception ex) {
                     log.warn("[AccessControl] Não foi possível obter detalhes específicos para o agendamento do grupo {}: {}", c.getAppointmentId(), ex.getMessage());
