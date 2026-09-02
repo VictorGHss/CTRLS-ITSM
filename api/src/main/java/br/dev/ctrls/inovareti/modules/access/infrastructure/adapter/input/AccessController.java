@@ -179,6 +179,8 @@ public class AccessController {
                 request.phone(),
                 request.birthDate(),
                 request.clinic(),
+                request.visitDate(),
+                request.doctorName(),
                 domainCompanions
             );
 
@@ -186,9 +188,15 @@ public class AccessController {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", "Falha ao gerar credencial"));
             }
 
-            String clinicName = (request.clinic() != null && request.clinic().toLowerCase().contains("inovare"))
-                ? "Inovare – Serviços de Saúde"
-                : "Clínica Da Imagem - Unidade Inovare";
+            String firstAppId = !credentials.isEmpty() ? credentials.get(0).getAppointmentId() : "";
+            boolean isInovare = (request.clinic() != null && request.clinic().toLowerCase().contains("inovare"))
+                    || (firstAppId != null && firstAppId.startsWith("INOV-"));
+
+            String resolvedDoctorName = (request.doctorName() != null && !request.doctorName().isBlank())
+                ? request.doctorName().trim()
+                : (isInovare ? "Inovare – Serviços de Saúde" : "Clínica Da Imagem - Unidade Inovare");
+
+            final String appointmentDateDisplay = resolveDisplayDate(firstAppId);
 
             List<AccessCredentialResponse> responseList = credentials.stream()
                 .map(cred -> new AccessCredentialResponse(
@@ -198,8 +206,8 @@ public class AccessController {
                     cred.getLocator(),
                     cred.getAccessCredential(),
                     cred.getCpf(),
-                    clinicName,
-                    "Hoje",
+                    resolvedDoctorName,
+                    appointmentDateDisplay,
                     "06:00",
                     "23:59"
                 ))
@@ -229,6 +237,14 @@ public class AccessController {
                     .body(Map.of("message", "Nenhum cadastro ativo encontrado para este CPF hoje."));
             }
 
+            String firstAppId = !credentials.isEmpty() ? credentials.get(0).getAppointmentId() : "";
+            boolean isInovare = (request.clinic() != null && request.clinic().toLowerCase().contains("inovare"))
+                    || (firstAppId != null && firstAppId.startsWith("INOV-"));
+
+            String resolvedDoctorName = isInovare ? "Inovare – Serviços de Saúde" : "Clínica Da Imagem - Unidade Inovare";
+
+            final String appointmentDateDisplay = resolveDisplayDate(firstAppId);
+
             List<AccessCredentialResponse> responseList = credentials.stream()
                 .map(cred -> new AccessCredentialResponse(
                     cred.getAppointmentId(),
@@ -237,8 +253,8 @@ public class AccessController {
                     cred.getLocator(),
                     cred.getAccessCredential(),
                     cred.getCpf(),
-                    "Clínica Da Imagem - Unidade Inovare",
-                    "Hoje",
+                    resolvedDoctorName,
+                    appointmentDateDisplay,
                     "06:00",
                     "23:59"
                 ))
@@ -522,16 +538,19 @@ public class AccessController {
             credentials.addAll(appCreds);
         }
 
-        // FILTRO DE HOJE: se o paciente possui credenciais geradas hoje sob o mesmo CPF, exibe as de hoje
+        // FILTRO DE HOJE: se o paciente possui credenciais geradas hoje sob o mesmo CPF, exibe as de hoje (apenas para agendamentos convencionais)
         try {
             LocalDate todayDate = LocalDate.now(CLINIC_ZONE);
-            boolean hasTodayCredentials = credentials.stream()
-                    .anyMatch(c -> c.getCreatedAt() != null && c.getCreatedAt().toLocalDate().equals(todayDate));
-            if (hasTodayCredentials) {
-                credentials = credentials.stream()
-                        .filter(c -> c.getCreatedAt() != null && c.getCreatedAt().toLocalDate().equals(todayDate))
-                        .collect(Collectors.toList());
-                log.info("[AccessControl] Filtro de hoje aplicado. Retornando apenas as credenciais geradas hoje.");
+            boolean isAutoCheckin = idAgendamento != null && (idAgendamento.startsWith("INOV-") || idAgendamento.startsWith("IMG-"));
+            if (!isAutoCheckin) {
+                boolean hasTodayCredentials = credentials.stream()
+                        .anyMatch(c -> c.getCreatedAt() != null && c.getCreatedAt().toLocalDate().equals(todayDate));
+                if (hasTodayCredentials) {
+                    credentials = credentials.stream()
+                            .filter(c -> c.getCreatedAt() != null && c.getCreatedAt().toLocalDate().equals(todayDate))
+                            .collect(Collectors.toList());
+                    log.info("[AccessControl] Filtro de hoje aplicado. Retornando apenas as credenciais geradas hoje.");
+                }
             }
         } catch (Exception ex) {
             log.warn("[AccessControl] Erro ao aplicar filtro de hoje nas credenciais: {}", ex.getMessage());
@@ -616,6 +635,13 @@ public class AccessController {
                 }
             }
 
+            if (c.getAppointmentId() != null && (c.getAppointmentId().startsWith("INOV-") || c.getAppointmentId().startsWith("IMG-"))) {
+                if (itemDoctorName == null || itemDoctorName.isBlank()) {
+                    itemDoctorName = c.getAppointmentId().startsWith("INOV-") ? "Inovare – Serviços de Saúde" : "Clínica Da Imagem - Unidade Inovare";
+                }
+                itemAppointmentDateTime = resolveDisplayDate(c.getAppointmentId());
+            }
+
             // Validação de janela de tempo para liberação de exibição do QR Code no frontend
             LocalDate todayDate = LocalDate.now(CLINIC_ZONE);
             LocalDate itemDate = null;
@@ -636,10 +662,11 @@ public class AccessController {
             }
             
             boolean isItemToday = itemDate != null && todayDate.equals(itemDate);
-            // No dia da consulta, o QR Code NUNCA deve ser bloqueado na tela!
-            // O paciente deve ter seu QR Code sempre visivel e ativo durante o dia do atendimento.
+            // No dia da consulta ou em auto-cadastros, o QR Code NUNCA deve ser bloqueado na tela!
             boolean isItemReleased = isItemToday;
-            if (!isItemToday && itemDate != null) {
+            if (c.getAppointmentId() != null && (c.getAppointmentId().startsWith("INOV-") || c.getAppointmentId().startsWith("IMG-"))) {
+                isItemReleased = true;
+            } else if (!isItemToday && itemDate != null) {
                 // Se for em data futura (amanha, semana que vem) ou passada, bloqueia exibicao
                 isItemReleased = false;
             }
@@ -684,5 +711,23 @@ public class AccessController {
             "token", token,
             "accessUrl", accessUrl
         ));
+    }
+
+    private String resolveDisplayDate(String appointmentId) {
+        if (appointmentId != null && appointmentId.length() >= 13 && (appointmentId.startsWith("INOV-") || appointmentId.startsWith("IMG-"))) {
+            try {
+                String datePart = appointmentId.substring(5, 13);
+                LocalDate parsedDate = LocalDate.parse(datePart, DateTimeFormatter.ofPattern("yyyyMMdd"));
+                LocalDate today = LocalDate.now(CLINIC_ZONE);
+                if (parsedDate.equals(today)) {
+                    return "Hoje";
+                } else if (parsedDate.equals(today.plusDays(1))) {
+                    return "Amanhã (" + parsedDate.format(DateTimeFormatter.ofPattern("dd/MM")) + ")";
+                } else {
+                    return parsedDate.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"));
+                }
+            } catch (Exception ignored) {}
+        }
+        return "Hoje";
     }
 }
