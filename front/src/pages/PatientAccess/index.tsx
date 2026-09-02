@@ -45,15 +45,15 @@ export default function PatientAccess() {
   const [cpfSubmitLoading, setCpfSubmitLoading] = useState<boolean>(false);
   const [cpfSubmitError, setCpfSubmitError] = useState<string | null>(null);
 
-  // --- Cadastro de Acompanhantes ---
+  // --- Cadastro de Acompanhantes e Reativação ---
   const [isCompanionModalOpen, setIsCompanionModalOpen] = useState<boolean>(false);
   const [companionName, setCompanionName] = useState<string>('');
   const [companionCpf, setCompanionCpf] = useState<string>('');
   const [companionBirthDate, setCompanionBirthDate] = useState<string>('');
   const [companionSubmitLoading, setCompanionSubmitLoading] = useState<boolean>(false);
   const [companionSubmitError, setCompanionSubmitError] = useState<string | null>(null);
+  const [isReactivating, setIsReactivating] = useState<boolean>(false);
 
-  // Screen Wake Lock API: impede que o ecrã do telemóvel apague enquanto o QR Code está em tela cheia
   // Screen Wake Lock API: impede que o ecrã do telemóvel apague enquanto o QR Code está em tela cheia
   useEffect(() => {
     let activeLock: WakeLockSentinel | null = null;
@@ -78,6 +78,9 @@ export default function PatientAccess() {
     };
   }, [fullscreenCard]);
 
+  const isPublicRoute = clinicTheme.id === 'imagem' || clinicTheme.id === 'inovare' || appointmentId === 'imagem' || appointmentId === 'inovare';
+  const defaultPrefix = clinicTheme.id === 'inovare' ? 'INOV-' : 'IMG-';
+
   const saveCredentialsWithOfflineCache = (
     data: AccessCredential[],
     authInfo?: { token?: string; phoneDigits?: string }
@@ -85,18 +88,18 @@ export default function PatientAccess() {
     // Garante que todas as credenciais possuam appointmentId definido
     const normalizedData = (data || []).map(c => ({
       ...c,
-      appointmentId: (c.appointmentId && c.appointmentId !== 'imagem')
+      appointmentId: (c.appointmentId && c.appointmentId !== 'imagem' && c.appointmentId !== 'inovare')
         ? c.appointmentId
-        : (appointmentId && appointmentId !== 'imagem')
+        : (appointmentId && appointmentId !== 'imagem' && appointmentId !== 'inovare')
           ? appointmentId
-          : (c.cpf ? `IMG-${c.cpf.replace(/\D/g, '')}` : undefined)
+          : (c.cpf ? `${defaultPrefix}${c.cpf.replace(/\D/g, '')}` : undefined)
     }));
 
     setCredentials(normalizedData);
     setIsVerified(true);
     if (normalizedData.length > 0) {
       try {
-        if (appointmentId && appointmentId !== 'imagem') {
+        if (appointmentId && appointmentId !== 'imagem' && appointmentId !== 'inovare') {
           localStorage.setItem(`patient_access_credentials_${appointmentId}`, JSON.stringify(normalizedData));
           if (authInfo?.token) {
             localStorage.setItem(`patient_access_token_${appointmentId}`, authInfo.token);
@@ -105,10 +108,10 @@ export default function PatientAccess() {
             localStorage.setItem(`patient_access_phone_${appointmentId}`, authInfo.phoneDigits);
           }
         }
-        // Se for Clínica da Imagem, salva também no cache permanente da Imagem com a data de emissão
-        if (clinicTheme.id === 'imagem' || appointmentId === 'imagem') {
+        // Se for auto-cadastro público (Imagem ou Inovare), salva também no cache permanente do tema com a data de emissão
+        if (isPublicRoute) {
           const todayStr = new Date().toLocaleDateString('sv-SE'); // 'YYYY-MM-DD'
-          localStorage.setItem('patient_access_imagem_last_credentials', JSON.stringify({
+          localStorage.setItem(`patient_access_${clinicTheme.id}_last_credentials`, JSON.stringify({
             savedDate: todayStr,
             credentials: normalizedData
           }));
@@ -121,8 +124,10 @@ export default function PatientAccess() {
 
   const handleResetAccess = () => {
     try {
+      localStorage.removeItem(`patient_access_${clinicTheme.id}_last_credentials`);
       localStorage.removeItem('patient_access_imagem_last_credentials');
-      if (appointmentId && appointmentId !== 'imagem') {
+      localStorage.removeItem('patient_access_inovare_last_credentials');
+      if (appointmentId && appointmentId !== 'imagem' && appointmentId !== 'inovare') {
         localStorage.removeItem(`patient_access_credentials_${appointmentId}`);
         localStorage.removeItem(`patient_access_token_${appointmentId}`);
         localStorage.removeItem(`patient_access_phone_${appointmentId}`);
@@ -135,7 +140,7 @@ export default function PatientAccess() {
   };
 
   const refreshCredentials = async (silent = false) => {
-    if (!appointmentId || appointmentId === 'imagem') return;
+    if (!appointmentId || appointmentId === 'imagem' || appointmentId === 'inovare') return;
     const params = new URLSearchParams(window.location.search);
     const token = (params.get('t') || params.get('token') || verifiedToken || localStorage.getItem(`patient_access_token_${appointmentId}`) || '').trim();
     const phoneDigits = (params.get('p') || params.get('auth') || verifiedPhoneDigits || localStorage.getItem(`patient_access_phone_${appointmentId}`) || '').trim();
@@ -170,7 +175,7 @@ export default function PatientAccess() {
 
   // Desbloqueio automático via Magic Link (?t=...) ou parâmetro de telefone (?p=...)
   useEffect(() => {
-    if (!appointmentId || appointmentId === 'imagem') return;
+    if (!appointmentId || appointmentId === 'imagem' || appointmentId === 'inovare') return;
     const params = new URLSearchParams(window.location.search);
     const tokenParam = (params.get('t') || params.get('token') || '').trim();
     const phoneDigitsParam = (params.get('p') || params.get('auth') || '').trim();
@@ -183,11 +188,11 @@ export default function PatientAccess() {
   // Recupera credenciais em cache local (PWA Offline-First) com Revalidação em Background
   useEffect(() => {
     try {
-      const isImagemRoute = clinicTheme.id === 'imagem' || appointmentId === 'imagem';
       const todayStr = new Date().toLocaleDateString('sv-SE'); // 'YYYY-MM-DD'
 
-      if (isImagemRoute) {
-        const cachedRaw = localStorage.getItem('patient_access_imagem_last_credentials');
+      if (isPublicRoute) {
+        const cacheKey = `patient_access_${clinicTheme.id}_last_credentials`;
+        const cachedRaw = localStorage.getItem(cacheKey) || (clinicTheme.id === 'imagem' ? localStorage.getItem('patient_access_imagem_last_credentials') : null);
         if (cachedRaw) {
           try {
             const parsed = JSON.parse(cachedRaw);
@@ -203,26 +208,26 @@ export default function PatientAccess() {
 
             // Se o cache for de um dia anterior, expira e limpa para exigir novo cadastro hoje
             if (savedDate && savedDate !== todayStr) {
-              console.log(`[PatientAccess] Cache da Clínica da Imagem é de outro dia (${savedDate}). Expirando para nova emissão.`);
-              localStorage.removeItem('patient_access_imagem_last_credentials');
+              console.log(`[PatientAccess] Cache de auto-cadastro (${clinicTheme.id}) é de outro dia (${savedDate}). Expirando para nova emissão.`);
+              localStorage.removeItem(cacheKey);
               setCredentials([]);
               setIsVerified(false);
               return;
             }
 
             if (creds.length > 0) {
-              console.log('[PatientAccess] Credenciais da Clínica da Imagem de hoje restauradas do cache');
+              console.log(`[PatientAccess] Credenciais (${clinicTheme.id}) de hoje restauradas do cache`);
               setCredentials(creds);
               setIsVerified(true);
             }
           } catch {
-            localStorage.removeItem('patient_access_imagem_last_credentials');
+            localStorage.removeItem(cacheKey);
           }
         }
         return;
       }
 
-      if (appointmentId && appointmentId !== 'imagem') {
+      if (appointmentId && appointmentId !== 'imagem' && appointmentId !== 'inovare') {
         const key = `patient_access_credentials_${appointmentId}`;
         const cached = localStorage.getItem(key);
         if (cached) {
@@ -254,7 +259,7 @@ export default function PatientAccess() {
     } catch {
       // Ignora falhas de leitura do localStorage
     }
-  }, [appointmentId, clinicTheme.id]);
+  }, [appointmentId, clinicTheme.id, isPublicRoute]);
 
   // Auto-refresh inteligente: revalida quando o app volta para o primeiro plano ou quando há cartões bloqueados
   useEffect(() => {
@@ -473,14 +478,14 @@ export default function PatientAccess() {
   };
 
   const getActiveAppointmentId = (): string | undefined => {
-    if (appointmentId && appointmentId !== 'imagem') {
+    if (appointmentId && appointmentId !== 'imagem' && appointmentId !== 'inovare') {
       return appointmentId;
     }
-    const fromCred = credentials.find(c => c.appointmentId && c.appointmentId !== 'imagem')?.appointmentId;
+    const fromCred = credentials.find(c => c.appointmentId && c.appointmentId !== 'imagem' && c.appointmentId !== 'inovare')?.appointmentId;
     if (fromCred) return fromCred;
     const patientCred = credentials.find(c => c.userType === 'PATIENT' && c.cpf) || credentials.find(c => c.cpf);
     if (patientCred?.cpf) {
-      return `IMG-${patientCred.cpf.replace(/\D/g, '')}`;
+      return `${defaultPrefix}${patientCred.cpf.replace(/\D/g, '')}`;
     }
     return undefined;
   };
@@ -528,7 +533,7 @@ export default function PatientAccess() {
           : '';
 
       const url = query 
-        ? `/v1/access/credentials/${targetAppointmentId}?${query}`
+        ? `/v1/access/credentials/${targetAppointmentId}?${query}` 
         : `/v1/access/credentials/${targetAppointmentId}`;
 
       const response = await api.get<AccessCredential[]>(
@@ -539,31 +544,32 @@ export default function PatientAccess() {
           }
         }
       );
-      const newCreds = response.data || [];
-      saveCredentialsWithOfflineCache(newCreds, { token: verifiedToken, phoneDigits: verifiedPhoneDigits });
-      setIsCompanionModalOpen(false);
-      setCompanionName('');
-      setCompanionCpf('');
-      setCompanionBirthDate('');
 
-      if (newCreds.length > 1) {
-        setTimeout(() => scrollToCard(newCreds.length - 1), 300);
+      if (response.data && response.data.length > 0) {
+        saveCredentialsWithOfflineCache(response.data, { token: verifiedToken, phoneDigits: verifiedPhoneDigits });
+        setIsCompanionModalOpen(false);
+        setCompanionName('');
+        setCompanionCpf('');
+        setCompanionBirthDate('');
+        setTimeout(() => {
+          scrollToCard(response.data.length - 1);
+        }, 300);
+      } else {
+        setCompanionSubmitError('Acompanhante cadastrado, mas não foi possível recarregar a lista.');
       }
     } catch (err: unknown) {
       console.error('[PatientAccess] Falha ao cadastrar acompanhante:', err);
-      setCompanionSubmitError('Ocorreu um erro ao cadastrar o acompanhante. Tente novamente.');
+      setCompanionSubmitError('Erro ao cadastrar acompanhante. Tente novamente.');
     } finally {
       setCompanionSubmitLoading(false);
     }
   };
 
-  const [isReactivating, setIsReactivating] = useState<boolean>(false);
-
   const handleReactivateAccess = async () => {
     const targetAppointmentId = getActiveAppointmentId();
 
     if (!targetAppointmentId) {
-      alert('Não foi possível identificar seu cadastro para reativação. Por favor, recarregue a página.');
+      console.warn('[PatientAccess] Não foi possível reativar: ID do agendamento ausente.');
       return;
     }
 
@@ -582,11 +588,9 @@ export default function PatientAccess() {
 
       if (response.data && response.data.length > 0) {
         saveCredentialsWithOfflineCache(response.data, { token: verifiedToken, phoneDigits: verifiedPhoneDigits });
-        alert('✅ Acesso reativado com sucesso! Seu novo QR Code já está pronto para passar na catraca.');
       }
     } catch (err: unknown) {
       console.error('[PatientAccess] Falha ao reativar acesso:', err);
-      alert('Não foi possível reativar o acesso no momento. Por favor, tente novamente ou informe seu nome na recepção.');
     } finally {
       setIsReactivating(false);
     }
@@ -604,16 +608,16 @@ export default function PatientAccess() {
   };
 
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
-    const container = e.currentTarget;
-    const scrollLeft = container.scrollLeft;
-    const width = container.clientWidth;
+    const target = e.currentTarget;
+    const scrollLeft = target.scrollLeft;
+    const width = target.clientWidth;
     const index = Math.round(scrollLeft / (width * 0.85));
     setActiveCardIndex(Math.min(Math.max(index, 0), credentials.length - 1));
   };
 
   // === TELA DE AUTO-CHECKIN OU DESAFIO DE IDENTIDADE (2FA) ===
   if (!isVerified) {
-    if (clinicTheme.id === 'imagem' || appointmentId === 'imagem') {
+    if (isPublicRoute) {
       return (
         <div className="min-h-screen bg-slate-100 flex flex-col justify-between font-sans antialiased">
           <title>Pré-Cadastro — {clinicTheme.shortName}</title>
@@ -625,11 +629,17 @@ export default function PatientAccess() {
                 alt={clinicTheme.name} 
                 className="h-10 w-auto object-contain mx-auto max-h-10"
                 onError={(e) => {
-                  e.currentTarget.src = 'https://placehold.co/180x60/b8004b/ffffff?text=Cl%C3%ADnica+da+Imagem';
+                  e.currentTarget.src = clinicTheme.id === 'imagem'
+                    ? 'https://placehold.co/180x60/b8004b/ffffff?text=Cl%C3%ADnica+da+Imagem'
+                    : 'https://placehold.co/180x60/00875f/ffffff?text=Inovare';
                 }}
               />
             </header>
-            <main className="flex-1 px-4 sm:px-6 py-8 space-y-6 overflow-y-auto bg-gradient-to-b from-white via-rose-50/20 to-slate-50">
+            <main className={`flex-1 px-4 sm:px-6 py-8 space-y-6 overflow-y-auto ${
+              clinicTheme.id === 'imagem'
+                ? 'bg-gradient-to-b from-white via-rose-50/20 to-slate-50'
+                : 'bg-gradient-to-b from-white via-emerald-50/20 to-slate-50'
+            }`}>
               <SelfRegistrationForm
                 clinicTheme={clinicTheme}
                 onSuccess={(creds, authInfo) => {
