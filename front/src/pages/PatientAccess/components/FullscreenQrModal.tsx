@@ -124,7 +124,6 @@ export const FullscreenQrModal: React.FC<FullscreenQrModalProps> = ({
             }}
           />
         </div>
-        <span className="text-[10.5px] font-mono text-slate-400 mt-2 font-semibold">Trava anti-bloqueio de tela ativada</span>
       </div>
 
       <button 
