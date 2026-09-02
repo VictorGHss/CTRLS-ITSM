@@ -149,15 +149,28 @@ public class AccessController {
         log.info("[AccessControl] Auto-cadastro público recebido: Nome={}, CPF={}, Clínica={}", 
                 request.name(), request.cpf(), request.clinic());
         try {
-            CompanionAccessInfo domainCompanion = null;
+            List<CompanionAccessInfo> domainCompanions = new ArrayList<>();
             if (request.companion() != null && request.companion().name() != null && !request.companion().name().isBlank()) {
-                domainCompanion = new CompanionAccessInfo(
+                domainCompanions.add(new CompanionAccessInfo(
                     request.companion().name(),
                     request.companion().cpf(),
                     request.companion().phone(),
                     null,
                     request.companion().birthDate()
-                );
+                ));
+            }
+            if (request.companions() != null) {
+                for (var c : request.companions()) {
+                    if (c != null && c.name() != null && !c.name().isBlank()) {
+                        domainCompanions.add(new CompanionAccessInfo(
+                            c.name(),
+                            c.cpf(),
+                            c.phone(),
+                            null,
+                            c.birthDate()
+                        ));
+                    }
+                }
             }
 
             List<AccessCredential> credentials = accessService.processSelfRegistration(
@@ -166,7 +179,7 @@ public class AccessController {
                 request.phone(),
                 request.birthDate(),
                 request.clinic(),
-                domainCompanion
+                domainCompanions
             );
 
             if (credentials.isEmpty()) {

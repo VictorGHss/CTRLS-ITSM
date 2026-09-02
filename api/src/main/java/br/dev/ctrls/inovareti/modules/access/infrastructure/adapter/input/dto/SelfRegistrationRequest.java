@@ -2,6 +2,7 @@ package br.dev.ctrls.inovareti.modules.access.infrastructure.adapter.input.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
+import java.util.List;
 
 public record SelfRegistrationRequest(
     @NotBlank(message = "O nome do paciente é obrigatório")
@@ -17,5 +18,7 @@ public record SelfRegistrationRequest(
 
     String clinic,
 
-    CompanionRequest companion
+    CompanionRequest companion,
+
+    List<CompanionRequest> companions
 ) {}
