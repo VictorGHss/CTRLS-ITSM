@@ -18,6 +18,10 @@ public record SelfRegistrationRequest(
 
     String clinic,
 
+    String visitDate,
+
+    String doctorName,
+
     CompanionRequest companion,
 
     List<CompanionRequest> companions

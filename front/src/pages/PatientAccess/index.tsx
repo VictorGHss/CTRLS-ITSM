@@ -108,11 +108,20 @@ export default function PatientAccess() {
             localStorage.setItem(`patient_access_phone_${appointmentId}`, authInfo.phoneDigits);
           }
         }
-        // Se for auto-cadastro público (Imagem ou Inovare), salva também no cache permanente do tema com a data de emissão
+        // Se for auto-cadastro público (Imagem ou Inovare), salva também no cache permanente do tema com a data de emissão e data alvo
         if (isPublicRoute) {
           const todayStr = new Date().toLocaleDateString('sv-SE'); // 'YYYY-MM-DD'
+          let targetDate = todayStr;
+          const firstAppId = normalizedData[0]?.appointmentId;
+          if (firstAppId && firstAppId.length >= 13 && (firstAppId.startsWith('INOV-') || firstAppId.startsWith('IMG-'))) {
+            const y = firstAppId.substring(5, 9);
+            const m = firstAppId.substring(9, 11);
+            const d = firstAppId.substring(11, 13);
+            targetDate = `${y}-${m}-${d}`;
+          }
           localStorage.setItem(`patient_access_${clinicTheme.id}_last_credentials`, JSON.stringify({
             savedDate: todayStr,
+            targetDate: targetDate,
             credentials: normalizedData
           }));
         }
@@ -206,9 +215,10 @@ export default function PatientAccess() {
               creds = parsed;
             }
 
-            // Se o cache for de um dia anterior, expira e limpa para exigir novo cadastro hoje
-            if (savedDate && savedDate !== todayStr) {
-              console.log(`[PatientAccess] Cache de auto-cadastro (${clinicTheme.id}) é de outro dia (${savedDate}). Expirando para nova emissão.`);
+            // Expira o cache APENAS se a data do agendamento/consulta já tiver passado (anterior a hoje)
+            const effectiveDate = parsed.targetDate || savedDate;
+            if (effectiveDate && effectiveDate < todayStr) {
+              console.log(`[PatientAccess] Cache de auto-cadastro (${clinicTheme.id}) expirado pois a consulta era em (${effectiveDate}). Expirando para nova emissão.`);
               localStorage.removeItem(cacheKey);
               setCredentials([]);
               setIsVerified(false);

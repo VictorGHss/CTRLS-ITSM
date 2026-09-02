@@ -25,6 +25,21 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
   const [phone, setPhone] = useState('');
   const [birthDate, setBirthDate] = useState('');
 
+  // Estados de Data da Consulta / Visita
+  const today = new Date();
+  const tomorrow = new Date();
+  tomorrow.setDate(today.getDate() + 1);
+
+  const toISODate = (d: Date) => d.toLocaleDateString('sv-SE'); // YYYY-MM-DD
+  const formatPillDate = (d: Date) => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+
+  const [dateSelection, setDateSelection] = useState<'today' | 'tomorrow' | 'custom'>('today');
+  const [customDate, setCustomDate] = useState<string>('');
+
+  // Especialidade / Médico (Opcional)
+  const [specialty, setSpecialty] = useState<string>(clinicTheme.id === 'inovare' ? 'Ginecologia' : '');
+  const [customDoctor, setCustomDoctor] = useState<string>('');
+
   // Acompanhantes (Múltiplos / Ilimitados)
   const [hasCompanion, setHasCompanion] = useState(false);
   const [companions, setCompanions] = useState<CompanionEntry[]>([
@@ -126,6 +141,24 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
       }
     }
 
+    let finalVisitDate = toISODate(today);
+    if (dateSelection === 'tomorrow') {
+      finalVisitDate = toISODate(tomorrow);
+    } else if (dateSelection === 'custom') {
+      if (!customDate) {
+        setErrorMessage('Por favor, selecione a data da consulta.');
+        return;
+      }
+      finalVisitDate = customDate;
+    }
+
+    let finalDoctorName: string | undefined = undefined;
+    if (specialty === 'custom') {
+      finalDoctorName = customDoctor.trim() || undefined;
+    } else if (specialty) {
+      finalDoctorName = specialty;
+    }
+
     setLoading(true);
 
     try {
@@ -135,6 +168,8 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
         phone: phone.replace(/\D/g, ''),
         birthDate: birthDate,
         clinic: clinicTheme.id,
+        visitDate: finalVisitDate,
+        doctorName: finalDoctorName,
         companion: companionsPayload.length > 0 ? companionsPayload[0] : undefined,
         companions: companionsPayload.length > 0 ? companionsPayload : undefined
       };
@@ -295,6 +330,95 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
                 className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-semibold text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 transition-all font-mono"
               />
             </div>
+
+            {/* Seleção de Data da Consulta / Atendimento */}
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                Data da Consulta / Atendimento *
+              </label>
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setDateSelection('today')}
+                  className={`py-2 px-1 rounded-xl text-xs font-bold transition-all border text-center ${
+                    dateSelection === 'today'
+                      ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
+                      : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                  }`}
+                >
+                  Hoje ({formatPillDate(today)})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDateSelection('tomorrow')}
+                  className={`py-2 px-1 rounded-xl text-xs font-bold transition-all border text-center ${
+                    dateSelection === 'tomorrow'
+                      ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
+                      : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                  }`}
+                >
+                  Amanhã ({formatPillDate(tomorrow)})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDateSelection('custom')}
+                  className={`py-2 px-1 rounded-xl text-xs font-bold transition-all border text-center ${
+                    dateSelection === 'custom'
+                      ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
+                      : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                  }`}
+                >
+                  Outra data
+                </button>
+              </div>
+
+              {dateSelection === 'custom' && (
+                <div className="mt-2.5">
+                  <input
+                    type="date"
+                    required
+                    min={toISODate(today)}
+                    value={customDate}
+                    onChange={(e) => setCustomDate(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-800 focus:bg-white focus:outline-none focus:ring-2 transition-all"
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Seleção de Especialidade / Setor */}
+            {clinicTheme.id === 'inovare' && (
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                  <User className="w-3.5 h-3.5 text-slate-400" />
+                  Especialidade / Setor <span className="text-[10px] text-slate-400 font-normal">(opcional)</span>
+                </label>
+                <select
+                  value={specialty}
+                  onChange={(e) => setSpecialty(e.target.value)}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-800 focus:bg-white focus:outline-none focus:ring-2 transition-all"
+                >
+                  <option value="Ginecologia">Ginecologia (3º Andar)</option>
+                  <option value="Ortopedia">Ortopedia (3º Andar - Direita)</option>
+                  <option value="Oftalmologia">Oftalmologia (2º Andar)</option>
+                  <option value="">Recepção Central (Geral)</option>
+                  <option value="custom">Outro médico ou especialista...</option>
+                </select>
+
+                {specialty === 'custom' && (
+                  <div className="mt-2">
+                    <input
+                      type="text"
+                      value={customDoctor}
+                      onChange={(e) => setCustomDoctor(e.target.value)}
+                      placeholder="Nome do médico ou especialista"
+                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-semibold text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 transition-all"
+                    />
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-3">
               <div>

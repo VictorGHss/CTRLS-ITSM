@@ -165,6 +165,13 @@ export const DOCTOR_LOCATIONS_MAP: Record<string, string> = {
   "Marina Polydoro": "Recepção de Ortopedia (3º Andar - Direita)",
   "Magno Zanellato": "Recepção de Ortopedia (3º Andar - Direita)",
 
+  // === ESPECIALIDADES E SETORES ===
+  "Ginecologia": "Recepção de Ginecologia (3º Andar)",
+  "Ortopedia": "Recepção de Ortopedia (3º Andar - Direita)",
+  "Oftalmologia": "Recepção de Oftalmologia (2º Andar)",
+  "Inovare – Serviços de Saúde": "1º Andar - Lado Direito",
+  "Inovare": "1º Andar - Lado Direito",
+
   // === TÉRREO ===
   "Daniel Oda": "Térreo — Endoscopia",
   "Danilo Saad": "Térreo — Endoscopia",
