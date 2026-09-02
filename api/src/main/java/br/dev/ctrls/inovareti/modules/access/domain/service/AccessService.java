@@ -285,11 +285,13 @@ public class AccessService {
         log.info("[ACCESS-WINDOW] Janela GerAcesso calculada para a data {}. Acesso físico liberado das {} às {}. Menor consulta: {}.",
             appointmentDate, physicalOpeningTime, closingTime, earliestTime);
 
-        // 7. Unificação de Credencial: verifica se já gerou uma credencial real para este paciente/CPF hoje
-        List<AccessCredential> existingCredentials = accessCredentialRepositoryPort.findByCpf(finalCpf);
-        Optional<AccessCredential> activeCredOpt = existingCredentials.stream()
-            .filter(c -> c.getCreatedAt().toLocalDate().equals(appointmentDate) 
-                      && c.getUserType() == UserType.PATIENT
+        // 7. Verificação de Credencial existente especificamente para este agendamento.
+        // Importante: Não reutilizamos credencial de outro agendamento do mesmo paciente em horários distintos,
+        // pois a catraca da GerAcesso encerra e dá baixa na visita quando o paciente sai do prédio (anti-passback).
+        // Cada agendamento precisa de sua própria credencial com o respectivo médico visitado.
+        List<AccessCredential> existingForThisApp = accessCredentialRepositoryPort.findByAppointmentId(accessInfo.appointmentId());
+        Optional<AccessCredential> activeCredOpt = existingForThisApp.stream()
+            .filter(c -> c.getUserType() == UserType.PATIENT
                       && c.getAccessCredential() != null
                       && !c.getAccessCredential().startsWith("CRED-"))
             .findFirst();
@@ -298,11 +300,11 @@ public class AccessService {
         String locator;
 
         if (activeCredOpt.isPresent()) {
-            // Reutiliza o token e localizador real existente para o dia todo
+            // Reutiliza o token e localizador real existente para este agendamento
             AccessCredential existing = activeCredOpt.get();
             token = existing.getAccessCredential();
             locator = existing.getLocator();
-            log.info("[AccessService] Reutilizando credencial ativa existente para o CPF {}: {}", finalCpf, token);
+            log.info("[AccessService] Reutilizando credencial ativa existente para o agendamento {}: {}", accessInfo.appointmentId(), token);
         } else {
             // Constrói payload de requisição para registrar o Paciente Titular na GerAcesso
             String startVisit = LocalDateTime.of(appointmentDate, physicalOpeningTime).format(GERACESSO_DATE_FORMATTER);
@@ -336,7 +338,7 @@ public class AccessService {
             Optional<GerAcessoResponse> responseOpt = Optional.empty();
 
             if (isCpfValid) {
-                log.info("[AccessService] Enviando cadastro do paciente titular {} para a GerAcesso local...", accessInfo.name());
+                log.info("[AccessService] Enviando cadastro do paciente titular {} para a GerAcesso local (Médico: {})...", accessInfo.name(), accessInfo.doctorName());
                 responseOpt = gerAcessoClientPort.registerAccess(titularRequest);
             } else {
                 log.warn("[GERACESSO-CPF] CPF do paciente ID {} incompleto (CPF: {}). Ativando credencial local contingencial.",
@@ -355,35 +357,33 @@ public class AccessService {
             }
         }
 
-        // 8. Salva o registro no banco mapeando para cada ID de agendamento envolvido
-        for (FeegowAppointment app : matchingAppointments) {
-            List<AccessCredential> savedList = accessCredentialRepositoryPort.findByAppointmentId(app.id());
-            if (savedList.isEmpty()) {
-                AccessCredential credential = AccessCredential.builder()
-                    .appointmentId(app.id())
-                    .name(accessInfo.name())
-                    .cpf(finalCpf)
-                    .userType(UserType.PATIENT)
-                    .accessCredential(token)
-                    .locator(locator)
-                    .createdAt(LocalDateTime.now())
-                    .build();
+        // 8. Salva o registro no banco mapeando para o ID deste agendamento
+        List<AccessCredential> savedList = accessCredentialRepositoryPort.findByAppointmentId(accessInfo.appointmentId());
+        if (savedList.isEmpty()) {
+            AccessCredential credential = AccessCredential.builder()
+                .appointmentId(accessInfo.appointmentId())
+                .name(accessInfo.name())
+                .cpf(finalCpf)
+                .userType(UserType.PATIENT)
+                .accessCredential(token)
+                .locator(locator)
+                .createdAt(LocalDateTime.now())
+                .build();
 
-                accessCredentialRepositoryPort.save(credential);
-                log.info("[AccessService] Credencial associada e salva para o agendamento ID: {}", app.id());
-            } else {
-                // Se já existia e era uma credencial contingencial (CRED-), atualiza para a credencial real do GerAcesso
-                AccessCredential existingCred = savedList.get(0);
-                if (existingCred.getAccessCredential() != null 
-                        && existingCred.getAccessCredential().startsWith("CRED-") 
-                        && !token.startsWith("CRED-")) {
-                    existingCred.setCpf(finalCpf);
-                    existingCred.setAccessCredential(token);
-                    existingCred.setLocator(locator);
-                    existingCred.setCreatedAt(LocalDateTime.now());
-                    accessCredentialRepositoryPort.save(existingCred);
-                    log.info("[AccessService] Atualizando credencial contingencial para credencial GerAcesso real para o agendamento ID: {}", app.id());
-                }
+            accessCredentialRepositoryPort.save(credential);
+            log.info("[AccessService] Credencial associada e salva para o agendamento ID: {}", accessInfo.appointmentId());
+        } else {
+            // Se já existia e era uma credencial contingencial (CRED-), atualiza para a credencial real do GerAcesso
+            AccessCredential existingCred = savedList.get(0);
+            if (existingCred.getAccessCredential() != null 
+                    && existingCred.getAccessCredential().startsWith("CRED-") 
+                    && !token.startsWith("CRED-")) {
+                existingCred.setCpf(finalCpf);
+                existingCred.setAccessCredential(token);
+                existingCred.setLocator(locator);
+                existingCred.setCreatedAt(LocalDateTime.now());
+                accessCredentialRepositoryPort.save(existingCred);
+                log.info("[AccessService] Atualizando credencial contingencial para credencial GerAcesso real para o agendamento ID: {}", accessInfo.appointmentId());
             }
         }
 
@@ -967,6 +967,23 @@ public class AccessService {
             throw new br.dev.ctrls.inovareti.core.shared.domain.model.exception.NotFoundException("Nenhuma credencial encontrada para reativação.");
         }
 
+        // Resolve os dados do médico deste agendamento para enviar à GerAcesso (obrigatório para cadastro de visitante)
+        String matricula = "";
+        String doctorCpf = "";
+        if (appointmentId != null && !appointmentId.startsWith("IMG-") && !appointmentId.startsWith("INOV-")) {
+            try {
+                var accessInfoOpt = feegowClientPort.fetchPatientAccessInfo(appointmentId);
+                if (accessInfoOpt.isPresent() && accessInfoOpt.get().doctorId() != null) {
+                    DoctorAccessData docData = resolveDoctorAccessData(accessInfoOpt.get().doctorId());
+                    matricula = docData.matricula();
+                    doctorCpf = docData.cpf();
+                    log.info("[AccessService] Médico resolvido para reativação: matricula={}, cpf={}", matricula, doctorCpf);
+                }
+            } catch (Exception ex) {
+                log.warn("[AccessService] Não foi possível resolver dados do médico para reativação do agendamento {}: {}", appointmentId, ex.getMessage());
+            }
+        }
+
         LocalDate today = LocalDate.now(CLINIC_ZONE);
         LocalDateTime startWindow = LocalDateTime.now(CLINIC_ZONE);
         LocalDateTime endWindow = LocalDateTime.of(today, LocalTime.of(23, 59));
@@ -984,9 +1001,9 @@ public class AccessService {
                     .startVisit(startVisit)
                     .endVisit(endVisit)
                     .phone("")
-                    .visitType(1)
-                    .visitedRegistration("")
-                    .visitedCpf("")
+                    .visitType(cred.getUserType() == UserType.PATIENT ? 1 : 2)
+                    .visitedRegistration(matricula)
+                    .visitedCpf(doctorCpf)
                     .build();
 
             String newCredentialValue = "CRED-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
