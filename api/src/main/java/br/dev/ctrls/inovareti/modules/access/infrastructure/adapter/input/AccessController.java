@@ -348,6 +348,37 @@ public class AccessController {
                 request.birthDate()
             );
             AccessCredential credential = accessService.registerCompanion(appointmentId, companionInfo);
+
+            // Retorna a lista atualizada de todas as credenciais deste agendamento para o frontend atualizar instantaneamente sem reload
+            List<AccessCredential> allCreds = accessCredentialRepositoryPort.findByAppointmentId(appointmentId);
+            if (allCreds != null && !allCreds.isEmpty()) {
+                String doctorName = "Clínica Inovare";
+                String appDateStr = "Hoje";
+                if (appointmentId.startsWith("IMG-")) {
+                    doctorName = "Clínica Da Imagem - Unidade Inovare";
+                } else if (appointmentId.startsWith("INOV-")) {
+                    doctorName = "Inovare – Serviços de Saúde";
+                }
+                final String finalDoctorName = doctorName;
+                final String finalAppDateStr = appDateStr;
+
+                List<AccessCredentialResponse> responseList = allCreds.stream()
+                    .map(cred -> new AccessCredentialResponse(
+                        cred.getAppointmentId(),
+                        cred.getName(),
+                        cred.getUserType() != null ? cred.getUserType() : UserType.COMPANION,
+                        cred.getLocator(),
+                        cred.getAccessCredential(),
+                        cred.getCpf(),
+                        finalDoctorName,
+                        finalAppDateStr,
+                        "06:00",
+                        "23:00"
+                    ))
+                    .toList();
+                return ResponseEntity.ok(responseList);
+            }
+
             return ResponseEntity.ok(credential);
         } catch (Exception ex) {
             log.error("[AccessControl] Erro ao cadastrar acompanhante para agendamento {}: {}", appointmentId, ex.getMessage(), ex);
@@ -373,6 +404,29 @@ public class AccessController {
             @RequestParam(value = "t", required = false) String token) {
         log.info("[AccessControl] Consulta de credenciais para o agendamento ID: {} (token={}, phoneDigits={})", 
                 idAgendamento, token != null && !token.isBlank() ? "presente" : "ausente", phoneDigits);
+
+        // Se for rota pública ou auto-cadastro (IMG- ou INOV-), busca diretamente do banco sem desafio Feegow
+        if (idAgendamento != null && (idAgendamento.startsWith("IMG-") || idAgendamento.startsWith("INOV-"))) {
+            List<AccessCredential> creds = accessCredentialRepositoryPort.findByAppointmentId(idAgendamento);
+            if (creds.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(List.of());
+            }
+            List<AccessCredentialResponse> resp = creds.stream()
+                .map(c -> new AccessCredentialResponse(
+                    c.getAppointmentId(),
+                    c.getName(),
+                    c.getUserType(),
+                    c.getLocator(),
+                    c.getAccessCredential(),
+                    c.getCpf(),
+                    idAgendamento.startsWith("INOV-") ? "Inovare – Serviços de Saúde" : "Clínica Da Imagem - Unidade Inovare",
+                    "Hoje",
+                    "06:00",
+                    "23:00"
+                ))
+                .toList();
+            return ResponseEntity.ok(resp);
+        }
 
         // Executa a validação do desafio (por token criptográfico ou 4 dígitos do telefone)
         FeegowPatientAccessInfo accessInfo = accessService.validateAccessChallenge(idAgendamento, phoneDigits, token);

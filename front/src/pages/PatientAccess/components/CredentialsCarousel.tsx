@@ -100,7 +100,7 @@ export const CredentialsCarousel: React.FC<CredentialsCarouselProps> = ({
 
               {/* Bloco do QR Code protegido contra Force Dark Mode */}
               <div 
-                className="p-4 rounded-2xl shadow-sm flex flex-col items-center justify-center relative min-h-[184px] w-[184px]"
+                className="p-3.5 rounded-2xl shadow-sm flex flex-col items-center justify-center relative min-h-[192px] w-[192px]"
                 style={{
                   backgroundColor: '#ffffff',
                   border: '1px solid #e2e8f0',
@@ -123,7 +123,7 @@ export const CredentialsCarousel: React.FC<CredentialsCarouselProps> = ({
                   <>
                     <QRCodeCanvas 
                       value={cred.credentialCode} 
-                      size={160} 
+                      size={168} 
                       fgColor="#000000" 
                       bgColor="#ffffff"
                       level="M"
@@ -149,8 +149,8 @@ export const CredentialsCarousel: React.FC<CredentialsCarouselProps> = ({
                   <Sun className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                   <span>Aumente o brilho do celular</span>
                 </div>
-                <p className="text-[10px] text-slate-400 font-medium">
-                  💡 Aproxime a 10–15 cm da câmera da catraca
+                <p className="text-[10px] text-slate-500 font-medium">
+                  📏 Mantenha a 15 cm da catraca (não encoste)
                 </p>
               </div>
 
