@@ -237,28 +237,64 @@ public class AccessController {
                     .body(Map.of("message", "Nenhum cadastro ativo encontrado para este CPF hoje."));
             }
 
-            String firstAppId = !credentials.isEmpty() ? credentials.get(0).getAppointmentId() : "";
-            boolean isInovare = (request.clinic() != null && request.clinic().toLowerCase().contains("inovare"))
-                    || (firstAppId != null && firstAppId.startsWith("INOV-"));
+            List<AccessCredentialResponse> responseList = new ArrayList<>();
 
-            String resolvedDoctorName = isInovare ? "Inovare – Serviços de Saúde" : "Clínica Da Imagem - Unidade Inovare";
+            for (AccessCredential cred : credentials) {
+                String appointmentId = cred.getAppointmentId();
+                String doctorName = cred.getDoctorName();
+                String appointmentDateDisplay = resolveDisplayDate(appointmentId);
+                String opensAt = "06:00";
+                String closesAt = "23:59";
 
-            final String appointmentDateDisplay = resolveDisplayDate(firstAppId);
+                // Se for um agendamento do Feegow (não começa com INOV- nem IMG-), consulta detalhes no Feegow
+                if (appointmentId != null && !appointmentId.startsWith("INOV-") && !appointmentId.startsWith("IMG-")) {
+                    try {
+                        Optional<FeegowPatientAccessInfo> accessInfoOpt = feegowClientPort.fetchPatientAccessInfo(appointmentId);
+                        if (accessInfoOpt.isPresent()) {
+                            FeegowPatientAccessInfo info = accessInfoOpt.get();
+                            if (info.doctorName() != null && !info.doctorName().isBlank()) {
+                                doctorName = info.doctorName();
+                                if (cred.getDoctorName() == null || cred.getDoctorName().isBlank()) {
+                                    cred.setDoctorName(doctorName);
+                                    accessCredentialRepositoryPort.save(cred);
+                                }
+                            }
+                            if (info.appointmentDate() != null) {
+                                if (info.appointmentTime() != null) {
+                                    appointmentDateDisplay = LocalDateTime.of(info.appointmentDate(), info.appointmentTime())
+                                            .format(DATE_TIME_FORMATTER);
+                                    opensAt = info.appointmentTime().minusMinutes(120).format(TIME_FORMATTER);
+                                    closesAt = info.appointmentTime().plusMinutes(120).format(TIME_FORMATTER);
+                                } else {
+                                    appointmentDateDisplay = info.appointmentDate().format(DATE_FORMATTER);
+                                    opensAt = "08:00";
+                                }
+                            }
+                        }
+                    } catch (Exception ex) {
+                        log.warn("[AccessControl] Erro ao buscar detalhes Feegow no lookup por CPF para {}: {}", appointmentId, ex.getMessage());
+                    }
+                }
 
-            List<AccessCredentialResponse> responseList = credentials.stream()
-                .map(cred -> new AccessCredentialResponse(
+                if (doctorName == null || doctorName.isBlank()) {
+                    boolean isInovare = (request.clinic() != null && request.clinic().toLowerCase().contains("inovare"))
+                            || (appointmentId != null && appointmentId.startsWith("INOV-"));
+                    doctorName = isInovare ? "Inovare – Serviços de Saúde" : "Clínica Da Imagem - Unidade Inovare";
+                }
+
+                responseList.add(new AccessCredentialResponse(
                     cred.getAppointmentId(),
                     cred.getName(),
                     cred.getUserType() != null ? cred.getUserType() : UserType.PATIENT,
                     cred.getLocator(),
                     cred.getAccessCredential(),
                     cred.getCpf(),
-                    resolvedDoctorName,
+                    doctorName,
                     appointmentDateDisplay,
-                    "06:00",
-                    "23:59"
-                ))
-                .toList();
+                    opensAt,
+                    closesAt
+                ));
+            }
 
             return ResponseEntity.ok(responseList);
         } catch (Exception ex) {
@@ -636,7 +672,9 @@ public class AccessController {
             }
 
             if (c.getAppointmentId() != null && (c.getAppointmentId().startsWith("INOV-") || c.getAppointmentId().startsWith("IMG-"))) {
-                if (itemDoctorName == null || itemDoctorName.isBlank()) {
+                if (c.getDoctorName() != null && !c.getDoctorName().isBlank()) {
+                    itemDoctorName = c.getDoctorName();
+                } else if (itemDoctorName == null || itemDoctorName.isBlank()) {
                     itemDoctorName = c.getAppointmentId().startsWith("INOV-") ? "Inovare – Serviços de Saúde" : "Clínica Da Imagem - Unidade Inovare";
                 }
                 itemAppointmentDateTime = resolveDisplayDate(c.getAppointmentId());

@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { formatCpf } from '../types';
 import type { AccessCredential } from '../types';
-import { resolveDoctorLocation } from '../utils/clinicThemes';
+import { resolveDoctorLocation, resolveDoctorSpecialty } from '../utils/clinicThemes';
 import type { ClinicTheme } from '../utils/clinicThemes';
 import { AddToCalendarMenu } from './AddToCalendarMenu';
 
@@ -96,6 +96,16 @@ export const CredentialsCarousel: React.FC<CredentialsCarouselProps> = ({
                     Liberado
                   </span>
                 )}
+              </div>
+
+              {/* Informações Visuais de Ajuda */}
+              <div className="flex items-center justify-center gap-3 text-[10px] text-slate-500 mb-3 bg-white/60 rounded-lg px-2 py-1 w-full border border-slate-100">
+                <span className="flex items-center gap-1">
+                  <Sun className="w-3 h-3 text-amber-500 shrink-0" />
+                  Aumente o brilho do celular
+                </span>
+                <span>•</span>
+                <span>📏 Mantenha a 15 cm da catraca (não encoste)</span>
               </div>
 
               {/* Bloco do QR Code protegido contra Force Dark Mode */}
@@ -188,6 +198,11 @@ export const CredentialsCarousel: React.FC<CredentialsCarouselProps> = ({
                 <div>
                   <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block">Médico / Especialista</span>
                   <span className="text-xs font-bold text-slate-800">{cred.doctorName || clinicTheme.name}</span>
+                  {resolveDoctorSpecialty(cred.doctorName) && (
+                    <span className="text-[10px] text-slate-500 font-medium block mt-0.5">
+                      {resolveDoctorSpecialty(cred.doctorName)}
+                    </span>
+                  )}
                 </div>
               </div>
               
