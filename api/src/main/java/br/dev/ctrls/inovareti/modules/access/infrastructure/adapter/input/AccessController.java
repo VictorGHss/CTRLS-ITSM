@@ -396,13 +396,15 @@ public class AccessController {
             log.warn("[AccessControl] Erro ao buscar grupo de sessões para o agendamento {}: {}", idAgendamento, ex.getMessage());
         }
 
-        // AUTO-DETECÇÃO DE SESSÃO ATIVA HOJE: inclui sessão atual do paciente caso o link seja histórico
+        // AUTO-DETECÇÃO DE SESSÃO ATIVA HOJE: inclui todas as consultas do paciente para hoje
+        LocalDate today = LocalDate.now(CLINIC_ZONE);
         if (accessInfo.patientId() != null) {
             try {
-                LocalDate today = LocalDate.now(CLINIC_ZONE);
                 var patientSessions = appointmentSessionRepository.findByPatientId(accessInfo.patientId());
                 for (var s : patientSessions) {
-                    if (s.getCreatedAt() != null && s.getCreatedAt().toLocalDate().equals(today)) {
+                    boolean isToday = (s.getAppointmentAt() != null && s.getAppointmentAt().toLocalDate().equals(today))
+                                   || (s.getCreatedAt() != null && s.getCreatedAt().toLocalDate().equals(today));
+                    if (isToday) {
                         if (s.getFeegowAppointmentId() != null && !appointmentIds.contains(s.getFeegowAppointmentId())) {
                             appointmentIds.add(s.getFeegowAppointmentId());
                             log.info("[AccessControl] Auto-detectado agendamento de hoje ({}) para o paciente ID: {}. Adicionado ao escopo de credenciamento.", s.getFeegowAppointmentId(), accessInfo.patientId());
@@ -411,6 +413,24 @@ public class AccessController {
                 }
             } catch (Exception ex) {
                 log.warn("[AccessControl] Erro ao auto-detectar sessões de hoje para o paciente: {}", ex.getMessage());
+            }
+        }
+
+        // AUTO-DETECÇÃO POR CPF: busca credenciais geradas hoje para este CPF
+        String patientCpf = accessInfo.cpf() != null ? accessInfo.cpf().replaceAll("\\D", "") : "";
+        if (patientCpf.length() == 11) {
+            try {
+                List<AccessCredential> todayCreds = accessCredentialRepositoryPort.findByCpf(patientCpf);
+                for (var c : todayCreds) {
+                    if (c.getCreatedAt() != null && c.getCreatedAt().toLocalDate().equals(today)) {
+                        if (c.getAppointmentId() != null && !appointmentIds.contains(c.getAppointmentId())) {
+                            appointmentIds.add(c.getAppointmentId());
+                            log.info("[AccessControl] Auto-detectado agendamento com credencial hoje ({}) por CPF: {}", c.getAppointmentId(), patientCpf);
+                        }
+                    }
+                }
+            } catch (Exception ex) {
+                log.warn("[AccessControl] Erro ao auto-detectar credenciais de hoje por CPF: {}", ex.getMessage());
             }
         }
 
@@ -561,18 +581,14 @@ public class AccessController {
             }
             
             boolean isItemToday = itemDate != null && todayDate.equals(itemDate);
-            boolean isItemTimeOpen = false;
-            if (isItemToday) {
-                if (itemTime != null) {
-                    LocalTime openingTime = itemTime.minusMinutes(120);
-                    LocalTime closingTime = LocalTime.of(23, 0);
-                    isItemTimeOpen = !nowTime.isBefore(openingTime) && !nowTime.isAfter(closingTime);
-                } else {
-                    isItemTimeOpen = true;
-                }
+            // No dia da consulta, o QR Code NUNCA deve ser bloqueado na tela!
+            // O paciente deve ter seu QR Code sempre visivel e ativo durante o dia do atendimento.
+            boolean isItemReleased = isItemToday;
+            if (!isItemToday && itemDate != null) {
+                // Se for em data futura (amanha, semana que vem) ou passada, bloqueia exibicao
+                isItemReleased = false;
             }
-            
-            boolean isItemReleased = isItemToday && isItemTimeOpen;
+
             String credentialCodeToReturn = c.getAccessCredential();
             if (!"CPF_MISSING".equals(credentialCodeToReturn)) {
                 credentialCodeToReturn = isItemReleased ? c.getAccessCredential() : "BLOCKED_OUTSIDE_WINDOW";

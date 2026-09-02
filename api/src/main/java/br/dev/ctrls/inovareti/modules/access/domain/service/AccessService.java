@@ -14,6 +14,7 @@ import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.Appointment
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.FeegowAppointment;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.FeegowPatient;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.PatientExternalPort;
+import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentSessionRepositoryPort;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.DoctorConfigurationRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -66,6 +67,7 @@ public class AccessService {
     private final AccessCredentialRepositoryPort accessCredentialRepositoryPort;
     private final GerAcessoClientPort gerAcessoClientPort;
     private final DoctorConfigurationRepository doctorConfigurationRepository;
+    private final AppointmentSessionRepositoryPort appointmentSessionRepository;
 
     private final java.util.concurrent.ConcurrentMap<String, FeegowPatient> patientCache = new java.util.concurrent.ConcurrentHashMap<>();
 
@@ -208,20 +210,47 @@ public class AccessService {
         }
         final LocalDate appointmentDate = resolvedAppointmentDate;
 
-        // 4. Busca todos os agendamentos marcados daquela data para agrupamento
+        // 4. Busca todos os agendamentos marcados daquela data para agrupamento (status 0 = todos os status ativos)
         log.info("[AccessService] Buscando pauta do dia {} no Feegow para agrupamento de consultas...", appointmentDate);
-        List<FeegowAppointment> dailyAppointments = appointmentExternalPort.searchAppointments(appointmentDate, 1);
+        List<FeegowAppointment> dailyAppointments = appointmentExternalPort.searchAppointments(appointmentDate, 0);
 
         List<FeegowAppointment> matchingAppointments = new ArrayList<>();
         String finalCpf = resolvedCpf;
 
         // Lógica de Agrupamento: Agrupamos agendamentos do mesmo paciente (mesmo patientId) para a data.
-        // Familiares que compartilham CPF ou telefone obterão a mesma credencial de forma independente
-        // quando suas solicitações forem processadas, devido à unificação por CPF no Passo 7.
-        // Isso evita chamadas síncronas N+1 de prontuários ao Feegow, garantindo carregamento instantâneo.
         for (FeegowAppointment app : dailyAppointments) {
             if (app.patientId().equals(accessInfo.patientId())) {
                 matchingAppointments.add(app);
+            }
+        }
+
+        // Também incorpora sessões locais do paciente agendadas para a data (evitando dependência estrita do Feegow)
+        if (accessInfo.patientId() != null) {
+            try {
+                var sessions = appointmentSessionRepository.findByPatientId(accessInfo.patientId());
+                for (var s : sessions) {
+                    if (s.getAppointmentAt() != null && s.getAppointmentAt().toLocalDate().equals(appointmentDate)) {
+                        boolean alreadyPresent = matchingAppointments.stream().anyMatch(m -> m.id().equals(s.getFeegowAppointmentId()));
+                        if (!alreadyPresent && s.getFeegowAppointmentId() != null) {
+                            matchingAppointments.add(new FeegowAppointment(
+                                s.getFeegowAppointmentId(),
+                                accessInfo.patientId(),
+                                s.getDoctorProfissionalId() != null ? s.getDoctorProfissionalId() : "",
+                                "",
+                                "",
+                                s.getAppointmentAt(),
+                                "1",
+                                "",
+                                "",
+                                false
+                            ));
+                            log.info("[AccessService] Sessão adicional ({}) incorporada ao agrupamento de hoje para paciente {}", 
+                                    s.getFeegowAppointmentId(), accessInfo.patientId());
+                        }
+                    }
+                }
+            } catch (Exception ex) {
+                log.warn("[AccessService] Erro ao incorporar sessões locais no agrupamento: {}", ex.getMessage());
             }
         }
 
@@ -247,13 +276,14 @@ public class AccessService {
             .min(java.util.Comparator.naturalOrder())
             .orElse(accessInfo.appointmentTime() != null ? accessInfo.appointmentTime() : LocalTime.of(12, 0));
 
-        // 6. Janela de Abertura: exatamente 120 minutos (2 horas) antes da consulta agendada
-        LocalTime openingTime = earliestTime.minusMinutes(120);
-        // Janela de Fechamento: fixo rigidamente às 23:00 da data do agendamento
+        // 6. Janela de Abertura na Catraca GerAcesso:
+        // No dia da consulta, a catraca física é liberada a partir das 06:00 (ou início da janela) até as 23:00,
+        // garantindo que pacientes que chegam com antecedência ou têm múltiplas consultas não sejam barrados.
+        LocalTime physicalOpeningTime = LocalTime.of(6, 0);
         LocalTime closingTime = LocalTime.of(23, 0);
 
-        log.info("[ACCESS-WINDOW] Janela GerAcesso calculada com base na data/hora do agendamento (não da resposta). Data consulta: {}, Horário consulta: {}, inicio_visita (2h antes): {}, fim_visita: {}.",
-            appointmentDate, earliestTime, openingTime, closingTime);
+        log.info("[ACCESS-WINDOW] Janela GerAcesso calculada para a data {}. Acesso físico liberado das {} às {}. Menor consulta: {}.",
+            appointmentDate, physicalOpeningTime, closingTime, earliestTime);
 
         // 7. Unificação de Credencial: verifica se já gerou uma credencial real para este paciente/CPF hoje
         List<AccessCredential> existingCredentials = accessCredentialRepositoryPort.findByCpf(finalCpf);
@@ -275,9 +305,7 @@ public class AccessService {
             log.info("[AccessService] Reutilizando credencial ativa existente para o CPF {}: {}", finalCpf, token);
         } else {
             // Constrói payload de requisição para registrar o Paciente Titular na GerAcesso
-            // Usa a constante GERACESSO_DATE_FORMATTER (imutável e thread-safe) em vez de
-            // instanciar um novo DateTimeFormatter a cada chamada em alto volume.
-            String startVisit = LocalDateTime.of(appointmentDate, openingTime).format(GERACESSO_DATE_FORMATTER);
+            String startVisit = LocalDateTime.of(appointmentDate, physicalOpeningTime).format(GERACESSO_DATE_FORMATTER);
             String endVisit = LocalDateTime.of(appointmentDate, closingTime).format(GERACESSO_DATE_FORMATTER);
 
             // Resolve os dados do médico para injeção de visitado
@@ -378,7 +406,7 @@ public class AccessService {
                             if (alreadyRegisteredWithRealCred) {
                                 log.info("[AccessService] Acompanhante '{}' já possui credencial GerAcesso real cadastrada para o agendamento {}. Ignorando duplicata.", companion.name(), accessInfo.appointmentId());
                             } else {
-                                registerCompanionAccess(companion, appointmentDate, openingTime, closingTime, finalToken, finalLocator, accessInfo.appointmentId(), accessInfo.doctorId());
+                                registerCompanionAccess(companion, appointmentDate, physicalOpeningTime, closingTime, finalToken, finalLocator, accessInfo.appointmentId(), accessInfo.doctorId());
                             }
                         } catch (Exception ex) {
                             log.error("[AccessService] Erro fatal no processamento assíncrono do acompanhante '{}': {}", 
@@ -439,8 +467,7 @@ public class AccessService {
         }
         LocalDate date = resolvedDate;
 
-        LocalTime appTime = accessInfo.appointmentTime() != null ? accessInfo.appointmentTime() : LocalTime.of(12, 0);
-        LocalTime openingTime = appTime.minusMinutes(120);
+        LocalTime openingTime = LocalTime.of(6, 0);
         LocalTime closingTime = LocalTime.of(23, 0);
 
         return registerCompanionAccess(companion, date, openingTime, closingTime, null, null, appointmentId, accessInfo.doctorId());

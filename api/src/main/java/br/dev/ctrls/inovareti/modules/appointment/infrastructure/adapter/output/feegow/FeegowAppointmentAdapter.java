@@ -95,8 +95,11 @@ public class FeegowAppointmentAdapter implements AppointmentExternalPort {
         UriComponentsBuilder uriBuilder = UriComponentsBuilder.fromUriString(properties.getFeegowBaseUrl())
                 .path(properties.getFeegowSearchPath())
                 .queryParam("data_start", formattedDate)
-                .queryParam("data_end", formattedDate)
-                .queryParam("status", statusId);
+                .queryParam("data_end", formattedDate);
+
+        if (statusId > 0) {
+            uriBuilder.queryParam("status", statusId);
+        }
 
         if (profissionalId != null && !profissionalId.isBlank()) {
             uriBuilder.queryParam("profissional_id", profissionalId.trim());
