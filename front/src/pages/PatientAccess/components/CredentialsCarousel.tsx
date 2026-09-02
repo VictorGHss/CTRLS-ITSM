@@ -98,16 +98,6 @@ export const CredentialsCarousel: React.FC<CredentialsCarouselProps> = ({
                 )}
               </div>
 
-              {/* Informações Visuais de Ajuda */}
-              <div className="flex items-center justify-center gap-3 text-[10px] text-slate-500 mb-3 bg-white/60 rounded-lg px-2 py-1 w-full border border-slate-100">
-                <span className="flex items-center gap-1">
-                  <Sun className="w-3 h-3 text-amber-500 shrink-0" />
-                  Aumente o brilho do celular
-                </span>
-                <span>•</span>
-                <span>📏 Mantenha a 15 cm da catraca (não encoste)</span>
-              </div>
-
               {/* Bloco do QR Code protegido contra Force Dark Mode */}
               <div 
                 className="p-3.5 rounded-2xl shadow-sm flex flex-col items-center justify-center relative min-h-[192px] w-[192px]"
