@@ -173,6 +173,10 @@ public class AccessController {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", "Falha ao gerar credencial"));
             }
 
+            String clinicName = (request.clinic() != null && request.clinic().toLowerCase().contains("inovare"))
+                ? "Inovare – Serviços de Saúde"
+                : "Clínica Da Imagem - Unidade Inovare";
+
             List<AccessCredentialResponse> responseList = credentials.stream()
                 .map(cred -> new AccessCredentialResponse(
                     cred.getAppointmentId(),
@@ -181,7 +185,7 @@ public class AccessController {
                     cred.getLocator(),
                     cred.getAccessCredential(),
                     cred.getCpf(),
-                    "Clínica Da Imagem - Unidade Inovare",
+                    clinicName,
                     "Hoje",
                     "06:00",
                     "23:59"

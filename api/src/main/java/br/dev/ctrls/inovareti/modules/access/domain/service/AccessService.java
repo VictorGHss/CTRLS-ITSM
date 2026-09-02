@@ -414,7 +414,7 @@ public class AccessService {
     public AccessCredential registerCompanion(String appointmentId, CompanionAccessInfo companion) {
         log.info("[AccessService] Processando cadastro individual de acompanhante '{}' para agendamento {}", companion.name(), appointmentId);
 
-        if (appointmentId != null && appointmentId.startsWith("IMG-")) {
+        if (appointmentId != null && (appointmentId.startsWith("IMG-") || appointmentId.startsWith("INOV-"))) {
             LocalDate date = LocalDate.now(CLINIC_ZONE);
             LocalTime openingTime = LocalTime.of(6, 0);
             LocalTime closingTime = LocalTime.of(23, 59);
@@ -578,16 +578,18 @@ public class AccessService {
         log.info("[AccessService] Validando credenciais para o agendamento ID: {} (token={})", 
                 appointmentId, token != null && !token.isBlank() ? "presente" : "ausente");
 
-        // Tratamento para auto-check-in da Clínica da Imagem
-        if (appointmentId != null && appointmentId.startsWith("IMG-")) {
+        // Tratamento para auto-check-in da Clínica da Imagem ou Inovare
+        if (appointmentId != null && (appointmentId.startsWith("IMG-") || appointmentId.startsWith("INOV-"))) {
             List<AccessCredential> creds = accessCredentialRepositoryPort.findByAppointmentId(appointmentId);
             if (creds == null || creds.isEmpty()) {
-                throw new br.dev.ctrls.inovareti.core.shared.domain.model.exception.NotFoundException("Credencial da Clínica da Imagem não encontrada.");
+                throw new br.dev.ctrls.inovareti.core.shared.domain.model.exception.NotFoundException("Credencial de acesso não encontrada.");
             }
             AccessCredential patient = creds.stream()
                 .filter(c -> c.getUserType() == UserType.PATIENT)
                 .findFirst()
                 .orElse(creds.get(0));
+
+            String clinicName = appointmentId.startsWith("INOV-") ? "Clínica Inovare" : "Clínica da Imagem";
 
             return new FeegowPatientAccessInfo(
                 patient.getAppointmentId(),
@@ -597,7 +599,7 @@ public class AccessService {
                 LocalDate.now(CLINIC_ZONE),
                 LocalTime.of(8, 0),
                 null,
-                "Clínica da Imagem",
+                clinicName,
                 ""
             );
         }
@@ -771,12 +773,13 @@ public class AccessService {
 
         LocalDate today = LocalDate.now(CLINIC_ZONE);
         String todayIdSuffix = today.format(DateTimeFormatter.ofPattern("yyyyMMdd"));
-        String appointmentId = "IMG-" + todayIdSuffix + "-" + cleanCpf;
+        String prefix = (clinic != null && clinic.toLowerCase().contains("inovare")) ? "INOV-" : "IMG-";
+        String appointmentId = prefix + todayIdSuffix + "-" + cleanCpf;
 
         // 1. Verifica se já existe credencial para este CPF hoje
         List<AccessCredential> existing = accessCredentialRepositoryPort.findByAppointmentId(appointmentId);
         if (existing != null && !existing.isEmpty()) {
-            log.info("[AccessService] Credencial já existente para auto-cadastro Imagem. CPF: {}, ID: {}", cleanCpf, appointmentId);
+            log.info("[AccessService] Credencial já existente para auto-cadastro ({}). CPF: {}, ID: {}", clinic, cleanCpf, appointmentId);
             if (companion != null && companion.cpf() != null && !companion.cpf().isBlank()) {
                 String compCpf = companion.cpf().replaceAll("\\D", "");
                 boolean compExists = existing.stream().anyMatch(c -> c.getCpf() != null && c.getCpf().replaceAll("\\D", "").equals(compCpf));
@@ -784,8 +787,8 @@ public class AccessService {
                     registerCompanionAccess(
                         companion,
                         today,
-                        LocalTime.of(7, 0),
-                        LocalTime.of(21, 0),
+                        LocalTime.of(6, 0),
+                        LocalTime.of(23, 59),
                         existing.get(0).getAccessCredential(),
                         existing.get(0).getLocator(),
                         appointmentId,
@@ -824,10 +827,10 @@ public class AccessService {
                 if (gerResponseOpt.get().locator() != null) {
                     locatorValue = gerResponseOpt.get().locator();
                 }
-                log.info("[AccessService] Paciente Imagem cadastrado no GerAcesso com sucesso. CPF={}, Credential={}", cleanCpf, credentialValue);
+                log.info("[AccessService] Paciente {} cadastrado no GerAcesso com sucesso. CPF={}, Credential={}", clinic, cleanCpf, credentialValue);
             }
         } catch (Exception ex) {
-            log.warn("[AccessService] Falha na integração GerAcesso para paciente Imagem (usando contingência): {}", ex.getMessage());
+            log.warn("[AccessService] Falha na integração GerAcesso para paciente {} (usando contingência): {}", clinic, ex.getMessage());
         }
 
         // 2. Persiste a credencial do paciente titular no banco
@@ -877,7 +880,7 @@ public class AccessService {
                     return updatedList;
                 }
             } catch (Exception e) {
-                log.warn("[AccessService] Erro ao cadastrar acompanhante no auto-cadastro da Imagem: {}", e.getMessage());
+                log.warn("[AccessService] Erro ao cadastrar acompanhante no auto-cadastro {}: {}", clinic, e.getMessage());
             }
         }
 
@@ -894,7 +897,8 @@ public class AccessService {
 
         LocalDate today = LocalDate.now(CLINIC_ZONE);
         String todayIdSuffix = today.format(DateTimeFormatter.ofPattern("yyyyMMdd"));
-        String appointmentId = "IMG-" + todayIdSuffix + "-" + cleanCpf;
+        String prefix = (clinic != null && clinic.toLowerCase().contains("inovare")) ? "INOV-" : "IMG-";
+        String appointmentId = prefix + todayIdSuffix + "-" + cleanCpf;
 
         List<AccessCredential> credentials = accessCredentialRepositoryPort.findByAppointmentId(appointmentId);
         if (credentials != null && !credentials.isEmpty()) {
