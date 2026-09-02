@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { User, CreditCard, Phone, Calendar, UserPlus, ArrowRight, Search, CheckCircle2, AlertCircle, ShieldCheck, Plus, Trash2 } from 'lucide-react';
-import type { ClinicTheme } from '../utils/clinicThemes';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
+import { User, CreditCard, Phone, Calendar, UserPlus, ArrowRight, Search, CheckCircle2, AlertCircle, ShieldCheck, Plus, Trash2, Stethoscope, MapPin, X } from 'lucide-react';
+import { type ClinicTheme, DOCTOR_SUGGESTIONS, type DoctorSuggestion, resolveDoctorLocation } from '../utils/clinicThemes';
 import type { AccessCredential } from '../types';
 import api from '../../../services/api';
 
@@ -36,9 +36,43 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
   const [dateSelection, setDateSelection] = useState<'today' | 'tomorrow' | 'custom'>('today');
   const [customDate, setCustomDate] = useState<string>('');
 
-  // Especialidade / Médico (Opcional)
-  const [specialty, setSpecialty] = useState<string>(clinicTheme.id === 'inovare' ? 'Ginecologia' : '');
-  const [customDoctor, setCustomDoctor] = useState<string>('');
+  // Médico ou Especialidade com Busca Autocomplete (ativado após digitar 3 caracteres)
+  const [doctorInput, setDoctorInput] = useState<string>('');
+  const [selectedLocation, setSelectedLocation] = useState<string | null>(null);
+  const [isDoctorDropdownOpen, setIsDoctorDropdownOpen] = useState<boolean>(false);
+  const doctorDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Fecha o dropdown ao clicar fora do componente
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (doctorDropdownRef.current && !doctorDropdownRef.current.contains(event.target as Node)) {
+        setIsDoctorDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  // Filtra as opções de médicos e especialidades quando há 3 ou mais caracteres
+  const filteredDoctors = useMemo(() => {
+    const q = doctorInput.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    if (q.length < 3) return [];
+
+    return DOCTOR_SUGGESTIONS.filter(item => {
+      const normName = item.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+      const normSpec = (item.specialty || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+      const normLoc = item.location.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+      return normName.includes(q) || normSpec.includes(q) || normLoc.includes(q);
+    });
+  }, [doctorInput]);
+
+  const handleSelectDoctor = (doc: DoctorSuggestion) => {
+    setDoctorInput(doc.name);
+    setSelectedLocation(doc.location);
+    setIsDoctorDropdownOpen(false);
+  };
 
   // Acompanhantes (Múltiplos / Ilimitados)
   const [hasCompanion, setHasCompanion] = useState(false);
@@ -152,12 +186,7 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
       finalVisitDate = customDate;
     }
 
-    let finalDoctorName: string | undefined = undefined;
-    if (specialty === 'custom') {
-      finalDoctorName = customDoctor.trim() || undefined;
-    } else if (specialty) {
-      finalDoctorName = specialty;
-    }
+    const finalDoctorName = doctorInput.trim() || undefined;
 
     setLoading(true);
 
@@ -387,34 +416,120 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
               )}
             </div>
 
-            {/* Seleção de Especialidade / Setor */}
+            {/* Campo de Busca de Médico / Especialidade (Dropdown após 3 caracteres) */}
             {clinicTheme.id === 'inovare' && (
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-                  <User className="w-3.5 h-3.5 text-slate-400" />
-                  Especialidade / Setor <span className="text-[10px] text-slate-400 font-normal">(opcional)</span>
+              <div className="relative" ref={doctorDropdownRef}>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <Stethoscope className="w-3.5 h-3.5 text-slate-400" />
+                    Médico / Especialidade <span className="text-[10px] text-slate-400 font-normal">(opcional)</span>
+                  </span>
+                  {doctorInput && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDoctorInput('');
+                        setSelectedLocation(null);
+                        setIsDoctorDropdownOpen(false);
+                      }}
+                      className="text-[10px] font-bold text-slate-400 hover:text-red-500 transition-colors flex items-center gap-0.5"
+                    >
+                      <X className="w-3 h-3" /> Limpar
+                    </button>
+                  )}
                 </label>
-                <select
-                  value={specialty}
-                  onChange={(e) => setSpecialty(e.target.value)}
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-800 focus:bg-white focus:outline-none focus:ring-2 transition-all"
-                >
-                  <option value="Ginecologia">Ginecologia (3º Andar)</option>
-                  <option value="Ortopedia">Ortopedia (3º Andar - Direita)</option>
-                  <option value="Oftalmologia">Oftalmologia (2º Andar)</option>
-                  <option value="">Recepção Central (Geral)</option>
-                  <option value="custom">Outro médico ou especialista...</option>
-                </select>
 
-                {specialty === 'custom' && (
-                  <div className="mt-2">
-                    <input
-                      type="text"
-                      value={customDoctor}
-                      onChange={(e) => setCustomDoctor(e.target.value)}
-                      placeholder="Nome do médico ou especialista"
-                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-semibold text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 transition-all"
-                    />
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={doctorInput}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setDoctorInput(val);
+                      setSelectedLocation(null);
+                      if (val.trim().length >= 3) {
+                        setIsDoctorDropdownOpen(true);
+                      } else {
+                        setIsDoctorDropdownOpen(false);
+                      }
+                    }}
+                    onFocus={() => {
+                      if (doctorInput.trim().length >= 3) {
+                        setIsDoctorDropdownOpen(true);
+                      }
+                    }}
+                    placeholder="Digite o nome do médico ou setor (ex: Brenda, Ginecologia...)"
+                    className="w-full pl-3.5 pr-9 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 transition-all"
+                  />
+                  {doctorInput && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDoctorInput('');
+                        setSelectedLocation(null);
+                        setIsDoctorDropdownOpen(false);
+                      }}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded-full hover:bg-slate-200/50 transition-all"
+                      title="Limpar médico"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Dica discreta ao digitar menos de 3 caracteres */}
+                {doctorInput.trim().length > 0 && doctorInput.trim().length < 3 && (
+                  <p className="text-[10px] font-medium text-slate-400 mt-1 pl-1">
+                    Digite mais {3 - doctorInput.trim().length} letra(s) para pesquisar médicos...
+                  </p>
+                )}
+
+                {/* Dropdown Flutuante após 3 caracteres */}
+                {isDoctorDropdownOpen && doctorInput.trim().length >= 3 && (
+                  <div className="absolute left-0 right-0 z-50 mt-1.5 bg-white border border-slate-200 rounded-2xl shadow-xl shadow-slate-300/50 max-h-56 overflow-y-auto divide-y divide-slate-100 animate-in fade-in zoom-in-95 duration-150">
+                    {filteredDoctors.length > 0 ? (
+                      filteredDoctors.map((doc, idx) => (
+                        <button
+                          key={`${doc.name}-${idx}`}
+                          type="button"
+                          onClick={() => handleSelectDoctor(doc)}
+                          className="w-full px-3.5 py-2.5 text-left hover:bg-slate-50 flex items-start justify-between gap-2 transition-colors group cursor-pointer"
+                        >
+                          <div>
+                            <div className="text-xs font-bold text-slate-800 group-hover:text-blue-700 flex items-center gap-1.5">
+                              <User className="w-3 h-3 text-slate-400 group-hover:text-blue-600 shrink-0" />
+                              {doc.name}
+                            </div>
+                            <div className="text-[10px] font-medium text-slate-500 mt-0.5 flex items-center gap-1">
+                              <MapPin className="w-2.5 h-2.5 text-slate-400 shrink-0" />
+                              {doc.location}
+                            </div>
+                          </div>
+                          {doc.specialty && (
+                            <span className="shrink-0 text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 bg-slate-100 text-slate-600 rounded-lg group-hover:bg-blue-50 group-hover:text-blue-700">
+                              {doc.specialty}
+                            </span>
+                          )}
+                        </button>
+                      ))
+                    ) : (
+                      <div className="p-3 text-center">
+                        <p className="text-xs font-semibold text-slate-600">Nenhum médico encontrado</p>
+                        <p className="text-[10px] text-slate-400 mt-0.5">
+                          Você pode manter "{doctorInput}" ou apagar para recepção geral.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Badge com a localização confirmada */}
+                {(selectedLocation || (doctorInput && resolveDoctorLocation(doctorInput) !== '1º Andar - Lado Direito')) && (
+                  <div className="mt-2 p-2 rounded-xl bg-emerald-50/90 border border-emerald-200/60 flex items-center gap-2 text-emerald-800 text-[11px] font-semibold animate-in fade-in duration-150">
+                    <MapPin className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span className="truncate">
+                      {selectedLocation || resolveDoctorLocation(doctorInput)}
+                    </span>
                   </div>
                 )}
               </div>
