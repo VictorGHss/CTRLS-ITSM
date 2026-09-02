@@ -82,7 +82,6 @@ export const CompanionModal: React.FC<CompanionModalProps> = ({
               <input
                 type="text"
                 inputMode="numeric"
-                pattern="[0-9]*"
                 required
                 placeholder="000.000.000-00"
                 value={companionCpf}
@@ -111,7 +110,6 @@ export const CompanionModal: React.FC<CompanionModalProps> = ({
               <input
                 type="text"
                 inputMode="numeric"
-                pattern="[0-9]*"
                 placeholder="DD/MM/AAAA (opcional)"
                 value={companionBirthDate}
                 onChange={(e) => {

@@ -32,7 +32,6 @@ export const CpfFallbackCard: React.FC<CpfFallbackCardProps> = ({
         <input
           type="text"
           inputMode="numeric"
-          pattern="[0-9]*"
           placeholder="000.000.000-00"
           value={cpfInput}
           onChange={(e) => {
