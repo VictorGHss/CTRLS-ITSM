@@ -297,7 +297,6 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
               <input
                 type="text"
                 inputMode="numeric"
-                pattern="[0-9]*"
                 required
                 value={cpf}
                 onChange={(e) => setCpf(maskCpf(e.target.value))}
@@ -316,7 +315,6 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
                 <input
                   type="text"
                   inputMode="numeric"
-                  pattern="[0-9]*"
                   value={birthDate}
                   onChange={(e) => setBirthDate(maskDate(e.target.value))}
                   placeholder="DD/MM/AAAA"
@@ -332,7 +330,6 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
                 <input
                   type="tel"
                   inputMode="numeric"
-                  pattern="[0-9]*"
                   value={phone}
                   onChange={(e) => setPhone(maskPhone(e.target.value))}
                   placeholder="(42) 99999-9999"
@@ -411,7 +408,6 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
                         <input
                           type="text"
                           inputMode="numeric"
-                          pattern="[0-9]*"
                           value={comp.cpf}
                           onChange={(e) => updateCompanion(comp.id, 'cpf', maskCpf(e.target.value))}
                           placeholder="CPF *"
@@ -421,7 +417,6 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
                         <input
                           type="text"
                           inputMode="numeric"
-                          pattern="[0-9]*"
                           value={comp.birthDate}
                           onChange={(e) => updateCompanion(comp.id, 'birthDate', maskDate(e.target.value))}
                           placeholder="Nasc. (opcional)"
@@ -471,7 +466,6 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
               <input
                 type="text"
                 inputMode="numeric"
-                pattern="[0-9]*"
                 required
                 value={lookupCpf}
                 onChange={(e) => setLookupCpf(maskCpf(e.target.value))}
