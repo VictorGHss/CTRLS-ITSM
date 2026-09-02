@@ -557,27 +557,21 @@ public class AccessController {
 
             // Validação de janela de tempo para liberação de exibição do QR Code no frontend
             LocalDate todayDate = LocalDate.now(CLINIC_ZONE);
-            LocalTime nowTime = LocalTime.now(CLINIC_ZONE);
-            
             LocalDate itemDate = null;
-            LocalTime itemTime = null;
             
             if (c.getAppointmentId().equalsIgnoreCase(idAgendamento)) {
                 itemDate = accessInfo.appointmentDate();
-                itemTime = accessInfo.appointmentTime();
             } else {
                 try {
                     FeegowPatientAccessInfo specificInfo = challengeCache.get(c.getAppointmentId());
                     if (specificInfo != null) {
                         itemDate = specificInfo.appointmentDate();
-                        itemTime = specificInfo.appointmentTime();
                     }
                 } catch (Exception ignored) {}
             }
             
             if (itemDate == null) {
                 itemDate = accessInfo.appointmentDate();
-                itemTime = accessInfo.appointmentTime();
             }
             
             boolean isItemToday = itemDate != null && todayDate.equals(itemDate);
