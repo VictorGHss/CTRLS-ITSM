@@ -499,13 +499,9 @@ export default function PatientAccess() {
       return;
     }
 
-    if (!companionName || !companionCpf) return;
+    if (!companionName.trim()) return;
 
-    const cleanCpf = companionCpf.replace(/\D/g, '');
-    if (!isValidCpf(cleanCpf)) {
-      setCompanionSubmitError('CPF do acompanhante inválido. Verifique os números digitados.');
-      return;
-    }
+    const cleanCpf = companionCpf ? companionCpf.replace(/\D/g, '') : '';
 
     setCompanionSubmitLoading(true);
     setCompanionSubmitError(null);
@@ -516,7 +512,7 @@ export default function PatientAccess() {
         `/v1/access/companions/${targetAppointmentId}`,
         {
           name: companionName.trim(),
-          cpf: cleanCpf,
+          cpf: cleanCpf || null,
           birthDate: companionBirthDate || null
         },
         {

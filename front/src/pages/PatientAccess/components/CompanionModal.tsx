@@ -102,13 +102,14 @@ export const CompanionModal: React.FC<CompanionModalProps> = ({
 
             {/* CPF */}
             <div>
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">CPF *</label>
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                CPF <span className="text-[9px] text-slate-400 font-normal">(Opcional)</span>
+              </label>
               <input
                 type="text"
                 inputMode="numeric"
                 pattern="[0-9]*"
-                required
-                placeholder="000.000.000-00"
+                placeholder="000.000.000-00 (opcional)"
                 value={companionCpf}
                 onChange={(e) => {
                   const digits = e.target.value.replace(/\D/g, '').substring(0, 11);
@@ -146,25 +147,14 @@ export const CompanionModal: React.FC<CompanionModalProps> = ({
             </button>
             <button
               type="submit"
-              disabled={
-                companionSubmitLoading || 
-                !companionName.trim() || 
-                companionCpf.replace(/\D/g, '').length !== 11 ||
-                (companionBirthDate.replace(/\D/g, '').length > 0 && companionBirthDate.replace(/\D/g, '').length !== 8)
-              }
+              disabled={companionSubmitLoading || !companionName.trim()}
               className={`flex-1 py-3 rounded-xl text-xs font-bold transition-all shadow-md flex items-center justify-center gap-2 ${
-                companionName.trim() && 
-                companionCpf.replace(/\D/g, '').length === 11 && 
-                (companionBirthDate.replace(/\D/g, '').length === 0 || companionBirthDate.replace(/\D/g, '').length === 8) &&
-                !companionSubmitLoading
+                companionName.trim() && !companionSubmitLoading
                   ? 'text-white hover:scale-[1.01] active:scale-[0.99] cursor-pointer'
                   : 'bg-slate-100 text-slate-400 cursor-not-allowed shadow-none'
               }`}
               style={
-                companionName.trim() && 
-                companionCpf.replace(/\D/g, '').length === 11 && 
-                (companionBirthDate.replace(/\D/g, '').length === 0 || companionBirthDate.replace(/\D/g, '').length === 8) &&
-                !companionSubmitLoading
+                companionName.trim() && !companionSubmitLoading
                   ? { backgroundImage: `linear-gradient(to right, ${primaryColor}, ${primaryDarkColor})` }
                   : undefined
               }

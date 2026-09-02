@@ -759,6 +759,11 @@ public class AccessService {
      */
     public List<AccessCredential> processSelfRegistration(
             String name, String rawCpf, String phone, String birthDate, String clinic, CompanionAccessInfo companion) {
+        return processSelfRegistration(name, rawCpf, phone, birthDate, clinic, companion != null ? List.of(companion) : List.of());
+    }
+
+    public List<AccessCredential> processSelfRegistration(
+            String name, String rawCpf, String phone, String birthDate, String clinic, List<CompanionAccessInfo> companions) {
         if (name == null || name.isBlank()) {
             throw new IllegalArgumentException("Nome do paciente é obrigatório.");
         }
@@ -780,22 +785,29 @@ public class AccessService {
         List<AccessCredential> existing = accessCredentialRepositoryPort.findByAppointmentId(appointmentId);
         if (existing != null && !existing.isEmpty()) {
             log.info("[AccessService] Credencial já existente para auto-cadastro ({}). CPF: {}, ID: {}", clinic, cleanCpf, appointmentId);
-            if (companion != null && companion.cpf() != null && !companion.cpf().isBlank()) {
-                String compCpf = companion.cpf().replaceAll("\\D", "");
-                boolean compExists = existing.stream().anyMatch(c -> c.getCpf() != null && c.getCpf().replaceAll("\\D", "").equals(compCpf));
-                if (!compExists) {
-                    registerCompanionAccess(
-                        companion,
-                        today,
-                        LocalTime.of(6, 0),
-                        LocalTime.of(23, 59),
-                        existing.get(0).getAccessCredential(),
-                        existing.get(0).getLocator(),
-                        appointmentId,
-                        null
-                    );
-                    return accessCredentialRepositoryPort.findByAppointmentId(appointmentId);
+            if (companions != null && !companions.isEmpty()) {
+                for (CompanionAccessInfo comp : companions) {
+                    if (comp != null && comp.name() != null && !comp.name().isBlank()) {
+                        String compCpf = comp.cpf() != null ? comp.cpf().replaceAll("\\D", "") : "";
+                        boolean compExists = existing.stream().anyMatch(c -> 
+                            (c.getName() != null && c.getName().equalsIgnoreCase(comp.name().trim())) ||
+                            (!compCpf.isEmpty() && c.getCpf() != null && c.getCpf().replaceAll("\\D", "").equals(compCpf))
+                        );
+                        if (!compExists) {
+                            registerCompanionAccess(
+                                comp,
+                                today,
+                                LocalTime.of(6, 0),
+                                LocalTime.of(23, 59),
+                                existing.get(0).getAccessCredential(),
+                                existing.get(0).getLocator(),
+                                appointmentId,
+                                null
+                            );
+                        }
+                    }
                 }
+                return accessCredentialRepositoryPort.findByAppointmentId(appointmentId);
             }
             return existing;
         }
@@ -862,25 +874,29 @@ public class AccessService {
         List<AccessCredential> resultList = new ArrayList<>();
         resultList.add(accessCredentialRepositoryPort.save(patientCred));
 
-        // 3. Cadastra acompanhante se enviado
-        if (companion != null && companion.name() != null && !companion.name().isBlank()) {
-            try {
-                registerCompanionAccess(
-                    companion,
-                    today,
-                    LocalTime.of(6, 0),
-                    LocalTime.of(23, 59),
-                    credentialValue,
-                    locatorValue,
-                    appointmentId,
-                    null
-                );
-                List<AccessCredential> updatedList = accessCredentialRepositoryPort.findByAppointmentId(appointmentId);
-                if (updatedList != null && !updatedList.isEmpty()) {
-                    return updatedList;
+        // 3. Cadastra lista de acompanhantes se enviados
+        if (companions != null && !companions.isEmpty()) {
+            for (CompanionAccessInfo comp : companions) {
+                if (comp != null && comp.name() != null && !comp.name().isBlank()) {
+                    try {
+                        registerCompanionAccess(
+                            comp,
+                            today,
+                            LocalTime.of(6, 0),
+                            LocalTime.of(23, 59),
+                            credentialValue,
+                            locatorValue,
+                            appointmentId,
+                            null
+                        );
+                    } catch (Exception e) {
+                        log.warn("[AccessService] Erro ao cadastrar acompanhante '{}' no auto-cadastro {}: {}", comp.name(), clinic, e.getMessage());
+                    }
                 }
-            } catch (Exception e) {
-                log.warn("[AccessService] Erro ao cadastrar acompanhante no auto-cadastro {}: {}", clinic, e.getMessage());
+            }
+            List<AccessCredential> updatedList = accessCredentialRepositoryPort.findByAppointmentId(appointmentId);
+            if (updatedList != null && !updatedList.isEmpty()) {
+                return updatedList;
             }
         }
 

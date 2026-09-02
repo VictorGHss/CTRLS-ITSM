@@ -1,8 +1,15 @@
 import React, { useState } from 'react';
-import { User, CreditCard, Phone, Calendar, UserPlus, ArrowRight, Search, CheckCircle2, AlertCircle, ShieldCheck } from 'lucide-react';
+import { User, CreditCard, Phone, Calendar, UserPlus, ArrowRight, Search, CheckCircle2, AlertCircle, ShieldCheck, Plus, Trash2 } from 'lucide-react';
 import type { ClinicTheme } from '../utils/clinicThemes';
 import type { AccessCredential } from '../types';
 import api from '../../../services/api';
+
+interface CompanionEntry {
+  id: string;
+  name: string;
+  cpf: string;
+  birthDate: string;
+}
 
 interface SelfRegistrationFormProps {
   clinicTheme: ClinicTheme;
@@ -12,17 +19,17 @@ interface SelfRegistrationFormProps {
 export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clinicTheme, onSuccess }) => {
   const [activeTab, setActiveTab] = useState<'register' | 'lookup'>('register');
 
-  // Campos de Cadastro
+  // Campos de Cadastro do Paciente Titular
   const [name, setName] = useState('');
   const [cpf, setCpf] = useState('');
   const [phone, setPhone] = useState('');
   const [birthDate, setBirthDate] = useState('');
 
-  // Acompanhante
+  // Acompanhantes (Múltiplos / Ilimitados)
   const [hasCompanion, setHasCompanion] = useState(false);
-  const [companionName, setCompanionName] = useState('');
-  const [companionCpf, setCompanionCpf] = useState('');
-  const [companionBirthDate, setCompanionBirthDate] = useState('');
+  const [companions, setCompanions] = useState<CompanionEntry[]>([
+    { id: 'comp-1', name: '', cpf: '', birthDate: '' }
+  ]);
 
   // Campos de Consulta
   const [lookupCpf, setLookupCpf] = useState('');
@@ -57,6 +64,27 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
       .replace(/(\d{2})(\d)/, '$1/$2');
   };
 
+  const addCompanionField = () => {
+    setCompanions(prev => [
+      ...prev,
+      { id: `comp-${Date.now()}`, name: '', cpf: '', birthDate: '' }
+    ]);
+  };
+
+  const removeCompanionField = (id: string) => {
+    setCompanions(prev => {
+      const filtered = prev.filter(c => c.id !== id);
+      if (filtered.length === 0) {
+        return [{ id: `comp-${Date.now()}`, name: '', cpf: '', birthDate: '' }];
+      }
+      return filtered;
+    });
+  };
+
+  const updateCompanion = (id: string, field: keyof CompanionEntry, value: string) => {
+    setCompanions(prev => prev.map(c => c.id === id ? { ...c, [field]: value } : c));
+  };
+
   const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
@@ -72,16 +100,19 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
       return;
     }
 
+    // Validação dos acompanhantes (se selecionado)
+    let companionsPayload: Array<{ name: string; cpf?: string; birthDate?: string }> = [];
     if (hasCompanion) {
-      if (!companionName.trim()) {
-        setErrorMessage('Por favor, informe o nome do acompanhante.');
+      const validEntries = companions.filter(c => c.name.trim().length > 0);
+      if (validEntries.length === 0) {
+        setErrorMessage('Por favor, informe o nome do(s) acompanhante(s) ou desmarque a opção.');
         return;
       }
-      const cleanCompCpf = companionCpf.replace(/\D/g, '');
-      if (cleanCompCpf && cleanCompCpf.length !== 11) {
-        setErrorMessage('O CPF do acompanhante deve conter 11 dígitos (ou ser deixado em branco).');
-        return;
-      }
+      companionsPayload = validEntries.map(c => ({
+        name: c.name.trim(),
+        cpf: c.cpf.replace(/\D/g, '') || undefined,
+        birthDate: c.birthDate || undefined
+      }));
     }
 
     setLoading(true);
@@ -93,11 +124,8 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
         phone: phone.replace(/\D/g, ''),
         birthDate: birthDate,
         clinic: clinicTheme.id,
-        companion: hasCompanion && companionName.trim() ? {
-          name: companionName.trim(),
-          cpf: companionCpf.replace(/\D/g, '') || undefined,
-          birthDate: companionBirthDate || undefined,
-        } : undefined
+        companion: companionsPayload.length > 0 ? companionsPayload[0] : undefined,
+        companions: companionsPayload.length > 0 ? companionsPayload : undefined
       };
 
       const response = await api.post<AccessCredential[]>(
@@ -153,11 +181,11 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
       if (response.data && response.data.length > 0) {
         onSuccess(response.data);
       } else {
-        setErrorMessage('Nenhum cadastro ativo encontrado para este CPF hoje.');
+        setErrorMessage('Nenhum cadastro ativo encontrado para este CPF hoje. Realize um novo cadastro acima.');
       }
     } catch (err: any) {
       console.error('[SelfRegistration] Erro ao consultar CPF:', err);
-      const msg = err.response?.data?.message || 'Nenhum cadastro ativo encontrado para este CPF hoje.';
+      const msg = err.response?.data?.message || 'Erro ao consultar CPF. Tente novamente.';
       setErrorMessage(msg);
     } finally {
       setLoading(false);
@@ -165,25 +193,31 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
   };
 
   return (
-    <div className="w-full max-w-md mx-auto space-y-6">
-      {/* Cabeçalho do Card */}
-      <div className="bg-white rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-100 p-6 sm:p-8 text-center relative overflow-hidden">
-        <div 
-          className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r"
-          style={{
-            backgroundImage: `linear-gradient(to right, ${clinicTheme.primaryColor}, ${clinicTheme.primaryDarkColor})`
-          }}
-        />
-
-        <h1 className="text-xl sm:text-2xl font-black text-slate-800 tracking-tight pt-1">
-          Pré-Cadastro
-        </h1>
-        <p className="text-xs sm:text-sm text-slate-500 mt-1 font-medium leading-relaxed">
-          Preencha seus dados para liberação da catraca física e emissão do QR Code de acesso.
+    <div className="w-full max-w-md mx-auto">
+      {/* Header com Logo e Subtítulo */}
+      <div className="text-center mb-6">
+        <div className="inline-flex items-center justify-center p-3 bg-white rounded-3xl shadow-sm border border-slate-100 mb-3">
+          <img
+            src={clinicTheme.logoUrl}
+            alt={clinicTheme.name}
+            className="h-10 object-contain"
+            onError={(e) => {
+              (e.target as HTMLElement).style.display = 'none';
+            }}
+          />
+        </div>
+        <h2 className="text-xl font-black text-slate-800 tracking-tight">
+          {clinicTheme.name}
+        </h2>
+        <p className="text-xs font-semibold text-slate-500 mt-0.5">
+          {clinicTheme.subtitle}
         </p>
+      </div>
 
-        {/* Seletor de Abas */}
-        <div className="flex rounded-2xl bg-slate-100 p-1 mt-5 border border-slate-200/60">
+      {/* Card Principal */}
+      <div className="bg-white rounded-3xl p-6 shadow-xl shadow-slate-200/50 border border-slate-100 relative overflow-hidden">
+        {/* Barra superior de abas */}
+        <div className="flex bg-slate-100/80 p-1 rounded-2xl">
           <button
             type="button"
             onClick={() => {
@@ -196,7 +230,7 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
                 : 'text-slate-500 hover:text-slate-800'
             }`}
           >
-            <UserPlus className="w-3.5 h-3.5" />
+            <UserPlus className="w-3.5 h-3.5" style={{ color: activeTab === 'register' ? clinicTheme.primaryColor : undefined }} />
             Novo Cadastro
           </button>
           <button
@@ -211,7 +245,7 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
                 : 'text-slate-500 hover:text-slate-800'
             }`}
           >
-            <Search className="w-3.5 h-3.5" />
+            <Search className="w-3.5 h-3.5" style={{ color: activeTab === 'lookup' ? clinicTheme.primaryColor : undefined }} />
             Consultar por CPF
           </button>
         </div>
@@ -240,7 +274,7 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Ex: Maria dos Santos"
-                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-semibold text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition-all"
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-semibold text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 transition-all"
               />
             </div>
 
@@ -258,7 +292,7 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
                 onChange={(e) => setCpf(maskCpf(e.target.value))}
                 placeholder="000.000.000-00"
                 maxLength={14}
-                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-semibold text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition-all"
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-semibold text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 transition-all font-mono"
               />
             </div>
 
@@ -266,7 +300,7 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
               <div>
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center gap-1">
                   <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                  Nascimento
+                  Nascimento <span className="text-[10px] text-slate-400 font-normal">(opcional)</span>
                 </label>
                 <input
                   type="text"
@@ -276,13 +310,13 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
                   onChange={(e) => setBirthDate(maskDate(e.target.value))}
                   placeholder="DD/MM/AAAA"
                   maxLength={10}
-                  className="w-full px-3.5 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-semibold text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition-all"
+                  className="w-full px-3.5 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-semibold text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 transition-all"
                 />
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center gap-1">
                   <Phone className="w-3.5 h-3.5 text-slate-400" />
-                  WhatsApp
+                  WhatsApp <span className="text-[10px] text-slate-400 font-normal">(opcional)</span>
                 </label>
                 <input
                   type="tel"
@@ -292,62 +326,100 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
                   onChange={(e) => setPhone(maskPhone(e.target.value))}
                   placeholder="(42) 99999-9999"
                   maxLength={15}
-                  className="w-full px-3.5 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-semibold text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition-all"
+                  className="w-full px-3.5 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-semibold text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 transition-all font-mono"
                 />
               </div>
             </div>
 
-            {/* Checkbox Acompanhante */}
+            {/* Checkbox e Lista de Acompanhantes (Múltiplos / Ilimitados) */}
             <div className="pt-2 border-t border-slate-100">
               <label className="flex items-center gap-2.5 cursor-pointer py-1.5 select-none">
                 <input
                   type="checkbox"
                   checked={hasCompanion}
                   onChange={(e) => setHasCompanion(e.target.checked)}
-                  className="w-4 h-4 rounded text-rose-600 focus:ring-rose-500 border-slate-300"
+                  className="w-4 h-4 rounded border-slate-300"
+                  style={{ accentColor: clinicTheme.primaryColor }}
                 />
                 <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                  <UserPlus className="w-3.5 h-3.5 text-rose-600" />
-                  Vou levar um acompanhante
+                  <UserPlus className="w-3.5 h-3.5" style={{ color: clinicTheme.primaryColor }} />
+                  Vou levar acompanhante(s)
                 </span>
               </label>
 
               {hasCompanion && (
-                <div className="mt-3 p-4 bg-rose-50/40 border border-rose-100 rounded-2xl space-y-3 animate-in fade-in duration-200">
-                  <p className="text-[11px] font-bold text-rose-900 uppercase tracking-wider">
-                    Dados do Acompanhante
-                  </p>
-                  <div>
-                    <input
-                      type="text"
-                      value={companionName}
-                      onChange={(e) => setCompanionName(e.target.value)}
-                      placeholder="Nome do Acompanhante *"
-                      className="w-full px-3.5 py-2.5 bg-white border border-rose-200 rounded-xl text-xs font-semibold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500"
-                    />
+                <div 
+                  className="mt-3 p-4 rounded-2xl space-y-3.5 animate-in fade-in duration-200 border"
+                  style={{
+                    backgroundColor: clinicTheme.secondaryColor,
+                    borderColor: `${clinicTheme.primaryColor}25`
+                  }}
+                >
+                  <div className="flex items-center justify-between">
+                    <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: clinicTheme.primaryDarkColor }}>
+                      Acompanhantes ({companions.length})
+                    </p>
+                    <button
+                      type="button"
+                      onClick={addCompanionField}
+                      className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-xl bg-white border shadow-sm transition-all hover:scale-105 active:scale-95 cursor-pointer"
+                      style={{ color: clinicTheme.primaryDarkColor, borderColor: `${clinicTheme.primaryColor}30` }}
+                    >
+                      <Plus className="w-3 h-3" />
+                      + Adicionar outro
+                    </button>
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      value={companionCpf}
-                      onChange={(e) => setCompanionCpf(maskCpf(e.target.value))}
-                      placeholder="CPF (opcional)"
-                      maxLength={14}
-                      className="w-full px-3.5 py-2.5 bg-white border border-rose-200 rounded-xl text-xs font-semibold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500"
-                    />
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      value={companionBirthDate}
-                      onChange={(e) => setCompanionBirthDate(maskDate(e.target.value))}
-                      placeholder="Nascimento"
-                      maxLength={10}
-                      className="w-full px-3.5 py-2.5 bg-white border border-rose-200 rounded-xl text-xs font-semibold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500"
-                    />
-                  </div>
+
+                  {companions.map((comp, idx) => (
+                    <div key={comp.id} className="p-3 bg-white rounded-xl border border-slate-200/80 shadow-xs space-y-2 relative">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-extrabold uppercase text-slate-500 tracking-wider">
+                          Acompanhante #{idx + 1}
+                        </span>
+                        {companions.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removeCompanionField(comp.id)}
+                            className="text-slate-400 hover:text-red-500 transition-colors p-1 cursor-pointer"
+                            title="Remover acompanhante"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                      <div>
+                        <input
+                          type="text"
+                          value={comp.name}
+                          onChange={(e) => updateCompanion(comp.id, 'name', e.target.value)}
+                          placeholder={`Nome do Acompanhante #${idx + 1} *`}
+                          className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-1 transition-all"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          value={comp.cpf}
+                          onChange={(e) => updateCompanion(comp.id, 'cpf', maskCpf(e.target.value))}
+                          placeholder="CPF (opcional)"
+                          maxLength={14}
+                          className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-1 transition-all font-mono"
+                        />
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          value={comp.birthDate}
+                          onChange={(e) => updateCompanion(comp.id, 'birthDate', maskDate(e.target.value))}
+                          placeholder="Nasc. (opcional)"
+                          maxLength={10}
+                          className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-1 transition-all"
+                        />
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
@@ -356,7 +428,7 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-4 px-6 rounded-2xl text-white font-extrabold text-sm shadow-lg shadow-rose-900/20 hover:opacity-95 active:scale-[0.98] transition-all flex items-center justify-center gap-2 mt-4 disabled:opacity-60 cursor-pointer"
+              className="w-full py-4 px-6 rounded-2xl text-white font-extrabold text-sm shadow-lg hover:opacity-95 active:scale-[0.98] transition-all flex items-center justify-center gap-2 mt-4 disabled:opacity-60 cursor-pointer"
               style={{
                 backgroundImage: `linear-gradient(135deg, ${clinicTheme.primaryColor}, ${clinicTheme.primaryDarkColor})`
               }}
@@ -394,14 +466,14 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
                 onChange={(e) => setLookupCpf(maskCpf(e.target.value))}
                 placeholder="000.000.000-00"
                 maxLength={14}
-                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-semibold text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition-all"
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-semibold text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 transition-all font-mono"
               />
             </div>
 
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-4 px-6 rounded-2xl text-white font-extrabold text-sm shadow-lg shadow-rose-900/20 hover:opacity-95 active:scale-[0.98] transition-all flex items-center justify-center gap-2 mt-4 disabled:opacity-60 cursor-pointer"
+              className="w-full py-4 px-6 rounded-2xl text-white font-extrabold text-sm shadow-lg hover:opacity-95 active:scale-[0.98] transition-all flex items-center justify-center gap-2 mt-4 disabled:opacity-60 cursor-pointer"
               style={{
                 backgroundImage: `linear-gradient(135deg, ${clinicTheme.primaryColor}, ${clinicTheme.primaryDarkColor})`
               }}
