@@ -400,36 +400,14 @@ export default function PatientAccess() {
     }
   };
 
-  const isValidCpf = (rawCpf: string): boolean => {
-    if (!rawCpf) return false;
-    const cpf = rawCpf.replace(/\D/g, '');
-    if (cpf.length !== 11) return false;
-    if (/^(\d)\1{10}$/.test(cpf)) return false;
-
-    let sum = 0;
-    for (let i = 0; i < 9; i++) {
-      sum += parseInt(cpf.charAt(i), 10) * (10 - i);
-    }
-    let remainder = sum % 11;
-    const firstCheck = remainder < 2 ? 0 : 11 - remainder;
-    if (parseInt(cpf.charAt(9), 10) !== firstCheck) return false;
-
-    sum = 0;
-    for (let i = 0; i < 10; i++) {
-      sum += parseInt(cpf.charAt(i), 10) * (11 - i);
-    }
-    remainder = sum % 11;
-    const secondCheck = remainder < 2 ? 0 : 11 - remainder;
-    return parseInt(cpf.charAt(10), 10) === secondCheck;
-  };
 
   const handleCpfSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!appointmentId || !cpfInput) return;
 
     const cleanCpf = cpfInput.replace(/\D/g, '');
-    if (!isValidCpf(cleanCpf)) {
-      setCpfSubmitError('CPF inválido. Verifique os números digitados.');
+    if (cleanCpf.length !== 11) {
+      setCpfSubmitError('Por favor, informe os 11 dígitos do seu CPF.');
       return;
     }
 
@@ -452,7 +430,7 @@ export default function PatientAccess() {
       );
 
       if (validateRes.data?.requiresCpfFallback || !validateRes.data?.authorized) {
-        setCpfSubmitError(validateRes.data?.message || 'CPF inválido. Por favor, confira os números digitados.');
+        setCpfSubmitError(validateRes.data?.message || 'CPF não encontrado ou inválido. Por favor, confira os números digitados.');
         return;
       }
 
@@ -499,9 +477,16 @@ export default function PatientAccess() {
       return;
     }
 
-    if (!companionName.trim()) return;
+    if (!companionName.trim()) {
+      setCompanionSubmitError('Por favor, informe o nome completo do acompanhante.');
+      return;
+    }
 
     const cleanCpf = companionCpf ? companionCpf.replace(/\D/g, '') : '';
+    if (cleanCpf.length !== 11) {
+      setCompanionSubmitError('Por favor, informe um CPF completo com 11 dígitos para o acompanhante.');
+      return;
+    }
 
     setCompanionSubmitLoading(true);
     setCompanionSubmitError(null);
@@ -512,7 +497,7 @@ export default function PatientAccess() {
         `/v1/access/companions/${targetAppointmentId}`,
         {
           name: companionName.trim(),
-          cpf: cleanCpf || null,
+          cpf: cleanCpf,
           birthDate: companionBirthDate || null
         },
         {

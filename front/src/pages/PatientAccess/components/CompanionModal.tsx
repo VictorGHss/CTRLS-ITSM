@@ -62,7 +62,7 @@ export const CompanionModal: React.FC<CompanionModalProps> = ({
           <div className="space-y-3">
             {/* Nome Completo */}
             <div>
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Nome Completo</label>
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Nome Completo *</label>
               <input
                 type="text"
                 required
@@ -74,42 +74,17 @@ export const CompanionModal: React.FC<CompanionModalProps> = ({
               />
             </div>
 
-            {/* Data de Nascimento */}
-            <div>
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                Data de Nascimento <span className="text-[9px] text-slate-400 font-normal">(Opcional)</span>
-              </label>
-              <input
-                type="text"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                placeholder="DD/MM/AAAA"
-                value={companionBirthDate}
-                onChange={(e) => {
-                  const digits = e.target.value.replace(/\D/g, '').substring(0, 8);
-                  let masked = digits;
-                  if (digits.length > 4) {
-                    masked = `${digits.substring(0, 2)}/${digits.substring(2, 4)}/${digits.substring(4)}`;
-                  } else if (digits.length > 2) {
-                    masked = `${digits.substring(0, 2)}/${digits.substring(2)}`;
-                  }
-                  onBirthDateChange(masked);
-                }}
-                disabled={companionSubmitLoading}
-                className="w-full py-3 px-4 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 transition-all text-xs font-semibold text-slate-700"
-              />
-            </div>
-
             {/* CPF */}
             <div>
               <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                CPF <span className="text-[9px] text-slate-400 font-normal">(Opcional)</span>
+                CPF *
               </label>
               <input
                 type="text"
                 inputMode="numeric"
                 pattern="[0-9]*"
-                placeholder="000.000.000-00 (opcional)"
+                required
+                placeholder="000.000.000-00"
                 value={companionCpf}
                 onChange={(e) => {
                   const digits = e.target.value.replace(/\D/g, '').substring(0, 11);
@@ -125,6 +100,32 @@ export const CompanionModal: React.FC<CompanionModalProps> = ({
                 }}
                 disabled={companionSubmitLoading}
                 className="w-full py-3 px-4 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 transition-all text-xs font-mono font-semibold text-slate-700"
+              />
+            </div>
+
+            {/* Data de Nascimento (Opcional) */}
+            <div>
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                Data de Nascimento <span className="text-[9px] text-slate-400 font-normal">(Opcional)</span>
+              </label>
+              <input
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                placeholder="DD/MM/AAAA (opcional)"
+                value={companionBirthDate}
+                onChange={(e) => {
+                  const digits = e.target.value.replace(/\D/g, '').substring(0, 8);
+                  let masked = digits;
+                  if (digits.length > 4) {
+                    masked = `${digits.substring(0, 2)}/${digits.substring(2, 4)}/${digits.substring(4)}`;
+                  } else if (digits.length > 2) {
+                    masked = `${digits.substring(0, 2)}/${digits.substring(2)}`;
+                  }
+                  onBirthDateChange(masked);
+                }}
+                disabled={companionSubmitLoading}
+                className="w-full py-3 px-4 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 transition-all text-xs font-semibold text-slate-700"
               />
             </div>
           </div>
@@ -147,14 +148,14 @@ export const CompanionModal: React.FC<CompanionModalProps> = ({
             </button>
             <button
               type="submit"
-              disabled={companionSubmitLoading || !companionName.trim()}
+              disabled={companionSubmitLoading || !companionName.trim() || companionCpf.replace(/\D/g, '').length !== 11}
               className={`flex-1 py-3 rounded-xl text-xs font-bold transition-all shadow-md flex items-center justify-center gap-2 ${
-                companionName.trim() && !companionSubmitLoading
+                companionName.trim() && companionCpf.replace(/\D/g, '').length === 11 && !companionSubmitLoading
                   ? 'text-white hover:scale-[1.01] active:scale-[0.99] cursor-pointer'
                   : 'bg-slate-100 text-slate-400 cursor-not-allowed shadow-none'
               }`}
               style={
-                companionName.trim() && !companionSubmitLoading
+                companionName.trim() && companionCpf.replace(/\D/g, '').length === 11 && !companionSubmitLoading
                   ? { backgroundImage: `linear-gradient(to right, ${primaryColor}, ${primaryDarkColor})` }
                   : undefined
               }
