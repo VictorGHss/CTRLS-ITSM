@@ -359,11 +359,15 @@ public class AccessService {
 
         // 8. Salva o registro no banco mapeando para o ID deste agendamento
         List<AccessCredential> savedList = accessCredentialRepositoryPort.findByAppointmentId(accessInfo.appointmentId());
+        String cleanPatientPhone = targetPhone != null ? targetPhone.replaceAll("\\D", "") : null;
+        if (cleanPatientPhone != null && cleanPatientPhone.isBlank()) cleanPatientPhone = null;
+
         if (savedList.isEmpty()) {
             AccessCredential credential = AccessCredential.builder()
                 .appointmentId(accessInfo.appointmentId())
                 .name(accessInfo.name())
                 .cpf(finalCpf)
+                .phone(cleanPatientPhone)
                 .userType(UserType.PATIENT)
                 .accessCredential(token)
                 .locator(locator)
@@ -375,6 +379,9 @@ public class AccessService {
         } else {
             // Se já existia e era uma credencial contingencial (CRED-), atualiza para a credencial real do GerAcesso
             AccessCredential existingCred = savedList.get(0);
+            if (cleanPatientPhone != null && !cleanPatientPhone.isBlank()) {
+                existingCred.setPhone(cleanPatientPhone);
+            }
             if (existingCred.getAccessCredential() != null 
                     && existingCred.getAccessCredential().startsWith("CRED-") 
                     && !token.startsWith("CRED-")) {
@@ -384,6 +391,8 @@ public class AccessService {
                 existingCred.setCreatedAt(LocalDateTime.now());
                 accessCredentialRepositoryPort.save(existingCred);
                 log.info("[AccessService] Atualizando credencial contingencial para credencial GerAcesso real para o agendamento ID: {}", accessInfo.appointmentId());
+            } else {
+                accessCredentialRepositoryPort.save(existingCred);
             }
         }
 
@@ -546,10 +555,16 @@ public class AccessService {
             .filter(c -> c.getName().equalsIgnoreCase(companion.name().trim()) && c.getUserType() == UserType.COMPANION)
             .findFirst();
 
+        String cleanCompPhone = companion.phone() != null ? companion.phone().replaceAll("\\D", "") : null;
+        if (cleanCompPhone != null && cleanCompPhone.isBlank()) cleanCompPhone = null;
+
         AccessCredential credential;
         if (existingCredOpt.isPresent()) {
             credential = existingCredOpt.get();
             credential.setCpf(companionCpf.isEmpty() ? null : companionCpf);
+            if (cleanCompPhone != null) {
+                credential.setPhone(cleanCompPhone);
+            }
             credential.setAccessCredential(companionToken);
             credential.setLocator(companionLocator);
             credential.setCreatedAt(LocalDateTime.now());
@@ -559,6 +574,7 @@ public class AccessService {
                 .appointmentId(appointmentId)
                 .name(companion.name())
                 .cpf(companionCpf.isEmpty() ? null : companionCpf)
+                .phone(cleanCompPhone)
                 .userType(UserType.COMPANION)
                 .accessCredential(companionToken)
                 .locator(companionLocator)
@@ -880,11 +896,17 @@ public class AccessService {
                 .filter(c -> c.getUserType() == UserType.PATIENT)
                 .findFirst();
 
+        String cleanSelfPhone = phone != null ? phone.replaceAll("\\D", "") : null;
+        if (cleanSelfPhone != null && cleanSelfPhone.isBlank()) cleanSelfPhone = null;
+
         AccessCredential patientCred;
         if (existingPatientCredOpt.isPresent()) {
             patientCred = existingPatientCredOpt.get();
             patientCred.setName(name.trim().toUpperCase());
             patientCred.setCpf(cleanCpf);
+            if (cleanSelfPhone != null) {
+                patientCred.setPhone(cleanSelfPhone);
+            }
             patientCred.setAccessCredential(credentialValue);
             patientCred.setLocator(locatorValue);
             patientCred.setCreatedAt(LocalDateTime.now(CLINIC_ZONE));
@@ -893,6 +915,7 @@ public class AccessService {
                     .appointmentId(appointmentId)
                     .name(name.trim().toUpperCase())
                     .cpf(cleanCpf)
+                    .phone(cleanSelfPhone)
                     .userType(UserType.PATIENT)
                     .accessCredential(credentialValue)
                     .locator(locatorValue)
