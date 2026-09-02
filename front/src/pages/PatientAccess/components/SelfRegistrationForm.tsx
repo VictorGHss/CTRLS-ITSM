@@ -101,18 +101,29 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
     }
 
     // Validação dos acompanhantes (se selecionado)
-    let companionsPayload: Array<{ name: string; cpf?: string; birthDate?: string }> = [];
+    let companionsPayload: Array<{ name: string; cpf: string; birthDate?: string }> = [];
     if (hasCompanion) {
-      const validEntries = companions.filter(c => c.name.trim().length > 0);
-      if (validEntries.length === 0) {
-        setErrorMessage('Por favor, informe o nome do(s) acompanhante(s) ou desmarque a opção.');
+      if (companions.length === 0) {
+        setErrorMessage('Por favor, informe os dados do acompanhante ou desmarque a opção.');
         return;
       }
-      companionsPayload = validEntries.map(c => ({
-        name: c.name.trim(),
-        cpf: c.cpf.replace(/\D/g, '') || undefined,
-        birthDate: c.birthDate || undefined
-      }));
+      for (let i = 0; i < companions.length; i++) {
+        const c = companions[i];
+        if (!c.name.trim()) {
+          setErrorMessage(`Por favor, informe o nome completo do Acompanhante #${i + 1}.`);
+          return;
+        }
+        const cleanCompCpf = c.cpf.replace(/\D/g, '');
+        if (cleanCompCpf.length !== 11) {
+          setErrorMessage(`Por favor, informe o CPF com 11 dígitos do Acompanhante #${i + 1} (${c.name}).`);
+          return;
+        }
+        companionsPayload.push({
+          name: c.name.trim(),
+          cpf: cleanCompCpf,
+          birthDate: c.birthDate || undefined
+        });
+      }
     }
 
     setLoading(true);
@@ -403,7 +414,7 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
                           pattern="[0-9]*"
                           value={comp.cpf}
                           onChange={(e) => updateCompanion(comp.id, 'cpf', maskCpf(e.target.value))}
-                          placeholder="CPF (opcional)"
+                          placeholder="CPF *"
                           maxLength={14}
                           className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-1 transition-all font-mono"
                         />

@@ -167,30 +167,33 @@ public class AccessService {
         }
 
         String resolvedCpf = null;
-        if (isValidCpf(cleanRequestCpf)) {
-            // Se o paciente acabou de submeter um CPF válido (via formulário web ou chat), usa-o com prioridade
+        if (cleanRequestCpf.length() == 11) {
+            // Se o paciente acabou de submeter um CPF com 11 dígitos (via formulário web ou chat), usa-o com prioridade
             resolvedCpf = cleanRequestCpf;
             try {
-                log.info("[AccessService] Sincronizando CPF válido informado ({}) de volta com a Feegow para o paciente ID: {}", resolvedCpf, accessInfo.patientId());
+                log.info("[AccessService] Sincronizando CPF informado ({}) de volta com a Feegow para o paciente ID: {}", resolvedCpf, accessInfo.patientId());
                 patientExternalPort.updatePatientCpf(accessInfo.patientId(), resolvedCpf, patientName, patientBirthdate);
             } catch (Exception e) {
                 log.error("[AccessService] Falha ao sincronizar CPF com a Feegow: {}", e.getMessage());
             }
+        } else if (cleanFeegowCpf.length() == 11) {
+            resolvedCpf = cleanFeegowCpf;
+        } else if (isValidCpf(cleanRequestCpf)) {
+            resolvedCpf = cleanRequestCpf;
         } else if (isValidCpf(cleanFeegowCpf)) {
             resolvedCpf = cleanFeegowCpf;
         }
 
         String targetPhone = mainPatient != null && mainPatient.phone() != null ? mainPatient.phone() : accessInfo.phone();
 
-        // 3. Contingência de CPF Nulo ou Matematicamente Inválido:
-        // Se o CPF for nulo, incompleto ou falhar na validação oficial da Receita Federal (Módulo 11),
-        // ativamos a flag requiresCpfFallback para que a interface web ou chatbot exiba o campo de correção.
-        if (resolvedCpf == null || resolvedCpf.isBlank() || !isValidCpf(resolvedCpf)) {
-            log.warn("[AccessService] Prontuário Feegow sem CPF válido (valor Feegow: '{}', valor request: '{}') para o paciente ID: {}. Ativando flag 'requiresCpfFallback'.",
+        // 3. Contingência de CPF Nulo ou com menos de 11 dígitos:
+        // Se o CPF for nulo ou incompleto, solicitamos a confirmação do CPF para liberação.
+        if (resolvedCpf == null || resolvedCpf.isBlank() || resolvedCpf.length() != 11) {
+            log.warn("[AccessService] Prontuário Feegow sem CPF de 11 dígitos (valor Feegow: '{}', valor request: '{}') para o paciente ID: {}. Ativando flag 'requiresCpfFallback'.",
                     cleanFeegowCpf, cleanRequestCpf, accessInfo.patientId());
             String token = generateAccessToken(appointmentId, targetPhone);
             String accessUrl = "https://itsm-inovare.ctrls.dev.br/" + appointmentId + "?t=" + token;
-            return new AccessValidationResult(false, null, null, true, "CPF ausente ou inválido. Por favor, confirme seu CPF para liberação da catraca.", token, accessUrl);
+            return new AccessValidationResult(false, null, null, true, "Por favor, confirme seu CPF para liberação da catraca.", token, accessUrl);
         }
 
         // Usa o timezone local explícito da clínica para garantir que LocalDate.now() reflita
@@ -300,17 +303,16 @@ public class AccessService {
                 .visitedCpf(doctorCpf)
                 .build();
 
-            // Validação prévia do algoritmo oficial de CPF (Módulo 11)
-            boolean isCpfValid = isValidCpf(finalCpf);
+            // Tenta cadastro na GerAcesso com CPF de 11 dígitos
+            boolean isCpfValid = finalCpf != null && finalCpf.length() == 11;
             Optional<GerAcessoResponse> responseOpt = Optional.empty();
 
-            if (!isCpfValid) {
-                log.warn("[GERACESSO-CPF] CPF do paciente ID {} é matematicamente inválido (CPF: {}). Ignorando chamada à GerAcesso e ativando credencial local contingencial.",
-                        accessInfo.patientId(), finalCpf);
-            } else {
-                // Dispara chamada de cadastro do paciente titular na API física da GerAcesso
+            if (isCpfValid) {
                 log.info("[AccessService] Enviando cadastro do paciente titular {} para a GerAcesso local...", accessInfo.name());
                 responseOpt = gerAcessoClientPort.registerAccess(titularRequest);
+            } else {
+                log.warn("[GERACESSO-CPF] CPF do paciente ID {} incompleto (CPF: {}). Ativando credencial local contingencial.",
+                        accessInfo.patientId(), finalCpf);
             }
 
             if (responseOpt.isPresent() && responseOpt.get().credential() != null && !responseOpt.get().credential().isBlank()) {
