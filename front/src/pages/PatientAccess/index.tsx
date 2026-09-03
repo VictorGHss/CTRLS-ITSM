@@ -46,6 +46,7 @@ export default function PatientAccess() {
   const [cpfSubmitLoading, setCpfSubmitLoading] = useState<boolean>(false);
   const [cpfSubmitError, setCpfSubmitError] = useState<string | null>(null);
   const [isEditingCpf, setIsEditingCpf] = useState<boolean>(false);
+  const [editingCredential, setEditingCredential] = useState<AccessCredential | null>(null);
 
   // --- Cadastro de Acompanhantes e Reativação ---
   const [isCompanionModalOpen, setIsCompanionModalOpen] = useState<boolean>(false);
@@ -435,7 +436,15 @@ export default function PatientAccess() {
 
   const handleCpfSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const targetId = getActiveAppointmentId() || appointmentId || credentials[0]?.appointmentId;
+    const missingCred = credentials.find(
+      c => c.locator === 'CPF_MISSING' || c.credentialCode === 'CPF_MISSING'
+    );
+    const targetId = editingCredential?.appointmentId 
+      || missingCred?.appointmentId 
+      || getActiveAppointmentId() 
+      || appointmentId 
+      || credentials[0]?.appointmentId;
+
     if (!targetId) {
       setCpfSubmitError('Não foi possível identificar seu agendamento. Por favor, recarregue a página.');
       return;
@@ -454,8 +463,27 @@ export default function PatientAccess() {
     setCpfSubmitLoading(true);
     setCpfSubmitError(null);
 
+    // Recupera o token / phoneDigits com fallback abrangente (URL, state e localStorage)
+    const token = (
+      new URLSearchParams(window.location.search).get('t') ||
+      new URLSearchParams(window.location.search).get('token') ||
+      verifiedToken ||
+      localStorage.getItem(`patient_access_token_${appointmentId}`) ||
+      localStorage.getItem(`patient_access_token_${targetId}`) ||
+      ''
+    ).trim();
+
+    const phoneDigits = (
+      new URLSearchParams(window.location.search).get('p') ||
+      new URLSearchParams(window.location.search).get('auth') ||
+      verifiedPhoneDigits ||
+      localStorage.getItem(`patient_access_phone_${appointmentId}`) ||
+      localStorage.getItem(`patient_access_phone_${targetId}`) ||
+      ''
+    ).trim();
+
     try {
-      console.log('[PatientAccess] Enviando CPF para validação:', cleanCpf, 'agendamento:', targetId);
+      console.log('[PatientAccess] Enviando CPF para validação:', cleanCpf, 'agendamento alvo:', targetId);
       const validateRes = await api.post<{ authorized: boolean; requiresCpfFallback?: boolean; message?: string }>(
         '/v1/access/validate',
         {
@@ -474,15 +502,17 @@ export default function PatientAccess() {
         return;
       }
 
-      const query = verifiedToken
-        ? `t=${encodeURIComponent(verifiedToken)}`
-        : verifiedPhoneDigits
-          ? `phoneDigits=${encodeURIComponent(verifiedPhoneDigits)}`
+      // Re-busca todas as credenciais do grupo pelo agendamento principal da rota ou pelo targetId
+      const rootId = (appointmentId && appointmentId !== 'inovare' && appointmentId !== 'imagem') ? appointmentId : targetId;
+      const query = token
+        ? `t=${encodeURIComponent(token)}`
+        : phoneDigits
+          ? `phoneDigits=${encodeURIComponent(phoneDigits)}`
           : '';
 
       try {
         const response = await api.get<AccessCredential[]>(
-          `/v1/access/credentials/${targetId}${query ? `?${query}` : ''}`,
+          `/v1/access/credentials/${rootId}${query ? `?${query}` : ''}`,
           {
             headers: {
               'X-Skip-Interceptor': 'true'
@@ -490,9 +520,13 @@ export default function PatientAccess() {
           }
         );
         if (response.data && response.data.length > 0) {
-          saveCredentialsWithOfflineCache(response.data, { token: verifiedToken, phoneDigits: verifiedPhoneDigits });
+          saveCredentialsWithOfflineCache(response.data, { token, phoneDigits });
+          if (token) setVerifiedToken(token);
+          if (phoneDigits) setVerifiedPhoneDigits(phoneDigits);
           setCredentials(response.data);
           setIsEditingCpf(false);
+          setEditingCredential(null);
+          setCpfInput('');
           return;
         }
       } catch (fetchErr) {
@@ -508,11 +542,17 @@ export default function PatientAccess() {
         if (lookupRes.data && lookupRes.data.length > 0) {
           saveCredentialsWithOfflineCache(lookupRes.data);
           setCredentials(lookupRes.data);
+          setIsEditingCpf(false);
+          setEditingCredential(null);
+          setCpfInput('');
+          return;
         }
       } catch (lookupErr) {
         console.warn('[PatientAccess] Lookup por CPF após validação falhou:', lookupErr);
       }
       setIsEditingCpf(false);
+      setEditingCredential(null);
+      setCpfInput('');
     } catch (err: unknown) {
       console.error('[PatientAccess] Falha ao enviar CPF:', err);
       const msg = getApiErrorMessage(err, 'Ocorreu um erro ao salvar o CPF. Tente novamente.');
@@ -774,21 +814,10 @@ export default function PatientAccess() {
           </div>
 
           {/* Fluxo Condicional */}
-          {credentials.some(c => c.locator === 'CPF_MISSING') || isEditingCpf ? (
+          {isEditingCpf || (credentials.length > 0 && credentials.every(c => c.locator === 'CPF_MISSING' || c.credentialCode === 'CPF_MISSING')) ? (
             <div className="space-y-3">
-              {isEditingCpf && credentials.length > 0 && (
-                <div className="flex justify-between items-center px-1">
-                  <span className="text-xs font-bold text-slate-700">Corrigir CPF do Paciente</span>
-                  <button
-                    type="button"
-                    onClick={() => setIsEditingCpf(false)}
-                    className="text-xs font-semibold text-slate-400 hover:text-slate-600 cursor-pointer"
-                  >
-                    Voltar
-                  </button>
-                </div>
-              )}
               <CpfFallbackCard
+                patientName={editingCredential?.name}
                 cpfInput={cpfInput}
                 cpfSubmitLoading={cpfSubmitLoading}
                 cpfSubmitError={cpfSubmitError}
@@ -797,6 +826,10 @@ export default function PatientAccess() {
                   setCpfInput(masked);
                 }}
                 onSubmit={handleCpfSubmit}
+                onCancel={credentials.some(c => c.locator !== 'CPF_MISSING' && c.credentialCode !== 'CPF_MISSING') ? () => {
+                  setIsEditingCpf(false);
+                  setEditingCredential(null);
+                } : undefined}
               />
             </div>
           ) : credentials.length === 0 ? (
@@ -820,7 +853,10 @@ export default function PatientAccess() {
               onOpenCompanionModal={() => setIsCompanionModalOpen(true)}
               onReactivateAccess={handleReactivateAccess}
               onResetAccess={handleResetAccess}
-              onEditCpf={() => setIsEditingCpf(true)}
+              onEditCpf={(targetCred) => {
+                if (targetCred) setEditingCredential(targetCred);
+                setIsEditingCpf(true);
+              }}
               isReactivating={isReactivating}
               clinicTheme={clinicTheme}
             />

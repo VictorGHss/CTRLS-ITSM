@@ -2,29 +2,48 @@ import React from 'react';
 import { ShieldCheck, AlertTriangle, RefreshCw } from 'lucide-react';
 
 interface CpfFallbackCardProps {
+  patientName?: string;
   cpfInput: string;
   cpfSubmitLoading: boolean;
   cpfSubmitError: string | null;
   onCpfChange: (val: string) => void;
   onSubmit: (e: React.FormEvent) => void;
+  onCancel?: () => void;
 }
 
 export const CpfFallbackCard: React.FC<CpfFallbackCardProps> = ({
+  patientName,
   cpfInput,
   cpfSubmitLoading,
   cpfSubmitError,
   onCpfChange,
   onSubmit,
+  onCancel,
 }) => {
   return (
     <div className="bg-white border border-slate-200/80 rounded-3xl p-6 space-y-5 shadow-sm text-center">
+      {onCancel && (
+        <div className="flex justify-end -mt-2 -mr-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="text-xs font-semibold text-slate-400 hover:text-slate-600 cursor-pointer"
+          >
+            Voltar ao início
+          </button>
+        </div>
+      )}
       <div className="w-14 h-14 bg-brand-primary/10 text-brand-primary rounded-full flex items-center justify-center mx-auto">
         <ShieldCheck className="w-7 h-7" />
       </div>
       <div className="space-y-1.5">
-        <h3 className="text-md font-bold text-slate-800">Correção do CPF</h3>
+        <h3 className="text-md font-bold text-slate-800">
+          {patientName ? `Correção do CPF de ${patientName}` : 'Correção do CPF'}
+        </h3>
         <p className="text-xs text-slate-500 leading-relaxed max-w-[290px] mx-auto">
-          O CPF cadastrado está incorreto. Digite os 11 números do seu CPF para liberar seu acesso na clínica:
+          {patientName
+            ? `Informe os 11 números do CPF de ${patientName} para liberar a credencial:`
+            : 'O CPF cadastrado está incorreto ou ausente. Digite os 11 números do CPF para liberar seu acesso na clínica:'}
         </p>
       </div>
 
