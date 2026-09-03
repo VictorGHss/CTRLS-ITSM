@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { QRCodeCanvas } from 'qrcode.react';
 import { 
   Lock, 
@@ -9,13 +9,15 @@ import {
   MapPin,
   RefreshCw,
   Sun,
-  CreditCard
+  CreditCard,
+  Share2
 } from 'lucide-react';
 import { formatCpf } from '../types';
 import type { AccessCredential } from '../types';
 import { resolveDoctorLocation, resolveDoctorSpecialty } from '../utils/clinicThemes';
 import type { ClinicTheme } from '../utils/clinicThemes';
 import { AddToCalendarMenu } from './AddToCalendarMenu';
+import { shareQrCodeImage } from '../utils/shareQrCode';
 
 interface CredentialsCarouselProps {
   credentials: AccessCredential[];
@@ -46,6 +48,8 @@ export const CredentialsCarousel: React.FC<CredentialsCarouselProps> = ({
   isReactivating,
   clinicTheme,
 }) => {
+  const [sharingIndex, setSharingIndex] = useState<number | null>(null);
+
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
@@ -130,6 +134,7 @@ export const CredentialsCarousel: React.FC<CredentialsCarouselProps> = ({
                 ) : (
                   <>
                     <QRCodeCanvas 
+                      id={`qr-canvas-${idx}`}
                       value={cred.credentialCode} 
                       size={168} 
                       fgColor="#000000" 
@@ -270,6 +275,23 @@ export const CredentialsCarousel: React.FC<CredentialsCarouselProps> = ({
               <Maximize2 className="w-3.5 h-3.5" />
               Ampliar QR Code
             </button>
+
+            {/* Botão Compartilhar Imagem do QR Code para Acompanhante */}
+            {cred.credentialCode !== 'BLOCKED_OUTSIDE_WINDOW' && cred.userType === 'COMPANION' && (
+              <button
+                type="button"
+                onClick={async () => {
+                  setSharingIndex(idx);
+                  await shareQrCodeImage(`qr-canvas-${idx}`, cred.name, cred.userType);
+                  setSharingIndex(null);
+                }}
+                disabled={sharingIndex === idx}
+                className="w-full mt-2 py-2.5 px-3 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 active:scale-[0.98] shadow-xs cursor-pointer"
+              >
+                <Share2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                <span>{sharingIndex === idx ? 'Preparando imagem...' : 'Compartilhar QR Code'}</span>
+              </button>
+            )}
           </div>
         ))}
       </div>

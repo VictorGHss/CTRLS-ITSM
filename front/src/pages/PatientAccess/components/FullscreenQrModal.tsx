@@ -1,37 +1,57 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { QRCodeCanvas } from 'qrcode.react';
-import { Sun } from 'lucide-react';
+import { Sun, ArrowRightLeft, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import type { ClinicTheme } from '../utils/clinicThemes';
+import type { AccessCredential } from '../types';
 
 interface FullscreenQrModalProps {
   modalRef: React.RefObject<HTMLDivElement | null>;
-  title: string;
-  qrCodeValue: string;
+  credentials: AccessCredential[];
+  currentIndex: number;
+  onSwitchCard: (index: number) => void;
   onClose: () => void;
   clinicTheme?: ClinicTheme;
+  title?: string;
+  qrCodeValue?: string;
 }
 
 export const FullscreenQrModal: React.FC<FullscreenQrModalProps> = ({
   modalRef,
-  title,
-  qrCodeValue,
+  credentials,
+  currentIndex,
+  onSwitchCard,
   onClose,
   clinicTheme,
+  title: legacyTitle,
+  qrCodeValue: legacyQrCodeValue,
 }) => {
   const primaryColor = clinicTheme?.primaryColor || '#00875F';
   const primaryDarkColor = clinicTheme?.primaryDarkColor || '#00583F';
 
-  const [qrSize, setQrSize] = React.useState<number>(310);
+  const [qrSize, setQrSize] = useState<number>(310);
+  const touchStartXRef = useRef<number | null>(null);
+
+  const total = credentials.length;
+  const hasMultiple = total > 1;
+  const currentCred = credentials[currentIndex] || credentials[0];
+  const nextIndex = (currentIndex + 1) % total;
+  const prevIndex = (currentIndex - 1 + total) % total;
+  const nextCred = credentials[nextIndex];
+
+  const qrValue = currentCred?.credentialCode || legacyQrCodeValue || '';
+  const displayTitle = currentCred 
+    ? `${currentCred.userType === 'PATIENT' ? 'Titular' : 'Acompanhante'}: ${currentCred.name}`
+    : legacyTitle || 'Acesso Físico';
 
   // Calcula tamanho ideal do QR Code para ocupar o maximo da tela do celular sem quebrar layout
-  React.useEffect(() => {
+  useEffect(() => {
     const calculateSize = () => {
       const w = window.innerWidth;
       const h = window.innerHeight;
       const targetByWidth = Math.floor(w * 0.85);
-      const targetByHeight = Math.floor(h * 0.48);
-      const ideal = Math.min(targetByWidth, targetByHeight, 360);
-      setQrSize(Math.max(ideal, 290));
+      const targetByHeight = Math.floor(h * 0.44);
+      const ideal = Math.min(targetByWidth, targetByHeight, 350);
+      setQrSize(Math.max(ideal, 270));
     };
     calculateSize();
     window.addEventListener('resize', calculateSize);
@@ -39,9 +59,9 @@ export const FullscreenQrModal: React.FC<FullscreenQrModalProps> = ({
   }, []);
 
   // Mantém a tela acesa impedindo auto-dimming ou bloqueio durante aproximação da catraca
-  React.useEffect(() => {
-    let wakeLockSentinel: any = null;
-    if ('wakeLock' in navigator) {
+  useEffect(() => {
+    let wakeLockSentinel: WakeLockSentinel | null = null;
+    if ('wakeLock' in navigator && navigator.wakeLock) {
       navigator.wakeLock.request('screen')
         .then((sentinel) => {
           wakeLockSentinel = sentinel;
@@ -57,12 +77,35 @@ export const FullscreenQrModal: React.FC<FullscreenQrModalProps> = ({
     };
   }, []);
 
+  // Suporte a swipe horizontal com o dedo
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartXRef.current = e.touches[0].clientX;
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartXRef.current === null || !hasMultiple) return;
+    const touchEndX = e.changedTouches[0].clientX;
+    const diff = touchStartXRef.current - touchEndX;
+
+    if (Math.abs(diff) > 50) {
+      if (diff > 0) {
+        // Deslizou para esquerda -> próximo
+        onSwitchCard(nextIndex);
+      } else {
+        // Deslizou para direita -> anterior
+        onSwitchCard(prevIndex);
+      }
+    }
+    touchStartXRef.current = null;
+  };
+
   return (
     <div 
       ref={modalRef}
-      className="fixed inset-0 z-50 flex flex-col items-center justify-between p-4 sm:p-8 select-none"
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+      className="fixed inset-0 z-50 flex flex-col items-center justify-between p-4 sm:p-6 select-none bg-white"
       style={{ 
-        backgroundColor: '#ffffff',
         colorScheme: 'light',
         forcedColorAdjust: 'none',
         filter: 'none',
@@ -70,35 +113,79 @@ export const FullscreenQrModal: React.FC<FullscreenQrModalProps> = ({
         isolation: 'isolate'
       }}
     >
-      <div className="text-center mt-3 sm:mt-6 flex flex-col items-center max-w-sm w-full">
-        <span 
-          className="text-[11px] font-extrabold tracking-wider uppercase block"
-          style={{ color: primaryColor }}
+      {/* Top Header */}
+      <div className="text-center mt-1 sm:mt-4 flex flex-col items-center max-w-sm w-full relative">
+        {/* Botão Fechar no canto superior */}
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute -top-1 right-0 p-2 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-colors"
+          aria-label="Fechar tela cheia"
         >
-          Catraca de Acesso Físico
-        </span>
-        <h4 className="text-lg sm:text-xl font-black text-slate-800 mt-1 line-clamp-1">{title}</h4>
+          <X className="w-5 h-5" />
+        </button>
+
+        {/* Indicador de cartão múltiplo */}
+        {hasMultiple ? (
+          <div className="flex items-center gap-1.5 mb-1">
+            <span 
+              className={`text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full tracking-wider border ${
+                currentCred?.userType === 'PATIENT' 
+                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200' 
+                  : 'bg-indigo-50 text-indigo-700 border-indigo-200'
+              }`}
+            >
+              {currentCred?.userType === 'PATIENT' ? 'Paciente Titular' : 'Acompanhante'}
+            </span>
+            <span className="text-[10px] font-bold text-slate-400">
+              ({currentIndex + 1} de {total})
+            </span>
+          </div>
+        ) : (
+          <span 
+            className="text-[11px] font-extrabold tracking-wider uppercase block mb-1"
+            style={{ color: primaryColor }}
+          >
+            Catraca de Acesso Físico
+          </span>
+        )}
+
+        <h4 className="text-lg sm:text-xl font-black text-slate-800 line-clamp-1">
+          {displayTitle}
+        </h4>
         
-        <div className="inline-flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 px-3 py-1 rounded-full text-[11px] font-bold mt-1.5 shadow-xs">
+        <div className="inline-flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 px-3 py-0.5 rounded-full text-[10.5px] font-bold mt-1 shadow-xs">
           <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
           Acesso Liberado para a Catraca
         </div>
 
         {/* Alerta Proeminente de Brilho e Distância Correta */}
-        <div className="bg-amber-50 border border-amber-300 text-amber-950 px-3.5 py-2 rounded-2xl text-xs font-bold mt-2.5 shadow-xs w-full text-center flex flex-col items-center gap-0.5">
+        <div className="bg-amber-50 border border-amber-300 text-amber-950 px-3 py-1.5 rounded-2xl text-[11px] font-bold mt-2 shadow-xs w-full text-center flex flex-col items-center gap-0.5">
           <div className="flex items-center gap-1.5 text-amber-800">
-            <Sun className="w-4 h-4 text-amber-600 shrink-0" />
+            <Sun className="w-3.5 h-3.5 text-amber-600 shrink-0" />
             <span>Aumente o brilho do celular ao máximo</span>
           </div>
-          <span className="text-[11px] text-amber-700 font-semibold">
+          <span className="text-[10px] text-amber-700 font-semibold">
             📏 Mantenha a 15 cm da catraca (não encoste no vidro!)
           </span>
         </div>
       </div>
 
-      <div className="flex flex-col items-center justify-center flex-1 my-2 w-full">
+      {/* Central QR Code com Setas Laterais */}
+      <div className="flex items-center justify-center flex-1 my-1 w-full max-w-sm relative">
+        {hasMultiple && (
+          <button
+            type="button"
+            onClick={() => onSwitchCard(prevIndex)}
+            className="absolute -left-2 z-10 w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-600 flex items-center justify-center shadow-md transition-all border border-slate-200"
+            aria-label="QR Code Anterior"
+          >
+            <ChevronLeft className="w-5 h-5" />
+          </button>
+        )}
+
         <div 
-          className="p-4 sm:p-6 bg-white border-2 rounded-3xl shadow-2xl flex items-center justify-center"
+          className="p-3 sm:p-5 bg-white border-2 rounded-3xl shadow-2xl flex items-center justify-center transition-all duration-300"
           style={{ 
             backgroundColor: '#ffffff',
             borderColor: `${primaryColor}40`,
@@ -110,7 +197,7 @@ export const FullscreenQrModal: React.FC<FullscreenQrModalProps> = ({
           }}
         >
           <QRCodeCanvas 
-            value={qrCodeValue} 
+            value={qrValue} 
             size={qrSize} 
             fgColor="#000000" 
             bgColor="#ffffff"
@@ -124,17 +211,51 @@ export const FullscreenQrModal: React.FC<FullscreenQrModalProps> = ({
             }}
           />
         </div>
+
+        {hasMultiple && (
+          <button
+            type="button"
+            onClick={() => onSwitchCard(nextIndex)}
+            className="absolute -right-2 z-10 w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-600 flex items-center justify-center shadow-md transition-all border border-slate-200"
+            aria-label="Próximo QR Code"
+          >
+            <ChevronRight className="w-5 h-5" />
+          </button>
+        )}
       </div>
 
-      <button 
-        onClick={onClose}
-        className="w-full max-w-sm py-4 active:scale-[0.98] text-white rounded-2xl font-bold tracking-wide transition-all duration-300 shadow-lg cursor-pointer text-sm"
-        style={{
-          backgroundImage: `linear-gradient(to right, ${primaryColor}, ${primaryDarkColor})`
-        }}
-      >
-        Fechar Tela Cheia
-      </button>
+      {/* Footer / Ações */}
+      <div className="w-full max-w-sm flex flex-col gap-2">
+        {/* Botão de Troca Rápida de QR Code */}
+        {hasMultiple && nextCred && (
+          <button
+            type="button"
+            onClick={() => onSwitchCard(nextIndex)}
+            className="w-full py-3 px-4 rounded-2xl font-bold flex items-center justify-center gap-2 text-xs sm:text-sm shadow-md transition-all active:scale-[0.98] border cursor-pointer"
+            style={{
+              backgroundColor: '#f8fafc',
+              borderColor: `${primaryColor}60`,
+              color: primaryDarkColor
+            }}
+          >
+            <ArrowRightLeft className="w-4 h-4 shrink-0" style={{ color: primaryColor }} />
+            <span className="truncate">
+              Trocar: <b>{nextCred.userType === 'PATIENT' ? 'Titular' : 'Acompanhante'} ({nextCred.name})</b>
+            </span>
+          </button>
+        )}
+
+        <button 
+          type="button"
+          onClick={onClose}
+          className="w-full py-3.5 active:scale-[0.98] text-white rounded-2xl font-bold tracking-wide transition-all duration-300 shadow-lg cursor-pointer text-xs sm:text-sm"
+          style={{
+            backgroundImage: `linear-gradient(to right, ${primaryColor}, ${primaryDarkColor})`
+          }}
+        >
+          Fechar Tela Cheia
+        </button>
+      </div>
     </div>
   );
 };
