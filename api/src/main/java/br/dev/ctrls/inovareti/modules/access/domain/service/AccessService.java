@@ -26,7 +26,6 @@ import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -1314,7 +1313,7 @@ public class AccessService {
                             LocalDate d = a.startAt().toLocalDate();
                             return !d.isBefore(today) && !d.isAfter(maxAllowedDate);
                         })
-                        .sorted(Comparator.comparing(FeegowAppointment::startAt))
+                        .sorted((a1, a2) -> a1.startAt().compareTo(a2.startAt()))
                         .toList();
 
                     if (!validUpcoming.isEmpty()) {
