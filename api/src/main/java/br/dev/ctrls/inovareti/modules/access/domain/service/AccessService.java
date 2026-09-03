@@ -183,8 +183,9 @@ public class AccessService {
             // Se o paciente acabou de submeter um CPF válido (via formulário web ou chat), usa-o com prioridade
             resolvedCpf = cleanRequestCpf;
             try {
+                String resolvedName = (patientName != null && !patientName.isBlank()) ? patientName : accessInfo.name();
                 log.info("[AccessService] Sincronizando CPF válido informado ({}) de volta com a Feegow para o paciente ID: {}", resolvedCpf, accessInfo.patientId());
-                patientExternalPort.updatePatientCpf(accessInfo.patientId(), resolvedCpf, patientName, patientBirthdate);
+                patientExternalPort.updatePatientCpf(accessInfo.patientId(), resolvedCpf, resolvedName, patientBirthdate);
             } catch (Exception e) {
                 log.error("[AccessService] Falha ao sincronizar CPF com a Feegow: {}", e.getMessage());
             }
@@ -1083,6 +1084,21 @@ public class AccessService {
         } catch (Exception ex) {
             log.warn("[AccessService] Falha na integração GerAcesso ao atualizar CPF para {}: {}", appointmentId, ex.getMessage());
             return new AccessValidationResult(false, patient.getName(), patient.getAccessCredential(), false, "Não foi possível liberar a catraca com este CPF: " + ex.getMessage());
+        }
+
+        // Sincroniza a correção do CPF também com a ficha do Feegow (se o paciente possuir prontuário no ERP)
+        try {
+            String oldCpf = patient.getCpf() != null ? patient.getCpf().replaceAll("\\D", "") : "";
+            FeegowPatient feegowP = null;
+            if (!oldCpf.isEmpty()) {
+                feegowP = patientExternalPort.patientInfo(oldCpf);
+            }
+            if (feegowP != null && feegowP.id() != null && !feegowP.id().isBlank()) {
+                log.info("[AccessService] Sincronizando correção de CPF com a ficha Feegow ID {} (Paciente: {})", feegowP.id(), patient.getName());
+                patientExternalPort.updatePatientCpf(feegowP.id(), cleanCpf, patient.getName(), feegowP.birthdate());
+            }
+        } catch (Exception ex) {
+            log.warn("[AccessService] Não foi possível sincronizar correção de CPF com o Feegow para {}: {}", appointmentId, ex.getMessage());
         }
 
         accessCredentialRepositoryPort.save(patient);
