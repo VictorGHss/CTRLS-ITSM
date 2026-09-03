@@ -434,7 +434,15 @@ export default function PatientAccess() {
 
   const handleCpfSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!appointmentId || !cpfInput) return;
+    const targetId = getActiveAppointmentId() || appointmentId || credentials[0]?.appointmentId;
+    if (!targetId) {
+      setCpfSubmitError('Não foi possível identificar seu agendamento. Por favor, recarregue a página.');
+      return;
+    }
+    if (!cpfInput) {
+      setCpfSubmitError('Por favor, informe os 11 dígitos do seu CPF.');
+      return;
+    }
 
     const cleanCpf = cpfInput.replace(/\D/g, '');
     if (cleanCpf.length !== 11) {
@@ -446,11 +454,11 @@ export default function PatientAccess() {
     setCpfSubmitError(null);
 
     try {
-      console.log('[PatientAccess] Enviando CPF para validação:', cleanCpf);
+      console.log('[PatientAccess] Enviando CPF para validação:', cleanCpf, 'agendamento:', targetId);
       const validateRes = await api.post<{ authorized: boolean; requiresCpfFallback?: boolean; message?: string }>(
         '/v1/access/validate',
         {
-          appointmentId,
+          appointmentId: targetId,
           cpf: cleanCpf
         },
         {
@@ -471,23 +479,44 @@ export default function PatientAccess() {
           ? `phoneDigits=${encodeURIComponent(verifiedPhoneDigits)}`
           : '';
 
-      const targetId = getActiveAppointmentId() || appointmentId;
-      const response = await api.get<AccessCredential[]>(
-        `/v1/access/credentials/${targetId}${query ? `?${query}` : ''}`,
-        {
-          headers: {
-            'X-Skip-Interceptor': 'true'
+      try {
+        const response = await api.get<AccessCredential[]>(
+          `/v1/access/credentials/${targetId}${query ? `?${query}` : ''}`,
+          {
+            headers: {
+              'X-Skip-Interceptor': 'true'
+            }
           }
+        );
+        if (response.data && response.data.length > 0) {
+          saveCredentialsWithOfflineCache(response.data, { token: verifiedToken, phoneDigits: verifiedPhoneDigits });
+          setCredentials(response.data);
+          setIsEditingCpf(false);
+          return;
         }
-      );
-      if (response.data && response.data.length > 0) {
-        saveCredentialsWithOfflineCache(response.data, { token: verifiedToken, phoneDigits: verifiedPhoneDigits });
-        setCredentials(response.data);
+      } catch (fetchErr) {
+        console.warn('[PatientAccess] Busca por appointmentId após CPF falhou, tentando lookup por CPF:', fetchErr);
+      }
+
+      // Fallback para auto-cadastros: busca as credenciais recém-emitidas pelo CPF
+      try {
+        const lookupRes = await api.post<AccessCredential[]>('/v1/access/lookup-by-cpf', {
+          cpf: cleanCpf,
+          clinic: clinicTheme.id
+        });
+        if (lookupRes.data && lookupRes.data.length > 0) {
+          saveCredentialsWithOfflineCache(lookupRes.data);
+          setCredentials(lookupRes.data);
+        }
+      } catch (lookupErr) {
+        console.warn('[PatientAccess] Lookup por CPF após validação falhou:', lookupErr);
       }
       setIsEditingCpf(false);
     } catch (err: unknown) {
       console.error('[PatientAccess] Falha ao enviar CPF:', err);
-      setCpfSubmitError('Ocorreu um erro ao salvar o CPF. Tente novamente.');
+      const apiErr = err as { response?: { data?: { message?: string } } };
+      const msg = apiErr?.response?.data?.message || 'Ocorreu um erro ao salvar o CPF. Tente novamente.';
+      setCpfSubmitError(msg);
     } finally {
       setCpfSubmitLoading(false);
     }
@@ -749,13 +778,13 @@ export default function PatientAccess() {
             <div className="space-y-3">
               {isEditingCpf && credentials.length > 0 && (
                 <div className="flex justify-between items-center px-1">
-                  <span className="text-xs font-bold text-slate-700">Atualizar CPF do Acesso</span>
+                  <span className="text-xs font-bold text-slate-700">Atualizar CPF</span>
                   <button
                     type="button"
                     onClick={() => setIsEditingCpf(false)}
                     className="text-xs font-semibold text-slate-400 hover:text-slate-600 cursor-pointer"
                   >
-                    Voltar aos Cartões
+                    Voltar
                   </button>
                 </div>
               )}

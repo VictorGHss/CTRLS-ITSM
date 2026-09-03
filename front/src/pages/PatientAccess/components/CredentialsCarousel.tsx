@@ -100,7 +100,7 @@ export const CredentialsCarousel: React.FC<CredentialsCarouselProps> = ({
                 {cred.credentialCode.startsWith('CRED-') ? (
                   <span className="inline-flex items-center gap-1 bg-amber-50 border border-amber-200/80 text-amber-700 text-[10px] font-bold px-2 py-0.5 rounded-full">
                     <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
-                    Contingência
+                    Acesso Provisório
                   </span>
                 ) : cred.credentialCode !== 'BLOCKED_OUTSIDE_WINDOW' && cred.credentialCode !== 'CPF_MISSING' && (
                   <span className="inline-flex items-center gap-1 bg-emerald-50 border border-emerald-200/80 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded-full">
@@ -169,21 +169,21 @@ export const CredentialsCarousel: React.FC<CredentialsCarouselProps> = ({
 
               {/* Localizador Catraca Discreto */}
               <span className="text-[10.5px] font-bold text-slate-400 font-mono mt-1 uppercase tracking-wider">
-                Ref: {cred.locator}
+                Código: {cred.locator}
               </span>
 
-              {/* Alerta de contingência com botão de correção de CPF */}
+              {/* Alerta de acesso provisório com botão de correção de CPF */}
               {cred.credentialCode.startsWith('CRED-') && onEditCpf && (
                 <div className="w-full mt-3 p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-center space-y-1.5">
                   <p className="text-[10.5px] font-bold text-amber-900 leading-snug">
-                    ⚠️ Acesso em contingência (CPF precisa de confirmação na catraca)
+                    ⚠️ Acesso provisório: seu CPF precisa de confirmação para liberação automática na catraca.
                   </p>
                   <button
                     type="button"
                     onClick={onEditCpf}
                     className="w-full py-1.5 px-3 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold transition-all shadow-xs cursor-pointer"
                   >
-                    Corrigir CPF do Titular
+                    Atualizar CPF
                   </button>
                 </div>
               )}
@@ -336,7 +336,7 @@ export const CredentialsCarousel: React.FC<CredentialsCarouselProps> = ({
             className="w-full py-3 px-4 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-700 rounded-2xl text-xs font-bold transition-all flex items-center justify-center gap-2 active:scale-[0.98] shadow-sm cursor-pointer"
           >
             <CreditCard className="w-4 h-4 text-slate-500" />
-            <span>Corrigir / Alterar CPF</span>
+            <span>Atualizar CPF</span>
           </button>
         )}
 

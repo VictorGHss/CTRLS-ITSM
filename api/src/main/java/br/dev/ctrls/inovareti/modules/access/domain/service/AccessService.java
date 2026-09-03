@@ -133,6 +133,11 @@ public class AccessService {
             }
         }
 
+        // Auto-cadastro público (ex: INOV-... ou IMG-...): atualiza o CPF diretamente
+        if (appointmentId != null && (appointmentId.startsWith("INOV-") || appointmentId.startsWith("IMG-"))) {
+            return processSelfRegistrationCpfUpdate(appointmentId, requestCpf);
+        }
+
         // 1. Busca os dados cadastrais do agendamento no Feegow.
         // Resiliência: caso o ERP Feegow oscile (5xx, timeout, IOException), retornamos o Fallback
         // Seguro imediatamente (requiresCpfFallback = true) em vez de propagar a exceção ao Blip.
@@ -1010,7 +1015,84 @@ public class AccessService {
     }
 
     /**
-     * Consulta credenciais ativas do dia associadas a um CPF.
+     * Atualiza o CPF de um auto-cadastro público e tenta liberação direta na GerAcesso.
+     */
+    private AccessValidationResult processSelfRegistrationCpfUpdate(String appointmentId, String newCpf) {
+        log.info("[AccessService] Atualizando CPF de auto-cadastro para agendamento {}", appointmentId);
+        if (newCpf == null || newCpf.isBlank()) {
+            return new AccessValidationResult(false, null, null, true, "Por favor, informe um CPF válido.");
+        }
+        String cleanCpf = newCpf.replaceAll("\\D", "");
+        if (!isValidCpf(cleanCpf)) {
+            return new AccessValidationResult(false, null, null, false, "CPF inválido perante a Receita Federal. Por favor, confira os números digitados.");
+        }
+
+        List<AccessCredential> creds = accessCredentialRepositoryPort.findByAppointmentId(appointmentId);
+        if (creds == null || creds.isEmpty()) {
+            return new AccessValidationResult(false, null, null, false, "Cadastro não encontrado.");
+        }
+
+        Optional<AccessCredential> patientCredOpt = creds.stream()
+                .filter(c -> c.getUserType() == UserType.PATIENT)
+                .findFirst();
+
+        if (patientCredOpt.isEmpty()) {
+            return new AccessValidationResult(false, null, null, false, "Paciente titular não encontrado.");
+        }
+
+        AccessCredential patient = patientCredOpt.get();
+        patient.setCpf(cleanCpf);
+
+        // Resolve data da visita a partir do appointmentId (ex: INOV-20260904-...)
+        LocalDate visitDate = LocalDate.now(CLINIC_ZONE);
+        if (appointmentId.length() >= 13) {
+            try {
+                String datePart = appointmentId.substring(5, 13);
+                visitDate = LocalDate.parse(datePart, DateTimeFormatter.ofPattern("yyyyMMdd"));
+            } catch (Exception ignored) {}
+        }
+
+        LocalDateTime startWindow = LocalDateTime.of(visitDate, LocalTime.of(6, 0));
+        LocalDateTime endWindow = LocalDateTime.of(visitDate, LocalTime.of(23, 59));
+        String startDateFormatted = startWindow.format(GERACESSO_DATE_FORMATTER);
+        String endDateFormatted = endWindow.format(GERACESSO_DATE_FORMATTER);
+
+        GerAcessoRequest gerAcessoRequest = GerAcessoRequest.builder()
+                .name(patient.getName().trim().toUpperCase())
+                .cpf(cleanCpf)
+                .startVisit(startDateFormatted)
+                .endVisit(endDateFormatted)
+                .phone(patient.getPhone() != null ? patient.getPhone().replaceAll("\\D", "") : "")
+                .visitType(1)
+                .visitedRegistration("")
+                .visitedCpf("")
+                .build();
+
+        try {
+            Optional<GerAcessoResponse> gerResponseOpt = gerAcessoClientPort.registerAccess(gerAcessoRequest);
+            if (gerResponseOpt.isPresent()) {
+                GerAcessoResponse resp = gerResponseOpt.get();
+                if (resp.credential() != null && !resp.credential().isBlank()) {
+                    patient.setAccessCredential(resp.credential());
+                }
+                if (resp.locator() != null && !resp.locator().isBlank()) {
+                    patient.setLocator(resp.locator());
+                }
+                log.info("[AccessService] CPF de auto-cadastro atualizado com sucesso no GerAcesso. Novo QR Code: {}", patient.getAccessCredential());
+            }
+        } catch (Exception ex) {
+            log.warn("[AccessService] Falha na integração GerAcesso ao atualizar CPF para {}: {}", appointmentId, ex.getMessage());
+            return new AccessValidationResult(false, patient.getName(), patient.getAccessCredential(), false, "Não foi possível liberar a catraca com este CPF: " + ex.getMessage());
+        }
+
+        accessCredentialRepositoryPort.save(patient);
+        String token = generateAccessToken(appointmentId, patient.getPhone());
+        String accessUrl = "https://itsm-inovare.ctrls.dev.br/" + appointmentId + "?t=" + token;
+        return new AccessValidationResult(true, patient.getName(), patient.getAccessCredential(), false, "Acesso liberado com sucesso!", token, accessUrl);
+    }
+
+    /**
+     * Consulta credenciais ativas associadas a um CPF em janela de até 7 dias futuros (ignora consultas passadas).
      */
     public List<AccessCredential> lookupCredentialsByCpf(String rawCpf, String clinic) {
         if (rawCpf == null || rawCpf.isBlank()) return List.of();
@@ -1018,6 +1100,7 @@ public class AccessService {
         if (cleanCpf.length() != 11) return List.of();
 
         LocalDate today = LocalDate.now(CLINIC_ZONE);
+        LocalDate maxAllowedDate = today.plusDays(7);
         List<AccessCredential> allByCpf = accessCredentialRepositoryPort.findByCpf(cleanCpf);
         if (allByCpf != null && !allByCpf.isEmpty()) {
             List<AccessCredential> validList = allByCpf.stream()
@@ -1025,34 +1108,32 @@ public class AccessService {
                     String apptId = c.getAppointmentId();
                     if (apptId == null || apptId.isBlank()) return false;
 
-                    // 1) Fast-path ultra-rápido: se a credencial foi criada nos últimos 3 dias (D-0, D-1, D-2),
-                    // é válida instantaneamente SEM bater no Feegow (0ms, 100% no PostgreSQL local)!
-                    if (c.getCreatedAt() != null && !c.getCreatedAt().toLocalDate().isBefore(today.minusDays(3))) {
-                        return true;
-                    }
-
-                    // 2) Auto-cadastro público (ex: INOV-20260903-CPF ou IMG-20260903-CPF)
+                    // 1) Auto-cadastro público (ex: INOV-20260903-CPF ou IMG-20260903-CPF)
                     if (apptId.length() >= 13 && (apptId.startsWith("INOV-") || apptId.startsWith("IMG-"))) {
                         try {
                             String datePart = apptId.substring(5, 13);
                             LocalDate appDate = LocalDate.parse(datePart, DateTimeFormatter.ofPattern("yyyyMMdd"));
-                            return !appDate.isBefore(today); // válido se for hoje ou futuro
-                        } catch (Exception ignored) {}
+                            // Válido se e somente se estiver entre hoje e os próximos 7 dias:
+                            return !appDate.isBefore(today) && !appDate.isAfter(maxAllowedDate);
+                        } catch (Exception ignored) {
+                            return false;
+                        }
                     }
 
-                    // 3) Se foi criada há mais de 3 dias, aí sim consulta o Feegow para checar se a consulta é para hoje ou futura
+                    // 2) Agendamento do Feegow: consulta a data real do atendimento
                     try {
                         Optional<FeegowPatientAccessInfo> accessInfoOpt = feegowClientPort.fetchPatientAccessInfo(apptId);
                         if (accessInfoOpt.isPresent() && accessInfoOpt.get().appointmentDate() != null) {
                             LocalDate appDate = accessInfoOpt.get().appointmentDate();
-                            return !appDate.isBefore(today); // válido se a consulta no Feegow for hoje ou futura
+                            // Válido se e somente se estiver entre hoje e os próximos 7 dias:
+                            return !appDate.isBefore(today) && !appDate.isAfter(maxAllowedDate);
                         }
                     } catch (Exception ex) {
                         log.warn("[AccessService] Erro ao consultar Feegow para agendamento {} durante lookup por CPF: {}", apptId, ex.getMessage());
                     }
 
-                    // 4) Fallback defensivo: válido se a credencial foi criada nos últimos 7 dias
-                    return c.getCreatedAt() != null && !c.getCreatedAt().toLocalDate().isBefore(today.minusDays(7));
+                    // Se não foi possível confirmar que a consulta é para os próximos 7 dias, descarta
+                    return false;
                 })
                 .toList();
 
