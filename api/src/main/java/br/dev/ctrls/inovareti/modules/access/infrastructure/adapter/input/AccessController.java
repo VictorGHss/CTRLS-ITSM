@@ -11,6 +11,8 @@ import br.dev.ctrls.inovareti.modules.access.infrastructure.adapter.input.dto.Ac
 import br.dev.ctrls.inovareti.modules.access.infrastructure.adapter.input.dto.CompanionRequest;
 import br.dev.ctrls.inovareti.modules.access.infrastructure.config.InovareMotorProperties;
 import br.dev.ctrls.inovareti.modules.access.domain.port.output.FeegowClientPort;
+import br.dev.ctrls.inovareti.modules.access.infrastructure.adapter.input.dto.CpfLookupRequest;
+import br.dev.ctrls.inovareti.modules.access.infrastructure.adapter.input.dto.FeegowPreRegistrationLookupResponse;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentSessionRepositoryPort;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -173,6 +175,47 @@ public class AccessController {
                 }
             }
 
+            // Se o agendamento real do Feegow foi fornecido, vincula diretamente à consulta real
+            if (request.appointmentId() != null && !request.appointmentId().isBlank()
+                    && !request.appointmentId().startsWith("INOV-")
+                    && !request.appointmentId().startsWith("IMG-")) {
+                try {
+                    log.info("[AccessControl] Auto-cadastro com agendamento Feegow vinculado: {}", request.appointmentId());
+                    var valResult = accessService.processAccessRequest(
+                        request.appointmentId(),
+                        request.cpf(),
+                        domainCompanions
+                    );
+                    if (valResult != null && valResult.authorized()) {
+                        List<AccessCredential> feegowCreds = accessCredentialRepositoryPort.findByAppointmentId(request.appointmentId());
+                        if (!feegowCreds.isEmpty()) {
+                            String docName = (request.doctorName() != null && !request.doctorName().isBlank())
+                                ? request.doctorName().trim()
+                                : feegowCreds.get(0).getDoctorName();
+                            String apptDateDisplay = resolveDisplayDate(request.appointmentId());
+                            List<AccessCredentialResponse> feegowResponseList = feegowCreds.stream()
+                                .map(cred -> new AccessCredentialResponse(
+                                    cred.getAppointmentId(),
+                                    cred.getName(),
+                                    cred.getUserType() != null ? cred.getUserType() : UserType.PATIENT,
+                                    cred.getLocator(),
+                                    cred.getAccessCredential(),
+                                    cred.getCpf(),
+                                    docName,
+                                    apptDateDisplay,
+                                    "06:00",
+                                    "23:59"
+                                ))
+                                .toList();
+                            return ResponseEntity.ok(feegowResponseList);
+                        }
+                    }
+                } catch (Exception ex) {
+                    log.warn("[AccessControl] Falha ao processar agendamento Feegow {}, caindo para auto-cadastro padrão: {}", 
+                            request.appointmentId(), ex.getMessage());
+                }
+            }
+
             List<AccessCredential> credentials = accessService.processSelfRegistration(
                 request.name(),
                 request.cpf(),
@@ -222,6 +265,17 @@ public class AccessController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("message", "Erro ao processar cadastro. Tente novamente em instantes."));
         }
+    }
+
+    /**
+     * Endpoint de consulta prévia no Feegow ao digitar o CPF no formulário de auto-cadastro.
+     * Retorna dados cadastrais e agendamentos futuros para auto-preenchimento instantâneo.
+     */
+    @PostMapping("/feegow-lookup")
+    public ResponseEntity<FeegowPreRegistrationLookupResponse> feegowLookup(@RequestBody @Valid CpfLookupRequest request) {
+        log.info("[AccessControl] Requisição de consulta prévia no Feegow para CPF: {}", request.cpf());
+        FeegowPreRegistrationLookupResponse response = accessService.lookupFeegowPreRegistration(request.cpf(), request.clinic());
+        return ResponseEntity.ok(response);
     }
 
     /**
