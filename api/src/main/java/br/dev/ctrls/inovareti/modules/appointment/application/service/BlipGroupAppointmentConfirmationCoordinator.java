@@ -139,6 +139,20 @@ public class BlipGroupAppointmentConfirmationCoordinator {
             }
             log.info("[CONFIRM-BATCH] Sessões do grupo {} / telefone {} atualizadas para CONFIRMED no banco local. Total: {}", groupIdStr, userPhone, listaSessoes.size());
 
+            // --- PRÉ-CREDENCIAMENTO FÍSICO NA GERACESSO PARA TODAS AS SESSÕES DO GRUPO ---
+            Thread.ofVirtual().name("group-geracesso-pre-reg").start(() -> {
+                for (AppointmentSession s : listaSessoes) {
+                    if (s.getFeegowAppointmentId() != null && !s.getFeegowAppointmentId().isBlank()) {
+                        try {
+                            log.info("[CONFIRM-BATCH-CATRACA] Pré-registrando credencial GerAcesso para agendamento {} do grupo...", s.getFeegowAppointmentId());
+                            accessService.processAccessRequest(s.getFeegowAppointmentId(), null, List.of());
+                        } catch (Exception ex) {
+                            log.warn("[CONFIRM-BATCH-CATRACA] Falha ao pré-registrar credencial GerAcesso para {}: {}", s.getFeegowAppointmentId(), ex.getMessage());
+                        }
+                    }
+                }
+            });
+
             try {
                 blipContextService.setUserContextForUser(userPhone, "isConfirmingAgenda", "false");
                 blipContextService.setUserContextForUser(userPhone, "hasActiveAppointment", "false");

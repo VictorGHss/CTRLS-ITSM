@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { QRCodeCanvas } from 'qrcode.react';
-import { Sun, ArrowRightLeft, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { Sun, ArrowRightLeft, ChevronLeft, ChevronRight, X, Share2 } from 'lucide-react';
 import type { ClinicTheme } from '../utils/clinicThemes';
 import type { AccessCredential } from '../types';
+import { shareQrCodeImage } from '../utils/shareQrCode';
 
 interface FullscreenQrModalProps {
   modalRef: React.RefObject<HTMLDivElement | null>;
@@ -29,6 +30,7 @@ export const FullscreenQrModal: React.FC<FullscreenQrModalProps> = ({
   const primaryDarkColor = clinicTheme?.primaryDarkColor || '#00583F';
 
   const [qrSize, setQrSize] = useState<number>(310);
+  const [isSharing, setIsSharing] = useState(false);
   const touchStartXRef = useRef<number | null>(null);
 
   const total = credentials.length;
@@ -197,6 +199,7 @@ export const FullscreenQrModal: React.FC<FullscreenQrModalProps> = ({
           }}
         >
           <QRCodeCanvas 
+            id="fullscreen-qr-canvas"
             value={qrValue} 
             size={qrSize} 
             fgColor="#000000" 
@@ -226,6 +229,23 @@ export const FullscreenQrModal: React.FC<FullscreenQrModalProps> = ({
 
       {/* Footer / Ações */}
       <div className="w-full max-w-sm flex flex-col gap-2">
+        {/* Botão Compartilhar Imagem em Tela Cheia */}
+        {qrValue && !qrValue.startsWith('CRED-') && qrValue !== 'BLOCKED_OUTSIDE_WINDOW' && qrValue !== 'CPF_MISSING' && (
+          <button
+            type="button"
+            onClick={async () => {
+              setIsSharing(true);
+              await shareQrCodeImage('fullscreen-qr-canvas', currentCred?.name || 'acesso', currentCred?.userType || 'PATIENT');
+              setIsSharing(false);
+            }}
+            disabled={isSharing}
+            className="w-full py-2.5 px-4 rounded-2xl font-bold flex items-center justify-center gap-2 text-xs sm:text-sm shadow-sm transition-all active:scale-[0.98] border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 cursor-pointer"
+          >
+            <Share2 className="w-4 h-4 text-emerald-700 shrink-0" />
+            <span>{isSharing ? 'Preparando imagem...' : 'Compartilhar Imagem do QR Code'}</span>
+          </button>
+        )}
+
         {/* Botão de Troca Rápida de QR Code */}
         {hasMultiple && nextCred && (
           <button

@@ -13,6 +13,8 @@ import br.dev.ctrls.inovareti.modules.access.infrastructure.config.InovareMotorP
 import br.dev.ctrls.inovareti.modules.access.domain.port.output.FeegowClientPort;
 import br.dev.ctrls.inovareti.modules.access.infrastructure.adapter.input.dto.CpfLookupRequest;
 import br.dev.ctrls.inovareti.modules.access.infrastructure.adapter.input.dto.FeegowPreRegistrationLookupResponse;
+import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.FeegowAppointment;
+import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentExternalPort;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentSessionRepositoryPort;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -60,6 +62,7 @@ public class AccessController {
     private final AccessService accessService;
     private final FeegowClientPort feegowClientPort;
     private final AppointmentSessionRepositoryPort appointmentSessionRepository;
+    private final AppointmentExternalPort appointmentExternalPort;
 
     /**
      * Endpoint de teste manual para validação de acesso das catracas.
@@ -606,6 +609,19 @@ public class AccessController {
                 }
             } catch (Exception ex) {
                 log.warn("[AccessControl] Erro ao auto-detectar sessões de hoje para o paciente: {}", ex.getMessage());
+            }
+
+            // AUTO-DETECÇÃO DE CONSULTAS DO DIA NO FEEGOW: inclui todas as consultas de hoje para este mesmo paciente no Feegow
+            try {
+                List<FeegowAppointment> todayFeegowApps = appointmentExternalPort.searchAppointments(today, 0);
+                for (FeegowAppointment fa : todayFeegowApps) {
+                    if (accessInfo.patientId().equals(fa.patientId()) && fa.id() != null && !appointmentIds.contains(fa.id())) {
+                        appointmentIds.add(fa.id());
+                        log.info("[AccessControl] Auto-detectada consulta adicional de hoje ({}) no Feegow para o paciente ID: {}. Adicionada ao escopo de credenciamento.", fa.id(), accessInfo.patientId());
+                    }
+                }
+            } catch (Exception ex) {
+                log.warn("[AccessControl] Erro ao buscar consultas adicionais do dia no Feegow: {}", ex.getMessage());
             }
         }
 
