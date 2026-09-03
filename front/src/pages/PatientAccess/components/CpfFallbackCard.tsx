@@ -24,7 +24,7 @@ export const CpfFallbackCard: React.FC<CpfFallbackCardProps> = ({
       <div className="space-y-1.5">
         <h3 className="text-md font-bold text-slate-800">Correção do CPF</h3>
         <p className="text-xs text-slate-500 leading-relaxed max-w-[290px] mx-auto">
-          O CPF anterior está incorreto ou não foi reconhecido pela catraca. Digite os 11 números do seu CPF correto para liberar sua entrada:
+          O CPF cadastrado está incorreto. Digite os 11 números do seu CPF para liberar seu acesso na clínica:
         </p>
       </div>
 
@@ -72,7 +72,7 @@ export const CpfFallbackCard: React.FC<CpfFallbackCardProps> = ({
               Validando...
             </>
           ) : (
-            'Salvar e Liberar Catraca'
+            'Salvar e Liberar Acesso'
           )}
         </button>
       </form>
