@@ -318,18 +318,7 @@ export default function PatientAccess() {
     }
   };
 
-  const getFullscreenData = () => {
-    if (fullscreenCard !== null && credentials[fullscreenCard]) {
-      const cred = credentials[fullscreenCard];
-      return { 
-        value: cred.credentialCode, 
-        title: `Acesso do ${cred.userType === 'PATIENT' ? 'Titular' : 'Acompanhante'}: ${cred.name}` 
-      };
-    }
-    return null;
-  };
 
-  const fullscreenData = getFullscreenData();
 
   // Monitora saída da tela cheia nativa do browser para sincronizar o estado do React
   useEffect(() => {
@@ -791,11 +780,12 @@ export default function PatientAccess() {
       </div>
 
       {/* Modal Tela Cheia */}
-      {fullscreenData && (
+      {fullscreenCard !== null && (
         <FullscreenQrModal
           modalRef={modalRef}
-          title={fullscreenData.title}
-          qrCodeValue={fullscreenData.value}
+          credentials={credentials}
+          currentIndex={fullscreenCard}
+          onSwitchCard={(idx) => setFullscreenCard(idx)}
           onClose={closeFullscreen}
           clinicTheme={clinicTheme}
         />
