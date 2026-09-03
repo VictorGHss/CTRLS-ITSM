@@ -94,4 +94,26 @@ public class AppointmentIngestionDateResolver {
 
         return new ResolvedDatesAndAppointments(targetDates, appointments);
     }
+
+    /**
+     * Busca agendamentos no Feegow especificamente para datas-alvo customizadas fornecidas sob demanda (ex: feriados).
+     */
+    public ResolvedDatesAndAppointments resolveCustomDatesAndFetchAppointments(List<LocalDate> customDates, List<String> doctorIds) {
+        if (customDates == null || customDates.isEmpty()) {
+            return new ResolvedDatesAndAppointments(List.of(), List.of());
+        }
+
+        log.info("[INGESTÃO-DATAS-CUSTOMIZADAS] Executando busca manual para as datas específicas: {} (médicos: {})",
+                customDates, doctorIds != null ? doctorIds : "todos ativos");
+
+        List<FeegowAppointment> appointments = new ArrayList<>();
+        for (LocalDate targetDate : customDates) {
+            log.info("[INGESTÃO-CUSTOMIZADA] Buscando consultas no Feegow para a data-alvo personalizada: {} (Dia da semana: {})...",
+                    targetDate, targetDate.getDayOfWeek());
+            List<FeegowAppointment> dailyAppointments = feegowAppointmentSearcher.searchAppointments(targetDate, doctorIds);
+            appointments.addAll(dailyAppointments);
+        }
+
+        return new ResolvedDatesAndAppointments(customDates, appointments);
+    }
 }

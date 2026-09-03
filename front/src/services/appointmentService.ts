@@ -21,8 +21,12 @@ export async function getAppointmentMotorConfig(): Promise<AppointmentMotorConfi
   return data;
 }
 
-export async function triggerAppointmentMotorManual(): Promise<AppointmentManualTriggerResponse> {
-  const { data } = await api.post<AppointmentManualTriggerResponse>('/v1/appointments/trigger-manual');
+export async function triggerAppointmentMotorManual(targetDate?: string): Promise<AppointmentManualTriggerResponse> {
+  const params: Record<string, string | boolean> = { production: true };
+  if (targetDate && targetDate.trim()) {
+    params.targetDate = targetDate.trim();
+  }
+  const { data } = await api.post<AppointmentManualTriggerResponse>('/v1/appointments/trigger-manual', null, { params });
   return data;
 }
 

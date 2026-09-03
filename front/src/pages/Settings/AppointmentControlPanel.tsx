@@ -15,6 +15,8 @@ export default function AppointmentControlPanel() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [config, setConfig] = useState<AppointmentMotorConfig | null>(null);
 
+  const [targetDate, setTargetDate] = useState('');
+
   async function loadConfig() {
     setLoading(true);
     try {
@@ -35,8 +37,8 @@ export default function AppointmentControlPanel() {
   async function handleConfirmExecution() {
     setRunning(true);
     try {
-      const result = await triggerAppointmentMotorManual();
-      toast.success(`Motor executado com sucesso. Mensagens enviadas: ${result.messages_sent}.`);
+      await triggerAppointmentMotorManual(targetDate || undefined);
+      toast.success(`Disparo manual iniciado com sucesso${targetDate ? ` para a data ${targetDate}` : ''}.`);
       setConfirmOpen(false);
       await loadConfig();
     } catch (error) {
@@ -96,8 +98,35 @@ export default function AppointmentControlPanel() {
           </div>
 
           {/* Seção de Execução Manual */}
-          <div>
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-3">Execução Manual</h3>
+          <div className="space-y-4">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Execução Manual</h3>
+            
+            <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 space-y-2">
+              <label className="block text-xs font-medium text-slate-700">
+                Data Alvo das Consultas (Opcional - ex: Feriados):
+              </label>
+              <div className="flex flex-wrap items-center gap-3">
+                <input
+                  type="date"
+                  value={targetDate}
+                  onChange={(e) => setTargetDate(e.target.value)}
+                  className="px-3 py-1.5 text-xs bg-white border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary"
+                />
+                {targetDate && (
+                  <button
+                    type="button"
+                    onClick={() => setTargetDate('')}
+                    className="text-xs text-slate-400 hover:text-slate-600 underline"
+                  >
+                    Limpar (Usar padrão)
+                  </button>
+                )}
+              </div>
+              <p className="text-[11px] text-slate-500">
+                Se vazio, o motor busca o padrão (D+0, D+1 ou Segunda-feira). Preencha caso deseje disparar para um dia específico (como a terça-feira após um feriado).
+              </p>
+            </div>
+
             <button
               type="button"
               onClick={() => setConfirmOpen(true)}
@@ -105,7 +134,7 @@ export default function AppointmentControlPanel() {
               className="inline-flex items-center gap-2 rounded-xl bg-brand-primary px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-primary-dark disabled:cursor-not-allowed disabled:opacity-40"
             >
               <PlayCircle size={16} />
-              {running ? 'Executando...' : 'Executar Motor de Confirmação Agora'}
+              {running ? 'Executando...' : targetDate ? `Executar Confirmação para ${targetDate}` : 'Executar Motor de Confirmação Agora'}
             </button>
           </div>
 
@@ -122,7 +151,9 @@ export default function AppointmentControlPanel() {
 
             <div className="px-6 py-5">
               <p className="text-sm text-slate-700">
-                Deseja iniciar o disparo manual? O sistema respeitará o Modo de Teste atual.
+                {targetDate
+                  ? `Deseja iniciar o disparo manual especificamente para as consultas do dia ${targetDate}?`
+                  : 'Deseja iniciar o disparo manual das datas padrão? O sistema respeitará as regras ativas de homologação/produção.'}
               </p>
             </div>
 
