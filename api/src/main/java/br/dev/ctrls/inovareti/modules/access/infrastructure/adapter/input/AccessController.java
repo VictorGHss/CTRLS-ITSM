@@ -136,7 +136,7 @@ public class AccessController {
         }
 
         if (!result.authorized()) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(result);
+            return ResponseEntity.ok(result);
         }
 
         return ResponseEntity.ok(result);

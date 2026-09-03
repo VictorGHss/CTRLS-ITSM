@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { Clock } from 'lucide-react';
 import api from '../../services/api';
+import { getApiErrorMessage } from '../../lib/apiError';
 import type { AccessCredential } from './types';
 import { resolveClinicTheme } from './utils/clinicThemes';
 import { TwoFactorAuthChallenge } from './components/TwoFactorAuthChallenge';
@@ -514,8 +515,7 @@ export default function PatientAccess() {
       setIsEditingCpf(false);
     } catch (err: unknown) {
       console.error('[PatientAccess] Falha ao enviar CPF:', err);
-      const apiErr = err as { response?: { data?: { message?: string } } };
-      const msg = apiErr?.response?.data?.message || 'Ocorreu um erro ao salvar o CPF. Tente novamente.';
+      const msg = getApiErrorMessage(err, 'Ocorreu um erro ao salvar o CPF. Tente novamente.');
       setCpfSubmitError(msg);
     } finally {
       setCpfSubmitLoading(false);
