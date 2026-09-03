@@ -27,7 +27,9 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -1057,13 +1059,26 @@ public class AccessService {
                     }
                 }
 
-                List<AccessCredential> result = new ArrayList<>();
+                Map<UUID, AccessCredential> uniqueCreds = new LinkedHashMap<>();
                 for (String apptId : validAppointmentIds) {
                     List<AccessCredential> byAppt = accessCredentialRepositoryPort.findByAppointmentId(apptId);
                     if (byAppt != null) {
-                        result.addAll(byAppt);
+                        for (AccessCredential c : byAppt) {
+                            if (c != null && c.getId() != null) {
+                                uniqueCreds.put(c.getId(), c);
+                            }
+                        }
                     }
                 }
+
+                List<AccessCredential> result = new ArrayList<>(uniqueCreds.values());
+                // Garante que o titular (PATIENT) venha sempre primeiro no carrossel, seguido pelos acompanhantes
+                result.sort((a, b) -> {
+                    if (a.getUserType() == UserType.PATIENT && b.getUserType() != UserType.PATIENT) return -1;
+                    if (a.getUserType() != UserType.PATIENT && b.getUserType() == UserType.PATIENT) return 1;
+                    return 0;
+                });
+
                 return result.isEmpty() ? validList : result;
             }
         }

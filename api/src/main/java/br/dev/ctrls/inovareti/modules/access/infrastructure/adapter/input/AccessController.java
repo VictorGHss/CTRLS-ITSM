@@ -349,6 +349,11 @@ public class AccessController {
                     closesAt
                 ));
             }
+            responseList.sort((a, b) -> {
+                if (a.userType() == UserType.PATIENT && b.userType() != UserType.PATIENT) return -1;
+                if (a.userType() != UserType.PATIENT && b.userType() == UserType.PATIENT) return 1;
+                return 0;
+            });
 
             return ResponseEntity.ok(responseList);
         } catch (Exception ex) {
