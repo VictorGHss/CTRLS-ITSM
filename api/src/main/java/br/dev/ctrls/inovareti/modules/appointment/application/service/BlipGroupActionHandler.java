@@ -139,6 +139,10 @@ public class BlipGroupActionHandler {
             }
             if (groups == null || groups.isEmpty()) {
                 log.info("[WEBHOOK] Grupo não encontrado no banco para groupId={} (actionType={}).", groupId, actionType);
+                if (groupId == null) {
+                    log.info("[WEBHOOK] Sem groupId associado; repassando ação '{}' para intentResolver.", action);
+                    return null;
+                }
                 
                 boolean shouldForceHumanDesk = "confirm_group".equalsIgnoreCase(actionType) || "alter_group".equalsIgnoreCase(actionType);
                 if (shouldForceHumanDesk && fromPhone != null && !fromPhone.isBlank()) {
@@ -315,8 +319,7 @@ public class BlipGroupActionHandler {
         if (lower == null || isMenuOrNavigationText(lower)) return false;
         String t = lower.trim();
         return t.contains("confirmar tudo") || t.contains("confirmar_tudo") ||
-               t.contains("confirmar presenca") || t.contains("confirmar presença") ||
-               t.startsWith("1 - confirmar") || t.startsWith("1. confirmar") ||
+               t.startsWith("1 - confirmar tudo") || t.startsWith("1. confirmar tudo") ||
                t.startsWith("1 - tudo") || t.startsWith("1. tudo");
     }
 
@@ -324,7 +327,6 @@ public class BlipGroupActionHandler {
         if (lower == null || isMenuOrNavigationText(lower)) return false;
         String t = lower.trim();
         return t.contains("preciso alterar") || t.contains("preciso_alterar") ||
-               t.contains("solicitar alteração") || t.contains("solicitar alteracao") ||
                t.startsWith("2 - alterar") || t.startsWith("2. alterar") ||
                t.startsWith("2 - preciso") || t.startsWith("2. preciso");
     }
