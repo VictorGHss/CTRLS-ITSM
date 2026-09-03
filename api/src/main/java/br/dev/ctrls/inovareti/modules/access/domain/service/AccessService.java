@@ -26,14 +26,13 @@ import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-import java.util.stream.Collectors;
 
 /**
  * Serviço de domínio AccessService.
@@ -1051,10 +1050,12 @@ public class AccessService {
 
             if (!validList.isEmpty()) {
                 // Recupera todas as credenciais (titular e acompanhantes) associadas aos agendamentos encontrados
-                Set<String> validAppointmentIds = validList.stream()
-                    .map(AccessCredential::getAppointmentId)
-                    .filter(Objects::nonNull)
-                    .collect(Collectors.toSet());
+                Set<String> validAppointmentIds = new HashSet<>();
+                for (AccessCredential cred : validList) {
+                    if (cred != null && cred.getAppointmentId() != null && !cred.getAppointmentId().isBlank()) {
+                        validAppointmentIds.add(cred.getAppointmentId());
+                    }
+                }
 
                 List<AccessCredential> result = new ArrayList<>();
                 for (String apptId : validAppointmentIds) {
