@@ -1484,11 +1484,27 @@ public class AccessService {
             String patientPhone = patient.phone() != null ? patient.phone().trim() : "";
             String patientBirthDate = patient.birthdate() != null ? patient.birthdate().trim() : "";
 
-            if (patientBirthDate.matches("\\d{4}-\\d{2}-\\d{2}")) {
+            // Normaliza data de nascimento para padrão brasileiro (dd/MM/yyyy)
+            if (patientBirthDate.matches("\\d{4}[-/]\\d{2}[-/]\\d{2}")) {
                 try {
-                    LocalDate bDate = LocalDate.parse(patientBirthDate);
+                    String clean = patientBirthDate.replace('/', '-');
+                    LocalDate bDate = LocalDate.parse(clean);
                     patientBirthDate = bDate.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"));
                 } catch (Exception ignored) {}
+            } else if (patientBirthDate.matches("\\d{2}[-/]\\d{2}[-/]\\d{4}")) {
+                patientBirthDate = patientBirthDate.replace('-', '/');
+            }
+
+            // Normaliza telefone removendo código de país 55 quando presente
+            if (patientPhone.startsWith("+55")) {
+                patientPhone = patientPhone.substring(3).trim();
+            }
+            String cleanPhoneDigits = patientPhone.replaceAll("\\D", "");
+            if (cleanPhoneDigits.startsWith("55") && (cleanPhoneDigits.length() == 12 || cleanPhoneDigits.length() == 13)) {
+                cleanPhoneDigits = cleanPhoneDigits.substring(2);
+            }
+            if (!cleanPhoneDigits.isEmpty()) {
+                patientPhone = cleanPhoneDigits;
             }
 
             List<FeegowAppointment> feegowAppts = appointmentExternalPort.searchPatientAppointments(patient.id());

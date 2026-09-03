@@ -113,7 +113,13 @@ export const CompanionModal: React.FC<CompanionModalProps> = ({
                 placeholder="DD/MM/AAAA (opcional)"
                 value={companionBirthDate}
                 onChange={(e) => {
-                  const digits = e.target.value.replace(/\D/g, '').substring(0, 8);
+                  const val = e.target.value.trim();
+                  const ymd = val.match(/^(\d{4})[-/](\d{2})[-/](\d{2})/);
+                  if (ymd) {
+                    onBirthDateChange(`${ymd[3]}/${ymd[2]}/${ymd[1]}`);
+                    return;
+                  }
+                  const digits = val.replace(/\D/g, '').substring(0, 8);
                   let masked = digits;
                   if (digits.length > 4) {
                     masked = `${digits.substring(0, 2)}/${digits.substring(2, 4)}/${digits.substring(4)}`;
