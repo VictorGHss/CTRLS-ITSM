@@ -393,10 +393,12 @@ public class AccessService {
             if (accessInfo.doctorName() != null && !accessInfo.doctorName().isBlank()) {
                 existingCred.setDoctorName(accessInfo.doctorName());
             }
+            if (finalCpf != null && !finalCpf.isBlank() && isValidCpf(finalCpf)) {
+                existingCred.setCpf(finalCpf);
+            }
             if (existingCred.getAccessCredential() != null 
                     && existingCred.getAccessCredential().startsWith("CRED-") 
                     && !token.startsWith("CRED-")) {
-                existingCred.setCpf(finalCpf);
                 existingCred.setAccessCredential(token);
                 existingCred.setLocator(locator);
                 existingCred.setCreatedAt(LocalDateTime.now());
@@ -1196,6 +1198,31 @@ public class AccessService {
         List<AccessCredential> credentials = accessCredentialRepositoryPort.findByAppointmentId(appointmentId);
         if (credentials != null && !credentials.isEmpty()) {
             return credentials;
+        }
+
+        // Fallback Feegow: se não encontrou credenciais locais pré-existentes, consulta o paciente na Feegow
+        try {
+            FeegowPatient feegowPatient = patientExternalPort.patientInfo(cleanCpf);
+            if (feegowPatient != null && feegowPatient.id() != null && !feegowPatient.id().isBlank()) {
+                List<FeegowAppointment> patientAppts = appointmentExternalPort.searchPatientAppointments(feegowPatient.id());
+                if (patientAppts != null && !patientAppts.isEmpty()) {
+                    for (FeegowAppointment appt : patientAppts) {
+                        if (appt.startAt() != null) {
+                            LocalDate apptDate = appt.startAt().toLocalDate();
+                            if (!apptDate.isBefore(today) && !apptDate.isAfter(maxAllowedDate)) {
+                                log.info("[AccessService] Agendamento Feegow {} encontrado para CPF {}. Gerando credencial automaticamente...", appt.id(), cleanCpf);
+                                processAccessRequest(appt.id().toString(), cleanCpf, null);
+                                List<AccessCredential> newlyCreated = accessCredentialRepositoryPort.findByAppointmentId(appt.id().toString());
+                                if (newlyCreated != null && !newlyCreated.isEmpty()) {
+                                    return newlyCreated;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Exception ex) {
+            log.warn("[AccessService] Falha defensiva ao buscar agendamentos Feegow no lookup por CPF {}: {}", cleanCpf, ex.getMessage());
         }
 
         return List.of();
