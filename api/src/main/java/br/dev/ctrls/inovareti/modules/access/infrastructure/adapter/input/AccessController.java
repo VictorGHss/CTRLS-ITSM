@@ -40,7 +40,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.stream.Collectors;
+
 
 /**
  * Controlador REST para o controle de acesso integrado às catracas físicas.
@@ -687,23 +687,7 @@ public class AccessController {
             credentials.addAll(appCreds);
         }
 
-        // FILTRO DE HOJE: se o paciente possui credenciais geradas hoje sob o mesmo CPF, exibe as de hoje (apenas para agendamentos convencionais)
-        try {
-            LocalDate todayDate = LocalDate.now(CLINIC_ZONE);
-            boolean isAutoCheckin = idAgendamento != null && (idAgendamento.startsWith("INOV-") || idAgendamento.startsWith("IMG-"));
-            if (!isAutoCheckin) {
-                boolean hasTodayCredentials = credentials.stream()
-                        .anyMatch(c -> c.getCreatedAt() != null && c.getCreatedAt().toLocalDate().equals(todayDate));
-                if (hasTodayCredentials) {
-                    credentials = credentials.stream()
-                            .filter(c -> c.getCreatedAt() != null && c.getCreatedAt().toLocalDate().equals(todayDate))
-                            .collect(Collectors.toList());
-                    log.info("[AccessControl] Filtro de hoje aplicado. Retornando apenas as credenciais geradas hoje.");
-                }
-            }
-        } catch (Exception ex) {
-            log.warn("[AccessControl] Erro ao aplicar filtro de hoje nas credenciais: {}", ex.getMessage());
-        }
+
 
         // Ordena para que o paciente principal venha em primeiro lugar, seguido de acompanhantes
         credentials.sort((c1, c2) -> {
