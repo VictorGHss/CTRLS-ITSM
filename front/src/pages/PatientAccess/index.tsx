@@ -114,11 +114,23 @@ export default function PatientAccess() {
           const todayStr = new Date().toLocaleDateString('sv-SE'); // 'YYYY-MM-DD'
           let targetDate = todayStr;
           const firstAppId = normalizedData[0]?.appointmentId;
+          const firstAppDateTime = normalizedData[0]?.appointmentDateTime;
+
           if (firstAppId && firstAppId.length >= 13 && (firstAppId.startsWith('INOV-') || firstAppId.startsWith('IMG-'))) {
             const y = firstAppId.substring(5, 9);
             const m = firstAppId.substring(9, 11);
             const d = firstAppId.substring(11, 13);
             targetDate = `${y}-${m}-${d}`;
+          } else if (firstAppDateTime) {
+            const dmyMatch = firstAppDateTime.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+            if (dmyMatch) {
+              targetDate = `${dmyMatch[3]}-${dmyMatch[2]}-${dmyMatch[1]}`;
+            } else {
+              const ymdMatch = firstAppDateTime.match(/(\d{4})-(\d{2})-(\d{2})/);
+              if (ymdMatch) {
+                targetDate = `${ymdMatch[1]}-${ymdMatch[2]}-${ymdMatch[3]}`;
+              }
+            }
           }
           localStorage.setItem(`patient_access_${clinicTheme.id}_last_credentials`, JSON.stringify({
             savedDate: todayStr,
@@ -217,7 +229,26 @@ export default function PatientAccess() {
             }
 
             // Expira o cache APENAS se a data do agendamento/consulta já tiver passado (anterior a hoje)
-            const effectiveDate = parsed.targetDate || savedDate;
+            let effectiveDate = parsed.targetDate || savedDate;
+            const hasFutureOrTodayAppt = creds.some(c => {
+              if (!c.appointmentDateTime) return false;
+              const dmy = c.appointmentDateTime.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+              if (dmy) {
+                const dateStr = `${dmy[3]}-${dmy[2]}-${dmy[1]}`;
+                return dateStr >= todayStr;
+              }
+              const ymd = c.appointmentDateTime.match(/(\d{4})-(\d{2})-(\d{2})/);
+              if (ymd) {
+                const dateStr = `${ymd[1]}-${ymd[2]}-${ymd[3]}`;
+                return dateStr >= todayStr;
+              }
+              return false;
+            });
+
+            if (hasFutureOrTodayAppt) {
+              effectiveDate = todayStr;
+            }
+
             if (effectiveDate && effectiveDate < todayStr) {
               console.log(`[PatientAccess] Cache de auto-cadastro (${clinicTheme.id}) expirado pois a consulta era em (${effectiveDate}). Expirando para nova emissão.`);
               localStorage.removeItem(cacheKey);
