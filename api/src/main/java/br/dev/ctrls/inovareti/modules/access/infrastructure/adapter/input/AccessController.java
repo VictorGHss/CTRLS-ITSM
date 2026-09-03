@@ -293,6 +293,8 @@ public class AccessController {
 
             List<AccessCredentialResponse> responseList = new ArrayList<>();
             Map<String, Optional<FeegowPatientAccessInfo>> feegowCache = new HashMap<>();
+            LocalDate today = LocalDate.now(CLINIC_ZONE);
+            LocalDate maxAllowed = today.plusDays(7);
 
             for (AccessCredential cred : credentials) {
                 String appointmentId = cred.getAppointmentId();
@@ -301,9 +303,19 @@ public class AccessController {
                 String opensAt = "06:00";
                 String closesAt = "23:59";
 
-                // Só consulta o Feegow se o nome do médico ainda não estiver salvo localmente
-                if ((doctorName == null || doctorName.isBlank()) 
-                        && appointmentId != null && !appointmentId.startsWith("INOV-") && !appointmentId.startsWith("IMG-")) {
+                // Filtro estrito de janela: ignora auto-cadastros passados ou além de 7 dias
+                if (appointmentId != null && appointmentId.length() >= 13 && (appointmentId.startsWith("INOV-") || appointmentId.startsWith("IMG-"))) {
+                    try {
+                        String datePart = appointmentId.substring(5, 13);
+                        LocalDate parsedDate = LocalDate.parse(datePart, DateTimeFormatter.ofPattern("yyyyMMdd"));
+                        if (parsedDate.isBefore(today) || parsedDate.isAfter(maxAllowed)) {
+                            continue;
+                        }
+                    } catch (Exception ignored) {}
+                }
+
+                // Consulta Feegow para obter médico e data real da consulta
+                if (appointmentId != null && !appointmentId.startsWith("INOV-") && !appointmentId.startsWith("IMG-")) {
                     try {
                         Optional<FeegowPatientAccessInfo> accessInfoOpt = feegowCache.computeIfAbsent(
                             appointmentId,
@@ -311,6 +323,12 @@ public class AccessController {
                         );
                         if (accessInfoOpt.isPresent()) {
                             FeegowPatientAccessInfo info = accessInfoOpt.get();
+                            // Filtro estrito de janela: ignora consultas passadas ou além de 7 dias
+                            if (info.appointmentDate() != null) {
+                                if (info.appointmentDate().isBefore(today) || info.appointmentDate().isAfter(maxAllowed)) {
+                                    continue;
+                                }
+                            }
                             if (info.doctorName() != null && !info.doctorName().isBlank()) {
                                 doctorName = info.doctorName();
                                 if (cred.getDoctorName() == null || cred.getDoctorName().isBlank()) {
@@ -354,6 +372,12 @@ public class AccessController {
                     closesAt
                 ));
             }
+
+            if (responseList.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Nenhum cadastro ativo encontrado para este CPF nos próximos 7 dias."));
+            }
+
             responseList.sort((a, b) -> {
                 if (a.userType() == UserType.PATIENT && b.userType() != UserType.PATIENT) return -1;
                 if (a.userType() != UserType.PATIENT && b.userType() == UserType.PATIENT) return 1;
