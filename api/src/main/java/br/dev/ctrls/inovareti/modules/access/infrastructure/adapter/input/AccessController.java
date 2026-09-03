@@ -287,8 +287,7 @@ public class AccessController {
         try {
             List<AccessCredential> credentials = accessService.lookupCredentialsByCpf(request.cpf(), request.clinic());
             if (credentials.isEmpty()) {
-                return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(Map.of("message", "Nenhum cadastro ativo encontrado para este CPF hoje."));
+                return ResponseEntity.ok(List.of());
             }
 
             List<AccessCredentialResponse> responseList = new ArrayList<>();
@@ -374,8 +373,7 @@ public class AccessController {
             }
 
             if (responseList.isEmpty()) {
-                return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(Map.of("message", "Nenhum cadastro ativo encontrado para este CPF nos próximos 7 dias."));
+                return ResponseEntity.ok(List.of());
             }
 
             responseList.sort((a, b) -> {

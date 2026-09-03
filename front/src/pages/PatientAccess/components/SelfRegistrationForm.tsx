@@ -3,6 +3,7 @@ import { User, CreditCard, Phone, Calendar, UserPlus, ArrowRight, Search, CheckC
 import { type ClinicTheme, DOCTOR_SUGGESTIONS, type DoctorSuggestion, resolveDoctorLocation } from '../utils/clinicThemes';
 import type { AccessCredential } from '../types';
 import api from '../../../services/api';
+import { getApiErrorMessage } from '../../../lib/apiError';
 
 interface CompanionEntry {
   id: string;
@@ -376,11 +377,13 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
       if (response.data && response.data.length > 0) {
         onSuccess(response.data);
       } else {
-        setErrorMessage('Nenhum cadastro ativo encontrado para este CPF hoje. Realize um novo cadastro acima.');
+        setErrorMessage(
+          'Nenhum agendamento ativo encontrado para este CPF nos próximos 7 dias. Se sua consulta for hoje ou se você veio para uma visita, emita seu QR Code na aba "Novo Cadastro" acima.'
+        );
       }
     } catch (err: any) {
       console.error('[SelfRegistration] Erro ao consultar CPF:', err);
-      const msg = err.response?.data?.message || 'Erro ao consultar CPF. Tente novamente.';
+      const msg = getApiErrorMessage(err, 'Não foi possível consultar seu CPF no momento. Tente novamente.');
       setErrorMessage(msg);
     } finally {
       setLoading(false);
