@@ -8,7 +8,8 @@ import {
   Maximize2, 
   MapPin,
   RefreshCw,
-  Sun
+  Sun,
+  CreditCard
 } from 'lucide-react';
 import { formatCpf } from '../types';
 import type { AccessCredential } from '../types';
@@ -26,6 +27,7 @@ interface CredentialsCarouselProps {
   onOpenCompanionModal: () => void;
   onReactivateAccess?: () => Promise<void>;
   onResetAccess?: () => void;
+  onEditCpf?: () => void;
   isReactivating?: boolean;
   clinicTheme: ClinicTheme;
 }
@@ -40,6 +42,7 @@ export const CredentialsCarousel: React.FC<CredentialsCarouselProps> = ({
   onOpenCompanionModal,
   onReactivateAccess,
   onResetAccess,
+  onEditCpf,
   isReactivating,
   clinicTheme,
 }) => {
@@ -90,7 +93,12 @@ export const CredentialsCarousel: React.FC<CredentialsCarouselProps> = ({
                 >
                   {cred.userType === 'PATIENT' ? 'Paciente Titular' : 'Acompanhante'}
                 </span>
-                {cred.credentialCode !== 'BLOCKED_OUTSIDE_WINDOW' && cred.credentialCode !== 'CPF_MISSING' && (
+                {cred.credentialCode.startsWith('CRED-') ? (
+                  <span className="inline-flex items-center gap-1 bg-amber-50 border border-amber-200/80 text-amber-700 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                    Contingência
+                  </span>
+                ) : cred.credentialCode !== 'BLOCKED_OUTSIDE_WINDOW' && cred.credentialCode !== 'CPF_MISSING' && (
                   <span className="inline-flex items-center gap-1 bg-emerald-50 border border-emerald-200/80 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded-full">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
                     Liberado
@@ -158,6 +166,22 @@ export const CredentialsCarousel: React.FC<CredentialsCarouselProps> = ({
               <span className="text-[10.5px] font-bold text-slate-400 font-mono mt-1 uppercase tracking-wider">
                 Ref: {cred.locator}
               </span>
+
+              {/* Alerta de contingência com botão de correção de CPF */}
+              {cred.credentialCode.startsWith('CRED-') && onEditCpf && (
+                <div className="w-full mt-3 p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-center space-y-1.5">
+                  <p className="text-[10.5px] font-bold text-amber-900 leading-snug">
+                    ⚠️ Acesso em contingência (CPF precisa de confirmação na catraca)
+                  </p>
+                  <button
+                    type="button"
+                    onClick={onEditCpf}
+                    className="w-full py-1.5 px-3 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold transition-all shadow-xs cursor-pointer"
+                  >
+                    Corrigir CPF do Titular
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Divisor Tracejado Estilo Wallet */}
@@ -282,6 +306,17 @@ export const CredentialsCarousel: React.FC<CredentialsCarouselProps> = ({
           <User className="w-4 h-4" style={{ color: clinicTheme.primaryColor }} />
           Cadastrar Acompanhante
         </button>
+
+        {onEditCpf && (
+          <button
+            type="button"
+            onClick={onEditCpf}
+            className="w-full py-3 px-4 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-700 rounded-2xl text-xs font-bold transition-all flex items-center justify-center gap-2 active:scale-[0.98] shadow-sm cursor-pointer"
+          >
+            <CreditCard className="w-4 h-4 text-slate-500" />
+            <span>Corrigir / Alterar CPF</span>
+          </button>
+        )}
 
         {onReactivateAccess && (
           <div className="flex flex-col gap-1.5">
