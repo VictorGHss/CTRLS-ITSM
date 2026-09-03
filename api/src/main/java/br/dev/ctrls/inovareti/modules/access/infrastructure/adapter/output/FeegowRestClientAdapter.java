@@ -14,6 +14,7 @@ import br.dev.ctrls.inovareti.modules.appointment.infrastructure.config.FeegowPr
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.web.util.UriComponentsBuilder;
@@ -45,6 +46,7 @@ public class FeegowRestClientAdapter implements FeegowClientPort {
     private final ObjectMapper objectMapper;
 
     @Override
+    @Cacheable(value = "feegowAccessInfo", key = "#appointmentId", unless = "#result == null || !#result.isPresent()")
     public Optional<FeegowPatientAccessInfo> fetchPatientAccessInfo(String appointmentId) {
         if (appointmentId == null || appointmentId.isBlank()) {
             return Optional.empty();
