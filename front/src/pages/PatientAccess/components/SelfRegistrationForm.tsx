@@ -129,17 +129,7 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
             setPhone(maskPhone(resp.data.phone));
           }
           if (resp.data.birthDate && (!birthDate.trim() || !manualDoctorMode)) {
-            const rawBirth = resp.data.birthDate.trim();
-            if (rawBirth.includes('-')) {
-              const parts = rawBirth.split('-');
-              if (parts.length === 3) {
-                setBirthDate(`${parts[2]}/${parts[1]}/${parts[0]}`);
-              } else {
-                setBirthDate(maskDate(rawBirth));
-              }
-            } else {
-              setBirthDate(maskDate(rawBirth));
-            }
+            setBirthDate(maskDate(resp.data.birthDate));
           }
 
           const appts = resp.data.appointments || [];
@@ -219,7 +209,17 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
   };
 
   const maskPhone = (val: string) => {
-    const raw = val.replace(/\D/g, '').slice(0, 11);
+    if (!val) return '';
+    let raw = val.trim();
+    if (raw.startsWith('+55')) {
+      raw = raw.slice(3);
+    }
+    raw = raw.replace(/\D/g, '');
+    // Se vier com o código de país 55 (ex: 5542991617188 ou 554232201000 - 12 ou 13 dígitos), remove o 55
+    if (raw.startsWith('55') && (raw.length === 12 || raw.length === 13)) {
+      raw = raw.slice(2);
+    }
+    raw = raw.slice(0, 11);
     if (raw.length <= 10) {
       return raw.replace(/(\d{2})(\d{4})(\d{0,4})/, '($1) $2-$3').replace(/-$/, '');
     }
@@ -227,7 +227,22 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
   };
 
   const maskDate = (val: string) => {
-    return val
+    if (!val) return '';
+    const trimmed = val.trim();
+
+    // Se vier no formato ano primeiro: YYYY-MM-DD ou YYYY/MM/DD
+    const ymdMatch = trimmed.match(/^(\d{4})[-/](\d{2})[-/](\d{2})/);
+    if (ymdMatch) {
+      return `${ymdMatch[3]}/${ymdMatch[2]}/${ymdMatch[1]}`;
+    }
+
+    // Se vier no formato dia primeiro com traço: DD-MM-YYYY
+    const dmyMatch = trimmed.match(/^(\d{2})-(\d{2})-(\d{4})/);
+    if (dmyMatch) {
+      return `${dmyMatch[1]}/${dmyMatch[2]}/${dmyMatch[3]}`;
+    }
+
+    return trimmed
       .replace(/\D/g, '')
       .slice(0, 8)
       .replace(/(\d{2})(\d)/, '$1/$2')
