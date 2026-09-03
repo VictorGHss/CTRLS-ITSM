@@ -301,8 +301,9 @@ public class AccessController {
                 String opensAt = "06:00";
                 String closesAt = "23:59";
 
-                // Se for um agendamento do Feegow (não começa com INOV- nem IMG-), consulta detalhes no Feegow
-                if (appointmentId != null && !appointmentId.startsWith("INOV-") && !appointmentId.startsWith("IMG-")) {
+                // Só consulta o Feegow se o nome do médico ainda não estiver salvo localmente
+                if ((doctorName == null || doctorName.isBlank()) 
+                        && appointmentId != null && !appointmentId.startsWith("INOV-") && !appointmentId.startsWith("IMG-")) {
                     try {
                         Optional<FeegowPatientAccessInfo> accessInfoOpt = feegowCache.computeIfAbsent(
                             appointmentId,

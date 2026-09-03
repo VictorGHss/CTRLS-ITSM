@@ -1025,7 +1025,13 @@ public class AccessService {
                     String apptId = c.getAppointmentId();
                     if (apptId == null || apptId.isBlank()) return false;
 
-                    // 1) Auto-cadastro público (ex: INOV-20260903-CPF ou IMG-20260903-CPF)
+                    // 1) Fast-path ultra-rápido: se a credencial foi criada nos últimos 3 dias (D-0, D-1, D-2),
+                    // é válida instantaneamente SEM bater no Feegow (0ms, 100% no PostgreSQL local)!
+                    if (c.getCreatedAt() != null && !c.getCreatedAt().toLocalDate().isBefore(today.minusDays(3))) {
+                        return true;
+                    }
+
+                    // 2) Auto-cadastro público (ex: INOV-20260903-CPF ou IMG-20260903-CPF)
                     if (apptId.length() >= 13 && (apptId.startsWith("INOV-") || apptId.startsWith("IMG-"))) {
                         try {
                             String datePart = apptId.substring(5, 13);
@@ -1034,7 +1040,7 @@ public class AccessService {
                         } catch (Exception ignored) {}
                     }
 
-                    // 2) Agendamento Feegow (ex: 3448219)
+                    // 3) Se foi criada há mais de 3 dias, aí sim consulta o Feegow para checar se a consulta é para hoje ou futura
                     try {
                         Optional<FeegowPatientAccessInfo> accessInfoOpt = feegowClientPort.fetchPatientAccessInfo(apptId);
                         if (accessInfoOpt.isPresent() && accessInfoOpt.get().appointmentDate() != null) {
@@ -1045,7 +1051,7 @@ public class AccessService {
                         log.warn("[AccessService] Erro ao consultar Feegow para agendamento {} durante lookup por CPF: {}", apptId, ex.getMessage());
                     }
 
-                    // 3) Fallback defensivo: válido se a credencial foi criada nos últimos 7 dias
+                    // 4) Fallback defensivo: válido se a credencial foi criada nos últimos 7 dias
                     return c.getCreatedAt() != null && !c.getCreatedAt().toLocalDate().isBefore(today.minusDays(7));
                 })
                 .toList();
