@@ -1042,6 +1042,7 @@ public class AccessService {
         }
 
         AccessCredential patient = patientCredOpt.get();
+        String oldCpf = patient.getCpf() != null ? patient.getCpf().replaceAll("\\D", "") : "";
         patient.setCpf(cleanCpf);
 
         // Resolve data da visita a partir do appointmentId (ex: INOV-20260904-...)
@@ -1088,10 +1089,12 @@ public class AccessService {
 
         // Sincroniza a correção do CPF também com a ficha do Feegow (se o paciente possuir prontuário no ERP)
         try {
-            String oldCpf = patient.getCpf() != null ? patient.getCpf().replaceAll("\\D", "") : "";
             FeegowPatient feegowP = null;
             if (!oldCpf.isEmpty()) {
                 feegowP = patientExternalPort.patientInfo(oldCpf);
+            }
+            if ((feegowP == null || feegowP.id() == null) && !cleanCpf.isEmpty()) {
+                feegowP = patientExternalPort.patientInfo(cleanCpf);
             }
             if (feegowP != null && feegowP.id() != null && !feegowP.id().isBlank()) {
                 log.info("[AccessService] Sincronizando correção de CPF com a ficha Feegow ID {} (Paciente: {})", feegowP.id(), patient.getName());
