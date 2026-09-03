@@ -80,6 +80,29 @@ public class AppointmentMotorController {
                 "mode", mode));
     }
 
+    private java.util.List<java.time.LocalDate> parseTargetDates(String targetDate, String targetDates) {
+        String raw = (targetDate != null && !targetDate.isBlank()) ? targetDate : targetDates;
+        if (raw == null || raw.isBlank()) return null;
+
+        java.util.List<java.time.LocalDate> dates = new java.util.ArrayList<>();
+        for (String part : raw.split("[,;\\s]+")) {
+            String trimmed = part.trim();
+            if (trimmed.isEmpty()) continue;
+            try {
+                if (trimmed.contains("/")) {
+                    dates.add(java.time.LocalDate.parse(trimmed, java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy")));
+                } else if (trimmed.contains("-") && trimmed.length() == 10 && trimmed.charAt(2) == '-') {
+                    dates.add(java.time.LocalDate.parse(trimmed, java.time.format.DateTimeFormatter.ofPattern("dd-MM-yyyy")));
+                } else {
+                    dates.add(java.time.LocalDate.parse(trimmed)); // ISO-8601 (yyyy-MM-dd)
+                }
+            } catch (Exception ex) {
+                log.warn("[TRIGGER-MANUAL] Data informada inválida '{}': {}", trimmed, ex.getMessage());
+            }
+        }
+        return dates.isEmpty() ? null : dates;
+    }
+
     @PostMapping("/trigger-manual")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Map<String, Object>> triggerManual(
@@ -88,10 +111,14 @@ public class AppointmentMotorController {
             @RequestParam(value = "doctorId", required = false) String doctorId,
             @RequestParam(value = "doctorIds", required = false) String doctorIds,
             @RequestParam(value = "forceSend", required = false, defaultValue = "false") boolean forceSend,
-            @RequestParam(value = "testPhone", required = false) String testPhone) {
+            @RequestParam(value = "testPhone", required = false) String testPhone,
+            @RequestParam(value = "targetDate", required = false) String targetDate,
+            @RequestParam(value = "targetDates", required = false) String targetDates) {
         
-        log.info("[TRIGGER-MANUAL] Recebida solicitação de disparo manual em segundo plano (production={}, doctorId={}, doctorIds={}, forceSend={}, testPhone={}). Respondendo HTTP 202 Accepted...",
-                production, doctorId, doctorIds, forceSend, testPhone);
+        java.util.List<java.time.LocalDate> customDates = parseTargetDates(targetDate, targetDates);
+
+        log.info("[TRIGGER-MANUAL] Recebida solicitação de disparo manual em segundo plano (production={}, doctorId={}, doctorIds={}, forceSend={}, testPhone={}, customDates={}). Respondendo HTTP 202 Accepted...",
+                production, doctorId, doctorIds, forceSend, testPhone, customDates);
 
         applicationTaskExecutor.execute(() -> {
             try {
@@ -101,8 +128,8 @@ public class AppointmentMotorController {
                             .map(id -> id != null ? id.trim() : "")
                             .filter(id -> !id.isEmpty())
                             .toList();
-                    log.info("[TRIGGER-MANUAL] Iniciando execução para médicos específicos: {} (forceSend={}, testPhone={})", specificDocs, forceSend, testPhone);
-                    ingestAppointmentsUseCase.execute(specificDocs, forceSend, testPhone);
+                    log.info("[TRIGGER-MANUAL] Iniciando execução para médicos específicos: {} (forceSend={}, testPhone={}, customDates={})", specificDocs, forceSend, testPhone, customDates);
+                    ingestAppointmentsUseCase.execute(specificDocs, forceSend, testPhone, customDates);
                 } else if (Boolean.TRUE.equals(production)) {
                     java.util.List<String> activeDoctorIds = new java.util.ArrayList<>(appointmentMotorProperties.getActiveDoctorIds());
                     
@@ -112,15 +139,15 @@ public class AppointmentMotorController {
                                 .filter(id -> !id.isEmpty())
                                 .toList();
                         
-                        log.info("[MANUAL-PROD] Executando motor em segundo plano para médicos ativos (forceSend={}, testPhone={}). Excluindo por demanda os IDs: {}", forceSend, testPhone, excludeList);
+                        log.info("[MANUAL-PROD] Executando motor em segundo plano para médicos ativos (forceSend={}, testPhone={}, customDates={}). Excluindo por demanda os IDs: {}", forceSend, testPhone, customDates, excludeList);
                         activeDoctorIds.removeAll(excludeList);
                     }
                     
-                    log.info("[TRIGGER-MANUAL] Iniciando execução de produção em segundo plano para os médicos: {} (forceSend={}, testPhone={})", activeDoctorIds, forceSend, testPhone);
-                    ingestAppointmentsUseCase.execute(activeDoctorIds, forceSend, testPhone);
+                    log.info("[TRIGGER-MANUAL] Iniciando execução de produção em segundo plano para os médicos: {} (forceSend={}, testPhone={}, customDates={})", activeDoctorIds, forceSend, testPhone, customDates);
+                    ingestAppointmentsUseCase.execute(activeDoctorIds, forceSend, testPhone, customDates);
                 } else {
-                    log.info("[TRIGGER-MANUAL] Iniciando execução manual em segundo plano (respeitando configurações globais, forceSend={}, testPhone={}).", forceSend, testPhone);
-                    ingestAppointmentsUseCase.execute(null, forceSend, testPhone);
+                    log.info("[TRIGGER-MANUAL] Iniciando execução manual em segundo plano (respeitando configurações globais, forceSend={}, testPhone={}, customDates={}).", forceSend, testPhone, customDates);
+                    ingestAppointmentsUseCase.execute(null, forceSend, testPhone, customDates);
                 }
                 log.info("[TRIGGER-MANUAL] Ingestão e disparo manual concluídos com sucesso em segundo plano.");
             } catch (Exception ex) {
@@ -130,6 +157,7 @@ public class AppointmentMotorController {
 
         return ResponseEntity.status(org.springframework.http.HttpStatus.ACCEPTED).body(Map.of(
                 "status", "accepted",
+                "customDates", customDates != null ? customDates.toString() : "default",
                 "message", "Ingestão e disparo manual iniciados em segundo plano."));
     }
 
@@ -137,12 +165,15 @@ public class AppointmentMotorController {
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Map<String, Object>> triggerMotor(
             @RequestParam(value = "forceSend", required = false, defaultValue = "false") boolean forceSend,
-            @RequestParam(value = "testPhone", required = false) String testPhone) {
-        log.info("[MOTOR-TRIGGER] Disparo manual acionado via /motor/trigger em segundo plano (forceSend={}, testPhone={}). Respondendo HTTP 202 Accepted...", forceSend, testPhone);
+            @RequestParam(value = "testPhone", required = false) String testPhone,
+            @RequestParam(value = "targetDate", required = false) String targetDate,
+            @RequestParam(value = "targetDates", required = false) String targetDates) {
+        java.util.List<java.time.LocalDate> customDates = parseTargetDates(targetDate, targetDates);
+        log.info("[MOTOR-TRIGGER] Disparo manual acionado via /motor/trigger em segundo plano (forceSend={}, testPhone={}, customDates={}). Respondendo HTTP 202 Accepted...", forceSend, testPhone, customDates);
 
         applicationTaskExecutor.execute(() -> {
             try {
-                ingestAppointmentsUseCase.execute(null, forceSend, testPhone);
+                ingestAppointmentsUseCase.execute(null, forceSend, testPhone, customDates);
                 log.info("[MOTOR-TRIGGER] Execução do motor concluída com sucesso em segundo plano.");
             } catch (Exception ex) {
                 log.error("[MOTOR-TRIGGER] Erro na execução assíncrona do motor: {}", ex.getMessage(), ex);
@@ -151,6 +182,7 @@ public class AppointmentMotorController {
 
         return ResponseEntity.status(org.springframework.http.HttpStatus.ACCEPTED).body(Map.of(
                 "status", "accepted",
+                "customDates", customDates != null ? customDates.toString() : "default",
                 "message", "Ingestão e disparo do motor iniciados em segundo plano."));
     }
 

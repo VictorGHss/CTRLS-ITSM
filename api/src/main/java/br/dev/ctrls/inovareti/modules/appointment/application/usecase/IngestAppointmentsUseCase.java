@@ -78,6 +78,10 @@ public class IngestAppointmentsUseCase {
     }
 
     public IngestionSummary execute(List<String> doctorIds, boolean forceSend, String testPhone) {
+        return execute(doctorIds, forceSend, testPhone, null);
+    }
+
+    public IngestionSummary execute(List<String> doctorIds, boolean forceSend, String testPhone, List<LocalDate> customDates) {
         long startTime = System.currentTimeMillis();
         final String overridePhone = (testPhone != null && !testPhone.isBlank())
                 ? testPhone.trim().replaceAll("\\D", "")
@@ -91,14 +95,21 @@ public class IngestAppointmentsUseCase {
         LocalDate today = LocalDate.now();
         DayOfWeek dayOfWeek = today.getDayOfWeek();
 
-        // Motor não opera aos finais de semana
-        if (dayOfWeek == DayOfWeek.SATURDAY || dayOfWeek == DayOfWeek.SUNDAY) {
+        // Se datas customizadas NÃO forem informadas, aplica a trava padrão de finais de semana
+        boolean hasCustomDates = customDates != null && !customDates.isEmpty();
+        if (!hasCustomDates && (dayOfWeek == DayOfWeek.SATURDAY || dayOfWeek == DayOfWeek.SUNDAY)) {
             log.info("[MOTOR-INGESTÃO] Dia da semana: {}. Motor não opera aos finais de semana. Encerrando sem processar.", dayOfWeek);
             return new IngestionSummary(0, 0, 0, 0, "WEEKEND_SKIP");
         }
 
         // 1. Resolução de Datas-Alvo e Busca de Agendamentos no Feegow
-        ResolvedDatesAndAppointments resolved = dateResolver.resolveDatesAndFetchAppointments(today, dayOfWeek, doctorIds);
+        ResolvedDatesAndAppointments resolved;
+        if (hasCustomDates) {
+            log.info("[MOTOR-INGESTÃO] Modo de data customizada ativo para as datas: {}", customDates);
+            resolved = dateResolver.resolveCustomDatesAndFetchAppointments(customDates, doctorIds);
+        } else {
+            resolved = dateResolver.resolveDatesAndFetchAppointments(today, dayOfWeek, doctorIds);
+        }
         List<LocalDate> targetDates = resolved.targetDates();
         List<FeegowAppointment> rawAppointments = resolved.appointments();
         int totalRaw = rawAppointments.size();
