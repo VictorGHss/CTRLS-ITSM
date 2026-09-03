@@ -13,6 +13,7 @@ export interface AccessCredential {
   appointmentDateTime?: string;
   opensAt?: string;
   closesAt?: string;
+  id?: string;
 }
 
 export const formatCpf = (cpf?: string) => {

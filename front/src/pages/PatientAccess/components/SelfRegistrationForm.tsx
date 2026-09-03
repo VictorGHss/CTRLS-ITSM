@@ -4,6 +4,7 @@ import { type ClinicTheme, DOCTOR_SUGGESTIONS, type DoctorSuggestion, resolveDoc
 import type { AccessCredential } from '../types';
 import api from '../../../services/api';
 import { getApiErrorMessage } from '../../../lib/apiError';
+import { isValidCpf } from '../utils/cpfValidator';
 
 interface CompanionEntry {
   id: string;
@@ -259,8 +260,8 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
     setErrorMessage(null);
 
     const cleanCpf = cpf.replace(/\D/g, '');
-    if (cleanCpf.length !== 11) {
-      setErrorMessage('Por favor, informe um CPF válido com 11 dígitos.');
+    if (cleanCpf.length !== 11 || !isValidCpf(cleanCpf)) {
+      setErrorMessage('CPF do paciente titular inválido perante a Receita Federal. Por favor, confira os números digitados.');
       return;
     }
 
@@ -283,8 +284,8 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
           return;
         }
         const cleanCompCpf = c.cpf.replace(/\D/g, '');
-        if (cleanCompCpf.length !== 11) {
-          setErrorMessage(`Por favor, informe o CPF com 11 dígitos do Acompanhante #${i + 1} (${c.name}).`);
+        if (cleanCompCpf.length !== 11 || !isValidCpf(cleanCompCpf)) {
+          setErrorMessage(`O CPF do Acompanhante #${i + 1} (${c.name}) é inválido perante a Receita Federal. Por favor, confira os números digitados.`);
           return;
         }
         companionsPayload.push({
@@ -353,8 +354,8 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
     setErrorMessage(null);
 
     const cleanCpf = lookupCpf.replace(/\D/g, '');
-    if (cleanCpf.length !== 11) {
-      setErrorMessage('Por favor, informe um CPF válido com 11 dígitos.');
+    if (cleanCpf.length !== 11 || !isValidCpf(cleanCpf)) {
+      setErrorMessage('CPF inválido perante a Receita Federal. Por favor, confira os números digitados.');
       return;
     }
 

@@ -140,9 +140,21 @@ public class BlipContextService {
         }
     }
 
+    public static boolean isInternalSystemIdentity(String identity) {
+        if (identity == null || identity.isBlank()) return true;
+        String lower = identity.toLowerCase();
+        return lower.contains("/!") 
+                || lower.contains("roteadorprincipal") 
+                || lower.contains("postmaster@") 
+                || lower.contains("@builder.msging.net");
+    }
+
     public String getUserContext(String userIdentity, String key) {
         if (userIdentity == null || userIdentity.isBlank() || key == null || key.isBlank()) return null;
+        if (isInternalSystemIdentity(userIdentity)) return null;
+
         String normalizedIdentity = limeClient.normalizeUserIdentity(userIdentity);
+        if (isInternalSystemIdentity(normalizedIdentity)) return null;
 
         Map<String, Object> command = blipContextPayloadFactory.buildGetContextCommand(normalizedIdentity, key);
 
@@ -173,6 +185,7 @@ public class BlipContextService {
 
     public void setUserContext(String userIdentity, String key, String value) {
         if (userIdentity == null || userIdentity.isBlank() || value == null || value.isBlank()) return;
+        if (isInternalSystemIdentity(userIdentity)) return;
 
         String masterIdentity = resolveMasterIdentity(userIdentity);
         String tunnelIdentity = resolveTunnelIdentity(userIdentity);

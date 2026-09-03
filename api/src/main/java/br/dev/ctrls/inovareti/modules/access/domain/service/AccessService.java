@@ -107,7 +107,30 @@ public class AccessService {
      * @return AccessValidationResult contendo os dados de liberação e flags de contingência.
      */
     public AccessValidationResult processAccessRequest(String appointmentId, String requestCpf, List<CompanionAccessInfo> companions) {
-        log.info("[AccessService] Processando solicitação de acesso físico. Agendamento: {}", appointmentId);
+        return processAccessRequest(appointmentId, requestCpf, companions, null, null, null);
+    }
+
+    public AccessValidationResult processAccessRequest(
+            String appointmentId,
+            String requestCpf,
+            List<CompanionAccessInfo> companions,
+            UUID credentialId,
+            String targetName,
+            String userType) {
+        log.info("[AccessService] Processando solicitação de acesso físico. Agendamento: {}, credentialId={}, targetName={}, userType={}",
+                appointmentId, credentialId, targetName, userType);
+
+        // Caso específico: Atualização de CPF de ACOMPANHANTE
+        boolean isCompanionTarget = "COMPANION".equalsIgnoreCase(userType);
+        if (!isCompanionTarget && credentialId != null) {
+            List<AccessCredential> creds = accessCredentialRepositoryPort.findByAppointmentId(appointmentId);
+            isCompanionTarget = creds != null && creds.stream().anyMatch(c -> c.getId() != null && c.getId().equals(credentialId) && c.getUserType() == UserType.COMPANION);
+        }
+
+        if (isCompanionTarget && requestCpf != null && !requestCpf.isBlank()) {
+            log.info("[AccessService] Redirecionando para atualização dedicada de CPF de ACOMPANHANTE: agendamento={}, targetName={}", appointmentId, targetName);
+            return processCompanionCpfUpdate(appointmentId, requestCpf, credentialId, targetName);
+        }
 
         // 0. Verificação de Existência (Idempotência) antes de criar/salvar novas credenciais.
         // Se já existem credenciais REAIS (não contingenciais CRED-) para este agendamento e nenhum novo CPF foi informado,
@@ -1015,6 +1038,126 @@ public class AccessService {
         }
 
         return resultList;
+    }
+
+    /**
+     * Atualiza o CPF especificamente de um acompanhante e tenta sua liberação física direta na GerAcesso.
+     */
+    private AccessValidationResult processCompanionCpfUpdate(String appointmentId, String newCpf, UUID credentialId, String targetName) {
+        log.info("[AccessService] Atualizando CPF de acompanhante para agendamento {} (credentialId={}, targetName={})", appointmentId, credentialId, targetName);
+        if (newCpf == null || newCpf.isBlank()) {
+            return new AccessValidationResult(false, null, null, true, "Por favor, informe um CPF válido para o acompanhante.");
+        }
+        String cleanCpf = newCpf.replaceAll("\\D", "");
+        if (!isValidCpf(cleanCpf)) {
+            return new AccessValidationResult(false, null, null, false, "CPF inválido perante a Receita Federal. Por favor, confira os números digitados.");
+        }
+
+        List<AccessCredential> creds = accessCredentialRepositoryPort.findByAppointmentId(appointmentId);
+        if (creds == null || creds.isEmpty()) {
+            return new AccessValidationResult(false, null, null, false, "Cadastro não encontrado.");
+        }
+
+        Optional<AccessCredential> compOpt = Optional.empty();
+        if (credentialId != null) {
+            compOpt = creds.stream().filter(c -> c.getId() != null && c.getId().equals(credentialId)).findFirst();
+        }
+        if (compOpt.isEmpty() && targetName != null && !targetName.isBlank()) {
+            compOpt = creds.stream().filter(c -> c.getUserType() == UserType.COMPANION && c.getName() != null && c.getName().equalsIgnoreCase(targetName.trim())).findFirst();
+        }
+        if (compOpt.isEmpty()) {
+            compOpt = creds.stream().filter(c -> c.getUserType() == UserType.COMPANION).findFirst();
+        }
+
+        if (compOpt.isEmpty()) {
+            return new AccessValidationResult(false, null, null, false, "Acompanhante não encontrado para este agendamento.");
+        }
+
+        AccessCredential companion = compOpt.get();
+        companion.setCpf(cleanCpf);
+
+        // Resolve data e horários
+        LocalDate visitDate = LocalDate.now(CLINIC_ZONE);
+        String doctorId = null;
+
+        if (appointmentId.startsWith("INOV-") || appointmentId.startsWith("IMG-")) {
+            if (appointmentId.length() >= 13) {
+                try {
+                    String datePart = appointmentId.substring(5, 13);
+                    visitDate = LocalDate.parse(datePart, DateTimeFormatter.ofPattern("yyyyMMdd"));
+                } catch (Exception ignored) {}
+            }
+        } else {
+            try {
+                var accessInfoOpt = feegowClientPort.fetchPatientAccessInfo(appointmentId);
+                if (accessInfoOpt.isPresent()) {
+                    FeegowPatientAccessInfo info = accessInfoOpt.get();
+                    if (info.appointmentDate() != null) {
+                        visitDate = info.appointmentDate();
+                    }
+                    doctorId = info.doctorId();
+                    if (info.doctorName() != null && !info.doctorName().isBlank()) {
+                        companion.setDoctorName(info.doctorName().trim());
+                    }
+                }
+            } catch (Exception ex) {
+                log.warn("[AccessService] Falha ao consultar Feegow ao atualizar acompanhante: {}", ex.getMessage());
+            }
+        }
+
+        LocalTime openingTime = LocalTime.of(6, 0);
+        LocalTime closingTime = LocalTime.of(23, 59);
+        String startVisit = LocalDateTime.of(visitDate, openingTime).format(GERACESSO_DATE_FORMATTER);
+        String endVisit = LocalDateTime.of(visitDate, closingTime).format(GERACESSO_DATE_FORMATTER);
+
+        String matricula = "";
+        String doctorCpf = "";
+        if (doctorId != null && !doctorId.isBlank()) {
+            DoctorAccessData docData = resolveDoctorAccessData(doctorId);
+            matricula = docData.matricula();
+            doctorCpf = docData.cpf();
+        }
+
+        GerAcessoRequest gerRequest = GerAcessoRequest.builder()
+                .cpf(cleanCpf)
+                .status(1)
+                .name(companion.getName().toUpperCase())
+                .phone(companion.getPhone() != null ? companion.getPhone().replaceAll("\\D", "") : "")
+                .email("")
+                .visitType(1)
+                .startVisit(startVisit)
+                .endVisit(endVisit)
+                .visitedRegistration(matricula)
+                .visitedCpf(doctorCpf)
+                .build();
+
+        try {
+            Optional<GerAcessoResponse> gerResponseOpt = gerAcessoClientPort.registerAccess(gerRequest);
+            if (gerResponseOpt.isPresent()) {
+                GerAcessoResponse resp = gerResponseOpt.get();
+                if (resp.credential() != null && !resp.credential().isBlank()) {
+                    companion.setAccessCredential(resp.credential().trim());
+                }
+                if (resp.locator() != null && !resp.locator().isBlank()) {
+                    companion.setLocator(resp.locator().trim());
+                }
+                companion.setCreatedAt(LocalDateTime.now(CLINIC_ZONE));
+                accessCredentialRepositoryPort.save(companion);
+                log.info("[AccessService] Acompanhante {} liberado na GerAcesso com QR Code: {}, Locator: {}", 
+                        companion.getName(), companion.getAccessCredential(), companion.getLocator());
+                String token = generateAccessToken(appointmentId, companion.getPhone());
+                String accessUrl = "https://itsm-inovare.ctrls.dev.br/" + appointmentId + "?t=" + token;
+                return new AccessValidationResult(true, companion.getName(), companion.getAccessCredential(), false, "Acesso do acompanhante liberado com sucesso!", token, accessUrl);
+            } else {
+                accessCredentialRepositoryPort.save(companion);
+                log.warn("[AccessService] GerAcesso retornou vazio para acompanhante {}. Credencial mantida contingencial.", companion.getName());
+                return new AccessValidationResult(false, companion.getName(), companion.getAccessCredential(), false, "Não foi possível liberar o acompanhante na catraca física neste momento. Dirija-se à recepção.");
+            }
+        } catch (Exception ex) {
+            accessCredentialRepositoryPort.save(companion);
+            log.error("[AccessService] Erro ao cadastrar acompanhante na GerAcesso: {}", ex.getMessage(), ex);
+            return new AccessValidationResult(false, companion.getName(), companion.getAccessCredential(), false, "Erro de comunicação com as catracas. Dirija-se à recepção.");
+        }
     }
 
     /**

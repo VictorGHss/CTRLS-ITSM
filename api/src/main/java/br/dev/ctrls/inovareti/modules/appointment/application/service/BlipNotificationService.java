@@ -241,7 +241,7 @@ public class BlipNotificationService {
     public static boolean isStaticZeroParamTemplate(String templateName) {
         if (templateName == null || templateName.isBlank()) return false;
         String norm = templateName.trim().toLowerCase().replace(" ", "_");
-        return "aviso_agendamento_grupo".equals(norm);
+        return "aviso_agendamento_grupo".equals(norm) || "aviso_confirmacao_pendente_grupo".equals(norm);
     }
 
     public void sendGroupTemplateMessage(String destination, String templateName, java.util.UUID groupId, String patientName) {
@@ -328,11 +328,12 @@ public class BlipNotificationService {
                 } catch (Exception retryEx) {
                     log.error("[AUTOCORRECAO-TEMPLATE] Falha no reenvio com parâmetro 1: {}", retryEx.getMessage());
                 }
-            } else if (errMsg.contains("132000") || errMsg.contains("number of localizable_params (1) does not match the expected number of params (0)")) {
-                log.warn("[AUTOCORRECAO-TEMPLATE] Meta indicou que o template de grupo '{}' não aceita parâmetros (132000). Reenviando com 0 parâmetros...", templateName);
+            } else if (errMsg.contains("132000") || errMsg.contains("number of localizable_params (1) does not match the expected number of params (0)")
+                    || errMsg.contains("message template is not valid") || errMsg.contains("IEnumerable")) {
+                log.warn("[AUTOCORRECAO-TEMPLATE] Blip/Meta indicou incompatibilidade de parâmetros para o template de grupo '{}'. Reenviando com 0 parâmetros estáticos...", templateName);
                 try {
                     Map<String, Object> retryPayload = blipPayloadBuilder.buildActiveCampaignCommandPayload(
-                            "Aviso Grupo Retry 132000 - " + UUID.randomUUID().toString().substring(0, 8), recipientE164, templateName,
+                            "Aviso Grupo Retry Estático - " + UUID.randomUUID().toString().substring(0, 8), recipientE164, templateName,
                             null, null, targetBot, stateIdPrepararAtendimento, targetBot
                     );
                     var retryResponse = limeClient.executeCommand(retryPayload, BlipLIMEClient.AuthorizationScope.ROUTER);
@@ -397,8 +398,14 @@ public class BlipNotificationService {
             log.info("[MENSAGERIA] Template estático de 0 parâmetros '{}' validado. Prosseguindo com envio.", templateName);
         }
 
-        String targetBot = "agendamento@msging.net";
-        String stateIdPrepararAtendimento = "a0776d9c-6486-42f3-8a4f-2706f0185908";
+        String targetBot = null;
+        String builderBotId = motorProperties.getBlipBuilderBotId();
+        if (builderBotId != null && !builderBotId.isBlank() && !builderBotId.toLowerCase().contains("fluxov1")) {
+            targetBot = builderBotId;
+        }
+        String stateIdPrepararAtendimento = (targetBot != null && !targetBot.isBlank())
+                ? "a0776d9c-6486-42f3-8a4f-2706f0185908"
+                : null;
 
         Map<String, String> messageParamValues = new java.util.LinkedHashMap<>();
         List<String> messageParamKeys = new ArrayList<>();
