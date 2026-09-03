@@ -155,14 +155,9 @@ public class BlipPayloadBuilder {
         String uniqueSuffix = UUID.randomUUID().toString().substring(0, 8);
         String campaignName = "Aviso Grupo - " + (groupId != null ? groupId.toString() : uniqueSuffix) + " - " + uniqueSuffix;
 
-        // Templates de grupo aprovados na Meta: aviso_agendamento_grupo possui 0 parâmetros, enquanto aviso_confirmacao_pendente_grupo possui 1 parâmetro (nome do paciente).
+        // Templates de grupo aprovados na Meta (aviso_agendamento_grupo e aviso_confirmacao_pendente_grupo) possuem 0 parâmetros no corpo (0 localizable_params).
         Map<String, String> paramValues = null;
         List<String> paramKeys = null;
-
-        if ("aviso_confirmacao_pendente_grupo".equalsIgnoreCase(templateName) && patientName != null && !patientName.isBlank()) {
-            paramValues = Map.of("1", patientName.trim());
-            paramKeys = List.of("1");
-        }
 
         String effectiveFlowId = (flowId != null && !flowId.isBlank()) 
                 ? flowId.trim() 

@@ -2,6 +2,7 @@ package br.dev.ctrls.inovareti.modules.access.infrastructure.adapter.input.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Representa o payload JSON recebido para validação e liberação de acesso físico.
@@ -13,5 +14,15 @@ public record AccessValidationRequest(
     
     String cpf,
     
-    List<CompanionRequest> companions
-) {}
+    List<CompanionRequest> companions,
+
+    UUID credentialId,
+
+    String targetName,
+
+    String userType
+) {
+    public AccessValidationRequest(String appointmentId, String cpf, List<CompanionRequest> companions) {
+        this(appointmentId, cpf, companions, null, null, null);
+    }
+}

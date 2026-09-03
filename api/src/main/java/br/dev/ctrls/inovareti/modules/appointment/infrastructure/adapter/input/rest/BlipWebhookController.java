@@ -160,7 +160,7 @@ public class BlipWebhookController {
         }
 
         // BLINDAGEM STATE-LOCK: Se o paciente estiver no fluxo de confirmação e mandar texto livre
-        String isConfirmingAgenda = (from != null && !from.isBlank())
+        String isConfirmingAgenda = (from != null && !from.isBlank() && !BlipContextService.isInternalSystemIdentity(from))
                 ? blipContextService.getUserContext(from, "isConfirmingAgenda")
                 : null;
 

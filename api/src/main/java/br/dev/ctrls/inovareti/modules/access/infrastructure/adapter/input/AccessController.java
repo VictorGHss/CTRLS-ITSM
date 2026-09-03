@@ -126,7 +126,7 @@ public class AccessController {
         }
 
         AccessService.AccessValidationResult result = accessService.processAccessRequest(
-                request.appointmentId(), request.cpf(), domainCompanions);
+                request.appointmentId(), request.cpf(), domainCompanions, request.credentialId(), request.targetName(), request.userType());
 
         // Se o CPF estiver ausente, retornamos a flag de fallback para o bot solicitar ao usuário
         if (result.requiresCpfFallback()) {
@@ -650,10 +650,11 @@ public class AccessController {
             boolean hasOnlyContingency = !appCreds.isEmpty() && appCreds.stream()
                     .allMatch(c -> c.getAccessCredential() != null && c.getAccessCredential().startsWith("CRED-"));
 
-            boolean hasInvalidCpf = !appCreds.isEmpty() && appCreds.stream()
+            boolean hasPatientWithInvalidCpf = !appCreds.isEmpty() && appCreds.stream()
+                    .filter(c -> c.getUserType() == UserType.PATIENT)
                     .anyMatch(c -> c.getCpf() == null || !AccessService.isValidCpf(c.getCpf()));
 
-            if (appCreds.isEmpty() || hasOnlyContingency || hasInvalidCpf) {
+            if (appCreds.isEmpty() || hasOnlyContingency || hasPatientWithInvalidCpf) {
                 log.info("[AccessControl] Credenciais não encontradas, contingenciais (CRED-) ou com CPF inválido para o agendamento ID: {}. Tentando obter credencial real na GerAcesso...", id);
                 try {
                     AccessService.AccessValidationResult result = accessService.processAccessRequest(id, null, null);
@@ -821,7 +822,8 @@ public class AccessController {
                     itemDoctorName,
                     itemAppointmentDateTime,
                     itemOpensAt,
-                    itemClosesAt
+                    itemClosesAt,
+                    c.getId()
             ));
         }
 

@@ -12,6 +12,7 @@ import { CpfFallbackCard } from './components/CpfFallbackCard';
 import { CredentialsCarousel } from './components/CredentialsCarousel';
 import { PatientAccessFooter } from './components/PatientAccessFooter';
 import { SelfRegistrationForm } from './components/SelfRegistrationForm';
+import { isValidCpf } from './utils/cpfValidator';
 
 export default function PatientAccess() {
   const { appointmentId } = useParams<{ appointmentId: string }>();
@@ -455,8 +456,8 @@ export default function PatientAccess() {
     }
 
     const cleanCpf = cpfInput.replace(/\D/g, '');
-    if (cleanCpf.length !== 11) {
-      setCpfSubmitError('Por favor, informe os 11 dígitos do seu CPF.');
+    if (cleanCpf.length !== 11 || !isValidCpf(cleanCpf)) {
+      setCpfSubmitError('CPF inválido perante a Receita Federal. Por favor, confira os números digitados.');
       return;
     }
 
@@ -483,12 +484,15 @@ export default function PatientAccess() {
     ).trim();
 
     try {
-      console.log('[PatientAccess] Enviando CPF para validação:', cleanCpf, 'agendamento alvo:', targetId);
+      console.log('[PatientAccess] Enviando CPF para validação:', cleanCpf, 'agendamento alvo:', targetId, 'editingCredential:', editingCredential);
       const validateRes = await api.post<{ authorized: boolean; requiresCpfFallback?: boolean; message?: string }>(
         '/v1/access/validate',
         {
           appointmentId: targetId,
-          cpf: cleanCpf
+          cpf: cleanCpf,
+          credentialId: editingCredential?.id,
+          targetName: editingCredential?.name,
+          userType: editingCredential?.userType
         },
         {
           headers: {
@@ -590,8 +594,8 @@ export default function PatientAccess() {
     }
 
     const cleanCpf = companionCpf ? companionCpf.replace(/\D/g, '') : '';
-    if (cleanCpf.length !== 11) {
-      setCompanionSubmitError('Por favor, informe um CPF completo com 11 dígitos para o acompanhante.');
+    if (cleanCpf.length !== 11 || !isValidCpf(cleanCpf)) {
+      setCompanionSubmitError('CPF do acompanhante inválido perante a Receita Federal. Por favor, confira os números digitados.');
       return;
     }
 
