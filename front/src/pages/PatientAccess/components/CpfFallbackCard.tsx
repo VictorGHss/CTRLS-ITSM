@@ -22,9 +22,9 @@ export const CpfFallbackCard: React.FC<CpfFallbackCardProps> = ({
         <ShieldCheck className="w-7 h-7" />
       </div>
       <div className="space-y-1.5">
-        <h3 className="text-md font-bold text-slate-800">Confirmação de Documento (CPF)</h3>
+        <h3 className="text-md font-bold text-slate-800">Correção do CPF</h3>
         <p className="text-xs text-slate-500 leading-relaxed max-w-[290px] mx-auto">
-          Para liberar sua passagem na catraca física com total segurança, informe os 11 dígitos do seu CPF:
+          O CPF anterior está incorreto ou não foi reconhecido pela catraca. Digite os 11 números do seu CPF correto para liberar sua entrada:
         </p>
       </div>
 
@@ -69,10 +69,10 @@ export const CpfFallbackCard: React.FC<CpfFallbackCardProps> = ({
           {cpfSubmitLoading ? (
             <>
               <RefreshCw className="w-4 h-4 animate-spin" />
-              Salvando...
+              Validando...
             </>
           ) : (
-            'Salvar e Liberar Acesso'
+            'Salvar e Liberar Catraca'
           )}
         </button>
       </form>

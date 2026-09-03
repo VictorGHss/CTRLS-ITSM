@@ -778,7 +778,7 @@ export default function PatientAccess() {
             <div className="space-y-3">
               {isEditingCpf && credentials.length > 0 && (
                 <div className="flex justify-between items-center px-1">
-                  <span className="text-xs font-bold text-slate-700">Atualizar CPF</span>
+                  <span className="text-xs font-bold text-slate-700">Corrigir CPF do Paciente</span>
                   <button
                     type="button"
                     onClick={() => setIsEditingCpf(false)}

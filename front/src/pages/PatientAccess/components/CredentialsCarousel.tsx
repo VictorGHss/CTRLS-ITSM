@@ -10,7 +10,8 @@ import {
   RefreshCw,
   Sun,
   CreditCard,
-  Share2
+  Share2,
+  AlertTriangle
 } from 'lucide-react';
 import { formatCpf } from '../types';
 import type { AccessCredential } from '../types';
@@ -98,9 +99,9 @@ export const CredentialsCarousel: React.FC<CredentialsCarouselProps> = ({
                   {cred.userType === 'PATIENT' ? 'Paciente Titular' : 'Acompanhante'}
                 </span>
                 {cred.credentialCode.startsWith('CRED-') ? (
-                  <span className="inline-flex items-center gap-1 bg-amber-50 border border-amber-200/80 text-amber-700 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
-                    Acesso Provisório
+                  <span className="inline-flex items-center gap-1 bg-rose-50 border border-rose-200/80 text-rose-700 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                    <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>
+                    CPF Incorreto – Catraca Bloqueada
                   </span>
                 ) : cred.credentialCode !== 'BLOCKED_OUTSIDE_WINDOW' && cred.credentialCode !== 'CPF_MISSING' && (
                   <span className="inline-flex items-center gap-1 bg-emerald-50 border border-emerald-200/80 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded-full">
@@ -123,7 +124,17 @@ export const CredentialsCarousel: React.FC<CredentialsCarouselProps> = ({
                   isolation: 'isolate'
                 }}
               >
-                {cred.credentialCode === 'BLOCKED_OUTSIDE_WINDOW' ? (
+                {cred.credentialCode.startsWith('CRED-') ? (
+                  <div className="flex flex-col items-center justify-center text-center p-2 space-y-2 select-none">
+                    <div className="w-12 h-12 bg-rose-50 rounded-full flex items-center justify-center text-rose-500 border border-rose-100">
+                      <AlertTriangle className="w-6 h-6 text-rose-500" />
+                    </div>
+                    <span className="text-[10.5px] font-bold text-rose-600 uppercase tracking-wider block">Catraca Não Liberada</span>
+                    <span className="text-[9.5px] text-slate-500 font-medium leading-snug block">
+                      O CPF informado está incorreto. Corrija o documento abaixo para liberar seu acesso.
+                    </span>
+                  </div>
+                ) : cred.credentialCode === 'BLOCKED_OUTSIDE_WINDOW' ? (
                   <div className="flex flex-col items-center justify-center text-center p-2 space-y-2 select-none">
                     <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center text-slate-400">
                       <Lock className="w-5 h-5" />
@@ -156,34 +167,42 @@ export const CredentialsCarousel: React.FC<CredentialsCarouselProps> = ({
                 )}
               </div>
 
-              {/* Dica de Brilho e Distância da Catraca */}
-              <div className="flex flex-col items-center gap-1 mt-2.5 text-center">
-                <div className="inline-flex items-center gap-1.5 bg-amber-50 border border-amber-200/90 text-amber-800 px-2.5 py-1 rounded-full text-[10.5px] font-bold shadow-xs">
-                  <Sun className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                  <span>Aumente o brilho do celular</span>
+              {/* Dica de Brilho e Distância da Catraca (apenas quando o QR Code estiver ativo e liberado) */}
+              {!cred.credentialCode.startsWith('CRED-') && cred.credentialCode !== 'BLOCKED_OUTSIDE_WINDOW' && (
+                <div className="flex flex-col items-center gap-1 mt-2.5 text-center">
+                  <div className="inline-flex items-center gap-1.5 bg-amber-50 border border-amber-200/90 text-amber-800 px-2.5 py-1 rounded-full text-[10.5px] font-bold shadow-xs">
+                    <Sun className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                    <span>Aumente o brilho do celular</span>
+                  </div>
+                  <p className="text-[10px] text-slate-500 font-medium">
+                    📏 Mantenha a 15 cm da catraca (não encoste)
+                  </p>
                 </div>
-                <p className="text-[10px] text-slate-500 font-medium">
-                  📏 Mantenha a 15 cm da catraca (não encoste)
-                </p>
-              </div>
+              )}
 
               {/* Localizador Catraca Discreto */}
-              <span className="text-[10.5px] font-bold text-slate-400 font-mono mt-1 uppercase tracking-wider">
-                Código: {cred.locator}
-              </span>
+              {!cred.credentialCode.startsWith('CRED-') && (
+                <span className="text-[10.5px] font-bold text-slate-400 font-mono mt-1 uppercase tracking-wider">
+                  Código: {cred.locator}
+                </span>
+              )}
 
-              {/* Alerta de acesso provisório com botão de correção de CPF */}
+              {/* Alerta explícito de CPF Incorreto com botão de correção */}
               {cred.credentialCode.startsWith('CRED-') && onEditCpf && (
-                <div className="w-full mt-3 p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-center space-y-1.5">
-                  <p className="text-[10.5px] font-bold text-amber-900 leading-snug">
-                    ⚠️ Acesso provisório: seu CPF precisa de confirmação para liberação automática na catraca.
+                <div className="w-full mt-3 p-3 rounded-2xl bg-rose-50 border border-rose-200 text-center space-y-2">
+                  <div className="flex items-center justify-center gap-1.5 text-rose-800 font-bold text-xs">
+                    <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                    <span>A catraca não vai abrir com este CPF</span>
+                  </div>
+                  <p className="text-[10.5px] text-slate-600 font-medium leading-snug">
+                    O CPF informado não foi reconhecido pelo sistema de segurança. Corrija agora para liberar seu QR Code na catraca.
                   </p>
                   <button
                     type="button"
                     onClick={onEditCpf}
-                    className="w-full py-1.5 px-3 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold transition-all shadow-xs cursor-pointer"
+                    className="w-full py-2 px-3 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center justify-center gap-1.5"
                   >
-                    Atualizar CPF
+                    <span>Corrigir CPF Agora</span>
                   </button>
                 </div>
               )}
@@ -336,7 +355,7 @@ export const CredentialsCarousel: React.FC<CredentialsCarouselProps> = ({
             className="w-full py-3 px-4 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-700 rounded-2xl text-xs font-bold transition-all flex items-center justify-center gap-2 active:scale-[0.98] shadow-sm cursor-pointer"
           >
             <CreditCard className="w-4 h-4 text-slate-500" />
-            <span>Atualizar CPF</span>
+            <span>Corrigir CPF</span>
           </button>
         )}
 
