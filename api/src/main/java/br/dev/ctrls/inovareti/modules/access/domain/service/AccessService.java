@@ -26,6 +26,7 @@ import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -1265,72 +1266,29 @@ public class AccessService {
 
         LocalDate today = LocalDate.now(CLINIC_ZONE);
         LocalDate maxAllowedDate = today.plusDays(7);
+
+        // 1) Auto-cadastro público recente (ex: INOV-20260903-CPF ou IMG-20260903-CPF)
+        // Validação estrita em memória pela data embutida no ID (0 chamadas HTTP externas)
         List<AccessCredential> allByCpf = accessCredentialRepositoryPort.findByCpf(cleanCpf);
         if (allByCpf != null && !allByCpf.isEmpty()) {
-            List<AccessCredential> validList = allByCpf.stream()
+            List<AccessCredential> validAutoRegistrations = allByCpf.stream()
                 .filter(c -> {
                     String apptId = c.getAppointmentId();
-                    if (apptId == null || apptId.isBlank()) return false;
-
-                    // 1) Auto-cadastro público (ex: INOV-20260903-CPF ou IMG-20260903-CPF)
-                    if (apptId.length() >= 13 && (apptId.startsWith("INOV-") || apptId.startsWith("IMG-"))) {
-                        try {
-                            String datePart = apptId.substring(5, 13);
-                            LocalDate appDate = LocalDate.parse(datePart, DateTimeFormatter.ofPattern("yyyyMMdd"));
-                            // Válido se e somente se estiver entre hoje e os próximos 7 dias:
-                            return !appDate.isBefore(today) && !appDate.isAfter(maxAllowedDate);
-                        } catch (Exception ignored) {
-                            return false;
-                        }
+                    if (apptId == null || apptId.length() < 13 || (!apptId.startsWith("INOV-") && !apptId.startsWith("IMG-"))) {
+                        return false;
                     }
-
-                    // 2) Agendamento do Feegow: consulta a data real do atendimento
                     try {
-                        Optional<FeegowPatientAccessInfo> accessInfoOpt = feegowClientPort.fetchPatientAccessInfo(apptId);
-                        if (accessInfoOpt.isPresent() && accessInfoOpt.get().appointmentDate() != null) {
-                            LocalDate appDate = accessInfoOpt.get().appointmentDate();
-                            // Válido se e somente se estiver entre hoje e os próximos 7 dias:
-                            return !appDate.isBefore(today) && !appDate.isAfter(maxAllowedDate);
-                        }
-                    } catch (Exception ex) {
-                        log.warn("[AccessService] Erro ao consultar Feegow para agendamento {} durante lookup por CPF: {}", apptId, ex.getMessage());
+                        String datePart = apptId.substring(5, 13);
+                        LocalDate appDate = LocalDate.parse(datePart, DateTimeFormatter.ofPattern("yyyyMMdd"));
+                        return !appDate.isBefore(today) && !appDate.isAfter(maxAllowedDate);
+                    } catch (Exception ignored) {
+                        return false;
                     }
-
-                    // Se não foi possível confirmar que a consulta é para os próximos 7 dias, descarta
-                    return false;
                 })
                 .toList();
 
-            if (!validList.isEmpty()) {
-                // Recupera todas as credenciais (titular e acompanhantes) associadas aos agendamentos encontrados
-                Set<String> validAppointmentIds = new HashSet<>();
-                for (AccessCredential cred : validList) {
-                    if (cred != null && cred.getAppointmentId() != null && !cred.getAppointmentId().isBlank()) {
-                        validAppointmentIds.add(cred.getAppointmentId());
-                    }
-                }
-
-                Map<UUID, AccessCredential> uniqueCreds = new LinkedHashMap<>();
-                for (String apptId : validAppointmentIds) {
-                    List<AccessCredential> byAppt = accessCredentialRepositoryPort.findByAppointmentId(apptId);
-                    if (byAppt != null) {
-                        for (AccessCredential c : byAppt) {
-                            if (c != null && c.getId() != null) {
-                                uniqueCreds.put(c.getId(), c);
-                            }
-                        }
-                    }
-                }
-
-                List<AccessCredential> result = new ArrayList<>(uniqueCreds.values());
-                // Garante que o titular (PATIENT) venha sempre primeiro no carrossel, seguido pelos acompanhantes
-                result.sort((a, b) -> {
-                    if (a.getUserType() == UserType.PATIENT && b.getUserType() != UserType.PATIENT) return -1;
-                    if (a.getUserType() != UserType.PATIENT && b.getUserType() == UserType.PATIENT) return 1;
-                    return 0;
-                });
-
-                return result.isEmpty() ? validList : result;
+            if (!validAutoRegistrations.isEmpty()) {
+                return expandAndSortCredentials(validAutoRegistrations);
             }
         }
 
@@ -1340,26 +1298,43 @@ public class AccessService {
 
         List<AccessCredential> credentials = accessCredentialRepositoryPort.findByAppointmentId(appointmentId);
         if (credentials != null && !credentials.isEmpty()) {
-            return credentials;
+            return expandAndSortCredentials(credentials);
         }
 
-        // Fallback Feegow: se não encontrou credenciais locais pré-existentes, consulta o paciente na Feegow
+        // 2) Agendamentos Feegow: busca o paciente e suas consultas futuras em lote (1 única chamada rápida)
+        // em vez de varrer agendamentos históricos antigos um a um sequencialmente.
         try {
             FeegowPatient feegowPatient = patientExternalPort.patientInfo(cleanCpf);
             if (feegowPatient != null && feegowPatient.id() != null && !feegowPatient.id().isBlank()) {
                 List<FeegowAppointment> patientAppts = appointmentExternalPort.searchPatientAppointments(feegowPatient.id());
                 if (patientAppts != null && !patientAppts.isEmpty()) {
-                    for (FeegowAppointment appt : patientAppts) {
-                        if (appt.startAt() != null) {
-                            LocalDate apptDate = appt.startAt().toLocalDate();
-                            if (!apptDate.isBefore(today) && !apptDate.isAfter(maxAllowedDate)) {
-                                log.info("[AccessService] Agendamento Feegow {} encontrado para CPF {}. Gerando credencial automaticamente...", appt.id(), cleanCpf);
-                                processAccessRequest(appt.id().toString(), cleanCpf, null);
-                                List<AccessCredential> newlyCreated = accessCredentialRepositoryPort.findByAppointmentId(appt.id().toString());
-                                if (newlyCreated != null && !newlyCreated.isEmpty()) {
-                                    return newlyCreated;
-                                }
+                    List<FeegowAppointment> validUpcoming = patientAppts.stream()
+                        .filter(a -> a.startAt() != null)
+                        .filter(a -> {
+                            LocalDate d = a.startAt().toLocalDate();
+                            return !d.isBefore(today) && !d.isAfter(maxAllowedDate);
+                        })
+                        .sorted(Comparator.comparing(FeegowAppointment::startAt))
+                        .toList();
+
+                    if (!validUpcoming.isEmpty()) {
+                        // Verifica se já existe credencial emitida no banco para qualquer um dos agendamentos futuros
+                        for (FeegowAppointment appt : validUpcoming) {
+                            String apptIdStr = String.valueOf(appt.id());
+                            List<AccessCredential> existing = accessCredentialRepositoryPort.findByAppointmentId(apptIdStr);
+                            if (existing != null && !existing.isEmpty()) {
+                                return expandAndSortCredentials(existing);
                             }
+                        }
+
+                        // Se ainda não gerou credencial para o agendamento mais próximo, emite agora
+                        FeegowAppointment closest = validUpcoming.getFirst();
+                        String closestIdStr = String.valueOf(closest.id());
+                        log.info("[AccessService] Agendamento Feegow {} encontrado para CPF {}. Gerando credencial automaticamente...", closestIdStr, cleanCpf);
+                        processAccessRequest(closestIdStr, cleanCpf, null);
+                        List<AccessCredential> newlyCreated = accessCredentialRepositoryPort.findByAppointmentId(closestIdStr);
+                        if (newlyCreated != null && !newlyCreated.isEmpty()) {
+                            return expandAndSortCredentials(newlyCreated);
                         }
                     }
                 }
@@ -1369,6 +1344,39 @@ public class AccessService {
         }
 
         return List.of();
+    }
+
+    private List<AccessCredential> expandAndSortCredentials(List<AccessCredential> baseList) {
+        if (baseList == null || baseList.isEmpty()) {
+            return List.of();
+        }
+        Set<String> validAppointmentIds = new HashSet<>();
+        for (AccessCredential cred : baseList) {
+            if (cred != null && cred.getAppointmentId() != null && !cred.getAppointmentId().isBlank()) {
+                validAppointmentIds.add(cred.getAppointmentId());
+            }
+        }
+
+        Map<UUID, AccessCredential> uniqueCreds = new LinkedHashMap<>();
+        for (String apptId : validAppointmentIds) {
+            List<AccessCredential> byAppt = accessCredentialRepositoryPort.findByAppointmentId(apptId);
+            if (byAppt != null) {
+                for (AccessCredential c : byAppt) {
+                    if (c != null && c.getId() != null) {
+                        uniqueCreds.put(c.getId(), c);
+                    }
+                }
+            }
+        }
+
+        List<AccessCredential> result = new ArrayList<>(uniqueCreds.values());
+        result.sort((a, b) -> {
+            if (a.getUserType() == UserType.PATIENT && b.getUserType() != UserType.PATIENT) return -1;
+            if (a.getUserType() != UserType.PATIENT && b.getUserType() == UserType.PATIENT) return 1;
+            return 0;
+        });
+
+        return result.isEmpty() ? baseList : result;
     }
 
     /**

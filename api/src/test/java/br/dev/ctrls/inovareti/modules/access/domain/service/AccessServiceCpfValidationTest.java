@@ -79,7 +79,7 @@ class AccessServiceCpfValidationTest {
 
         assertThat(result.authorized()).isFalse();
         assertThat(result.requiresCpfFallback()).isTrue();
-        assertThat(result.message()).contains("CPF ausente ou inválido");
+        assertThat(result.message()).contains("confirme seu CPF");
         verify(gerAcessoClientPort, never()).registerAccess(any());
     }
 
