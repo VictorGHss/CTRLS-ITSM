@@ -27,10 +27,13 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.stream.Collectors;
 
 /**
  * Serviço de domínio AccessService.
@@ -1018,20 +1021,49 @@ public class AccessService {
         if (allByCpf != null && !allByCpf.isEmpty()) {
             List<AccessCredential> validList = allByCpf.stream()
                 .filter(c -> {
-                    if (c.getAppointmentId() != null && c.getAppointmentId().length() >= 13 
-                            && (c.getAppointmentId().startsWith("INOV-") || c.getAppointmentId().startsWith("IMG-"))) {
+                    String apptId = c.getAppointmentId();
+                    if (apptId == null || apptId.isBlank()) return false;
+
+                    // 1) Auto-cadastro público (ex: INOV-20260903-CPF ou IMG-20260903-CPF)
+                    if (apptId.length() >= 13 && (apptId.startsWith("INOV-") || apptId.startsWith("IMG-"))) {
                         try {
-                            String datePart = c.getAppointmentId().substring(5, 13);
+                            String datePart = apptId.substring(5, 13);
                             LocalDate appDate = LocalDate.parse(datePart, DateTimeFormatter.ofPattern("yyyyMMdd"));
                             return !appDate.isBefore(today); // válido se for hoje ou futuro
                         } catch (Exception ignored) {}
                     }
-                    return c.getCreatedAt() != null && !c.getCreatedAt().toLocalDate().isBefore(today);
+
+                    // 2) Agendamento Feegow (ex: 3448219)
+                    try {
+                        Optional<FeegowPatientAccessInfo> accessInfoOpt = feegowClientPort.fetchPatientAccessInfo(apptId);
+                        if (accessInfoOpt.isPresent() && accessInfoOpt.get().appointmentDate() != null) {
+                            LocalDate appDate = accessInfoOpt.get().appointmentDate();
+                            return !appDate.isBefore(today); // válido se a consulta no Feegow for hoje ou futura
+                        }
+                    } catch (Exception ex) {
+                        log.warn("[AccessService] Erro ao consultar Feegow para agendamento {} durante lookup por CPF: {}", apptId, ex.getMessage());
+                    }
+
+                    // 3) Fallback defensivo: válido se a credencial foi criada nos últimos 7 dias
+                    return c.getCreatedAt() != null && !c.getCreatedAt().toLocalDate().isBefore(today.minusDays(7));
                 })
                 .toList();
 
             if (!validList.isEmpty()) {
-                return validList;
+                // Recupera todas as credenciais (titular e acompanhantes) associadas aos agendamentos encontrados
+                Set<String> validAppointmentIds = validList.stream()
+                    .map(AccessCredential::getAppointmentId)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toSet());
+
+                List<AccessCredential> result = new ArrayList<>();
+                for (String apptId : validAppointmentIds) {
+                    List<AccessCredential> byAppt = accessCredentialRepositoryPort.findByAppointmentId(apptId);
+                    if (byAppt != null) {
+                        result.addAll(byAppt);
+                    }
+                }
+                return result.isEmpty() ? validList : result;
             }
         }
 
