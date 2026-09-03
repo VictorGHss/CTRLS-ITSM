@@ -1236,6 +1236,11 @@ public class AccessService {
                     if (appt.startAt() == null) continue;
 
                     LocalDate apptDate = appt.startAt().toLocalDate();
+                    // Limita a exibição a no máximo 7 dias no futuro a partir de hoje (ignora consultas passadas ou além de 7 dias)
+                    if (apptDate.isBefore(today) || apptDate.isAfter(today.plusDays(7))) {
+                        continue;
+                    }
+
                     boolean isToday = apptDate.equals(today);
                     boolean isTomorrow = apptDate.equals(tomorrow);
 

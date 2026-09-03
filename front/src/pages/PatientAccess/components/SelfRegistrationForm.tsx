@@ -401,6 +401,14 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
 
       {/* Card Principal */}
       <div className="bg-white rounded-3xl p-6 shadow-xl shadow-slate-200/50 border border-slate-100 relative overflow-hidden">
+        <style>{`
+          .form-input-themed:focus {
+            border-color: ${clinicTheme.primaryColor} !important;
+            box-shadow: 0 0 0 2px ${clinicTheme.primaryColor}30 !important;
+            background-color: #ffffff !important;
+          }
+        `}</style>
+
         {/* Barra superior de abas */}
         <div className="flex bg-slate-100/80 p-1 rounded-2xl">
           <button
@@ -456,13 +464,19 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
                   CPF do Paciente *
                 </label>
                 {isSearchingFeegow ? (
-                  <span className="text-[11px] font-bold text-blue-600 flex items-center gap-1 animate-pulse">
-                    <Sparkles className="w-3 h-3 text-blue-500 animate-spin" />
+                  <span 
+                    className="text-[11px] font-bold flex items-center gap-1 animate-pulse"
+                    style={{ color: clinicTheme.primaryDarkColor }}
+                  >
+                    <Sparkles className="w-3 h-3 animate-spin" style={{ color: clinicTheme.primaryColor }} />
                     Buscando no Feegow...
                   </span>
                 ) : feegowLookupDone && feegowAppointments.length > 0 && !manualDoctorMode ? (
-                  <span className="text-[11px] font-bold text-emerald-600 flex items-center gap-1">
-                    <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                  <span 
+                    className="text-[11px] font-bold flex items-center gap-1"
+                    style={{ color: clinicTheme.primaryDarkColor }}
+                  >
+                    <CheckCircle2 className="w-3 h-3" style={{ color: clinicTheme.primaryColor }} />
                     Consulta localizada
                   </span>
                 ) : feegowLookupDone ? (
@@ -480,23 +494,35 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
                 onChange={(e) => setCpf(maskCpf(e.target.value))}
                 placeholder="000.000.000-00"
                 maxLength={14}
-                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-semibold text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 transition-all font-mono"
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-semibold text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none transition-all font-mono form-input-themed"
               />
             </div>
 
             {/* Card de Consulta Localizada no Feegow */}
             {feegowAppointments.length > 0 && !manualDoctorMode && (
-              <div className="p-4 rounded-2xl bg-gradient-to-br from-emerald-50/90 to-teal-50/50 border border-emerald-200/80 shadow-xs space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
+              <div 
+                className="p-4 rounded-2xl border shadow-xs space-y-3 animate-in fade-in slide-in-from-top-2 duration-200"
+                style={{
+                  backgroundColor: `${clinicTheme.secondaryColor}20`,
+                  borderColor: `${clinicTheme.primaryColor}35`
+                }}
+              >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <span className="w-6 h-6 rounded-full bg-emerald-500 text-white flex items-center justify-center text-xs font-bold shadow-xs">
+                    <span 
+                      className="w-6 h-6 rounded-full text-white flex items-center justify-center text-xs font-bold shadow-xs"
+                      style={{ backgroundColor: clinicTheme.primaryColor }}
+                    >
                       ✓
                     </span>
                     <div>
-                      <span className="text-xs font-extrabold text-emerald-950 block leading-tight">
+                      <span 
+                        className="text-xs font-extrabold block leading-tight"
+                        style={{ color: clinicTheme.primaryDarkColor }}
+                      >
                         Consulta Localizada no Feegow!
                       </span>
-                      <span className="text-[10.5px] text-emerald-700 font-medium">
+                      <span className="text-[10.5px] text-slate-600 font-medium">
                         Médico, horário e local pré-selecionados
                       </span>
                     </div>
@@ -507,7 +533,7 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
                       setManualDoctorMode(true);
                       setSelectedFeegowApptId(null);
                     }}
-                    className="text-[11px] font-bold text-slate-500 hover:text-slate-800 underline decoration-slate-300 underline-offset-2 transition-colors"
+                    className="text-[11px] font-bold text-slate-500 hover:text-slate-800 underline decoration-slate-300 underline-offset-2 transition-colors cursor-pointer"
                   >
                     Alterar médico
                   </button>
@@ -521,20 +547,31 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
                       <div
                         key={appt.appointmentId}
                         onClick={() => selectFeegowAppointment(appt)}
-                        className={`p-3 rounded-xl border transition-all cursor-pointer flex flex-col gap-1.5 ${
-                          isSelected
-                            ? 'bg-white border-emerald-500 shadow-sm ring-1 ring-emerald-500/30'
-                            : 'bg-white/60 border-emerald-100 hover:bg-white text-slate-600'
-                        }`}
+                        className="p-3 rounded-xl border transition-all cursor-pointer flex flex-col gap-1.5"
+                        style={isSelected ? {
+                          backgroundColor: '#ffffff',
+                          borderColor: clinicTheme.primaryColor,
+                          boxShadow: `0 0 0 1.5px ${clinicTheme.primaryColor}50`
+                        } : {
+                          backgroundColor: 'rgba(255, 255, 255, 0.7)',
+                          borderColor: `${clinicTheme.primaryColor}25`
+                        }}
                       >
                         <div className="flex items-center justify-between">
                           <span className="text-xs font-extrabold text-slate-800 flex items-center gap-1.5">
-                            <Stethoscope className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                            <Stethoscope className="w-3.5 h-3.5 shrink-0" style={{ color: clinicTheme.primaryColor }} />
                             {appt.doctorName || clinicTheme.name}
                           </span>
-                          <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${
-                            appt.isToday ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'
-                          }`}>
+                          <span 
+                            className="text-[10px] font-extrabold px-2 py-0.5 rounded-full"
+                            style={appt.isToday ? {
+                              backgroundColor: `${clinicTheme.secondaryColor}60`,
+                              color: clinicTheme.primaryDarkColor
+                            } : {
+                              backgroundColor: '#f1f5f9',
+                              color: '#475569'
+                            }}
+                          >
                             {appt.formattedDateTime}
                           </span>
                         </div>
@@ -544,7 +581,7 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
                             {appt.specialty || 'Consulta'}
                           </span>
                           <span className="font-bold text-slate-700 flex items-center gap-1 shrink-0">
-                            <MapPin className="w-3 h-3 text-emerald-600" />
+                            <MapPin className="w-3 h-3" style={{ color: clinicTheme.primaryColor }} />
                             {resolvedFloor}
                           </span>
                         </div>
@@ -567,9 +604,10 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
                         const chosen = feegowAppointments.find(a => a.isToday) || feegowAppointments[0];
                         selectFeegowAppointment(chosen);
                       }}
-                      className="text-[11px] font-bold text-emerald-700 hover:text-emerald-800 transition-colors flex items-center gap-1"
+                      className="text-[11px] font-bold transition-colors flex items-center gap-1 cursor-pointer"
+                      style={{ color: clinicTheme.primaryDarkColor }}
                     >
-                      <Clock className="w-3 h-3" />
+                      <Clock className="w-3 h-3" style={{ color: clinicTheme.primaryColor }} />
                       Usar consulta do Feegow
                     </button>
                   </div>
@@ -585,33 +623,51 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
                     <button
                       type="button"
                       onClick={() => setDateSelection('today')}
-                      className={`py-2 px-1 rounded-xl text-xs font-bold transition-all border text-center ${
-                        dateSelection === 'today'
-                          ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
-                          : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-                      }`}
+                      className="py-2 px-1 rounded-xl text-xs font-bold transition-all border text-center cursor-pointer"
+                      style={dateSelection === 'today' ? {
+                        backgroundColor: clinicTheme.primaryColor,
+                        borderColor: clinicTheme.primaryDarkColor,
+                        color: '#ffffff',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+                      } : {
+                        backgroundColor: '#f8fafc',
+                        borderColor: '#e2e8f0',
+                        color: '#334155'
+                      }}
                     >
                       Hoje ({formatPillDate(today)})
                     </button>
                     <button
                       type="button"
                       onClick={() => setDateSelection('tomorrow')}
-                      className={`py-2 px-1 rounded-xl text-xs font-bold transition-all border text-center ${
-                        dateSelection === 'tomorrow'
-                          ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
-                          : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-                      }`}
+                      className="py-2 px-1 rounded-xl text-xs font-bold transition-all border text-center cursor-pointer"
+                      style={dateSelection === 'tomorrow' ? {
+                        backgroundColor: clinicTheme.primaryColor,
+                        borderColor: clinicTheme.primaryDarkColor,
+                        color: '#ffffff',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+                      } : {
+                        backgroundColor: '#f8fafc',
+                        borderColor: '#e2e8f0',
+                        color: '#334155'
+                      }}
                     >
                       Amanhã ({formatPillDate(tomorrow)})
                     </button>
                     <button
                       type="button"
                       onClick={() => setDateSelection('custom')}
-                      className={`py-2 px-1 rounded-xl text-xs font-bold transition-all border text-center ${
-                        dateSelection === 'custom'
-                          ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
-                          : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-                      }`}
+                      className="py-2 px-1 rounded-xl text-xs font-bold transition-all border text-center cursor-pointer"
+                      style={dateSelection === 'custom' ? {
+                        backgroundColor: clinicTheme.primaryColor,
+                        borderColor: clinicTheme.primaryDarkColor,
+                        color: '#ffffff',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+                      } : {
+                        backgroundColor: '#f8fafc',
+                        borderColor: '#e2e8f0',
+                        color: '#334155'
+                      }}
                     >
                       Outra data
                     </button>
@@ -625,7 +681,7 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
                         min={toISODate(today)}
                         value={customDate}
                         onChange={(e) => setCustomDate(e.target.value)}
-                        className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-800 focus:bg-white focus:outline-none focus:ring-2 transition-all"
+                        className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-800 focus:bg-white focus:outline-none transition-all form-input-themed"
                       />
                     </div>
                   )}
@@ -647,7 +703,7 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
                             setSelectedLocation(null);
                             setIsDoctorDropdownOpen(false);
                           }}
-                          className="text-[10px] font-bold text-slate-400 hover:text-red-500 transition-colors flex items-center gap-0.5"
+                          className="text-[10px] font-bold text-slate-400 hover:text-red-500 transition-colors flex items-center gap-0.5 cursor-pointer"
                         >
                           <X className="w-3 h-3" /> Limpar
                         </button>
@@ -674,7 +730,7 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
                           }
                         }}
                         placeholder="Digite o nome do médico ou setor (ex: Brenda, Ginecologia...)"
-                        className="w-full pl-3.5 pr-9 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 transition-all"
+                        className="w-full pl-3.5 pr-9 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none transition-all form-input-themed"
                       />
                       {doctorInput && (
                         <button
@@ -684,7 +740,7 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
                             setSelectedLocation(null);
                             setIsDoctorDropdownOpen(false);
                           }}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded-full hover:bg-slate-200/50 transition-all"
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded-full hover:bg-slate-200/50 transition-all cursor-pointer"
                           title="Limpar médico"
                         >
                           <X className="w-3.5 h-3.5" />
@@ -708,11 +764,11 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
                               key={`${doc.name}-${idx}`}
                               type="button"
                               onClick={() => handleSelectDoctor(doc)}
-                              className="w-full px-3.5 py-2.5 text-left hover:bg-slate-50 flex items-start justify-between gap-2 transition-colors group cursor-pointer"
+                              className="w-full px-3.5 py-2.5 text-left hover:bg-slate-50 flex items-start justify-between gap-2 transition-colors cursor-pointer"
                             >
                               <div>
-                                <div className="text-xs font-bold text-slate-800 group-hover:text-blue-700 flex items-center gap-1.5">
-                                  <User className="w-3 h-3 text-slate-400 group-hover:text-blue-600 shrink-0" />
+                                <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                                  <User className="w-3 h-3 text-slate-400 shrink-0" />
                                   {doc.name}
                                 </div>
                                 <div className="text-[10px] font-medium text-slate-500 mt-0.5 flex items-center gap-1">
@@ -721,7 +777,13 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
                                 </div>
                               </div>
                               {doc.specialty && (
-                                <span className="shrink-0 text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 bg-slate-100 text-slate-600 rounded-lg group-hover:bg-blue-50 group-hover:text-blue-700">
+                                <span 
+                                  className="shrink-0 text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-lg"
+                                  style={{
+                                    backgroundColor: `${clinicTheme.secondaryColor}40`,
+                                    color: clinicTheme.primaryDarkColor
+                                  }}
+                                >
                                   {doc.specialty}
                                 </span>
                               )}
@@ -740,8 +802,15 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
 
                     {/* Badge com a localização confirmada */}
                     {(selectedLocation || (doctorInput && resolveDoctorLocation(doctorInput) !== '1º Andar - Lado Direito')) && (
-                      <div className="mt-2 p-2 rounded-xl bg-emerald-50/90 border border-emerald-200/60 flex items-center gap-2 text-emerald-800 text-[11px] font-semibold animate-in fade-in duration-150">
-                        <MapPin className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                      <div 
+                        className="mt-2 p-2 rounded-xl border flex items-center gap-2 text-[11px] font-semibold animate-in fade-in duration-150"
+                        style={{
+                          backgroundColor: `${clinicTheme.secondaryColor}30`,
+                          borderColor: `${clinicTheme.primaryColor}30`,
+                          color: clinicTheme.primaryDarkColor
+                        }}
+                      >
+                        <MapPin className="w-3.5 h-3.5 shrink-0" style={{ color: clinicTheme.primaryColor }} />
                         <span className="truncate">
                           {selectedLocation || resolveDoctorLocation(doctorInput)}
                         </span>
@@ -764,7 +833,7 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Ex: Maria dos Santos"
-                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-semibold text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 transition-all"
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-semibold text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none transition-all uppercase form-input-themed"
               />
             </div>
 
@@ -781,7 +850,7 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
                   onChange={(e) => setBirthDate(maskDate(e.target.value))}
                   placeholder="DD/MM/AAAA"
                   maxLength={10}
-                  className="w-full px-3.5 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-semibold text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 transition-all"
+                  className="w-full px-3.5 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-semibold text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none transition-all font-mono form-input-themed"
                 />
               </div>
               <div>
@@ -796,7 +865,7 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
                   onChange={(e) => setPhone(maskPhone(e.target.value))}
                   placeholder="(42) 99999-9999"
                   maxLength={15}
-                  className="w-full px-3.5 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-semibold text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 transition-all font-mono"
+                  className="w-full px-3.5 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-semibold text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none transition-all font-mono form-input-themed"
                 />
               </div>
             </div>
@@ -863,7 +932,7 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
                           value={comp.name}
                           onChange={(e) => updateCompanion(comp.id, 'name', e.target.value)}
                           placeholder={`Nome do Acompanhante #${idx + 1} *`}
-                          className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-1 transition-all"
+                          className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none transition-all form-input-themed"
                         />
                       </div>
                       <div className="grid grid-cols-2 gap-2">
@@ -874,7 +943,7 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
                           onChange={(e) => updateCompanion(comp.id, 'cpf', maskCpf(e.target.value))}
                           placeholder="CPF *"
                           maxLength={14}
-                          className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-1 transition-all font-mono"
+                          className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none transition-all font-mono form-input-themed"
                         />
                         <input
                           type="text"
@@ -883,7 +952,7 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
                           onChange={(e) => updateCompanion(comp.id, 'birthDate', maskDate(e.target.value))}
                           placeholder="Nasc. (opcional)"
                           maxLength={10}
-                          className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-1 transition-all"
+                          className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none transition-all form-input-themed"
                         />
                       </div>
                     </div>
@@ -933,7 +1002,7 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
                 onChange={(e) => setLookupCpf(maskCpf(e.target.value))}
                 placeholder="000.000.000-00"
                 maxLength={14}
-                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-semibold text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 transition-all font-mono"
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-semibold text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none transition-all font-mono form-input-themed"
               />
             </div>
 
@@ -963,7 +1032,7 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
 
         <div className="mt-6 pt-4 border-t border-slate-100 text-center">
           <p className="text-[11px] text-slate-400 font-semibold flex items-center justify-center gap-1.5">
-            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+            <CheckCircle2 className="w-3.5 h-3.5" style={{ color: clinicTheme.primaryColor }} />
             Acesso integrado às catracas do Edifício Inovare
           </p>
         </div>

@@ -682,7 +682,7 @@ export default function PatientAccess() {
             <main className={`flex-1 px-4 sm:px-6 py-8 space-y-6 overflow-y-auto ${
               clinicTheme.id === 'imagem'
                 ? 'bg-gradient-to-b from-white via-rose-50/20 to-slate-50'
-                : 'bg-gradient-to-b from-white via-emerald-50/20 to-slate-50'
+                : 'bg-gradient-to-b from-white via-amber-50/20 to-slate-50'
             }`}>
               <SelfRegistrationForm
                 clinicTheme={clinicTheme}
