@@ -292,6 +292,7 @@ public class AccessController {
             }
 
             List<AccessCredentialResponse> responseList = new ArrayList<>();
+            Map<String, Optional<FeegowPatientAccessInfo>> feegowCache = new HashMap<>();
 
             for (AccessCredential cred : credentials) {
                 String appointmentId = cred.getAppointmentId();
@@ -303,7 +304,10 @@ public class AccessController {
                 // Se for um agendamento do Feegow (não começa com INOV- nem IMG-), consulta detalhes no Feegow
                 if (appointmentId != null && !appointmentId.startsWith("INOV-") && !appointmentId.startsWith("IMG-")) {
                     try {
-                        Optional<FeegowPatientAccessInfo> accessInfoOpt = feegowClientPort.fetchPatientAccessInfo(appointmentId);
+                        Optional<FeegowPatientAccessInfo> accessInfoOpt = feegowCache.computeIfAbsent(
+                            appointmentId,
+                            feegowClientPort::fetchPatientAccessInfo
+                        );
                         if (accessInfoOpt.isPresent()) {
                             FeegowPatientAccessInfo info = accessInfoOpt.get();
                             if (info.doctorName() != null && !info.doctorName().isBlank()) {
