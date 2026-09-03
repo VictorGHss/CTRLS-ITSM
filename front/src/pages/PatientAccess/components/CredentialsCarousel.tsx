@@ -295,8 +295,8 @@ export const CredentialsCarousel: React.FC<CredentialsCarouselProps> = ({
               Ampliar QR Code
             </button>
 
-            {/* Botão Compartilhar Imagem do QR Code para Acompanhante */}
-            {cred.credentialCode !== 'BLOCKED_OUTSIDE_WINDOW' && cred.userType === 'COMPANION' && (
+            {/* Botão Compartilhar Imagem do QR Code (disponível para todos os cartões liberados) */}
+            {cred.credentialCode !== 'BLOCKED_OUTSIDE_WINDOW' && !cred.credentialCode.startsWith('CRED-') && cred.credentialCode !== 'CPF_MISSING' && (
               <button
                 type="button"
                 onClick={async () => {
