@@ -170,29 +170,25 @@ public class AccessService {
         }
 
         String resolvedCpf = null;
-        if (cleanRequestCpf.length() == 11) {
-            // Se o paciente acabou de submeter um CPF com 11 dígitos (via formulário web ou chat), usa-o com prioridade
+        if (isValidCpf(cleanRequestCpf)) {
+            // Se o paciente acabou de submeter um CPF válido (via formulário web ou chat), usa-o com prioridade
             resolvedCpf = cleanRequestCpf;
             try {
-                log.info("[AccessService] Sincronizando CPF informado ({}) de volta com a Feegow para o paciente ID: {}", resolvedCpf, accessInfo.patientId());
+                log.info("[AccessService] Sincronizando CPF válido informado ({}) de volta com a Feegow para o paciente ID: {}", resolvedCpf, accessInfo.patientId());
                 patientExternalPort.updatePatientCpf(accessInfo.patientId(), resolvedCpf, patientName, patientBirthdate);
             } catch (Exception e) {
                 log.error("[AccessService] Falha ao sincronizar CPF com a Feegow: {}", e.getMessage());
             }
-        } else if (cleanFeegowCpf.length() == 11) {
-            resolvedCpf = cleanFeegowCpf;
-        } else if (isValidCpf(cleanRequestCpf)) {
-            resolvedCpf = cleanRequestCpf;
         } else if (isValidCpf(cleanFeegowCpf)) {
             resolvedCpf = cleanFeegowCpf;
         }
 
         String targetPhone = mainPatient != null && mainPatient.phone() != null ? mainPatient.phone() : accessInfo.phone();
 
-        // 3. Contingência de CPF Nulo ou com menos de 11 dígitos:
-        // Se o CPF for nulo ou incompleto, solicitamos a confirmação do CPF para liberação.
-        if (resolvedCpf == null || resolvedCpf.isBlank() || resolvedCpf.length() != 11) {
-            log.warn("[AccessService] Prontuário Feegow sem CPF de 11 dígitos (valor Feegow: '{}', valor request: '{}') para o paciente ID: {}. Ativando flag 'requiresCpfFallback'.",
+        // 3. Contingência de CPF Nulo, incompleto ou matematicamente inválido (Receita Federal):
+        // Se o CPF for nulo ou inválido, solicitamos a confirmação do CPF correto para liberação física na catraca.
+        if (resolvedCpf == null || resolvedCpf.isBlank() || !isValidCpf(resolvedCpf)) {
+            log.warn("[AccessService] Prontuário Feegow sem CPF válido pela Receita Federal (valor Feegow: '{}', valor request: '{}') para o paciente ID: {}. Ativando flag 'requiresCpfFallback'.",
                     cleanFeegowCpf, cleanRequestCpf, accessInfo.patientId());
             String token = generateAccessToken(appointmentId, targetPhone);
             String accessUrl = "https://itsm-inovare.ctrls.dev.br/" + appointmentId + "?t=" + token;
@@ -1090,6 +1086,15 @@ public class AccessService {
 
         for (AccessCredential cred : existingList) {
             String cleanCpf = cred.getCpf() != null ? cred.getCpf().replaceAll("\\D", "") : "";
+
+            if (!isValidCpf(cleanCpf)) {
+                log.warn("[AccessService] CPF inválido ({}) cadastrado para '{}'. Não enviando para GerAcesso. Ativando contingência.", cleanCpf, cred.getName());
+                String newCredentialValue = "CRED-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+                cred.setAccessCredential(newCredentialValue);
+                cred.setCreatedAt(LocalDateTime.now(CLINIC_ZONE));
+                updatedList.add(accessCredentialRepositoryPort.save(cred));
+                continue;
+            }
 
             GerAcessoRequest gerAcessoRequest = GerAcessoRequest.builder()
                     .name(cred.getName())

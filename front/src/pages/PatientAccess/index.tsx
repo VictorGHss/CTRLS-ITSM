@@ -44,6 +44,7 @@ export default function PatientAccess() {
   const [cpfInput, setCpfInput] = useState<string>('');
   const [cpfSubmitLoading, setCpfSubmitLoading] = useState<boolean>(false);
   const [cpfSubmitError, setCpfSubmitError] = useState<string | null>(null);
+  const [isEditingCpf, setIsEditingCpf] = useState<boolean>(false);
 
   // --- Cadastro de Acompanhantes e Reativação ---
   const [isCompanionModalOpen, setIsCompanionModalOpen] = useState<boolean>(false);
@@ -446,17 +447,24 @@ export default function PatientAccess() {
 
       const query = verifiedToken
         ? `t=${encodeURIComponent(verifiedToken)}`
-        : `phoneDigits=${encodeURIComponent(verifiedPhoneDigits)}`;
+        : verifiedPhoneDigits
+          ? `phoneDigits=${encodeURIComponent(verifiedPhoneDigits)}`
+          : '';
 
+      const targetId = getActiveAppointmentId() || appointmentId;
       const response = await api.get<AccessCredential[]>(
-        `/v1/access/credentials/${appointmentId}?${query}`,
+        `/v1/access/credentials/${targetId}${query ? `?${query}` : ''}`,
         {
           headers: {
             'X-Skip-Interceptor': 'true'
           }
         }
       );
-      saveCredentialsWithOfflineCache(response.data || [], { token: verifiedToken, phoneDigits: verifiedPhoneDigits });
+      if (response.data && response.data.length > 0) {
+        saveCredentialsWithOfflineCache(response.data, { token: verifiedToken, phoneDigits: verifiedPhoneDigits });
+        setCredentials(response.data);
+      }
+      setIsEditingCpf(false);
     } catch (err: unknown) {
       console.error('[PatientAccess] Falha ao enviar CPF:', err);
       setCpfSubmitError('Ocorreu um erro ao salvar o CPF. Tente novamente.');
@@ -717,17 +725,31 @@ export default function PatientAccess() {
           </div>
 
           {/* Fluxo Condicional */}
-          {credentials.some(c => c.locator === 'CPF_MISSING') ? (
-            <CpfFallbackCard
-              cpfInput={cpfInput}
-              cpfSubmitLoading={cpfSubmitLoading}
-              cpfSubmitError={cpfSubmitError}
-              onCpfChange={(masked) => {
-                setCpfSubmitError(null);
-                setCpfInput(masked);
-              }}
-              onSubmit={handleCpfSubmit}
-            />
+          {credentials.some(c => c.locator === 'CPF_MISSING') || isEditingCpf ? (
+            <div className="space-y-3">
+              {isEditingCpf && credentials.length > 0 && (
+                <div className="flex justify-between items-center px-1">
+                  <span className="text-xs font-bold text-slate-700">Atualizar CPF do Acesso</span>
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingCpf(false)}
+                    className="text-xs font-semibold text-slate-400 hover:text-slate-600 cursor-pointer"
+                  >
+                    Voltar aos Cartões
+                  </button>
+                </div>
+              )}
+              <CpfFallbackCard
+                cpfInput={cpfInput}
+                cpfSubmitLoading={cpfSubmitLoading}
+                cpfSubmitError={cpfSubmitError}
+                onCpfChange={(masked) => {
+                  setCpfSubmitError(null);
+                  setCpfInput(masked);
+                }}
+                onSubmit={handleCpfSubmit}
+              />
+            </div>
           ) : credentials.length === 0 ? (
             <div className="bg-brand-secondary/10 border border-brand-primary/20 rounded-3xl p-6 text-center space-y-4 shadow-sm">
               <div className="w-16 h-16 bg-brand-primary/10 rounded-full flex items-center justify-center mx-auto text-brand-primary animate-pulse">
@@ -749,6 +771,7 @@ export default function PatientAccess() {
               onOpenCompanionModal={() => setIsCompanionModalOpen(true)}
               onReactivateAccess={handleReactivateAccess}
               onResetAccess={handleResetAccess}
+              onEditCpf={() => setIsEditingCpf(true)}
               isReactivating={isReactivating}
               clinicTheme={clinicTheme}
             />

@@ -377,10 +377,11 @@ public class AccessController {
             String opensAt = "07:00";
             String closesAt = "23:00";
 
-            if (appointmentId != null && !appointmentId.startsWith("IMG-")) {
+            if (appointmentId != null && !appointmentId.startsWith("IMG-") && !appointmentId.startsWith("INOV-")) {
                 try {
-                    var accessInfo = accessService.validateAccessChallenge(appointmentId, null, null);
-                    if (accessInfo != null) {
+                    var accessInfoOpt = feegowClientPort.fetchPatientAccessInfo(appointmentId);
+                    if (accessInfoOpt.isPresent()) {
+                        var accessInfo = accessInfoOpt.get();
                         if (accessInfo.doctorName() != null && !accessInfo.doctorName().isBlank()) {
                             doctorName = accessInfo.doctorName();
                         }
@@ -601,18 +602,28 @@ public class AccessController {
             boolean hasOnlyContingency = !appCreds.isEmpty() && appCreds.stream()
                     .allMatch(c -> c.getAccessCredential() != null && c.getAccessCredential().startsWith("CRED-"));
 
-            if (appCreds.isEmpty() || hasOnlyContingency) {
-                log.info("[AccessControl] Credenciais não encontradas ou contingenciais (CRED-) para o agendamento ID: {}. Tentando obter credencial real na GerAcesso...", id);
+            boolean hasInvalidCpf = !appCreds.isEmpty() && appCreds.stream()
+                    .anyMatch(c -> c.getCpf() == null || !AccessService.isValidCpf(c.getCpf()));
+
+            if (appCreds.isEmpty() || hasOnlyContingency || hasInvalidCpf) {
+                log.info("[AccessControl] Credenciais não encontradas, contingenciais (CRED-) ou com CPF inválido para o agendamento ID: {}. Tentando obter credencial real na GerAcesso...", id);
                 try {
                     AccessService.AccessValidationResult result = accessService.processAccessRequest(id, null, null);
                     if (result.authorized()) {
                         appCreds = accessCredentialRepositoryPort.findByAppointmentId(id);
                     } else if (result.requiresCpfFallback()) {
-                        var specificInfo = accessService.validateAccessChallenge(id, phoneDigits, token);
+                        String patientNameFallback = "Paciente";
+                        try {
+                            var accessInfoOpt = feegowClientPort.fetchPatientAccessInfo(id);
+                            if (accessInfoOpt.isPresent() && accessInfoOpt.get().name() != null) {
+                                patientNameFallback = accessInfoOpt.get().name();
+                            }
+                        } catch (Exception ignored) {}
+
                         AccessCredential ghost = AccessCredential.builder()
                                 .id(UUID.randomUUID())
                                 .appointmentId(id)
-                                .name(specificInfo.name())
+                                .name(patientNameFallback)
                                 .cpf("")
                                 .userType(UserType.PATIENT)
                                 .accessCredential("CPF_MISSING")
