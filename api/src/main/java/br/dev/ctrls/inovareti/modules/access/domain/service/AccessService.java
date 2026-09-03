@@ -14,6 +14,7 @@ import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.Appointment
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.FeegowAppointment;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.FeegowPatient;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.PatientExternalPort;
+import br.dev.ctrls.inovareti.modules.access.infrastructure.adapter.input.dto.FeegowPreRegistrationLookupResponse;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentSessionRepositoryPort;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.DoctorConfigurationRepository;
 import lombok.RequiredArgsConstructor;
@@ -1125,6 +1126,106 @@ public class AccessService {
         }
 
         return updatedList;
+    }
+
+    /**
+     * Consulta prévia no Feegow ao digitar CPF para preenchimento automático
+     * de dados cadastrais e agendamentos futuros no auto-cadastro.
+     */
+    public FeegowPreRegistrationLookupResponse lookupFeegowPreRegistration(String rawCpf, String clinic) {
+        if (rawCpf == null || rawCpf.isBlank()) {
+            return new FeegowPreRegistrationLookupResponse(false, null, null, null, List.of(), "CPF não informado.");
+        }
+
+        String cleanCpf = rawCpf.replaceAll("\\D", "");
+        if (cleanCpf.length() != 11) {
+            return new FeegowPreRegistrationLookupResponse(false, null, null, null, List.of(), "CPF deve ter 11 dígitos.");
+        }
+
+        log.info("[AccessService] Consulta prévia no Feegow para auto-cadastro por CPF: {}", cleanCpf);
+
+        try {
+            FeegowPatient patient = patientExternalPort.patientInfo(cleanCpf);
+            if (patient == null || patient.id() == null || patient.id().isBlank() || patient.name() == null || patient.name().isBlank()) {
+                log.info("[AccessService] Paciente não localizado no Feegow para o CPF {}", cleanCpf);
+                return new FeegowPreRegistrationLookupResponse(false, null, null, null, List.of(), "Paciente não localizado no Feegow.");
+            }
+
+            String patientName = patient.name().trim();
+            String patientPhone = patient.phone() != null ? patient.phone().trim() : "";
+            String patientBirthDate = patient.birthdate() != null ? patient.birthdate().trim() : "";
+
+            if (patientBirthDate.matches("\\d{4}-\\d{2}-\\d{2}")) {
+                try {
+                    LocalDate bDate = LocalDate.parse(patientBirthDate);
+                    patientBirthDate = bDate.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"));
+                } catch (Exception ignored) {}
+            }
+
+            List<FeegowAppointment> feegowAppts = appointmentExternalPort.searchPatientAppointments(patient.id());
+            List<FeegowPreRegistrationLookupResponse.FeegowAppointmentItemDto> appointmentDtos = new ArrayList<>();
+
+            if (feegowAppts != null && !feegowAppts.isEmpty()) {
+                LocalDate today = LocalDate.now(CLINIC_ZONE);
+                LocalDate tomorrow = today.plusDays(1);
+
+                DateTimeFormatter timeFmt = DateTimeFormatter.ofPattern("HH:mm");
+                DateTimeFormatter dateIsoFmt = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+                DateTimeFormatter dateBrFmt = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+
+                for (FeegowAppointment appt : feegowAppts) {
+                    if (appt.startAt() == null) continue;
+
+                    LocalDate apptDate = appt.startAt().toLocalDate();
+                    boolean isToday = apptDate.equals(today);
+                    boolean isTomorrow = apptDate.equals(tomorrow);
+
+                    String formattedDateLabel;
+                    if (isToday) {
+                        formattedDateLabel = "Hoje às " + appt.startAt().format(timeFmt);
+                    } else if (isTomorrow) {
+                        formattedDateLabel = "Amanhã às " + appt.startAt().format(timeFmt);
+                    } else {
+                        formattedDateLabel = appt.startAt().format(dateBrFmt) + " às " + appt.startAt().format(timeFmt);
+                    }
+
+                    String docName = appt.doctorName() != null && !appt.doctorName().isBlank() 
+                            ? appt.doctorName().trim() 
+                            : "";
+                    String specialty = appt.procedureName() != null && !appt.procedureName().isBlank() 
+                            ? appt.procedureName().trim() 
+                            : "";
+
+                    appointmentDtos.add(new FeegowPreRegistrationLookupResponse.FeegowAppointmentItemDto(
+                        appt.id(),
+                        docName,
+                        specialty,
+                        apptDate.format(dateIsoFmt),
+                        appt.startAt().format(timeFmt),
+                        formattedDateLabel,
+                        isToday,
+                        null
+                    ));
+                }
+
+                appointmentDtos.sort((a, b) -> {
+                    int c = a.date().compareTo(b.date());
+                    return c != 0 ? c : a.time().compareTo(b.time());
+                });
+            }
+
+            return new FeegowPreRegistrationLookupResponse(
+                true,
+                patientName,
+                patientBirthDate,
+                patientPhone,
+                appointmentDtos,
+                appointmentDtos.isEmpty() ? "Cadastro localizado no Feegow." : "Consultas localizadas no Feegow."
+            );
+        } catch (Exception ex) {
+            log.error("[AccessService] Falha ao consultar pré-cadastro no Feegow para o CPF {}: {}", cleanCpf, ex.getMessage(), ex);
+            return new FeegowPreRegistrationLookupResponse(false, null, null, null, List.of(), "Falha temporária ao consultar Feegow.");
+        }
     }
 
     /**

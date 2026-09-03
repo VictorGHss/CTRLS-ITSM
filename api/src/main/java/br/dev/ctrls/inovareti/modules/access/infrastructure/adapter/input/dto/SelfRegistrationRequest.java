@@ -22,6 +22,8 @@ public record SelfRegistrationRequest(
 
     String doctorName,
 
+    String appointmentId,
+
     CompanionRequest companion,
 
     List<CompanionRequest> companions

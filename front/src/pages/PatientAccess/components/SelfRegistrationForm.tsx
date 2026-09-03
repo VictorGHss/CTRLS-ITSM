@@ -1,5 +1,5 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react';
-import { User, CreditCard, Phone, Calendar, UserPlus, ArrowRight, Search, CheckCircle2, AlertCircle, ShieldCheck, Plus, Trash2, Stethoscope, MapPin, X } from 'lucide-react';
+import { User, CreditCard, Phone, Calendar, UserPlus, ArrowRight, Search, CheckCircle2, AlertCircle, ShieldCheck, Plus, Trash2, Stethoscope, MapPin, X, Sparkles, Clock } from 'lucide-react';
 import { type ClinicTheme, DOCTOR_SUGGESTIONS, type DoctorSuggestion, resolveDoctorLocation } from '../utils/clinicThemes';
 import type { AccessCredential } from '../types';
 import api from '../../../services/api';
@@ -9,6 +9,26 @@ interface CompanionEntry {
   name: string;
   cpf: string;
   birthDate: string;
+}
+
+export interface FeegowAppointmentItem {
+  appointmentId: string;
+  doctorName: string;
+  specialty: string;
+  date: string;
+  time: string;
+  formattedDateTime: string;
+  isToday: boolean;
+  location?: string;
+}
+
+export interface FeegowLookupResponse {
+  found: boolean;
+  patientName?: string;
+  birthDate?: string;
+  phone?: string;
+  appointments: FeegowAppointmentItem[];
+  message?: string;
 }
 
 interface SelfRegistrationFormProps {
@@ -41,6 +61,105 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
   const [selectedLocation, setSelectedLocation] = useState<string | null>(null);
   const [isDoctorDropdownOpen, setIsDoctorDropdownOpen] = useState<boolean>(false);
   const doctorDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Estados de Busca Automática Inteligente no Feegow
+  const [isSearchingFeegow, setIsSearchingFeegow] = useState(false);
+  const [feegowLookupDone, setFeegowLookupDone] = useState(false);
+  const [feegowAppointments, setFeegowAppointments] = useState<FeegowAppointmentItem[]>([]);
+  const [selectedFeegowApptId, setSelectedFeegowApptId] = useState<string | null>(null);
+  const [manualDoctorMode, setManualDoctorMode] = useState(false);
+
+  // Seleciona um agendamento localizado no Feegow
+  const selectFeegowAppointment = (appt: FeegowAppointmentItem) => {
+    setSelectedFeegowApptId(appt.appointmentId);
+    setManualDoctorMode(false);
+    if (appt.doctorName) {
+      setDoctorInput(appt.doctorName);
+      setSelectedLocation(resolveDoctorLocation(appt.doctorName, clinicTheme.floorInfo));
+    }
+    if (appt.isToday) {
+      setDateSelection('today');
+    } else {
+      const tomorrowStr = toISODate(tomorrow);
+      if (appt.date === tomorrowStr) {
+        setDateSelection('tomorrow');
+      } else {
+        setDateSelection('custom');
+        setCustomDate(appt.date);
+      }
+    }
+  };
+
+  // Efeito de busca automática no Feegow com debounce ao digitar os 11 dígitos do CPF
+  useEffect(() => {
+    const cleanCpf = cpf.replace(/\D/g, '');
+    if (cleanCpf.length !== 11) {
+      setFeegowAppointments([]);
+      setSelectedFeegowApptId(null);
+      setFeegowLookupDone(false);
+      setManualDoctorMode(false);
+      return;
+    }
+
+    let isMounted = true;
+    const timer = setTimeout(async () => {
+      setIsSearchingFeegow(true);
+      try {
+        const resp = await api.post<FeegowLookupResponse>(
+          '/v1/access/feegow-lookup',
+          {
+            cpf: cleanCpf,
+            clinic: clinicTheme.id
+          },
+          {
+            headers: { 'X-Skip-Interceptor': 'true' }
+          }
+        );
+
+        if (!isMounted) return;
+
+        if (resp.data && resp.data.found) {
+          setFeegowLookupDone(true);
+          if (resp.data.patientName && (!name.trim() || !manualDoctorMode)) {
+            setName(resp.data.patientName);
+          }
+          if (resp.data.phone && (!phone.trim() || !manualDoctorMode)) {
+            setPhone(maskPhone(resp.data.phone));
+          }
+          if (resp.data.birthDate && (!birthDate.trim() || !manualDoctorMode)) {
+            const rawBirth = resp.data.birthDate.trim();
+            if (rawBirth.includes('-')) {
+              const parts = rawBirth.split('-');
+              if (parts.length === 3) {
+                setBirthDate(`${parts[2]}/${parts[1]}/${parts[0]}`);
+              } else {
+                setBirthDate(maskDate(rawBirth));
+              }
+            } else {
+              setBirthDate(maskDate(rawBirth));
+            }
+          }
+
+          const appts = resp.data.appointments || [];
+          setFeegowAppointments(appts);
+
+          if (appts.length > 0 && !manualDoctorMode) {
+            const chosen = appts.find(a => a.isToday) || appts[0];
+            selectFeegowAppointment(chosen);
+          }
+        }
+      } catch (err) {
+        console.warn('[SelfRegistrationForm] Falha defensiva ao consultar Feegow:', err);
+      } finally {
+        if (isMounted) setIsSearchingFeegow(false);
+      }
+    }, 450);
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timer);
+    };
+  }, [cpf, clinicTheme.id]);
 
   // Fecha o dropdown ao clicar fora do componente
   useEffect(() => {
@@ -199,6 +318,7 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
         clinic: clinicTheme.id,
         visitDate: finalVisitDate,
         doctorName: finalDoctorName,
+        appointmentId: (!manualDoctorMode && selectedFeegowApptId) ? selectedFeegowApptId : undefined,
         companion: companionsPayload.length > 0 ? companionsPayload[0] : undefined,
         companions: companionsPayload.length > 0 ? companionsPayload : undefined
       };
@@ -328,6 +448,311 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
         {/* Formulário: Novo Cadastro */}
         {activeTab === 'register' && (
           <form onSubmit={handleRegisterSubmit} className="mt-6 space-y-4 text-left">
+            {/* 1. CPF do Paciente no topo com busca instantânea no Feegow */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                  <CreditCard className="w-3.5 h-3.5 text-slate-400" />
+                  CPF do Paciente *
+                </label>
+                {isSearchingFeegow ? (
+                  <span className="text-[11px] font-bold text-blue-600 flex items-center gap-1 animate-pulse">
+                    <Sparkles className="w-3 h-3 text-blue-500 animate-spin" />
+                    Buscando no Feegow...
+                  </span>
+                ) : feegowLookupDone && feegowAppointments.length > 0 && !manualDoctorMode ? (
+                  <span className="text-[11px] font-bold text-emerald-600 flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                    Consulta localizada
+                  </span>
+                ) : feegowLookupDone ? (
+                  <span className="text-[11px] font-bold text-slate-500 flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3 text-slate-400" />
+                    Dados sincronizados
+                  </span>
+                ) : null}
+              </div>
+              <input
+                type="text"
+                inputMode="numeric"
+                required
+                value={cpf}
+                onChange={(e) => setCpf(maskCpf(e.target.value))}
+                placeholder="000.000.000-00"
+                maxLength={14}
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-semibold text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 transition-all font-mono"
+              />
+            </div>
+
+            {/* Card de Consulta Localizada no Feegow */}
+            {feegowAppointments.length > 0 && !manualDoctorMode && (
+              <div className="p-4 rounded-2xl bg-gradient-to-br from-emerald-50/90 to-teal-50/50 border border-emerald-200/80 shadow-xs space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="w-6 h-6 rounded-full bg-emerald-500 text-white flex items-center justify-center text-xs font-bold shadow-xs">
+                      ✓
+                    </span>
+                    <div>
+                      <span className="text-xs font-extrabold text-emerald-950 block leading-tight">
+                        Consulta Localizada no Feegow!
+                      </span>
+                      <span className="text-[10.5px] text-emerald-700 font-medium">
+                        Médico, horário e local pré-selecionados
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setManualDoctorMode(true);
+                      setSelectedFeegowApptId(null);
+                    }}
+                    className="text-[11px] font-bold text-slate-500 hover:text-slate-800 underline decoration-slate-300 underline-offset-2 transition-colors"
+                  >
+                    Alterar médico
+                  </button>
+                </div>
+
+                <div className="space-y-2 pt-0.5">
+                  {feegowAppointments.map((appt) => {
+                    const isSelected = selectedFeegowApptId === appt.appointmentId;
+                    const resolvedFloor = resolveDoctorLocation(appt.doctorName, clinicTheme.floorInfo);
+                    return (
+                      <div
+                        key={appt.appointmentId}
+                        onClick={() => selectFeegowAppointment(appt)}
+                        className={`p-3 rounded-xl border transition-all cursor-pointer flex flex-col gap-1.5 ${
+                          isSelected
+                            ? 'bg-white border-emerald-500 shadow-sm ring-1 ring-emerald-500/30'
+                            : 'bg-white/60 border-emerald-100 hover:bg-white text-slate-600'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-extrabold text-slate-800 flex items-center gap-1.5">
+                            <Stethoscope className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                            {appt.doctorName || clinicTheme.name}
+                          </span>
+                          <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${
+                            appt.isToday ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'
+                          }`}>
+                            {appt.formattedDateTime}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center justify-between text-[11px] text-slate-500 pt-0.5 border-t border-slate-100">
+                          <span className="font-medium truncate max-w-[55%]">
+                            {appt.specialty || 'Consulta'}
+                          </span>
+                          <span className="font-bold text-slate-700 flex items-center gap-1 shrink-0">
+                            <MapPin className="w-3 h-3 text-emerald-600" />
+                            {resolvedFloor}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Modo Manual de Consulta / Data (exibido se não houver consulta no Feegow ou se paciente clicar em Alterar) */}
+            {(feegowAppointments.length === 0 || manualDoctorMode) && (
+              <div className="space-y-4">
+                {manualDoctorMode && feegowAppointments.length > 0 && (
+                  <div className="flex items-center justify-between p-2 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+                    <span className="text-slate-600 font-medium">Preenchendo manualmente</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const chosen = feegowAppointments.find(a => a.isToday) || feegowAppointments[0];
+                        selectFeegowAppointment(chosen);
+                      }}
+                      className="text-[11px] font-bold text-emerald-700 hover:text-emerald-800 transition-colors flex items-center gap-1"
+                    >
+                      <Clock className="w-3 h-3" />
+                      Usar consulta do Feegow
+                    </button>
+                  </div>
+                )}
+
+                {/* Seleção de Data da Consulta / Atendimento */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                    Data da Consulta / Atendimento *
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setDateSelection('today')}
+                      className={`py-2 px-1 rounded-xl text-xs font-bold transition-all border text-center ${
+                        dateSelection === 'today'
+                          ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
+                          : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      Hoje ({formatPillDate(today)})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDateSelection('tomorrow')}
+                      className={`py-2 px-1 rounded-xl text-xs font-bold transition-all border text-center ${
+                        dateSelection === 'tomorrow'
+                          ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
+                          : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      Amanhã ({formatPillDate(tomorrow)})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDateSelection('custom')}
+                      className={`py-2 px-1 rounded-xl text-xs font-bold transition-all border text-center ${
+                        dateSelection === 'custom'
+                          ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
+                          : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      Outra data
+                    </button>
+                  </div>
+
+                  {dateSelection === 'custom' && (
+                    <div className="mt-2.5">
+                      <input
+                        type="date"
+                        required
+                        min={toISODate(today)}
+                        value={customDate}
+                        onChange={(e) => setCustomDate(e.target.value)}
+                        className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-800 focus:bg-white focus:outline-none focus:ring-2 transition-all"
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {/* Campo de Busca de Médico / Especialidade (Dropdown após 3 caracteres) */}
+                {clinicTheme.id === 'inovare' && (
+                  <div className="relative" ref={doctorDropdownRef}>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                      <span className="flex items-center gap-1.5">
+                        <Stethoscope className="w-3.5 h-3.5 text-slate-400" />
+                        Médico / Especialidade <span className="text-[10px] text-slate-400 font-normal">(opcional)</span>
+                      </span>
+                      {doctorInput && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDoctorInput('');
+                            setSelectedLocation(null);
+                            setIsDoctorDropdownOpen(false);
+                          }}
+                          className="text-[10px] font-bold text-slate-400 hover:text-red-500 transition-colors flex items-center gap-0.5"
+                        >
+                          <X className="w-3 h-3" /> Limpar
+                        </button>
+                      )}
+                    </label>
+
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={doctorInput}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setDoctorInput(val);
+                          setSelectedLocation(null);
+                          if (val.trim().length >= 3) {
+                            setIsDoctorDropdownOpen(true);
+                          } else {
+                            setIsDoctorDropdownOpen(false);
+                          }
+                        }}
+                        onFocus={() => {
+                          if (doctorInput.trim().length >= 3) {
+                            setIsDoctorDropdownOpen(true);
+                          }
+                        }}
+                        placeholder="Digite o nome do médico ou setor (ex: Brenda, Ginecologia...)"
+                        className="w-full pl-3.5 pr-9 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 transition-all"
+                      />
+                      {doctorInput && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDoctorInput('');
+                            setSelectedLocation(null);
+                            setIsDoctorDropdownOpen(false);
+                          }}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded-full hover:bg-slate-200/50 transition-all"
+                          title="Limpar médico"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Dica discreta ao digitar menos de 3 caracteres */}
+                    {doctorInput.trim().length > 0 && doctorInput.trim().length < 3 && (
+                      <p className="text-[10px] font-medium text-slate-400 mt-1 pl-1">
+                        Digite mais {3 - doctorInput.trim().length} letra(s) para pesquisar médicos...
+                      </p>
+                    )}
+
+                    {/* Dropdown Flutuante após 3 caracteres */}
+                    {isDoctorDropdownOpen && doctorInput.trim().length >= 3 && (
+                      <div className="absolute left-0 right-0 z-50 mt-1.5 bg-white border border-slate-200 rounded-2xl shadow-xl shadow-slate-300/50 max-h-56 overflow-y-auto divide-y divide-slate-100 animate-in fade-in zoom-in-95 duration-150">
+                        {filteredDoctors.length > 0 ? (
+                          filteredDoctors.map((doc, idx) => (
+                            <button
+                              key={`${doc.name}-${idx}`}
+                              type="button"
+                              onClick={() => handleSelectDoctor(doc)}
+                              className="w-full px-3.5 py-2.5 text-left hover:bg-slate-50 flex items-start justify-between gap-2 transition-colors group cursor-pointer"
+                            >
+                              <div>
+                                <div className="text-xs font-bold text-slate-800 group-hover:text-blue-700 flex items-center gap-1.5">
+                                  <User className="w-3 h-3 text-slate-400 group-hover:text-blue-600 shrink-0" />
+                                  {doc.name}
+                                </div>
+                                <div className="text-[10px] font-medium text-slate-500 mt-0.5 flex items-center gap-1">
+                                  <MapPin className="w-2.5 h-2.5 text-slate-400 shrink-0" />
+                                  {doc.location}
+                                </div>
+                              </div>
+                              {doc.specialty && (
+                                <span className="shrink-0 text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 bg-slate-100 text-slate-600 rounded-lg group-hover:bg-blue-50 group-hover:text-blue-700">
+                                  {doc.specialty}
+                                </span>
+                              )}
+                            </button>
+                          ))
+                        ) : (
+                          <div className="p-3 text-center">
+                            <p className="text-xs font-semibold text-slate-600">Nenhum médico encontrado</p>
+                            <p className="text-[10px] text-slate-400 mt-0.5">
+                              Você pode manter "{doctorInput}" ou apagar para recepção geral.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Badge com a localização confirmada */}
+                    {(selectedLocation || (doctorInput && resolveDoctorLocation(doctorInput) !== '1º Andar - Lado Direito')) && (
+                      <div className="mt-2 p-2 rounded-xl bg-emerald-50/90 border border-emerald-200/60 flex items-center gap-2 text-emerald-800 text-[11px] font-semibold animate-in fade-in duration-150">
+                        <MapPin className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        <span className="truncate">
+                          {selectedLocation || resolveDoctorLocation(doctorInput)}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 2. Nome Completo do Paciente */}
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
                 <User className="w-3.5 h-3.5 text-slate-400" />
@@ -342,198 +767,6 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
                 className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-semibold text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 transition-all"
               />
             </div>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-                <CreditCard className="w-3.5 h-3.5 text-slate-400" />
-                CPF do Paciente *
-              </label>
-              <input
-                type="text"
-                inputMode="numeric"
-                required
-                value={cpf}
-                onChange={(e) => setCpf(maskCpf(e.target.value))}
-                placeholder="000.000.000-00"
-                maxLength={14}
-                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-semibold text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 transition-all font-mono"
-              />
-            </div>
-
-            {/* Seleção de Data da Consulta / Atendimento */}
-            <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-                <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                Data da Consulta / Atendimento *
-              </label>
-              <div className="grid grid-cols-3 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setDateSelection('today')}
-                  className={`py-2 px-1 rounded-xl text-xs font-bold transition-all border text-center ${
-                    dateSelection === 'today'
-                      ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
-                      : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-                  }`}
-                >
-                  Hoje ({formatPillDate(today)})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setDateSelection('tomorrow')}
-                  className={`py-2 px-1 rounded-xl text-xs font-bold transition-all border text-center ${
-                    dateSelection === 'tomorrow'
-                      ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
-                      : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-                  }`}
-                >
-                  Amanhã ({formatPillDate(tomorrow)})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setDateSelection('custom')}
-                  className={`py-2 px-1 rounded-xl text-xs font-bold transition-all border text-center ${
-                    dateSelection === 'custom'
-                      ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
-                      : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-                  }`}
-                >
-                  Outra data
-                </button>
-              </div>
-
-              {dateSelection === 'custom' && (
-                <div className="mt-2.5">
-                  <input
-                    type="date"
-                    required
-                    min={toISODate(today)}
-                    value={customDate}
-                    onChange={(e) => setCustomDate(e.target.value)}
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-800 focus:bg-white focus:outline-none focus:ring-2 transition-all"
-                  />
-                </div>
-              )}
-            </div>
-
-            {/* Campo de Busca de Médico / Especialidade (Dropdown após 3 caracteres) */}
-            {clinicTheme.id === 'inovare' && (
-              <div className="relative" ref={doctorDropdownRef}>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center justify-between">
-                  <span className="flex items-center gap-1.5">
-                    <Stethoscope className="w-3.5 h-3.5 text-slate-400" />
-                    Médico / Especialidade <span className="text-[10px] text-slate-400 font-normal">(opcional)</span>
-                  </span>
-                  {doctorInput && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setDoctorInput('');
-                        setSelectedLocation(null);
-                        setIsDoctorDropdownOpen(false);
-                      }}
-                      className="text-[10px] font-bold text-slate-400 hover:text-red-500 transition-colors flex items-center gap-0.5"
-                    >
-                      <X className="w-3 h-3" /> Limpar
-                    </button>
-                  )}
-                </label>
-
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={doctorInput}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setDoctorInput(val);
-                      setSelectedLocation(null);
-                      if (val.trim().length >= 3) {
-                        setIsDoctorDropdownOpen(true);
-                      } else {
-                        setIsDoctorDropdownOpen(false);
-                      }
-                    }}
-                    onFocus={() => {
-                      if (doctorInput.trim().length >= 3) {
-                        setIsDoctorDropdownOpen(true);
-                      }
-                    }}
-                    placeholder="Digite o nome do médico ou setor (ex: Brenda, Ginecologia...)"
-                    className="w-full pl-3.5 pr-9 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 transition-all"
-                  />
-                  {doctorInput && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setDoctorInput('');
-                        setSelectedLocation(null);
-                        setIsDoctorDropdownOpen(false);
-                      }}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded-full hover:bg-slate-200/50 transition-all"
-                      title="Limpar médico"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                </div>
-
-                {/* Dica discreta ao digitar menos de 3 caracteres */}
-                {doctorInput.trim().length > 0 && doctorInput.trim().length < 3 && (
-                  <p className="text-[10px] font-medium text-slate-400 mt-1 pl-1">
-                    Digite mais {3 - doctorInput.trim().length} letra(s) para pesquisar médicos...
-                  </p>
-                )}
-
-                {/* Dropdown Flutuante após 3 caracteres */}
-                {isDoctorDropdownOpen && doctorInput.trim().length >= 3 && (
-                  <div className="absolute left-0 right-0 z-50 mt-1.5 bg-white border border-slate-200 rounded-2xl shadow-xl shadow-slate-300/50 max-h-56 overflow-y-auto divide-y divide-slate-100 animate-in fade-in zoom-in-95 duration-150">
-                    {filteredDoctors.length > 0 ? (
-                      filteredDoctors.map((doc, idx) => (
-                        <button
-                          key={`${doc.name}-${idx}`}
-                          type="button"
-                          onClick={() => handleSelectDoctor(doc)}
-                          className="w-full px-3.5 py-2.5 text-left hover:bg-slate-50 flex items-start justify-between gap-2 transition-colors group cursor-pointer"
-                        >
-                          <div>
-                            <div className="text-xs font-bold text-slate-800 group-hover:text-blue-700 flex items-center gap-1.5">
-                              <User className="w-3 h-3 text-slate-400 group-hover:text-blue-600 shrink-0" />
-                              {doc.name}
-                            </div>
-                            <div className="text-[10px] font-medium text-slate-500 mt-0.5 flex items-center gap-1">
-                              <MapPin className="w-2.5 h-2.5 text-slate-400 shrink-0" />
-                              {doc.location}
-                            </div>
-                          </div>
-                          {doc.specialty && (
-                            <span className="shrink-0 text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 bg-slate-100 text-slate-600 rounded-lg group-hover:bg-blue-50 group-hover:text-blue-700">
-                              {doc.specialty}
-                            </span>
-                          )}
-                        </button>
-                      ))
-                    ) : (
-                      <div className="p-3 text-center">
-                        <p className="text-xs font-semibold text-slate-600">Nenhum médico encontrado</p>
-                        <p className="text-[10px] text-slate-400 mt-0.5">
-                          Você pode manter "{doctorInput}" ou apagar para recepção geral.
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Badge com a localização confirmada */}
-                {(selectedLocation || (doctorInput && resolveDoctorLocation(doctorInput) !== '1º Andar - Lado Direito')) && (
-                  <div className="mt-2 p-2 rounded-xl bg-emerald-50/90 border border-emerald-200/60 flex items-center gap-2 text-emerald-800 text-[11px] font-semibold animate-in fade-in duration-150">
-                    <MapPin className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                    <span className="truncate">
-                      {selectedLocation || resolveDoctorLocation(doctorInput)}
-                    </span>
-                  </div>
-                )}
-              </div>
-            )}
 
             <div className="grid grid-cols-2 gap-3">
               <div>
