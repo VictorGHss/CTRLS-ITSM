@@ -14,6 +14,8 @@ import br.dev.ctrls.inovareti.modules.appointment.infrastructure.config.FeegowPr
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import br.dev.ctrls.inovareti.config.CacheConfig;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.web.util.UriComponentsBuilder;
@@ -45,6 +47,7 @@ public class FeegowRestClientAdapter implements FeegowClientPort {
     private final ObjectMapper objectMapper;
 
     @Override
+    @Cacheable(value = CacheConfig.CACHE_PATIENT_ACCESS_INFO, key = "#appointmentId", unless = "#result == null or !#result.isPresent()")
     public Optional<FeegowPatientAccessInfo> fetchPatientAccessInfo(String appointmentId) {
         if (appointmentId == null || appointmentId.isBlank()) {
             return Optional.empty();
@@ -84,21 +87,32 @@ public class FeegowRestClientAdapter implements FeegowClientPort {
                 return Optional.empty();
             }
 
-            // Busca os detalhes completos do paciente (como o CPF) via PatientExternalPort
-            log.info("[FEEGOW-ACCESS] Buscando prontuário do paciente ID: {}", patientId);
-            FeegowPatient patient = patientExternalPort.patientInfo(patientId);
+            String resolvedCpf = (appDto.patientCpf() != null && !appDto.patientCpf().isBlank())
+                    ? appDto.patientCpf().replaceAll("\\D", "")
+                    : "";
+            String resolvedName = (appDto.patientName() != null && !appDto.patientName().isBlank())
+                    ? appDto.patientName().trim()
+                    : "";
+            String resolvedPhone = (appDto.patientPhone() != null && !appDto.patientPhone().isBlank())
+                    ? appDto.patientPhone().trim()
+                    : "";
 
-            String resolvedCpf = (patient != null && patient.cpf() != null && !patient.cpf().isBlank())
-                    ? patient.cpf()
-                    : (appDto.patientCpf() != null ? appDto.patientCpf().replaceAll("\\D", "") : "");
-
-            String resolvedName = (patient != null && patient.name() != null && !patient.name().isBlank())
-                    ? patient.name()
-                    : (appDto.patientName() != null ? appDto.patientName().trim() : "");
-
-            String resolvedPhone = (patient != null && patient.phone() != null && !patient.phone().isBlank())
-                    ? patient.phone()
-                    : (appDto.patientPhone() != null ? appDto.patientPhone().trim() : "");
+            // Apenas busca prontuário se CPF ou Nome estiverem ausentes no retorno do agendamento
+            if (resolvedCpf.isBlank() || resolvedName.isBlank()) {
+                log.info("[FEEGOW-ACCESS] Dados cadastrais ausentes no agendamento. Buscando prontuário do paciente ID: {}", patientId);
+                FeegowPatient patient = patientExternalPort.patientInfo(patientId);
+                if (patient != null) {
+                    if (resolvedCpf.isBlank() && patient.cpf() != null) {
+                        resolvedCpf = patient.cpf().replaceAll("\\D", "");
+                    }
+                    if (resolvedName.isBlank() && patient.name() != null) {
+                        resolvedName = patient.name().trim();
+                    }
+                    if (resolvedPhone.isBlank() && patient.phone() != null) {
+                        resolvedPhone = patient.phone().trim();
+                    }
+                }
+            }
 
             // Realiza parse de data e hora do agendamento
             LocalDate date = null;

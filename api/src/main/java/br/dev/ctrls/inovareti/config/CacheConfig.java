@@ -32,6 +32,7 @@ public class CacheConfig {
     public static final String CACHE_FEEGOW_PROFESSIONAL_NAME = "feegowProfessionalName";
     public static final String CACHE_CONTA_AZUL_SUMMARY = "contaAzulSummary";
     public static final String CACHE_FEEGOW_LOCKS = "feegow-locks";
+    public static final String CACHE_PATIENT_ACCESS_INFO = "patientAccessInfo";
 
     @Bean
     @Primary
