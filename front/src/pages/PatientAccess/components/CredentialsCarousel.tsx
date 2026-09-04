@@ -3,7 +3,6 @@ import { QRCodeCanvas } from 'qrcode.react';
 import { 
   Lock, 
   User, 
-  Users,
   ShieldCheck, 
   Calendar, 
   Maximize2, 
@@ -75,51 +74,6 @@ export const CredentialsCarousel: React.FC<CredentialsCarouselProps> = ({
         )}
       </div>
 
-      {/* Alerta educativo e Seletor Rápido de Abas quando houver 2 ou mais pessoas */}
-      {credentials.length > 1 && (
-        <div className="space-y-2">
-          {/* Banner anti-duplicação na catraca */}
-          <div className="p-3 bg-amber-50/95 border border-amber-300 rounded-2xl flex items-start gap-2.5 shadow-xs">
-            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-            <div className="text-xs text-amber-950 leading-snug">
-              <p className="font-extrabold text-[11px] uppercase tracking-wide text-amber-900">
-                ⚠️ Importante: Cada pessoa tem seu próprio QR Code!
-              </p>
-              <p className="mt-1 text-[11px] text-amber-900/90 font-medium">
-                A catraca só libera <strong>1 pessoa por código</strong>. Na entrada e na saída, passe o QR Code de cada um individualmente. Não use o mesmo QR Code para duas pessoas, senão a catraca <strong>bloqueia na saída</strong>!
-              </p>
-            </div>
-          </div>
-
-          {/* Abas com o nome de cada pessoa para troca rápida com 1 toque */}
-          <div className="flex gap-1.5 p-1.5 bg-slate-100/90 backdrop-blur-xs rounded-2xl border border-slate-200/80">
-            {credentials.map((c, i) => {
-              const firstName = c.name ? c.name.trim().split(' ')[0] : (c.userType === 'PATIENT' ? 'Titular' : 'Acomp.');
-              const isActive = activeCardIndex === i;
-              return (
-                <button
-                  key={i}
-                  type="button"
-                  onClick={() => scrollToCard(i)}
-                  className={`flex-1 py-2 px-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer select-none ${
-                    isActive
-                      ? 'bg-white shadow-xs border border-slate-200 text-slate-900 scale-[1.01]'
-                      : 'text-slate-500 hover:text-slate-800'
-                  }`}
-                >
-                  {c.userType === 'PATIENT' ? (
-                    <User className="w-3.5 h-3.5 shrink-0 text-slate-700" />
-                  ) : (
-                    <Users className="w-3.5 h-3.5 shrink-0 text-indigo-600" />
-                  )}
-                  <span className="truncate max-w-[110px]">{i + 1}º: {firstName}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
       {/* Slider de rolagem horizontal com snap CSS */}
       <div 
         ref={scrollRef}
@@ -135,41 +89,31 @@ export const CredentialsCarousel: React.FC<CredentialsCarouselProps> = ({
             {/* Metade Superior: QR Code e Metadados do Acesso */}
             <div className="flex flex-col items-center w-full">
               {/* Tag de Tipo de Usuário no Topo do Cartão */}
-              <div className="flex flex-col items-center gap-1.5 mb-3 w-full">
-                <div className="flex items-center gap-2">
-                  <span 
-                    className={`text-[10px] font-extrabold uppercase px-3 py-1 rounded-full tracking-wider border ${
-                      cred.userType === 'PATIENT' 
-                        ? '' 
-                        : 'bg-indigo-50 text-indigo-700 border-indigo-100'
-                    }`}
-                    style={cred.userType === 'PATIENT' ? {
-                      backgroundColor: clinicTheme.secondaryColor,
-                      color: clinicTheme.primaryDarkColor,
-                      borderColor: `${clinicTheme.primaryColor}30`
-                    } : undefined}
-                  >
-                    {cred.userType === 'PATIENT' ? 'Paciente Titular' : 'Acompanhante'}
+              <div className="flex items-center gap-2 mb-3">
+                <span 
+                  className={`text-[10px] font-extrabold uppercase px-3 py-1 rounded-full tracking-wider border ${
+                    cred.userType === 'PATIENT' 
+                      ? '' 
+                      : 'bg-indigo-50 text-indigo-700 border-indigo-100'
+                  }`}
+                  style={cred.userType === 'PATIENT' ? {
+                    backgroundColor: clinicTheme.secondaryColor,
+                    color: clinicTheme.primaryDarkColor,
+                    borderColor: `${clinicTheme.primaryColor}30`
+                  } : undefined}
+                >
+                  {cred.userType === 'PATIENT' ? 'Paciente Titular' : 'Acompanhante'}
+                </span>
+                {cred.credentialCode.startsWith('CRED-') || cred.credentialCode === 'CPF_MISSING' ? (
+                  <span className="inline-flex items-center gap-1 bg-amber-50 border border-amber-200/80 text-amber-700 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                    CPF Pendente
                   </span>
-                  {cred.credentialCode.startsWith('CRED-') || cred.credentialCode === 'CPF_MISSING' ? (
-                    <span className="inline-flex items-center gap-1 bg-amber-50 border border-amber-200/80 text-amber-700 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
-                      CPF Pendente
-                    </span>
-                  ) : cred.credentialCode !== 'BLOCKED_OUTSIDE_WINDOW' && (
-                    <span className="inline-flex items-center gap-1 bg-emerald-50 border border-emerald-200/80 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                      Liberado
-                    </span>
-                  )}
-                </div>
-
-                {credentials.length > 1 && (
-                  <div className="text-center">
-                    <span className="text-[11px] font-extrabold text-slate-700 bg-white/95 border border-slate-200/80 rounded-lg px-2.5 py-0.5 inline-block shadow-2xs">
-                      Pessoa {idx + 1} de {credentials.length}: <strong className="text-slate-900">{cred.name ? cred.name.trim().split(' ')[0] : (cred.userType === 'PATIENT' ? 'Titular' : 'Acompanhante')}</strong>
-                    </span>
-                  </div>
+                ) : cred.credentialCode !== 'BLOCKED_OUTSIDE_WINDOW' && (
+                  <span className="inline-flex items-center gap-1 bg-emerald-50 border border-emerald-200/80 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                    Liberado
+                  </span>
                 )}
               </div>
 
@@ -318,13 +262,6 @@ export const CredentialsCarousel: React.FC<CredentialsCarouselProps> = ({
                       <span>{sharingIndex === idx ? '...' : 'Compartilhar'}</span>
                     </button>
                   </div>
-
-                  {/* Dica para enviar QR code ao acompanhante */}
-                  {cred.userType !== 'PATIENT' && (
-                    <div className="mt-2 p-2 bg-indigo-50/80 border border-indigo-100 rounded-xl text-[10.5px] text-indigo-900 font-medium text-center leading-snug">
-                      📲 Toque em <strong>Compartilhar</strong> para enviar este QR Code direto para o WhatsApp do acompanhante!
-                    </div>
-                  )}
                 </div>
               )}
 
@@ -488,7 +425,7 @@ export const CredentialsCarousel: React.FC<CredentialsCarouselProps> = ({
               </div>
             )}
             <p className="text-[10px] text-slate-500 text-center font-medium leading-relaxed px-2">
-              💡 <strong>Acompanhante ou paciente não consegue sair?</strong> Se alguém entrou com o mesmo QR Code ou a catraca não identificou a saída, toque acima para renovar e liberar a catraca agora mesmo.
+              💡 Se a catraca não liberar na <strong>entrada</strong> ou na <strong>saída</strong>, clique acima para renovar seu acesso imediatamente.
             </p>
           </div>
         )}
