@@ -27,7 +27,7 @@ public record FeegowSearchResponseDto(
     public record FeegowSearchAppointmentDto(
             @JsonProperty("agendamento_id") @JsonAlias({"id", "agendamento_id", "agendamentoId", "appointment_id", "appointmentId"}) Object appointmentId,
             @JsonProperty("paciente_id") @JsonAlias({"patientId", "paciente_id", "pacienteId", "patient_id"}) String patientId,
-            @JsonProperty("paciente_nome") @JsonAlias({"paciente_nome", "nome_paciente", "patient_name", "patientName"}) String patientName,
+            @JsonProperty("paciente_nome") @JsonAlias({"paciente_nome", "nome_paciente", "patient_name", "patientName", "paciente", "nome"}) String patientName,
             @JsonProperty("paciente_cpf") @JsonAlias({"paciente_cpf", "cpf", "CPF", "cpf_paciente", "patient_cpf", "patientCpf"}) String patientCpf,
             @JsonProperty("paciente_celular") @JsonAlias({"paciente_celular", "celular", "celular_paciente", "patient_phone"}) String patientPhone,
             @JsonProperty("profissional_id") @JsonAlias({"doctorId", "profissional_id", "profissionalId", "doctor_id", "medico_id", "medicoId"}) String doctorId,
