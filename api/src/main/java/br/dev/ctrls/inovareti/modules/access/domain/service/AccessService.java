@@ -32,7 +32,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import br.dev.ctrls.inovareti.modules.appointment.domain.model.DoctorConfiguration;
-import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Executors;
@@ -949,11 +948,9 @@ public class AccessService {
             AccessCredential first = existing.get(0);
             boolean createdToday = first.getCreatedAt() != null 
                     && first.getCreatedAt().toLocalDate().isEqual(today);
-            boolean isRecent = createdToday 
-                    && first.getCreatedAt().isAfter(LocalDateTime.now(CLINIC_ZONE).minusMinutes(15));
 
-            if (isRecent) {
-                log.info("[AccessService] Credencial recente encontrada para auto-cadastro ({}). CPF: {}, ID: {}", clinic, cleanCpf, appointmentId);
+            if (createdToday) {
+                log.info("[AccessService] Credencial válida para o dia todo já existente ({}). CPF: {}, ID: {}", clinic, cleanCpf, appointmentId);
                 if (companions != null && !companions.isEmpty()) {
                     for (CompanionAccessInfo comp : companions) {
                         if (comp != null && comp.name() != null && !comp.name().isBlank()) {
@@ -981,7 +978,7 @@ public class AccessService {
                 }
                 return existing;
             }
-            log.info("[AccessService] Credencial existente para auto-cadastro ({}) é antiga ou de data anterior (criada em: {}). Renovando no GerAcesso. CPF: {}, ID: {}",
+            log.info("[AccessService] Credencial existente para auto-cadastro ({}) foi gerada em data anterior (criada em: {}). Renovando no GerAcesso para hoje. CPF: {}, ID: {}",
                     clinic, first.getCreatedAt(), cleanCpf, appointmentId);
         }
 
@@ -1004,6 +1001,7 @@ public class AccessService {
         GerAcessoRequest gerAcessoRequest = GerAcessoRequest.builder()
                 .name(name.trim().toUpperCase())
                 .cpf(cleanCpf)
+                .status(1)
                 .startVisit(startDateFormatted)
                 .endVisit(endDateFormatted)
                 .phone(phone != null ? phone.replaceAll("\\D", "") : "")
@@ -1499,12 +1497,13 @@ public class AccessService {
             }
         } else {
             // Auto-cadastro: resolve médico pelo doctorName salvo na credencial
-            String doctorName = existingList.stream()
-                    .map(AccessCredential::getDoctorName)
-                    .filter(Objects::nonNull)
-                    .filter(s -> !s.isBlank())
-                    .findFirst()
-                    .orElse("");
+            String doctorName = "";
+            for (AccessCredential c : existingList) {
+                if (c != null && c.getDoctorName() != null && !c.getDoctorName().isBlank()) {
+                    doctorName = c.getDoctorName().trim();
+                    break;
+                }
+            }
             if (!doctorName.isBlank()) {
                 DoctorAccessData docData = resolveDoctorAccessDataByName(doctorName);
                 matricula = docData.matricula();
@@ -1537,6 +1536,7 @@ public class AccessService {
             GerAcessoRequest gerAcessoRequest = GerAcessoRequest.builder()
                     .name(cred.getName())
                     .cpf(cleanCpf)
+                    .status(1)
                     .startVisit(startVisit)
                     .endVisit(endVisit)
                     .phone(cred.getPhone() != null ? cred.getPhone().replaceAll("\\D", "") : "")
