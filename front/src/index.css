@@ -18,3 +18,13 @@
     @apply rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-primary/50 focus:border-brand-primary;
   }
 }
+
+/* Previne auto-zoom persistente do iOS Safari (iPhone) e navegadores móveis ao focar em campos de texto */
+@media screen and (max-width: 768px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
