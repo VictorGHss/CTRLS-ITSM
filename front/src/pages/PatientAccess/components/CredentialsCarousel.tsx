@@ -11,6 +11,8 @@ import {
   Sun,
   CreditCard,
   Share2,
+  Download,
+  Check,
   AlertTriangle
 } from 'lucide-react';
 import { formatCpf } from '../types';
@@ -18,7 +20,7 @@ import type { AccessCredential } from '../types';
 import { resolveDoctorLocation, resolveDoctorSpecialty } from '../utils/clinicThemes';
 import type { ClinicTheme } from '../utils/clinicThemes';
 import { AddToCalendarMenu } from './AddToCalendarMenu';
-import { shareQrCodeImage } from '../utils/shareQrCode';
+import { shareQrCodeImage, downloadQrCodeImage } from '../utils/shareQrCode';
 
 interface CredentialsCarouselProps {
   credentials: AccessCredential[];
@@ -50,6 +52,8 @@ export const CredentialsCarousel: React.FC<CredentialsCarouselProps> = ({
   clinicTheme,
 }) => {
   const [sharingIndex, setSharingIndex] = useState<number | null>(null);
+  const [savingIndex, setSavingIndex] = useState<number | null>(null);
+  const [savedIndex, setSavedIndex] = useState<number | null>(null);
 
   return (
     <div className="space-y-3">
@@ -295,21 +299,62 @@ export const CredentialsCarousel: React.FC<CredentialsCarouselProps> = ({
               Ampliar QR Code
             </button>
 
-            {/* Botão Compartilhar Imagem do QR Code (disponível para todos os cartões liberados) */}
+            {/* Ações de Salvar e Compartilhar Imagem do QR Code */}
             {cred.credentialCode !== 'BLOCKED_OUTSIDE_WINDOW' && !cred.credentialCode.startsWith('CRED-') && cred.credentialCode !== 'CPF_MISSING' && (
-              <button
-                type="button"
-                onClick={async () => {
-                  setSharingIndex(idx);
-                  await shareQrCodeImage(`qr-canvas-${idx}`, cred.name, cred.userType);
-                  setSharingIndex(null);
-                }}
-                disabled={sharingIndex === idx}
-                className="w-full mt-2 py-2.5 px-3 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 active:scale-[0.98] shadow-xs cursor-pointer"
-              >
-                <Share2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                <span>{sharingIndex === idx ? 'Preparando imagem...' : 'Compartilhar QR Code'}</span>
-              </button>
+              <div className="flex gap-2 mt-2">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setSavedIndex(null);
+                    setSavingIndex(idx);
+                    const ok = await downloadQrCodeImage(
+                      `qr-canvas-${idx}`,
+                      cred.name,
+                      cred.userType,
+                      cred.doctorName || clinicTheme.name,
+                      cred.locator
+                    );
+                    setSavingIndex(null);
+                    if (ok) {
+                      setSavedIndex(idx);
+                      setTimeout(() => setSavedIndex(null), 3500);
+                    }
+                  }}
+                  disabled={savingIndex === idx}
+                  className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 active:scale-[0.98] shadow-xs cursor-pointer border ${
+                    savedIndex === idx
+                      ? 'bg-emerald-100 border-emerald-300 text-emerald-900'
+                      : 'bg-emerald-50 hover:bg-emerald-100 border-emerald-200 text-emerald-800'
+                  }`}
+                >
+                  {savedIndex === idx ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                      <span>Salvo no Celular!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                      <span>{savingIndex === idx ? 'Salvando...' : 'Salvar no Celular'}</span>
+                    </>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setSharingIndex(idx);
+                    await shareQrCodeImage(`qr-canvas-${idx}`, cred.name, cred.userType);
+                    setSharingIndex(null);
+                  }}
+                  disabled={sharingIndex === idx}
+                  className="py-2.5 px-3 bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 active:scale-[0.98] shadow-xs cursor-pointer shrink-0"
+                  title="Compartilhar QR Code"
+                >
+                  <Share2 className="w-3.5 h-3.5 text-slate-600 shrink-0" />
+                  <span>{sharingIndex === idx ? '...' : 'Compartilhar'}</span>
+                </button>
+              </div>
             )}
           </div>
         ))}

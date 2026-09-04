@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { QRCodeCanvas } from 'qrcode.react';
-import { Sun, ArrowRightLeft, ChevronLeft, ChevronRight, X, Share2 } from 'lucide-react';
+import { Sun, ArrowRightLeft, ChevronLeft, ChevronRight, X, Share2, Download, Check } from 'lucide-react';
 import type { ClinicTheme } from '../utils/clinicThemes';
 import type { AccessCredential } from '../types';
-import { shareQrCodeImage } from '../utils/shareQrCode';
+import { shareQrCodeImage, downloadQrCodeImage } from '../utils/shareQrCode';
 
 interface FullscreenQrModalProps {
   modalRef: React.RefObject<HTMLDivElement | null>;
@@ -31,6 +31,8 @@ export const FullscreenQrModal: React.FC<FullscreenQrModalProps> = ({
 
   const [qrSize, setQrSize] = useState<number>(310);
   const [isSharing, setIsSharing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isSaved, setIsSaved] = useState(false);
   const touchStartXRef = useRef<number | null>(null);
 
   const total = credentials.length;
@@ -229,21 +231,62 @@ export const FullscreenQrModal: React.FC<FullscreenQrModalProps> = ({
 
       {/* Footer / Ações */}
       <div className="w-full max-w-sm flex flex-col gap-2">
-        {/* Botão Compartilhar Imagem em Tela Cheia */}
+        {/* Botões Salvar no Celular e Compartilhar Imagem em Tela Cheia */}
         {qrValue && !qrValue.startsWith('CRED-') && qrValue !== 'BLOCKED_OUTSIDE_WINDOW' && qrValue !== 'CPF_MISSING' && (
-          <button
-            type="button"
-            onClick={async () => {
-              setIsSharing(true);
-              await shareQrCodeImage('fullscreen-qr-canvas', currentCred?.name || 'acesso', currentCred?.userType || 'PATIENT');
-              setIsSharing(false);
-            }}
-            disabled={isSharing}
-            className="w-full py-2.5 px-4 rounded-2xl font-bold flex items-center justify-center gap-2 text-xs sm:text-sm shadow-sm transition-all active:scale-[0.98] border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 cursor-pointer"
-          >
-            <Share2 className="w-4 h-4 text-emerald-700 shrink-0" />
-            <span>{isSharing ? 'Preparando imagem...' : 'Compartilhar Imagem do QR Code'}</span>
-          </button>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={async () => {
+                setIsSaved(false);
+                setIsSaving(true);
+                const ok = await downloadQrCodeImage(
+                  'fullscreen-qr-canvas',
+                  currentCred?.name || 'acesso',
+                  currentCred?.userType || 'PATIENT',
+                  currentCred?.doctorName || clinicTheme?.name,
+                  currentCred?.locator
+                );
+                setIsSaving(false);
+                if (ok) {
+                  setIsSaved(true);
+                  setTimeout(() => setIsSaved(false), 3500);
+                }
+              }}
+              disabled={isSaving}
+              className={`flex-1 py-2.5 px-3 rounded-2xl font-bold flex items-center justify-center gap-2 text-xs sm:text-sm shadow-sm transition-all active:scale-[0.98] border cursor-pointer ${
+                isSaved
+                  ? 'bg-emerald-100 border-emerald-300 text-emerald-900'
+                  : 'bg-emerald-50 hover:bg-emerald-100 border-emerald-300 text-emerald-900'
+              }`}
+            >
+              {isSaved ? (
+                <>
+                  <Check className="w-4 h-4 text-emerald-700 shrink-0" />
+                  <span>Salvo no Celular!</span>
+                </>
+              ) : (
+                <>
+                  <Download className="w-4 h-4 text-emerald-700 shrink-0" />
+                  <span>{isSaving ? 'Salvando...' : 'Salvar no Celular'}</span>
+                </>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={async () => {
+                setIsSharing(true);
+                await shareQrCodeImage('fullscreen-qr-canvas', currentCred?.name || 'acesso', currentCred?.userType || 'PATIENT');
+                setIsSharing(false);
+              }}
+              disabled={isSharing}
+              className="py-2.5 px-3 rounded-2xl font-bold flex items-center justify-center gap-1.5 text-xs sm:text-sm shadow-sm transition-all active:scale-[0.98] border border-slate-300 bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer shrink-0"
+              title="Compartilhar Imagem do QR Code"
+            >
+              <Share2 className="w-4 h-4 text-slate-600 shrink-0" />
+              <span>{isSharing ? '...' : 'Compartilhar'}</span>
+            </button>
+          </div>
         )}
 
         {/* Botão de Troca Rápida de QR Code */}
