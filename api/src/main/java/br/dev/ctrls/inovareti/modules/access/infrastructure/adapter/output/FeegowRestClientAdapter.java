@@ -47,7 +47,7 @@ public class FeegowRestClientAdapter implements FeegowClientPort {
     private final ObjectMapper objectMapper;
 
     @Override
-    @Cacheable(value = CacheConfig.CACHE_PATIENT_ACCESS_INFO, key = "#appointmentId", unless = "#result == null or !#result.isPresent()")
+    @Cacheable(value = CacheConfig.CACHE_PATIENT_ACCESS_INFO, key = "#appointmentId", unless = "#result == null")
     public Optional<FeegowPatientAccessInfo> fetchPatientAccessInfo(String appointmentId) {
         if (appointmentId == null || appointmentId.isBlank()) {
             return Optional.empty();
