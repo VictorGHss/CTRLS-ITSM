@@ -64,7 +64,7 @@ class FeegowRestClientAdapterCacheTest {
         @Bean
         public FeegowProperties feegowProperties() {
             FeegowProperties props = new FeegowProperties();
-            props.setApiToken("test-token");
+            props.setApiKey("test-token");
             return props;
         }
 
@@ -128,12 +128,12 @@ class FeegowRestClientAdapterCacheTest {
         // 1ª chamada: vai no client HTTP e armazena no cache
         Optional<FeegowPatientAccessInfo> firstCall = feegowRestClientAdapter.fetchPatientAccessInfo(appointmentId);
         assertThat(firstCall).isPresent();
-        assertThat(firstCall.get().patientName()).isEqualTo("LUIS RICARDO MACHADO");
+        assertThat(firstCall.get().name()).isEqualTo("LUIS RICARDO MACHADO");
 
         // 2ª chamada: deve vir do cache Caffeine, sem chamar o client HTTP de novo
         Optional<FeegowPatientAccessInfo> secondCall = feegowRestClientAdapter.fetchPatientAccessInfo(appointmentId);
         assertThat(secondCall).isPresent();
-        assertThat(secondCall.get().patientName()).isEqualTo("LUIS RICARDO MACHADO");
+        assertThat(secondCall.get().name()).isEqualTo("LUIS RICARDO MACHADO");
 
         // O client HTTP deve ter sido invocado apenas 1 vez graças ao cache
         verify(appointmentClient, times(1)).searchAppointments(any(URI.class), any());
