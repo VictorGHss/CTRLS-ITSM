@@ -412,7 +412,7 @@ export const CredentialsCarousel: React.FC<CredentialsCarouselProps> = ({
               className="w-full py-3 px-4 bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 rounded-2xl text-xs font-bold transition-all flex items-center justify-center gap-2 active:scale-[0.98] shadow-sm cursor-pointer disabled:opacity-60"
             >
               <RefreshCw className={`w-4 h-4 text-amber-700 ${isReactivating ? 'animate-spin' : ''}`} />
-              <span>{isReactivating ? 'Gerando Novo QR Code...' : '🔄 Problemas na catraca? Atualizar QR Code'}</span>
+              <span>{isReactivating ? 'Gerando Novo QR Code...' : 'Problemas na catraca? Atualizar QR Code'}</span>
             </button>
             {reactivateMessage && (
               <div className={`p-2.5 rounded-xl text-xs font-medium text-center flex items-center justify-center gap-1.5 transition-all ${
