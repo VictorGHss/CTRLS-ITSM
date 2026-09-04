@@ -22,6 +22,7 @@ import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
 import java.net.URI;
 import java.util.Optional;
 
+import br.dev.ctrls.inovareti.modules.access.domain.port.output.FeegowClientPort;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
@@ -30,7 +31,7 @@ import static org.mockito.Mockito.*;
 class FeegowRestClientAdapterCacheTest {
 
     @TestConfiguration
-    @EnableCaching
+    @EnableCaching(proxyTargetClass = true)
     @Import(CacheConfig.class)
     static class TestContextConfig {
         @Bean
@@ -96,7 +97,7 @@ class FeegowRestClientAdapterCacheTest {
     }
 
     @Autowired
-    private FeegowRestClientAdapter feegowRestClientAdapter;
+    private FeegowClientPort feegowRestClientAdapter;
 
     @Autowired
     private FeegowAppointmentClient appointmentClient;
@@ -114,6 +115,8 @@ class FeegowRestClientAdapterCacheTest {
                             "paciente_id": "310300",
                             "paciente_cpf": "12345678901",
                             "paciente": "LUIS RICARDO MACHADO",
+                            "paciente_nome": "LUIS RICARDO MACHADO",
+                            "paciente_celular": "42999999999",
                             "nome_especialidade": "Urologia",
                             "data": "09-10-2026",
                             "horario": "12:40"
