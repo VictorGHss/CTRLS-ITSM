@@ -9,6 +9,7 @@ import br.dev.ctrls.inovareti.modules.appointment.infrastructure.adapter.output.
 import br.dev.ctrls.inovareti.modules.appointment.infrastructure.config.AppointmentMotorProperties;
 import br.dev.ctrls.inovareti.modules.appointment.infrastructure.config.FeegowProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -102,6 +103,11 @@ class FeegowRestClientAdapterCacheTest {
     @Autowired
     private FeegowAppointmentClient appointmentClient;
 
+    @BeforeEach
+    void setUp() {
+        reset(appointmentClient);
+    }
+
     @Test
     @DisplayName("Deveria avaliar a condição unless do cache sem lançar SpelEvaluationException")
     void shouldCacheWithoutSpelEvaluationException() {
@@ -158,5 +164,16 @@ class FeegowRestClientAdapterCacheTest {
 
         Optional<FeegowPatientAccessInfo> result = feegowRestClientAdapter.fetchPatientAccessInfo(appointmentId);
         assertThat(result).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Deveria retornar Optional.empty() imediatamente sem consultar Feegow quando appointmentId não for numérico")
+    void shouldReturnEmptyImmediatelyWhenAppointmentIdIsNotNumeric() {
+        String nonNumericId = "INOV-20260904-33866473915";
+
+        Optional<FeegowPatientAccessInfo> result = feegowRestClientAdapter.fetchPatientAccessInfo(nonNumericId);
+
+        assertThat(result).isEmpty();
+        verify(appointmentClient, never()).searchAppointments(any(), any());
     }
 }

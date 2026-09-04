@@ -49,7 +49,9 @@ public class FeegowRestClientAdapter implements FeegowClientPort {
     @Override
     @Cacheable(value = CacheConfig.CACHE_PATIENT_ACCESS_INFO, key = "#appointmentId", unless = "#result == null")
     public Optional<FeegowPatientAccessInfo> fetchPatientAccessInfo(String appointmentId) {
-        if (appointmentId == null || appointmentId.isBlank()) {
+        // A API do Feegow exige que o parâmetro agendamento_id seja estritamente numérico.
+        // Identificadores de auto-cadastro (ex: INOV-20260904-CPF ou IMG-...) devem ser rejeitados imediatamente.
+        if (appointmentId == null || appointmentId.isBlank() || !appointmentId.trim().matches("\\d+")) {
             return Optional.empty();
         }
 
