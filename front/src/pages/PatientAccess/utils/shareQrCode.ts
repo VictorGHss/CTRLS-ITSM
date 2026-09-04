@@ -1,4 +1,126 @@
 /**
+ * Utilitário para download direto da imagem PNG do QR Code formatado como cartão de acesso.
+ * O paciente pode salvar diretamente na galeria/downloads do celular para uso offline na catraca.
+ */
+export async function downloadQrCodeImage(
+  canvasId: string,
+  personName: string,
+  userType: 'PATIENT' | 'COMPANION',
+  doctorOrClinicName?: string,
+  locatorCode?: string
+): Promise<boolean> {
+  const sourceCanvas = document.getElementById(canvasId) as HTMLCanvasElement | null;
+  if (!sourceCanvas) {
+    console.warn(`[downloadQrCode] Canvas com ID ${canvasId} não encontrado no DOM.`);
+    return false;
+  }
+
+  // Gera um cartão digital de alta resolução (600 x 780)
+  const width = 600;
+  const height = 780;
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return false;
+
+  // 1. Fundo branco puro
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fillRect(0, 0, width, height);
+
+  // 2. Moldura sutil
+  ctx.strokeStyle = '#E2E8F0';
+  ctx.lineWidth = 4;
+  ctx.strokeRect(8, 8, width - 16, height - 16);
+
+  // 3. Faixa de cabeçalho
+  ctx.fillStyle = '#0F172A';
+  ctx.font = 'bold 22px system-ui, -apple-system, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('ACESSO À CATRACA', width / 2, 55);
+
+  // 4. Subtítulo / Clínica
+  ctx.fillStyle = '#00875F';
+  ctx.font = '600 16px system-ui, -apple-system, sans-serif';
+  const clinicTitle = doctorOrClinicName ? doctorOrClinicName.toUpperCase() : 'EDIFÍCIO INOVARE';
+  ctx.fillText(clinicTitle.substring(0, 36), width / 2, 85);
+
+  // 5. Nome do Paciente / Tipo
+  ctx.fillStyle = '#334155';
+  ctx.font = 'bold 18px system-ui, -apple-system, sans-serif';
+  const typeText = userType === 'PATIENT' ? 'Paciente Titular' : 'Acompanhante';
+  const nameText = `${(personName || 'Paciente').toUpperCase()} (${typeText})`;
+  ctx.fillText(nameText.substring(0, 38), width / 2, 125);
+
+  // Linha divisória tracejada
+  ctx.strokeStyle = '#CBD5E1';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([8, 6]);
+  ctx.beginPath();
+  ctx.moveTo(40, 145);
+  ctx.lineTo(width - 40, 145);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // 6. QR Code Centralizado em alta resolução (390x390)
+  const qrSize = 390;
+  const qrX = (width - qrSize) / 2;
+  const qrY = 165;
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(sourceCanvas, qrX, qrY, qrSize, qrSize);
+
+  // 7. Rodapé com instruções
+  ctx.fillStyle = '#059669';
+  ctx.font = 'bold 17px system-ui, -apple-system, sans-serif';
+  ctx.fillText('📏 Aproxime a 15 cm da catraca', width / 2, 595);
+
+  ctx.fillStyle = '#64748B';
+  ctx.font = '14px system-ui, -apple-system, sans-serif';
+  ctx.fillText('Mantenha a tela virada para o leitor', width / 2, 625);
+
+  if (locatorCode) {
+    ctx.fillStyle = '#94A3B8';
+    ctx.font = 'bold 14px monospace';
+    ctx.fillText(`CÓDIGO: ${locatorCode}`, width / 2, 665);
+  }
+
+  return new Promise((resolve) => {
+    canvas.toBlob((blob) => {
+      if (!blob) {
+        resolve(false);
+        return;
+      }
+
+      const cleanName = (personName || 'qrcode')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]/g, '_')
+        .replace(/_+/g, '_')
+        .substring(0, 25);
+
+      const typeLabel = userType === 'PATIENT' ? 'titular' : 'acompanhante';
+      const fileName = `qrcode_catraca_${typeLabel}_${cleanName}.png`;
+
+      try {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 2000);
+        resolve(true);
+      } catch (err) {
+        console.error('[downloadQrCode] Erro ao baixar imagem:', err);
+        resolve(false);
+      }
+    }, 'image/png');
+  });
+}
+
+/**
  * Utilitário para geração e compartilhamento de imagem PNG de alta resolução do QR Code.
  * Utiliza a Web Share API (navigator.share) nativa em dispositivos móveis (iOS/Android)
  * com fallback para download direto do arquivo de imagem PNG.
