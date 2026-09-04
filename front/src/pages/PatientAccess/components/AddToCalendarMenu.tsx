@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { CalendarPlus, Calendar, Smartphone, ExternalLink, Download, Check, Apple } from 'lucide-react';
-import { generateGoogleCalendarUrl, downloadIcsFile, openAppleCalendar } from '../utils/calendarUtils';
+import { generateGoogleCalendarUrl, generateAppleCalendarUrl, downloadIcsFile } from '../utils/calendarUtils';
 import type { CalendarEventDetails } from '../utils/calendarUtils';
 import type { ClinicTheme } from '../utils/clinicThemes';
 
@@ -50,15 +50,6 @@ export const AddToCalendarMenu: React.FC<AddToCalendarMenuProps> = ({
     setIsOpen(false);
   };
 
-  const handleAppleCalendar = () => {
-    openAppleCalendar(eventDetails);
-    setDownloaded(true);
-    setTimeout(() => {
-      setDownloaded(false);
-      setIsOpen(false);
-    }, 1200);
-  };
-
   const handleIcsDownload = () => {
     downloadIcsFile(eventDetails);
     setDownloaded(true);
@@ -106,9 +97,15 @@ export const AddToCalendarMenu: React.FC<AddToCalendarMenuProps> = ({
             </button>
 
             {/* Apple Calendário (iPhone / Mac) */}
-            <button
-              type="button"
-              onClick={handleAppleCalendar}
+            <a
+              href={generateAppleCalendarUrl(eventDetails)}
+              onClick={() => {
+                setDownloaded(true);
+                setTimeout(() => {
+                  setDownloaded(false);
+                  setIsOpen(false);
+                }, 1500);
+              }}
               className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-left text-xs font-bold text-slate-700 hover:bg-slate-50 active:bg-slate-100 transition-colors group cursor-pointer"
             >
               <div className="flex items-center gap-2.5">
@@ -125,7 +122,7 @@ export const AddToCalendarMenu: React.FC<AddToCalendarMenuProps> = ({
               ) : (
                 <ExternalLink className="w-3.5 h-3.5 text-slate-300 group-hover:text-rose-500 transition-colors" />
               )}
-            </button>
+            </a>
 
             {/* Outros / Outlook / Download .ics */}
             <button

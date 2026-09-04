@@ -125,28 +125,39 @@ export function buildIcsContent(event: CalendarEventDetails): string {
 }
 
 /**
- * Abre o evento diretamente no Calendário da Apple (iOS / iPhone / iPad / Mac)
- * No Safari iOS, usar navegação direta por Data URI ou Blob URL sem o atributo 'download'
- * faz o iOS abrir o modal nativo "Adicionar ao Calendário" em vez de salvar no app Arquivos.
+ * Gera URL do endpoint do servidor para adicionar evento no Apple Calendar (iOS / iPhone / Mac).
+ * No iOS Safari e Chrome no iOS, navegar para um endpoint HTTPS que retorna text/calendar
+ * abre diretamente o modal nativo "Adicionar Evento" do app Calendário da Apple.
+ */
+export function generateAppleCalendarUrl(event: CalendarEventDetails): string {
+  const dates = parseAppointmentDate(event.dateTimeStr);
+  const params = new URLSearchParams({
+    title: event.title,
+    description: event.description,
+    location: event.location,
+  });
+
+  if (dates) {
+    params.set('start', formatDateToUtcString(dates.start));
+    params.set('end', formatDateToUtcString(dates.end));
+  }
+
+  return `/api/v1/access/calendar/event.ics?${params.toString()}`;
+}
+
+/**
+ * Abre o evento diretamente no Calendário da Apple (iOS / iPhone / iPad / Mac).
+ * Utiliza o endpoint HTTPS nativo que o Safari/iOS reconhece para abrir o app Calendário,
+ * com fallback para download do arquivo .ics.
  */
 export function openAppleCalendar(event: CalendarEventDetails): void {
-  const icsContent = buildIcsContent(event);
+  const url = generateAppleCalendarUrl(event);
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
   if (isIOS) {
-    // No iOS/Safari: disparar navegação direta para o data URI com MIME text/calendar
-    // O WebKit do iOS intercepta o MIME text/calendar e abre a tela nativa do app Calendário
-    const encoded = encodeURIComponent(icsContent);
-    const dataUri = `data:text/calendar;charset=utf-8,${encoded}`;
-    
-    // Tenta abrir direto no Safari
-    const tempLink = document.createElement('a');
-    tempLink.href = dataUri;
-    tempLink.target = '_self';
-    document.body.appendChild(tempLink);
-    tempLink.click();
-    document.body.removeChild(tempLink);
+    // No iOS Safari/Chrome: navegar para a URL HTTPS do .ics faz o WebKit abrir o modal nativo do Calendário
+    window.location.href = url;
     return;
   }
 

@@ -19,6 +19,7 @@ import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.Appointment
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -29,10 +30,12 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -871,5 +874,67 @@ public class AccessController {
             } catch (Exception ignored) {}
         }
         return "Hoje";
+    }
+
+    /**
+     * Endpoint para download e adição de evento iCalendar (.ics) nativo no iOS / Apple Calendar e Outlook.
+     * Retorna o arquivo com MIME text/calendar para que o iOS Safari abra diretamente o app nativo do Calendário.
+     */
+    @GetMapping(value = "/calendar/event.ics", produces = "text/calendar;charset=UTF-8")
+    public ResponseEntity<String> getCalendarEventIcs(
+            @RequestParam(value = "title", defaultValue = "Consulta Médica - Inovare") String title,
+            @RequestParam(value = "start", required = false) String start,
+            @RequestParam(value = "end", required = false) String end,
+            @RequestParam(value = "location", defaultValue = "Edifício Inovare, Ponta Grossa - PR") String location,
+            @RequestParam(value = "description", defaultValue = "Consulta médica agendada no Edifício Inovare.") String description) {
+
+        String uid = "inovare-" + System.currentTimeMillis() + "@itsm-inovare.ctrls.dev.br";
+        String nowUtc = DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'").withZone(ZoneOffset.UTC).format(Instant.now());
+
+        String dtStart = (start != null && !start.isBlank()) ? start : nowUtc;
+        String dtEnd = (end != null && !end.isBlank()) ? end : dtStart;
+
+        String ics = String.join("\r\n",
+                "BEGIN:VCALENDAR",
+                "VERSION:2.0",
+                "PRODID:-//Inovare Servicos de Saude//ITSM Acesso//PT",
+                "CALSCALE:GREGORIAN",
+                "METHOD:PUBLISH",
+                "BEGIN:VEVENT",
+                "UID:" + uid,
+                "DTSTAMP:" + nowUtc,
+                "DTSTART:" + dtStart,
+                "DTEND:" + dtEnd,
+                "SUMMARY:" + escapeIcs(title),
+                "DESCRIPTION:" + escapeIcs(description),
+                "LOCATION:" + escapeIcs(location),
+                "STATUS:CONFIRMED",
+                "BEGIN:VALARM",
+                "TRIGGER:-P1D",
+                "ACTION:DISPLAY",
+                "DESCRIPTION:Lembrete de Consulta Médica (Amanhã)",
+                "END:VALARM",
+                "BEGIN:VALARM",
+                "TRIGGER:-PT1H",
+                "ACTION:DISPLAY",
+                "DESCRIPTION:Lembrete: Sua consulta é em 1 hora",
+                "END:VALARM",
+                "END:VEVENT",
+                "END:VCALENDAR"
+        );
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"consulta-inovare.ics\"")
+                .header(HttpHeaders.CONTENT_TYPE, "text/calendar; charset=UTF-8")
+                .body(ics);
+    }
+
+    private String escapeIcs(String text) {
+        if (text == null) return "";
+        return text.replace("\\", "\\\\")
+                .replace(";", "\\;")
+                .replace(",", "\\,")
+                .replace("\n", "\\n")
+                .replace("\r", "");
     }
 }
