@@ -191,6 +191,78 @@ export const CredentialsCarousel: React.FC<CredentialsCarouselProps> = ({
                 </span>
               )}
 
+              {/* Botões de Ação do QR Code (Diretamente abaixo do QR Code) */}
+              {cred.credentialCode !== 'BLOCKED_OUTSIDE_WINDOW' && !cred.credentialCode.startsWith('CRED-') && cred.credentialCode !== 'CPF_MISSING' && (
+                <div className="w-full mt-3 flex flex-col gap-2">
+                  <button 
+                    type="button"
+                    onClick={() => onOpenFullscreen(idx)}
+                    className="w-full py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-sm hover:opacity-95 active:scale-[0.98] text-white cursor-pointer"
+                    style={{
+                      backgroundImage: `linear-gradient(to right, ${clinicTheme.primaryColor}, ${clinicTheme.primaryDarkColor})`
+                    }}
+                  >
+                    <Maximize2 className="w-3.5 h-3.5" />
+                    <span>Ampliar QR Code</span>
+                  </button>
+
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        setSavedIndex(null);
+                        setSavingIndex(idx);
+                        const ok = await downloadQrCodeImage(
+                          `qr-canvas-${idx}`,
+                          cred.name,
+                          cred.userType,
+                          cred.doctorName || clinicTheme.name,
+                          cred.locator
+                        );
+                        setSavingIndex(null);
+                        if (ok) {
+                          setSavedIndex(idx);
+                          setTimeout(() => setSavedIndex(null), 3500);
+                        }
+                      }}
+                      disabled={savingIndex === idx}
+                      className={`flex-1 py-2 px-2.5 rounded-xl text-[11px] font-bold transition-all flex items-center justify-center gap-1.5 active:scale-[0.98] shadow-xs cursor-pointer border ${
+                        savedIndex === idx
+                          ? 'bg-emerald-100 border-emerald-300 text-emerald-900'
+                          : 'bg-emerald-50 hover:bg-emerald-100 border-emerald-200 text-emerald-800'
+                      }`}
+                    >
+                      {savedIndex === idx ? (
+                        <>
+                          <Check className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                          <span>Salvo no Celular!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Download className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                          <span>{savingIndex === idx ? 'Salvando...' : 'Salvar no Celular'}</span>
+                        </>
+                      )}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        setSharingIndex(idx);
+                        await shareQrCodeImage(`qr-canvas-${idx}`, cred.name, cred.userType);
+                        setSharingIndex(null);
+                      }}
+                      disabled={sharingIndex === idx}
+                      className="py-2 px-3 bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 rounded-xl text-[11px] font-bold transition-all flex items-center justify-center gap-1.5 active:scale-[0.98] shadow-xs cursor-pointer shrink-0"
+                      title="Compartilhar QR Code"
+                    >
+                      <Share2 className="w-3.5 h-3.5 text-slate-600 shrink-0" />
+                      <span>{sharingIndex === idx ? '...' : 'Compartilhar'}</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* Alerta de CPF Incorreto com botão de correção */}
               {(cred.credentialCode.startsWith('CRED-') || cred.credentialCode === 'CPF_MISSING') && onEditCpf && (
                 <div className="w-full mt-3 p-3 rounded-2xl bg-amber-50/80 border border-amber-200 text-center space-y-2">
@@ -272,88 +344,13 @@ export const CredentialsCarousel: React.FC<CredentialsCarouselProps> = ({
 
             {/* Menu Adicionar à Agenda */}
             {cred.appointmentDateTime && (
-              <div className="mb-3">
+              <div>
                 <AddToCalendarMenu
                   doctorName={cred.doctorName}
                   patientName={cred.name}
                   dateTimeStr={cred.appointmentDateTime}
                   clinicTheme={clinicTheme}
                 />
-              </div>
-            )}
-
-            {/* Botão Ampliar QR Code para tela cheia */}
-            <button 
-              onClick={() => onOpenFullscreen(idx)}
-              disabled={cred.credentialCode === 'BLOCKED_OUTSIDE_WINDOW'}
-              className={`w-full py-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-sm mt-auto ${
-                cred.credentialCode === 'BLOCKED_OUTSIDE_WINDOW'
-                  ? 'bg-slate-100 text-slate-400 cursor-not-allowed shadow-none'
-                  : 'hover:opacity-95 active:scale-[0.98] text-white cursor-pointer'
-              }`}
-              style={cred.credentialCode !== 'BLOCKED_OUTSIDE_WINDOW' ? {
-                backgroundImage: `linear-gradient(to right, ${clinicTheme.primaryColor}, ${clinicTheme.primaryDarkColor})`
-              } : undefined}
-            >
-              <Maximize2 className="w-3.5 h-3.5" />
-              Ampliar QR Code
-            </button>
-
-            {/* Ações de Salvar e Compartilhar Imagem do QR Code */}
-            {cred.credentialCode !== 'BLOCKED_OUTSIDE_WINDOW' && !cred.credentialCode.startsWith('CRED-') && cred.credentialCode !== 'CPF_MISSING' && (
-              <div className="flex gap-2 mt-2">
-                <button
-                  type="button"
-                  onClick={async () => {
-                    setSavedIndex(null);
-                    setSavingIndex(idx);
-                    const ok = await downloadQrCodeImage(
-                      `qr-canvas-${idx}`,
-                      cred.name,
-                      cred.userType,
-                      cred.doctorName || clinicTheme.name,
-                      cred.locator
-                    );
-                    setSavingIndex(null);
-                    if (ok) {
-                      setSavedIndex(idx);
-                      setTimeout(() => setSavedIndex(null), 3500);
-                    }
-                  }}
-                  disabled={savingIndex === idx}
-                  className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 active:scale-[0.98] shadow-xs cursor-pointer border ${
-                    savedIndex === idx
-                      ? 'bg-emerald-100 border-emerald-300 text-emerald-900'
-                      : 'bg-emerald-50 hover:bg-emerald-100 border-emerald-200 text-emerald-800'
-                  }`}
-                >
-                  {savedIndex === idx ? (
-                    <>
-                      <Check className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
-                      <span>Salvo no Celular!</span>
-                    </>
-                  ) : (
-                    <>
-                      <Download className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
-                      <span>{savingIndex === idx ? 'Salvando...' : 'Salvar no Celular'}</span>
-                    </>
-                  )}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={async () => {
-                    setSharingIndex(idx);
-                    await shareQrCodeImage(`qr-canvas-${idx}`, cred.name, cred.userType);
-                    setSharingIndex(null);
-                  }}
-                  disabled={sharingIndex === idx}
-                  className="py-2.5 px-3 bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 active:scale-[0.98] shadow-xs cursor-pointer shrink-0"
-                  title="Compartilhar QR Code"
-                >
-                  <Share2 className="w-3.5 h-3.5 text-slate-600 shrink-0" />
-                  <span>{sharingIndex === idx ? '...' : 'Compartilhar'}</span>
-                </button>
               </div>
             )}
           </div>
