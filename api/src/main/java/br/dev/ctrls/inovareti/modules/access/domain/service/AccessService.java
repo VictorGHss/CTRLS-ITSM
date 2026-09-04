@@ -31,6 +31,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import br.dev.ctrls.inovareti.modules.appointment.domain.model.DoctorConfiguration;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Executors;
@@ -71,7 +73,7 @@ public class AccessService {
     private final PatientExternalPort patientExternalPort;
     private final AccessCredentialRepositoryPort accessCredentialRepositoryPort;
     private final GerAcessoClientPort gerAcessoClientPort;
-    private final DoctorConfigurationRepository doctorConfigurationRepository;
+    private final DoctorConfigurationRepository doctorConfigurationRepository; 
     private final AppointmentSessionRepositoryPort appointmentSessionRepository;
 
     private final java.util.concurrent.ConcurrentMap<String, FeegowPatient> patientCache = new java.util.concurrent.ConcurrentHashMap<>();
@@ -549,6 +551,10 @@ public class AccessService {
             DoctorAccessData docData = resolveDoctorAccessData(docId);
             matricula = docData.matricula();
             doctorCpf = docData.cpf();
+        } else if (doctorName != null && !doctorName.isBlank()) {
+            DoctorAccessData docData = resolveDoctorAccessDataByName(doctorName);
+            matricula = docData.matricula();
+            doctorCpf = docData.cpf();
         }
 
         GerAcessoRequest request = GerAcessoRequest.builder()
@@ -816,6 +822,42 @@ public class AccessService {
         }
     }
 
+    private DoctorAccessData resolveDoctorAccessDataByName(String doctorName) {
+        if (doctorName == null || doctorName.isBlank()) {
+            return new DoctorAccessData("", "");
+        }
+        try {
+            String cleanQuery = doctorName.toLowerCase()
+                    .replace("dra.", "")
+                    .replace("dr.", "")
+                    .trim();
+
+            List<DoctorConfiguration> allConfigs = doctorConfigurationRepository.findAll();
+            if (allConfigs != null) {
+                for (DoctorConfiguration config : allConfigs) {
+                    if (config.getDoctorName() != null && !config.getDoctorName().isBlank()) {
+                        String cfgName = config.getDoctorName().toLowerCase()
+                                .replace("dra.", "")
+                                .replace("dr.", "")
+                                .trim();
+                        if (cfgName.equalsIgnoreCase(cleanQuery) || cfgName.contains(cleanQuery) || cleanQuery.contains(cfgName)) {
+                            String mat = config.getGerAcessoMatricula() != null ? config.getGerAcessoMatricula().trim() : "";
+                            String cpf = config.getGerAcessoCpf() != null ? config.getGerAcessoCpf().trim() : "";
+                            log.info("[CATRACA-MÉDICO] Injetando dados do visitado por NOME: '{}' -> '{}' (Matricula: {}, CPF: {})", 
+                                    doctorName, config.getDoctorName(), mat, cpf);
+                            return new DoctorAccessData(mat, cpf);
+                        }
+                    }
+                }
+            }
+            log.warn("[CATRACA-MÉDICO] Médico '{}' não possui cadastro correspondente em doctor_configurations.", doctorName);
+            return new DoctorAccessData("", "");
+        } catch (Exception ex) {
+            log.warn("[CATRACA-MÉDICO] Falha ao buscar credenciais do visitado por nome '{}': {}", doctorName, ex.getMessage());
+            return new DoctorAccessData("", "");
+        }
+    }
+
     /**
      * Valida se um CPF é matematicamente válido utilizando os dígitos verificadores do Módulo 11 (algoritmo da Receita Federal).
      */
@@ -904,33 +946,43 @@ public class AccessService {
         // 1. Verifica se já existe credencial para este agendamento/data
         List<AccessCredential> existing = accessCredentialRepositoryPort.findByAppointmentId(appointmentId);
         if (existing != null && !existing.isEmpty()) {
-            log.info("[AccessService] Credencial já existente para auto-cadastro ({}). CPF: {}, ID: {}", clinic, cleanCpf, appointmentId);
-            if (companions != null && !companions.isEmpty()) {
-                for (CompanionAccessInfo comp : companions) {
-                    if (comp != null && comp.name() != null && !comp.name().isBlank()) {
-                        String compCpf = comp.cpf() != null ? comp.cpf().replaceAll("\\D", "") : "";
-                        boolean compExists = existing.stream().anyMatch(c -> 
-                            (c.getName() != null && c.getName().equalsIgnoreCase(comp.name().trim())) ||
-                            (!compCpf.isEmpty() && c.getCpf() != null && c.getCpf().replaceAll("\\D", "").equals(compCpf))
-                        );
-                        if (!compExists) {
-                            registerCompanionAccess(
-                                comp,
-                                visitDate,
-                                LocalTime.of(6, 0),
-                                LocalTime.of(23, 59),
-                                existing.get(0).getAccessCredential(),
-                                existing.get(0).getLocator(),
-                                appointmentId,
-                                null,
-                                doctorName
+            AccessCredential first = existing.get(0);
+            boolean createdToday = first.getCreatedAt() != null 
+                    && first.getCreatedAt().toLocalDate().isEqual(today);
+            boolean isRecent = createdToday 
+                    && first.getCreatedAt().isAfter(LocalDateTime.now(CLINIC_ZONE).minusMinutes(15));
+
+            if (isRecent) {
+                log.info("[AccessService] Credencial recente encontrada para auto-cadastro ({}). CPF: {}, ID: {}", clinic, cleanCpf, appointmentId);
+                if (companions != null && !companions.isEmpty()) {
+                    for (CompanionAccessInfo comp : companions) {
+                        if (comp != null && comp.name() != null && !comp.name().isBlank()) {
+                            String compCpf = comp.cpf() != null ? comp.cpf().replaceAll("\\D", "") : "";
+                            boolean compExists = existing.stream().anyMatch(c -> 
+                                (c.getName() != null && c.getName().equalsIgnoreCase(comp.name().trim())) ||
+                                (!compCpf.isEmpty() && c.getCpf() != null && c.getCpf().replaceAll("\\D", "").equals(compCpf))
                             );
+                            if (!compExists) {
+                                registerCompanionAccess(
+                                    comp,
+                                    visitDate,
+                                    LocalTime.of(6, 0),
+                                    LocalTime.of(23, 59),
+                                    existing.get(0).getAccessCredential(),
+                                    existing.get(0).getLocator(),
+                                    appointmentId,
+                                    null,
+                                    doctorName
+                                );
+                            }
                         }
                     }
+                    return accessCredentialRepositoryPort.findByAppointmentId(appointmentId);
                 }
-                return accessCredentialRepositoryPort.findByAppointmentId(appointmentId);
+                return existing;
             }
-            return existing;
+            log.info("[AccessService] Credencial existente para auto-cadastro ({}) é antiga ou de data anterior (criada em: {}). Renovando no GerAcesso. CPF: {}, ID: {}",
+                    clinic, first.getCreatedAt(), cleanCpf, appointmentId);
         }
 
         // Janela de acesso para a data escolhida (06:00 até 23:59)
@@ -938,6 +990,15 @@ public class AccessService {
         LocalDateTime endWindow = LocalDateTime.of(visitDate, LocalTime.of(23, 59));
         String startDateFormatted = startWindow.format(GERACESSO_DATE_FORMATTER);
         String endDateFormatted = endWindow.format(GERACESSO_DATE_FORMATTER);
+
+        // Resolve médico por nome para injeção de visitado na GerAcesso
+        String matricula = "";
+        String doctorCpf = "";
+        if (doctorName != null && !doctorName.isBlank()) {
+            DoctorAccessData docData = resolveDoctorAccessDataByName(doctorName);
+            matricula = docData.matricula();
+            doctorCpf = docData.cpf();
+        }
 
         // 2. Registra na GerAcesso
         GerAcessoRequest gerAcessoRequest = GerAcessoRequest.builder()
@@ -947,8 +1008,8 @@ public class AccessService {
                 .endVisit(endDateFormatted)
                 .phone(phone != null ? phone.replaceAll("\\D", "") : "")
                 .visitType(1)
-                .visitedRegistration("")
-                .visitedCpf("")
+                .visitedRegistration(matricula)
+                .visitedCpf(doctorCpf)
                 .build();
 
         String credentialValue = "CRED-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
@@ -1114,6 +1175,10 @@ public class AccessService {
         String doctorCpf = "";
         if (doctorId != null && !doctorId.isBlank()) {
             DoctorAccessData docData = resolveDoctorAccessData(doctorId);
+            matricula = docData.matricula();
+            doctorCpf = docData.cpf();
+        } else if (companion.getDoctorName() != null && !companion.getDoctorName().isBlank()) {
+            DoctorAccessData docData = resolveDoctorAccessDataByName(companion.getDoctorName());
             matricula = docData.matricula();
             doctorCpf = docData.cpf();
         }
@@ -1387,15 +1452,42 @@ public class AccessService {
 
         List<AccessCredential> existingList = accessCredentialRepositoryPort.findByAppointmentId(appointmentId);
         if (existingList == null || existingList.isEmpty()) {
+            // Fallback por CPF caso o ID informado contenha dígitos do CPF (ex: INOV-60813571987 ou 60813571987)
+            String potentialDigits = appointmentId != null ? appointmentId.replaceAll("\\D", "") : "";
+            if (potentialDigits.length() >= 11) {
+                String cleanCpf = potentialDigits.length() == 11 ? potentialDigits : potentialDigits.substring(potentialDigits.length() - 11);
+                List<AccessCredential> byCpf = accessCredentialRepositoryPort.findByCpf(cleanCpf);
+                if (byCpf != null && !byCpf.isEmpty()) {
+                    LocalDate today = LocalDate.now(CLINIC_ZONE);
+                    existingList = byCpf.stream()
+                        .filter(c -> c.getCreatedAt() != null && c.getCreatedAt().toLocalDate().equals(today))
+                        .toList();
+                    if (existingList.isEmpty()) {
+                        String latestAppId = byCpf.get(byCpf.size() - 1).getAppointmentId();
+                        existingList = byCpf.stream()
+                            .filter(c -> latestAppId.equals(c.getAppointmentId()))
+                            .toList();
+                    }
+                    if (!existingList.isEmpty()) {
+                        log.info("[AccessService] Credencial localizada via fallback de CPF ({}). AppointmentId real: {}", 
+                                cleanCpf, existingList.get(0).getAppointmentId());
+                    }
+                }
+            }
+        }
+
+        if (existingList == null || existingList.isEmpty()) {
             throw new br.dev.ctrls.inovareti.core.shared.domain.model.exception.NotFoundException("Nenhuma credencial encontrada para reativação.");
         }
 
         // Resolve os dados do médico deste agendamento para enviar à GerAcesso (obrigatório para cadastro de visitante)
         String matricula = "";
         String doctorCpf = "";
-        if (appointmentId != null && !appointmentId.startsWith("IMG-") && !appointmentId.startsWith("INOV-")) {
+        String effectiveAppId = existingList.get(0).getAppointmentId();
+
+        if (effectiveAppId != null && !effectiveAppId.startsWith("IMG-") && !effectiveAppId.startsWith("INOV-")) {
             try {
-                var accessInfoOpt = feegowClientPort.fetchPatientAccessInfo(appointmentId);
+                var accessInfoOpt = feegowClientPort.fetchPatientAccessInfo(effectiveAppId);
                 if (accessInfoOpt.isPresent() && accessInfoOpt.get().doctorId() != null) {
                     DoctorAccessData docData = resolveDoctorAccessData(accessInfoOpt.get().doctorId());
                     matricula = docData.matricula();
@@ -1403,12 +1495,27 @@ public class AccessService {
                     log.info("[AccessService] Médico resolvido para reativação: matricula={}, cpf={}", matricula, doctorCpf);
                 }
             } catch (Exception ex) {
-                log.warn("[AccessService] Não foi possível resolver dados do médico para reativação do agendamento {}: {}", appointmentId, ex.getMessage());
+                log.warn("[AccessService] Não foi possível resolver dados do médico para reativação do agendamento {}: {}", effectiveAppId, ex.getMessage());
+            }
+        } else {
+            // Auto-cadastro: resolve médico pelo doctorName salvo na credencial
+            String doctorName = existingList.stream()
+                    .map(AccessCredential::getDoctorName)
+                    .filter(Objects::nonNull)
+                    .filter(s -> !s.isBlank())
+                    .findFirst()
+                    .orElse("");
+            if (!doctorName.isBlank()) {
+                DoctorAccessData docData = resolveDoctorAccessDataByName(doctorName);
+                matricula = docData.matricula();
+                doctorCpf = docData.cpf();
+                log.info("[AccessService] Médico resolvido por NOME para reativação de auto-cadastro ('{}'): matricula={}, cpf={}", 
+                        doctorName, matricula, doctorCpf);
             }
         }
 
         LocalDate today = LocalDate.now(CLINIC_ZONE);
-        LocalDateTime startWindow = LocalDateTime.now(CLINIC_ZONE);
+        LocalDateTime startWindow = LocalDateTime.of(today, LocalTime.of(6, 0));
         LocalDateTime endWindow = LocalDateTime.of(today, LocalTime.of(23, 59));
         String startVisit = startWindow.format(GERACESSO_DATE_FORMATTER);
         String endVisit = endWindow.format(GERACESSO_DATE_FORMATTER);
@@ -1432,8 +1539,8 @@ public class AccessService {
                     .cpf(cleanCpf)
                     .startVisit(startVisit)
                     .endVisit(endVisit)
-                    .phone("")
-                    .visitType(cred.getUserType() == UserType.PATIENT ? 1 : 2)
+                    .phone(cred.getPhone() != null ? cred.getPhone().replaceAll("\\D", "") : "")
+                    .visitType(1)
                     .visitedRegistration(matricula)
                     .visitedCpf(doctorCpf)
                     .build();
