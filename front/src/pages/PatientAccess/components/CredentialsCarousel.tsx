@@ -34,6 +34,7 @@ interface CredentialsCarouselProps {
   onResetAccess?: () => void;
   onEditCpf?: (cred?: AccessCredential) => void;
   isReactivating?: boolean;
+  reactivateMessage?: { type: 'success' | 'error'; text: string } | null;
   clinicTheme: ClinicTheme;
 }
 
@@ -49,6 +50,7 @@ export const CredentialsCarousel: React.FC<CredentialsCarouselProps> = ({
   onResetAccess,
   onEditCpf,
   isReactivating,
+  reactivateMessage,
   clinicTheme,
 }) => {
   const [sharingIndex, setSharingIndex] = useState<number | null>(null);
@@ -404,15 +406,26 @@ export const CredentialsCarousel: React.FC<CredentialsCarouselProps> = ({
         {onReactivateAccess && (
           <div className="flex flex-col gap-1.5">
             <button
+              type="button"
               onClick={onReactivateAccess}
               disabled={isReactivating}
-              className="w-full py-3 px-4 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-700 rounded-2xl text-xs font-bold transition-all flex items-center justify-center gap-2 active:scale-[0.98] shadow-sm cursor-pointer disabled:opacity-60"
+              className="w-full py-3 px-4 bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 rounded-2xl text-xs font-bold transition-all flex items-center justify-center gap-2 active:scale-[0.98] shadow-sm cursor-pointer disabled:opacity-60"
             >
-              <RefreshCw className={`w-4 h-4 text-slate-500 ${isReactivating ? 'animate-spin' : ''}`} />
-              {isReactivating ? 'Gerando Novo QR Code...' : 'Reativar Acesso (Entrar Novamente)'}
+              <RefreshCw className={`w-4 h-4 text-amber-700 ${isReactivating ? 'animate-spin' : ''}`} />
+              <span>{isReactivating ? 'Gerando Novo QR Code...' : '🔄 Problemas na catraca? Atualizar QR Code'}</span>
             </button>
-            <p className="text-[10px] text-slate-400 text-center font-medium leading-relaxed px-2">
-              💡 Precisou sair do prédio e vai entrar de novo? Clique acima para gerar um novo QR Code válido nas catracas.
+            {reactivateMessage && (
+              <div className={`p-2.5 rounded-xl text-xs font-medium text-center flex items-center justify-center gap-1.5 transition-all ${
+                reactivateMessage.type === 'success'
+                  ? 'bg-emerald-50 border border-emerald-200 text-emerald-800'
+                  : 'bg-red-50 border border-red-200 text-red-800'
+              }`}>
+                <span>{reactivateMessage.type === 'success' ? '✅' : '⚠️'}</span>
+                <span>{reactivateMessage.text}</span>
+              </div>
+            )}
+            <p className="text-[10px] text-slate-500 text-center font-medium leading-relaxed px-2">
+              💡 Se a catraca não liberar na <strong>entrada</strong> ou na <strong>saída</strong> (ou se precisou sair do prédio e retornar), clique acima para renovar seu acesso imediatamente.
             </p>
           </div>
         )}

@@ -57,6 +57,7 @@ export default function PatientAccess() {
   const [companionSubmitLoading, setCompanionSubmitLoading] = useState<boolean>(false);
   const [companionSubmitError, setCompanionSubmitError] = useState<string | null>(null);
   const [isReactivating, setIsReactivating] = useState<boolean>(false);
+  const [reactivateMessage, setReactivateMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Screen Wake Lock API: impede que o ecrã do telemóvel apague enquanto o QR Code está em tela cheia
   useEffect(() => {
@@ -90,14 +91,18 @@ export default function PatientAccess() {
     authInfo?: { token?: string; phoneDigits?: string }
   ) => {
     // Garante que todas as credenciais possuam appointmentId definido
-    const normalizedData = (data || []).map(c => ({
-      ...c,
-      appointmentId: (c.appointmentId && c.appointmentId !== 'imagem' && c.appointmentId !== 'inovare')
-        ? c.appointmentId
-        : (appointmentId && appointmentId !== 'imagem' && appointmentId !== 'inovare')
-          ? appointmentId
-          : (c.cpf ? `${defaultPrefix}${c.cpf.replace(/\D/g, '')}` : undefined)
-    }));
+    const todayDigits = new Date().toLocaleDateString('sv-SE').replace(/-/g, '');
+    const normalizedData = (data || []).map(c => {
+      const fallbackAppId = c.cpf ? `${defaultPrefix}${todayDigits}-${c.cpf.replace(/\D/g, '')}` : undefined;
+      return {
+        ...c,
+        appointmentId: (c.appointmentId && c.appointmentId !== 'imagem' && c.appointmentId !== 'inovare')
+          ? c.appointmentId
+          : (appointmentId && appointmentId !== 'imagem' && appointmentId !== 'inovare')
+            ? appointmentId
+            : fallbackAppId
+      };
+    });
 
     setCredentials(normalizedData);
     setIsVerified(true);
@@ -264,6 +269,12 @@ export default function PatientAccess() {
               console.log(`[PatientAccess] Credenciais (${clinicTheme.id}) de hoje restauradas do cache`);
               setCredentials(creds);
               setIsVerified(true);
+              if (navigator.onLine) {
+                const patientCpf = creds.find(c => c.cpf)?.cpf?.replace(/\D/g, '');
+                if (patientCpf) {
+                  void revalidatePublicCredentials(patientCpf);
+                }
+              }
             }
           } catch {
             localStorage.removeItem(cacheKey);
@@ -323,7 +334,14 @@ export default function PatientAccess() {
     // Revalidar imediatamente quando o paciente desbloqueia o celular ou volta para a aba do navegador
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible' && navigator.onLine && isVerified) {
-        void refreshCredentials(true);
+        if (isPublicRoute) {
+          const patientCpf = credentials.find(c => c.cpf)?.cpf?.replace(/\D/g, '');
+          if (patientCpf) {
+            void revalidatePublicCredentials(patientCpf);
+          }
+        } else {
+          void refreshCredentials(true);
+        }
       }
     };
 
@@ -333,7 +351,7 @@ export default function PatientAccess() {
       if (interval) clearInterval(interval);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [credentials, isVerified, verifiedToken, verifiedPhoneDigits]);
+  }, [credentials, isVerified, verifiedToken, verifiedPhoneDigits, isPublicRoute]);
 
   const openFullscreen = (index: number) => {
     if (credentials[index]?.credentialCode === 'BLOCKED_OUTSIDE_WINDOW') return;
@@ -573,8 +591,12 @@ export default function PatientAccess() {
     const fromCred = credentials.find(c => c.appointmentId && c.appointmentId !== 'imagem' && c.appointmentId !== 'inovare')?.appointmentId;
     if (fromCred) return fromCred;
     const patientCred = credentials.find(c => c.userType === 'PATIENT' && c.cpf) || credentials.find(c => c.cpf);
+    if (patientCred?.appointmentId && patientCred.appointmentId !== 'imagem' && patientCred.appointmentId !== 'inovare') {
+      return patientCred.appointmentId;
+    }
     if (patientCred?.cpf) {
-      return `${defaultPrefix}${patientCred.cpf.replace(/\D/g, '')}`;
+      const todayDigits = new Date().toLocaleDateString('sv-SE').replace(/-/g, '');
+      return `${defaultPrefix}${todayDigits}-${patientCred.cpf.replace(/\D/g, '')}`;
     }
     return undefined;
   };
@@ -682,15 +704,41 @@ export default function PatientAccess() {
     }
   };
 
+  const revalidatePublicCredentials = async (patientCpf: string) => {
+    if (!patientCpf) return;
+    try {
+      const response = await api.post<AccessCredential[]>(
+        '/v1/access/lookup-by-cpf',
+        {
+          cpf: patientCpf,
+          clinic: clinicTheme.id
+        },
+        {
+          headers: {
+            'X-Skip-Interceptor': 'true'
+          }
+        }
+      );
+      if (response.data && response.data.length > 0) {
+        saveCredentialsWithOfflineCache(response.data);
+      }
+    } catch (err) {
+      console.warn('[PatientAccess] Revalidação silenciosa pública falhou:', err);
+    }
+  };
+
   const handleReactivateAccess = async () => {
     const targetAppointmentId = getActiveAppointmentId();
 
     if (!targetAppointmentId) {
       console.warn('[PatientAccess] Não foi possível reativar: ID do agendamento ausente.');
+      setReactivateMessage({ type: 'error', text: 'Não foi possível identificar o agendamento. Recarregue a página.' });
+      setTimeout(() => setReactivateMessage(null), 5000);
       return;
     }
 
     setIsReactivating(true);
+    setReactivateMessage(null);
     try {
       console.log('[PatientAccess] Reativando acesso físico:', targetAppointmentId);
       const response = await api.post<AccessCredential[]>(
@@ -705,9 +753,16 @@ export default function PatientAccess() {
 
       if (response.data && response.data.length > 0) {
         saveCredentialsWithOfflineCache(response.data, { token: verifiedToken, phoneDigits: verifiedPhoneDigits });
+        setReactivateMessage({ type: 'success', text: 'Novo QR Code gerado e liberado com sucesso nas catracas!' });
+        setTimeout(() => setReactivateMessage(null), 6000);
+      } else {
+        setReactivateMessage({ type: 'error', text: 'Não foi possível gerar nova credencial. Procure a recepção.' });
+        setTimeout(() => setReactivateMessage(null), 5000);
       }
     } catch (err: unknown) {
       console.error('[PatientAccess] Falha ao reativar acesso:', err);
+      setReactivateMessage({ type: 'error', text: 'Erro ao reativar acesso na catraca. Tente novamente.' });
+      setTimeout(() => setReactivateMessage(null), 5000);
     } finally {
       setIsReactivating(false);
     }
@@ -862,6 +917,7 @@ export default function PatientAccess() {
                 setIsEditingCpf(true);
               }}
               isReactivating={isReactivating}
+              reactivateMessage={reactivateMessage}
               clinicTheme={clinicTheme}
             />
           )}

@@ -450,18 +450,24 @@ public class AccessController {
             final String finalClosesAt = closesAt;
 
             List<AccessCredentialResponse> responseList = credentials.stream()
-                .map(cred -> new AccessCredentialResponse(
-                    cred.getAppointmentId(),
-                    cred.getName(),
-                    cred.getUserType() != null ? cred.getUserType() : UserType.PATIENT,
-                    cred.getLocator(),
-                    cred.getAccessCredential(),
-                    cred.getCpf(),
-                    finalDoctorName,
-                    finalAppointmentDateTime,
-                    finalOpensAt,
-                    finalClosesAt
-                ))
+                .map(cred -> {
+                    String docName = cred.getDoctorName();
+                    if (docName == null || docName.isBlank()) {
+                        docName = finalDoctorName;
+                    }
+                    return new AccessCredentialResponse(
+                        cred.getAppointmentId(),
+                        cred.getName(),
+                        cred.getUserType() != null ? cred.getUserType() : UserType.PATIENT,
+                        cred.getLocator(),
+                        cred.getAccessCredential(),
+                        cred.getCpf(),
+                        docName,
+                        finalAppointmentDateTime,
+                        finalOpensAt,
+                        finalClosesAt
+                    );
+                })
                 .toList();
 
             return ResponseEntity.ok(responseList);
