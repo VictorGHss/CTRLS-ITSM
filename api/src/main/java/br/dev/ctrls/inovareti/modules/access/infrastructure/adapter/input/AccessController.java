@@ -663,9 +663,11 @@ public class AccessController {
                     } else if (result.requiresCpfFallback()) {
                         String patientNameFallback = "Paciente";
                         try {
-                            var accessInfoOpt = feegowClientPort.fetchPatientAccessInfo(id);
-                            if (accessInfoOpt.isPresent() && accessInfoOpt.get().name() != null) {
-                                patientNameFallback = accessInfoOpt.get().name();
+                            if (id != null && id.matches("\\d+")) {
+                                var accessInfoOpt = feegowClientPort.fetchPatientAccessInfo(id);
+                                if (accessInfoOpt.isPresent() && accessInfoOpt.get().name() != null) {
+                                    patientNameFallback = accessInfoOpt.get().name();
+                                }
                             }
                         } catch (Exception ignored) {}
 
@@ -733,8 +735,11 @@ public class AccessController {
             String itemOpensAt = finalOpensAt;
             String itemClosesAt = finalClosesAt;
 
-            // Se for um agendamento diferente do principal, busca as informações específicas de data/hora/médico
-            if (!c.getAppointmentId().equalsIgnoreCase(idAgendamento) && !"CPF_MISSING".equals(c.getAccessCredential())) {
+            // Se for um agendamento diferente do principal, busca as informações específicas de data/hora/médico (apenas para IDs numéricos do Feegow)
+            if (!c.getAppointmentId().equalsIgnoreCase(idAgendamento) 
+                    && !"CPF_MISSING".equals(c.getAccessCredential()) 
+                    && c.getAppointmentId() != null 
+                    && c.getAppointmentId().matches("\\d+")) {
                 try {
                     FeegowPatientAccessInfo specificInfo = null;
                     if (challengeCache.containsKey(c.getAppointmentId())) {
