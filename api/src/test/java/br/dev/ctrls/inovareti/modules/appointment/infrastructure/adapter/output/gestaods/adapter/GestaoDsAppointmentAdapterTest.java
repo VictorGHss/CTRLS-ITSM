@@ -12,6 +12,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import br.dev.ctrls.inovareti.modules.appointment.domain.model.GestaoDsAppointmentItem;
+import br.dev.ctrls.inovareti.modules.appointment.domain.model.GestaoDsPatient;
 import br.dev.ctrls.inovareti.modules.appointment.infrastructure.adapter.output.gestaods.client.GestaoDsRestClient;
 import br.dev.ctrls.inovareti.modules.appointment.infrastructure.adapter.output.gestaods.dto.GestaoDsAgendamentoItemDto;
 import br.dev.ctrls.inovareti.modules.appointment.infrastructure.adapter.output.gestaods.dto.GestaoDsPacienteDto;
@@ -28,7 +30,7 @@ class GestaoDsAppointmentAdapterTest {
     }
 
     @Test
-    @DisplayName("Deve delegar busca de paciente para o restClient")
+    @DisplayName("Deve delegar busca de paciente para o restClient e converter em modelo de domínio")
     void shouldDelegateFetchPatient() {
         String cpf = "12345678900";
         GestaoDsPacienteDto dto = new GestaoDsPacienteDto(
@@ -38,15 +40,17 @@ class GestaoDsAppointmentAdapterTest {
 
         when(restClient.findPatientByCpf(cpf)).thenReturn(Optional.of(dto));
 
-        Optional<GestaoDsPacienteDto> result = adapter.fetchPatient(cpf);
+        Optional<GestaoDsPatient> result = adapter.fetchPatient(cpf);
 
         assertThat(result).isPresent();
-        assertThat(result.get().nomeCompleto()).isEqualTo("João da Silva");
+        assertThat(result.get().fullName()).isEqualTo("João da Silva");
+        assertThat(result.get().firstName()).isEqualTo("João");
+        assertThat(result.get().cpf()).isEqualTo(cpf);
         verify(restClient).findPatientByCpf(cpf);
     }
 
     @Test
-    @DisplayName("Deve delegar busca de agendamentos para o restClient")
+    @DisplayName("Deve delegar busca de agendamentos para o restClient e converter em modelos de domínio")
     void shouldDelegateFetchAppointments() {
         String cpf = "12345678900";
         GestaoDsAgendamentoItemDto item = new GestaoDsAgendamentoItemDto(
@@ -55,10 +59,11 @@ class GestaoDsAppointmentAdapterTest {
 
         when(restClient.findPatientAppointments(cpf)).thenReturn(List.of(item));
 
-        List<GestaoDsAgendamentoItemDto> result = adapter.fetchPatientAppointments(cpf);
+        List<GestaoDsAppointmentItem> result = adapter.fetchPatientAppointments(cpf);
 
         assertThat(result).hasSize(1);
-        assertThat(result.get(0).agendamento()).isEqualTo("APP-1");
+        assertThat(result.getFirst().appointmentId()).isEqualTo("APP-1");
+        assertThat(result.getFirst().professionalName()).isEqualTo("Dra. Maria");
         verify(restClient).findPatientAppointments(cpf);
     }
 

@@ -3,12 +3,13 @@ package br.dev.ctrls.inovareti.modules.appointment.domain.port.output;
 import java.util.List;
 import java.util.Optional;
 
-import br.dev.ctrls.inovareti.modules.appointment.infrastructure.adapter.output.gestaods.dto.GestaoDsAgendamentoItemDto;
-import br.dev.ctrls.inovareti.modules.appointment.infrastructure.adapter.output.gestaods.dto.GestaoDsPacienteDto;
+import br.dev.ctrls.inovareti.modules.appointment.domain.model.GestaoDsAppointmentItem;
+import br.dev.ctrls.inovareti.modules.appointment.domain.model.GestaoDsPatient;
 
 /**
  * Porta de Saída do Domínio: GestaoDsClientPort.
  * Interface pura que abstrai as operações de consulta e atualização junto ao ERP Gestão DS.
+ * Isolada da camada de infraestrutura.
  */
 public interface GestaoDsClientPort {
 
@@ -18,7 +19,7 @@ public interface GestaoDsClientPort {
      * @param cpf CPF do paciente
      * @return Optional com o paciente localizado
      */
-    Optional<GestaoDsPacienteDto> fetchPatient(String cpf);
+    Optional<GestaoDsPatient> fetchPatient(String cpf);
 
     /**
      * Busca todos os agendamentos vinculados ao CPF no Gestão DS.
@@ -26,7 +27,7 @@ public interface GestaoDsClientPort {
      * @param cpf CPF do paciente
      * @return Lista de agendamentos
      */
-    List<GestaoDsAgendamentoItemDto> fetchPatientAppointments(String cpf);
+    List<GestaoDsAppointmentItem> fetchPatientAppointments(String cpf);
 
     /**
      * Atualiza o status de confirmação ou cancelamento do agendamento no Gestão DS.

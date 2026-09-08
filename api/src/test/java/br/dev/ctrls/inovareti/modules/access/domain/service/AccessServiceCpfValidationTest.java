@@ -1,6 +1,7 @@
 package br.dev.ctrls.inovareti.modules.access.domain.service;
 
 import br.dev.ctrls.inovareti.modules.access.domain.model.AccessCredential;
+import br.dev.ctrls.inovareti.modules.access.domain.model.AccessValidationResult;
 import br.dev.ctrls.inovareti.modules.access.domain.model.CompanionAccessInfo;
 import br.dev.ctrls.inovareti.modules.access.domain.model.FeegowPatientAccessInfo;
 import br.dev.ctrls.inovareti.modules.access.domain.model.GerAcessoRequest;
@@ -76,7 +77,7 @@ class AccessServiceCpfValidationTest {
         when(feegowClientPort.fetchPatientAccessInfo(appointmentId)).thenReturn(Optional.of(accessInfo));
         when(patientExternalPort.patientInfo("100")).thenReturn(new FeegowPatient("100", "RICHARD JOSEPH HOULE", invalidCpf, "1980-01-01", "42999999999"));
 
-        AccessService.AccessValidationResult result = accessService.processAccessRequest(appointmentId, null, null);
+        AccessValidationResult result = accessService.processAccessRequest(appointmentId, null, null);
 
         assertThat(result.authorized()).isFalse();
         assertThat(result.requiresCpfFallback()).isTrue();
@@ -110,7 +111,7 @@ class AccessServiceCpfValidationTest {
         when(gerAcessoClientPort.registerAccess(any(GerAcessoRequest.class)))
                 .thenReturn(Optional.of(new GerAcessoResponse("1", "OK", 3470777L, "1", 100L, "PNWGN4", "000099894597")));
 
-        AccessService.AccessValidationResult result = accessService.processAccessRequest(appointmentId, validCpf, null);
+        AccessValidationResult result = accessService.processAccessRequest(appointmentId, validCpf, null);
 
         assertThat(result.authorized()).isTrue();
         assertThat(result.requiresCpfFallback()).isFalse();

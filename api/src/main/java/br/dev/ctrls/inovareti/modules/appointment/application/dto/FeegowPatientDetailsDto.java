@@ -102,6 +102,7 @@ public class FeegowPatientDetailsDto {
                 }
                 directCpf = cpf;
             }
+            String candidateDocCpf = null;
             if (documentos != null) {
                 if (documentos instanceof java.util.Map<?, ?> map) {
                     for (java.util.Map.Entry<?, ?> entry : map.entrySet()) {
@@ -113,11 +114,13 @@ public class FeegowPatientDetailsDto {
                                 if (num != null) {
                                     String clean = String.valueOf(num).replaceAll("\\D", "");
                                     if (clean.length() == 11) return clean;
+                                    if (!clean.isBlank() && candidateDocCpf == null) candidateDocCpf = clean;
                                 }
                             }
                             if (val != null) {
                                 String clean = String.valueOf(val).replaceAll("\\D", "");
                                 if (clean.length() == 11) return clean;
+                                if (!clean.isBlank() && candidateDocCpf == null) candidateDocCpf = clean;
                             }
                         }
                     }
@@ -131,6 +134,7 @@ public class FeegowPatientDetailsDto {
                                 if (num != null) {
                                     String clean = String.valueOf(num).replaceAll("\\D", "");
                                     if (clean.length() == 11) return clean;
+                                    if (!clean.isBlank() && candidateDocCpf == null) candidateDocCpf = clean;
                                 }
                             }
                         }
@@ -140,9 +144,13 @@ public class FeegowPatientDetailsDto {
                     if (clean.length() == 11) {
                         return clean;
                     }
+                    if (!clean.isBlank() && candidateDocCpf == null) {
+                        candidateDocCpf = clean;
+                    }
                 }
             }
-            return directCpf;
+            if (directCpf != null) return directCpf;
+            return candidateDocCpf;
         }
 
         public void setCpf(String cpf) {

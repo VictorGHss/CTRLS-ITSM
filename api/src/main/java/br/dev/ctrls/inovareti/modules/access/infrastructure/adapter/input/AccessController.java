@@ -1,21 +1,29 @@
 package br.dev.ctrls.inovareti.modules.access.infrastructure.adapter.input;
 
+import br.dev.ctrls.inovareti.modules.access.application.usecase.GenerateCalendarIcsUseCase;
+import br.dev.ctrls.inovareti.modules.access.application.usecase.GetCredentialsUseCase;
+import br.dev.ctrls.inovareti.modules.access.application.usecase.LookupCredentialsByCpfUseCase;
+import br.dev.ctrls.inovareti.modules.access.application.usecase.LookupFeegowPreRegistrationUseCase;
+import br.dev.ctrls.inovareti.modules.access.application.usecase.ProcessAccessRequestUseCase;
+import br.dev.ctrls.inovareti.modules.access.application.usecase.ReactivateAccessUseCase;
+import br.dev.ctrls.inovareti.modules.access.application.usecase.RegisterCompanionUseCase;
+import br.dev.ctrls.inovareti.modules.access.application.usecase.SelfRegistrationUseCase;
+import br.dev.ctrls.inovareti.modules.access.application.usecase.ValidateAccessChallengeUseCase;
 import br.dev.ctrls.inovareti.modules.access.domain.model.AccessCredential;
+import br.dev.ctrls.inovareti.modules.access.domain.model.AccessValidationResult;
 import br.dev.ctrls.inovareti.modules.access.domain.model.CompanionAccessInfo;
 import br.dev.ctrls.inovareti.modules.access.domain.model.FeegowPatientAccessInfo;
 import br.dev.ctrls.inovareti.modules.access.domain.model.UserType;
 import br.dev.ctrls.inovareti.modules.access.domain.port.output.AccessCredentialRepositoryPort;
-import br.dev.ctrls.inovareti.modules.access.domain.service.AccessService;
+import br.dev.ctrls.inovareti.modules.access.domain.port.output.FeegowClientPort;
+import br.dev.ctrls.inovareti.modules.access.domain.service.AccessWindowCalculator;
 import br.dev.ctrls.inovareti.modules.access.infrastructure.adapter.input.dto.AccessCredentialResponse;
 import br.dev.ctrls.inovareti.modules.access.infrastructure.adapter.input.dto.AccessValidationRequest;
 import br.dev.ctrls.inovareti.modules.access.infrastructure.adapter.input.dto.CompanionRequest;
-import br.dev.ctrls.inovareti.modules.access.infrastructure.config.InovareMotorProperties;
-import br.dev.ctrls.inovareti.modules.access.domain.port.output.FeegowClientPort;
 import br.dev.ctrls.inovareti.modules.access.infrastructure.adapter.input.dto.CpfLookupRequest;
 import br.dev.ctrls.inovareti.modules.access.infrastructure.adapter.input.dto.FeegowPreRegistrationLookupResponse;
-import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.FeegowAppointment;
-import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentExternalPort;
-import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentSessionRepositoryPort;
+import br.dev.ctrls.inovareti.modules.access.infrastructure.adapter.input.dto.SelfRegistrationRequest;
+import br.dev.ctrls.inovareti.modules.access.infrastructure.config.InovareMotorProperties;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -30,12 +38,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
-import java.time.ZoneId;
-import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -44,10 +49,10 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
-
 /**
  * Controlador REST para o controle de acesso integrado às catracas físicas.
- * Gerencia validação de credenciais, testes de catraca e fornecimento de QR codes para pacientes e acompanhantes.
+ * Atua estritamente como adaptador de entrada HTTP, delegando a lógica de negócio
+ * para Casos de Uso especializados na camada de aplicação.
  */
 @Slf4j
 @RestController
@@ -55,37 +60,37 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class AccessController {
 
-    private static final ZoneId CLINIC_ZONE = ZoneId.of("America/Sao_Paulo");
     private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy");
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm");
 
     private final InovareMotorProperties inovareMotorProperties;
     private final AccessCredentialRepositoryPort accessCredentialRepositoryPort;
-    private final AccessService accessService;
     private final FeegowClientPort feegowClientPort;
-    private final AppointmentSessionRepositoryPort appointmentSessionRepository;
-    private final AppointmentExternalPort appointmentExternalPort;
+
+    private final ProcessAccessRequestUseCase processAccessRequestUseCase;
+    private final GetCredentialsUseCase getCredentialsUseCase;
+    private final SelfRegistrationUseCase selfRegistrationUseCase;
+    private final LookupFeegowPreRegistrationUseCase lookupFeegowPreRegistrationUseCase;
+    private final LookupCredentialsByCpfUseCase lookupCredentialsByCpfUseCase;
+    private final ReactivateAccessUseCase reactivateAccessUseCase;
+    private final RegisterCompanionUseCase registerCompanionUseCase;
+    private final ValidateAccessChallengeUseCase validateAccessChallengeUseCase;
+    private final GenerateCalendarIcsUseCase generateCalendarIcsUseCase;
 
     /**
      * Endpoint de teste manual para validação de acesso das catracas.
-     * Aceita apenas doctorId permitido nas propriedades de teste para blindar o ambiente de produção.
-     *
-     * @param doctorId Identificador do médico para teste.
-     * @return ResponseEntity com o resultado da operação.
      */
     @PostMapping("/test")
     public ResponseEntity<?> testAccess(@RequestParam("doctorId") Long doctorId) {
         log.info("[AccessControl] Executando validação de acesso de teste para o doctorId: {}", doctorId);
 
-        // Validação estrita: Aceita apenas os IDs de teste manual configurados nas propriedades
         if (doctorId == null || inovareMotorProperties.getTestDoctorIds() == null || !inovareMotorProperties.getTestDoctorIds().contains(doctorId)) {
             log.warn("[AccessControl] Acesso proibido. O doctorId {} não é permitido para testes ou a produção está ativa.", doctorId);
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(Map.of("error", "Forbidden", "message", "Acesso negado. O ID fornecido não é elegível para testes."));
         }
 
-        // Cria e persiste uma credencial de teste para validação da infraestrutura JPA
         AccessCredential credential = AccessCredential.builder()
             .id(UUID.randomUUID())
             .appointmentId("TEST-APP-" + doctorId + "-" + System.currentTimeMillis())
@@ -98,7 +103,7 @@ public class AccessController {
             .build();
 
         AccessCredential saved = accessCredentialRepositoryPort.save(credential);
-        log.info("[AccessControl] Credencial de teste salva com sucesso: ID={}, Nome={}", saved.getId(), saved.getName());
+        log.info("[AccessControl] Credencial de teste salva: ID={}, Nome={}", saved.getId(), saved.getName());
 
         return ResponseEntity.ok(Map.of(
             "status", "success",
@@ -110,50 +115,41 @@ public class AccessController {
 
     /**
      * Endpoint de validação de acesso utilizado pelo bot do Blip ou portal web.
-     * Consulta prontuários no Feegow, agrupa agendamentos diários, cadastra paciente/acompanhantes no GerAcesso
-     * e gera as credenciais unificadas.
-     *
-     * @param request Payload contendo dados do agendamento, CPF e acompanhantes.
-     * @return ResponseEntity com o resultado da validação de acesso.
      */
     @PostMapping("/validate")
     public ResponseEntity<?> validateAccess(@RequestBody @Valid AccessValidationRequest request) {
-        log.info("[AccessControl] Solicitação de validação de acesso: agendamento={}, cpf={}", 
-                request.appointmentId(), request.cpf());
+        log.info("[AccessControl] Requisição de validação de acesso recebida para o agendamento ID: {}", request.appointmentId());
 
-        List<CompanionAccessInfo> domainCompanions = null;
-        if (request.companions() != null) {
-            domainCompanions = request.companions().stream()
-                    .map(c -> new CompanionAccessInfo(c.name(), c.cpf(), c.phone(), c.email(), c.birthDate()))
-                    .toList();
+        List<CompanionAccessInfo> companions = null;
+        if (request.companions() != null && !request.companions().isEmpty()) {
+            companions = request.companions().stream()
+                .map(dto -> new CompanionAccessInfo(
+                    dto.name(),
+                    dto.cpf(),
+                    dto.phone(),
+                    dto.email(),
+                    dto.birthDate()
+                ))
+                .toList();
         }
 
-        AccessService.AccessValidationResult result = accessService.processAccessRequest(
-                request.appointmentId(), request.cpf(), domainCompanions, request.credentialId(), request.targetName(), request.userType());
-
-        // Se o CPF estiver ausente, retornamos a flag de fallback para o bot solicitar ao usuário
-        if (result.requiresCpfFallback()) {
-            log.warn("[AccessControl] CPF ausente para agendamento {}. Retornando requerimento de fallback de CPF.", request.appointmentId());
-            return ResponseEntity.ok(Map.of(
-                "authorized", false,
-                "requiresCpfFallback", true,
-                "message", result.message()
-            ));
-        }
-
-        if (!result.authorized()) {
-            return ResponseEntity.ok(result);
-        }
+        AccessValidationResult result = processAccessRequestUseCase.execute(
+            request.appointmentId(),
+            request.cpf(),
+            companions,
+            request.credentialId(),
+            request.targetName(),
+            request.userType()
+        );
 
         return ResponseEntity.ok(result);
     }
 
     /**
      * Endpoint de auto-cadastro público (Clínica da Imagem ou clínicas externas).
-     * Libera o acesso no GerAcesso e retorna credenciais com QR code.
      */
     @PostMapping("/self-registration")
-    public ResponseEntity<?> selfRegistration(@RequestBody @Valid br.dev.ctrls.inovareti.modules.access.infrastructure.adapter.input.dto.SelfRegistrationRequest request) {
+    public ResponseEntity<?> selfRegistration(@RequestBody @Valid SelfRegistrationRequest request) {
         log.info("[AccessControl] Auto-cadastro público recebido: Nome={}, CPF={}, Clínica={}", 
                 request.name(), request.cpf(), request.clinic());
         try {
@@ -181,13 +177,12 @@ public class AccessController {
                 }
             }
 
-            // Se o agendamento real do Feegow foi fornecido, vincula diretamente à consulta real
             if (request.appointmentId() != null && !request.appointmentId().isBlank()
                     && !request.appointmentId().startsWith("INOV-")
                     && !request.appointmentId().startsWith("IMG-")) {
                 try {
                     log.info("[AccessControl] Auto-cadastro com agendamento Feegow vinculado: {}", request.appointmentId());
-                    var valResult = accessService.processAccessRequest(
+                    var valResult = processAccessRequestUseCase.execute(
                         request.appointmentId(),
                         request.cpf(),
                         domainCompanions
@@ -197,7 +192,7 @@ public class AccessController {
                         if (!feegowCreds.isEmpty()) {
                             String docName = (request.doctorName() != null && !request.doctorName().isBlank())
                                 ? request.doctorName().trim()
-                                : feegowCreds.get(0).getDoctorName();
+                                : feegowCreds.getFirst().getDoctorName();
                             String apptDateDisplay = resolveDisplayDate(request.appointmentId());
                             List<AccessCredentialResponse> feegowResponseList = feegowCreds.stream()
                                 .map(cred -> new AccessCredentialResponse(
@@ -222,7 +217,7 @@ public class AccessController {
                 }
             }
 
-            List<AccessCredential> credentials = accessService.processSelfRegistration(
+            List<AccessCredential> credentials = selfRegistrationUseCase.processSelfRegistration(
                 request.name(),
                 request.cpf(),
                 request.phone(),
@@ -237,7 +232,7 @@ public class AccessController {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("message", "Falha ao gerar credencial"));
             }
 
-            String firstAppId = !credentials.isEmpty() ? credentials.get(0).getAppointmentId() : "";
+            String firstAppId = credentials.getFirst().getAppointmentId();
             boolean isInovare = (request.clinic() != null && request.clinic().toLowerCase().contains("inovare"))
                     || (firstAppId != null && firstAppId.startsWith("INOV-"));
 
@@ -275,12 +270,11 @@ public class AccessController {
 
     /**
      * Endpoint de consulta prévia no Feegow ao digitar o CPF no formulário de auto-cadastro.
-     * Retorna dados cadastrais e agendamentos futuros para auto-preenchimento instantâneo.
      */
     @PostMapping("/feegow-lookup")
     public ResponseEntity<FeegowPreRegistrationLookupResponse> feegowLookup(@RequestBody @Valid CpfLookupRequest request) {
         log.info("[AccessControl] Requisição de consulta prévia no Feegow para CPF: {}", request.cpf());
-        FeegowPreRegistrationLookupResponse response = accessService.lookupFeegowPreRegistration(request.cpf(), request.clinic());
+        FeegowPreRegistrationLookupResponse response = lookupFeegowPreRegistrationUseCase.execute(request.cpf(), request.clinic());
         return ResponseEntity.ok(response);
     }
 
@@ -288,17 +282,17 @@ public class AccessController {
      * Endpoint de consulta rápida de credenciais ativas pelo CPF.
      */
     @PostMapping("/lookup-by-cpf")
-    public ResponseEntity<?> lookupByCpf(@RequestBody @Valid br.dev.ctrls.inovareti.modules.access.infrastructure.adapter.input.dto.CpfLookupRequest request) {
+    public ResponseEntity<?> lookupByCpf(@RequestBody @Valid CpfLookupRequest request) {
         log.info("[AccessControl] Busca de credenciais ativas por CPF: {}", request.cpf());
         try {
-            List<AccessCredential> credentials = accessService.lookupCredentialsByCpf(request.cpf(), request.clinic());
+            List<AccessCredential> credentials = lookupCredentialsByCpfUseCase.lookupCredentialsByCpf(request.cpf(), request.clinic());
             if (credentials.isEmpty()) {
                 return ResponseEntity.ok(List.of());
             }
 
             List<AccessCredentialResponse> responseList = new ArrayList<>();
             Map<String, Optional<FeegowPatientAccessInfo>> feegowCache = new HashMap<>();
-            LocalDate today = LocalDate.now(CLINIC_ZONE);
+            LocalDate today = LocalDate.now(AccessWindowCalculator.CLINIC_ZONE);
             LocalDate maxAllowed = today.plusDays(7);
 
             for (AccessCredential cred : credentials) {
@@ -308,7 +302,6 @@ public class AccessController {
                 String opensAt = "06:00";
                 String closesAt = "23:59";
 
-                // Filtro estrito de janela: ignora auto-cadastros passados ou além de 7 dias
                 if (appointmentId != null && appointmentId.length() >= 13 && (appointmentId.startsWith("INOV-") || appointmentId.startsWith("IMG-"))) {
                     try {
                         String datePart = appointmentId.substring(5, 13);
@@ -319,7 +312,6 @@ public class AccessController {
                     } catch (Exception ignored) {}
                 }
 
-                // Consulta Feegow para obter médico e data real da consulta
                 if (appointmentId != null && !appointmentId.startsWith("INOV-") && !appointmentId.startsWith("IMG-")) {
                     try {
                         Optional<FeegowPatientAccessInfo> accessInfoOpt = feegowCache.computeIfAbsent(
@@ -328,7 +320,6 @@ public class AccessController {
                         );
                         if (accessInfoOpt.isPresent()) {
                             FeegowPatientAccessInfo info = accessInfoOpt.get();
-                            // Filtro estrito de janela: ignora consultas passadas ou além de 7 dias
                             if (info.appointmentDate() != null) {
                                 if (info.appointmentDate().isBefore(today) || info.appointmentDate().isAfter(maxAllowed)) {
                                     continue;
@@ -397,14 +388,13 @@ public class AccessController {
     }
 
     /**
-     * Endpoint de reativação de acesso para gerar uma nova credencial no GerAcesso
-     * caso o paciente/acompanhante tenha saído do prédio e precise entrar novamente.
+     * Endpoint de reativação de acesso para gerar uma nova credencial no GerAcesso.
      */
     @PostMapping("/reactivate/{appointmentId}")
     public ResponseEntity<?> reactivateAccess(@PathVariable("appointmentId") String appointmentId) {
         log.info("[AccessControl] Solicitação de reativação de acesso para agendamento: {}", appointmentId);
         try {
-            List<AccessCredential> credentials = accessService.reactivateAccess(appointmentId);
+            List<AccessCredential> credentials = reactivateAccessUseCase.reactivateAccess(appointmentId);
             if (credentials.isEmpty()) {
                 return ResponseEntity.status(HttpStatus.NOT_FOUND)
                         .body(Map.of("message", "Nenhuma credencial encontrada para reativar."));
@@ -480,10 +470,6 @@ public class AccessController {
 
     /**
      * Endpoint de cadastro de acompanhante pelo portal web do paciente.
-     *
-     * @param appointmentId Identificador do agendamento principal.
-     * @param request Dados cadastrais do acompanhante (nome, CPF, nascimento).
-     * @return ResponseEntity contendo a credencial gerada para o acompanhante.
      */
     @PostMapping("/companions/{appointmentId}")
     public ResponseEntity<?> registerCompanion(
@@ -498,9 +484,8 @@ public class AccessController {
                 request.email(),
                 request.birthDate()
             );
-            AccessCredential credential = accessService.registerCompanion(appointmentId, companionInfo);
+            AccessCredential credential = registerCompanionUseCase.registerCompanion(appointmentId, companionInfo);
 
-            // Retorna a lista atualizada de todas as credenciais deste agendamento para o frontend atualizar instantaneamente sem reload
             List<AccessCredential> allCreds = accessCredentialRepositoryPort.findByAppointmentId(appointmentId);
             if (allCreds != null && !allCreds.isEmpty()) {
                 String doctorName = "Clínica Inovare";
@@ -542,307 +527,14 @@ public class AccessController {
 
     /**
      * Endpoint de consulta de credenciais físicas para renderização no portal web.
-     * Retorna a lista de credenciais geradas para o agendamento informado após validação do desafio telefônico.
-     *
-     * @param idAgendamento Identificador do agendamento vindo da rota.
-     * @param phoneDigits 4 últimos dígitos do telefone para desafio de segurança.
-     * @return ResponseEntity contendo a lista de credenciais formatadas.
      */
     @GetMapping("/credentials/{idAgendamento}")
     public ResponseEntity<List<AccessCredentialResponse>> getCredentials(
             @PathVariable("idAgendamento") String idAgendamento,
             @RequestParam(value = "phoneDigits", required = false) String phoneDigits,
             @RequestParam(value = "t", required = false) String token) {
-        log.info("[AccessControl] Consulta de credenciais para o agendamento ID: {} (token={}, phoneDigits={})", 
-                idAgendamento, token != null && !token.isBlank() ? "presente" : "ausente", phoneDigits);
-
-        // Se for rota pública ou auto-cadastro (IMG- ou INOV-), busca diretamente do banco sem desafio Feegow
-        if (idAgendamento != null && (idAgendamento.startsWith("IMG-") || idAgendamento.startsWith("INOV-"))) {
-            List<AccessCredential> creds = accessCredentialRepositoryPort.findByAppointmentId(idAgendamento);
-            if (creds.isEmpty()) {
-                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(List.of());
-            }
-            List<AccessCredentialResponse> resp = creds.stream()
-                .map(c -> new AccessCredentialResponse(
-                    c.getAppointmentId(),
-                    c.getName(),
-                    c.getUserType(),
-                    c.getLocator(),
-                    c.getAccessCredential(),
-                    c.getCpf(),
-                    idAgendamento.startsWith("INOV-") ? "Inovare – Serviços de Saúde" : "Clínica Da Imagem - Unidade Inovare",
-                    "Hoje",
-                    "06:00",
-                    "23:00"
-                ))
-                .toList();
-            return ResponseEntity.ok(resp);
-        }
-
-        // Executa a validação do desafio (por token criptográfico ou 4 dígitos do telefone)
-        FeegowPatientAccessInfo accessInfo = accessService.validateAccessChallenge(idAgendamento, phoneDigits, token);
-
-        // Resolve todos os IDs de agendamento que pertencem ao mesmo grupo
-        List<String> appointmentIds = new ArrayList<>();
-        appointmentIds.add(idAgendamento);
-
-        try {
-            var mainSessionOpt = appointmentSessionRepository.findByFeegowAppointmentId(idAgendamento);
-            if (mainSessionOpt.isPresent() && mainSessionOpt.get().getCurrentGroupId() != null) {
-                var groupSessions = appointmentSessionRepository.findByCurrentGroupId(mainSessionOpt.get().getCurrentGroupId());
-                for (var s : groupSessions) {
-                    if (s.getFeegowAppointmentId() != null && !s.getFeegowAppointmentId().equalsIgnoreCase(idAgendamento)) {
-                        appointmentIds.add(s.getFeegowAppointmentId());
-                    }
-                }
-                log.info("[AccessControl] Encontrado grupo com {} agendamentos: {}", appointmentIds.size(), appointmentIds);
-            }
-        } catch (Exception ex) {
-            log.warn("[AccessControl] Erro ao buscar grupo de sessões para o agendamento {}: {}", idAgendamento, ex.getMessage());
-        }
-
-        // AUTO-DETECÇÃO DE SESSÃO ATIVA HOJE: inclui todas as consultas do paciente para hoje
-        LocalDate today = LocalDate.now(CLINIC_ZONE);
-        if (accessInfo.patientId() != null) {
-            try {
-                var patientSessions = appointmentSessionRepository.findByPatientId(accessInfo.patientId());
-                for (var s : patientSessions) {
-                    boolean isToday = (s.getAppointmentAt() != null && s.getAppointmentAt().toLocalDate().equals(today))
-                                   || (s.getCreatedAt() != null && s.getCreatedAt().toLocalDate().equals(today));
-                    if (isToday) {
-                        if (s.getFeegowAppointmentId() != null && !appointmentIds.contains(s.getFeegowAppointmentId())) {
-                            appointmentIds.add(s.getFeegowAppointmentId());
-                            log.info("[AccessControl] Auto-detectado agendamento de hoje ({}) para o paciente ID: {}. Adicionado ao escopo de credenciamento.", s.getFeegowAppointmentId(), accessInfo.patientId());
-                        }
-                    }
-                }
-            } catch (Exception ex) {
-                log.warn("[AccessControl] Erro ao auto-detectar sessões de hoje para o paciente: {}", ex.getMessage());
-            }
-
-            // AUTO-DETECÇÃO DE CONSULTAS DO DIA NO FEEGOW: inclui todas as consultas de hoje para este mesmo paciente no Feegow
-            try {
-                List<FeegowAppointment> todayFeegowApps = appointmentExternalPort.searchAppointments(today, 0);
-                for (FeegowAppointment fa : todayFeegowApps) {
-                    if (accessInfo.patientId().equals(fa.patientId()) && fa.id() != null && !appointmentIds.contains(fa.id())) {
-                        appointmentIds.add(fa.id());
-                        log.info("[AccessControl] Auto-detectada consulta adicional de hoje ({}) no Feegow para o paciente ID: {}. Adicionada ao escopo de credenciamento.", fa.id(), accessInfo.patientId());
-                    }
-                }
-            } catch (Exception ex) {
-                log.warn("[AccessControl] Erro ao buscar consultas adicionais do dia no Feegow: {}", ex.getMessage());
-            }
-        }
-
-        // AUTO-DETECÇÃO POR CPF: busca credenciais geradas hoje para este CPF
-        String patientCpf = accessInfo.cpf() != null ? accessInfo.cpf().replaceAll("\\D", "") : "";
-        if (patientCpf.length() == 11) {
-            try {
-                List<AccessCredential> todayCreds = accessCredentialRepositoryPort.findByCpf(patientCpf);
-                for (var c : todayCreds) {
-                    if (c.getCreatedAt() != null && c.getCreatedAt().toLocalDate().equals(today)) {
-                        if (c.getAppointmentId() != null && !appointmentIds.contains(c.getAppointmentId())) {
-                            appointmentIds.add(c.getAppointmentId());
-                            log.info("[AccessControl] Auto-detectado agendamento com credencial hoje ({}) por CPF: {}", c.getAppointmentId(), patientCpf);
-                        }
-                    }
-                }
-            } catch (Exception ex) {
-                log.warn("[AccessControl] Erro ao auto-detectar credenciais de hoje por CPF: {}", ex.getMessage());
-            }
-        }
-
-        List<AccessCredential> credentials = new ArrayList<>();
-
-        for (String id : appointmentIds) {
-            List<AccessCredential> appCreds = accessCredentialRepositoryPort.findByAppointmentId(id);
-            boolean hasOnlyContingency = !appCreds.isEmpty() && appCreds.stream()
-                    .allMatch(c -> c.getAccessCredential() != null && c.getAccessCredential().startsWith("CRED-"));
-
-            boolean hasPatientWithInvalidCpf = !appCreds.isEmpty() && appCreds.stream()
-                    .filter(c -> c.getUserType() == UserType.PATIENT)
-                    .anyMatch(c -> c.getCpf() == null || !AccessService.isValidCpf(c.getCpf()));
-
-            if (appCreds.isEmpty() || hasOnlyContingency || hasPatientWithInvalidCpf) {
-                log.info("[AccessControl] Credenciais não encontradas, contingenciais (CRED-) ou com CPF inválido para o agendamento ID: {}. Tentando obter credencial real na GerAcesso...", id);
-                try {
-                    AccessService.AccessValidationResult result = accessService.processAccessRequest(id, null, null);
-                    if (result.authorized()) {
-                        appCreds = accessCredentialRepositoryPort.findByAppointmentId(id);
-                    } else if (result.requiresCpfFallback()) {
-                        String patientNameFallback = "Paciente";
-                        try {
-                            if (id != null && id.matches("\\d+")) {
-                                var accessInfoOpt = feegowClientPort.fetchPatientAccessInfo(id);
-                                if (accessInfoOpt.isPresent() && accessInfoOpt.get().name() != null) {
-                                    patientNameFallback = accessInfoOpt.get().name();
-                                }
-                            }
-                        } catch (Exception ignored) {}
-
-                        AccessCredential ghost = AccessCredential.builder()
-                                .id(UUID.randomUUID())
-                                .appointmentId(id)
-                                .name(patientNameFallback)
-                                .cpf("")
-                                .userType(UserType.PATIENT)
-                                .accessCredential("CPF_MISSING")
-                                .locator("CPF_MISSING")
-                                .createdAt(LocalDateTime.now())
-                                .build();
-                        appCreds = List.of(ghost);
-                    }
-                } catch (Exception ex) {
-                    log.error("[AccessControl] Falha ao processar acesso em tempo real para o agendamento ID {}: {}", id, ex.getMessage());
-                }
-            }
-            credentials.addAll(appCreds);
-        }
-
-
-
-        // Ordena para que o paciente principal venha em primeiro lugar, seguido de acompanhantes
-        credentials.sort((c1, c2) -> {
-            boolean isC1MainPatient = c1.getUserType() == UserType.PATIENT && c1.getAppointmentId().equalsIgnoreCase(idAgendamento);
-            boolean isC2MainPatient = c2.getUserType() == UserType.PATIENT && c2.getAppointmentId().equalsIgnoreCase(idAgendamento);
-            if (isC1MainPatient && !isC2MainPatient) return -1;
-            if (!isC1MainPatient && isC2MainPatient) return 1;
-
-            if (c1.getUserType() == UserType.PATIENT && c2.getUserType() != UserType.PATIENT) return -1;
-            if (c1.getUserType() != UserType.PATIENT && c2.getUserType() == UserType.PATIENT) return 1;
-
-            return 0;
-        });
-
-        // Formata data e hora do agendamento principal
-        String appointmentDateTime = "";
-        String opensAt = "";
-        String closesAt = "23:00";
-        if (accessInfo.appointmentDate() != null) {
-            if (accessInfo.appointmentTime() != null) {
-                appointmentDateTime = LocalDateTime.of(accessInfo.appointmentDate(), accessInfo.appointmentTime())
-                        .format(DATE_TIME_FORMATTER);
-                LocalTime openingTime = accessInfo.appointmentTime().minusMinutes(120);
-                opensAt = openingTime.format(TIME_FORMATTER);
-            } else {
-                appointmentDateTime = accessInfo.appointmentDate().format(DATE_FORMATTER);
-                opensAt = "08:00";
-            }
-        }
-
-        String doctorName = accessInfo.doctorName() != null ? accessInfo.doctorName() : "";
-        final String finalAppointmentDateTime = appointmentDateTime;
-        final String finalDoctorName = doctorName;
-        final String finalOpensAt = opensAt;
-        final String finalClosesAt = closesAt;
-
-        Map<String, FeegowPatientAccessInfo> challengeCache = new HashMap<>();
-        List<AccessCredentialResponse> response = new ArrayList<>();
-        for (AccessCredential c : credentials) {
-            String itemAppointmentDateTime = finalAppointmentDateTime;
-            String itemDoctorName = finalDoctorName;
-            String itemOpensAt = finalOpensAt;
-            String itemClosesAt = finalClosesAt;
-
-            // Se for um agendamento diferente do principal, busca as informações específicas de data/hora/médico (apenas para IDs numéricos do Feegow)
-            if (!c.getAppointmentId().equalsIgnoreCase(idAgendamento) 
-                    && !"CPF_MISSING".equals(c.getAccessCredential()) 
-                    && c.getAppointmentId() != null 
-                    && c.getAppointmentId().matches("\\d+")) {
-                try {
-                    FeegowPatientAccessInfo specificInfo = null;
-                    if (challengeCache.containsKey(c.getAppointmentId())) {
-                        specificInfo = challengeCache.get(c.getAppointmentId());
-                    } else {
-                        // O paciente já está autenticado pelo agendamento principal da requisição.
-                        // Para os demais agendamentos do mesmo paciente, buscamos os dados no Feegow diretamente sem revalidar o Magic Token (que pertence ao agendamento principal).
-                        var optInfo = feegowClientPort.fetchPatientAccessInfo(c.getAppointmentId());
-                        if (optInfo.isPresent()) {
-                            specificInfo = optInfo.get();
-                            challengeCache.put(c.getAppointmentId(), specificInfo);
-                        }
-                    }
-                    if (specificInfo != null) {
-                        if (specificInfo.appointmentDate() != null) {
-                            if (specificInfo.appointmentTime() != null) {
-                                itemAppointmentDateTime = LocalDateTime.of(specificInfo.appointmentDate(), specificInfo.appointmentTime())
-                                        .format(DATE_TIME_FORMATTER);
-                                LocalTime openingTime = specificInfo.appointmentTime().minusMinutes(120);
-                                itemOpensAt = openingTime.format(TIME_FORMATTER);
-                            } else {
-                                itemAppointmentDateTime = specificInfo.appointmentDate().format(DATE_FORMATTER);
-                                itemOpensAt = "08:00";
-                            }
-                        }
-                        if (specificInfo.doctorName() != null && !specificInfo.doctorName().isBlank()) {
-                            itemDoctorName = specificInfo.doctorName();
-                        }
-                    }
-                } catch (Exception ex) {
-                    log.warn("[AccessControl] Não foi possível obter detalhes específicos para o agendamento do grupo {}: {}", c.getAppointmentId(), ex.getMessage());
-                }
-            }
-
-            if (c.getAppointmentId() != null && (c.getAppointmentId().startsWith("INOV-") || c.getAppointmentId().startsWith("IMG-"))) {
-                if (c.getDoctorName() != null && !c.getDoctorName().isBlank()) {
-                    itemDoctorName = c.getDoctorName();
-                } else if (itemDoctorName == null || itemDoctorName.isBlank()) {
-                    itemDoctorName = c.getAppointmentId().startsWith("INOV-") ? "Inovare – Serviços de Saúde" : "Clínica Da Imagem - Unidade Inovare";
-                }
-                itemAppointmentDateTime = resolveDisplayDate(c.getAppointmentId());
-            }
-
-            // Validação de janela de tempo para liberação de exibição do QR Code no frontend
-            LocalDate todayDate = LocalDate.now(CLINIC_ZONE);
-            LocalDate itemDate = null;
-            
-            if (c.getAppointmentId().equalsIgnoreCase(idAgendamento)) {
-                itemDate = accessInfo.appointmentDate();
-            } else {
-                try {
-                    FeegowPatientAccessInfo specificInfo = challengeCache.get(c.getAppointmentId());
-                    if (specificInfo != null) {
-                        itemDate = specificInfo.appointmentDate();
-                    }
-                } catch (Exception ignored) {}
-            }
-            
-            if (itemDate == null) {
-                itemDate = accessInfo.appointmentDate();
-            }
-            
-            boolean isItemToday = itemDate != null && todayDate.equals(itemDate);
-            // No dia da consulta ou em auto-cadastros, o QR Code NUNCA deve ser bloqueado na tela!
-            boolean isItemReleased = isItemToday;
-            if (c.getAppointmentId() != null && (c.getAppointmentId().startsWith("INOV-") || c.getAppointmentId().startsWith("IMG-"))) {
-                isItemReleased = true;
-            } else if (!isItemToday && itemDate != null) {
-                // Se for em data futura (amanha, semana que vem) ou passada, bloqueia exibicao
-                isItemReleased = false;
-            }
-
-            String credentialCodeToReturn = c.getAccessCredential();
-            if (!"CPF_MISSING".equals(credentialCodeToReturn)) {
-                credentialCodeToReturn = isItemReleased ? c.getAccessCredential() : "BLOCKED_OUTSIDE_WINDOW";
-            }
-
-            response.add(new AccessCredentialResponse(
-                    c.getAppointmentId(),
-                    c.getName(),
-                    c.getUserType(),
-                    c.getLocator(),
-                    credentialCodeToReturn,
-                    c.getCpf(),
-                    itemDoctorName,
-                    itemAppointmentDateTime,
-                    itemOpensAt,
-                    itemClosesAt,
-                    c.getId()
-            ));
-        }
-
-        log.info("[AccessControl] Retornando {} credencial(ais) para o agendamento ID: {}", response.size(), idAgendamento);
-        return ResponseEntity.ok(response);
+        List<AccessCredentialResponse> responses = getCredentialsUseCase.execute(idAgendamento, phoneDigits, token);
+        return ResponseEntity.ok(responses);
     }
 
     /**
@@ -855,7 +547,7 @@ public class AccessController {
             return ResponseEntity.notFound().build();
         }
         FeegowPatientAccessInfo accessInfo = accessInfoOpt.get();
-        String token = accessService.generateAccessToken(idAgendamento, accessInfo.phone());
+        String token = validateAccessChallengeUseCase.generateAccessToken(idAgendamento, accessInfo.phone());
         String accessUrl = "https://itsm-inovare.ctrls.dev.br/" + idAgendamento + "?t=" + token;
         return ResponseEntity.ok(Map.of(
             "appointmentId", idAgendamento,
@@ -864,12 +556,31 @@ public class AccessController {
         ));
     }
 
+    /**
+     * Endpoint para download e adição de evento iCalendar (.ics) nativo no iOS / Apple Calendar e Outlook.
+     */
+    @GetMapping(value = "/calendar/event.ics", produces = "text/calendar;charset=UTF-8")
+    public ResponseEntity<String> getCalendarEventIcs(
+            @RequestParam(value = "title", defaultValue = "Consulta Médica - Inovare") String title,
+            @RequestParam(value = "start", required = false) String start,
+            @RequestParam(value = "end", required = false) String end,
+            @RequestParam(value = "location", defaultValue = "Edifício Inovare, Ponta Grossa - PR") String location,
+            @RequestParam(value = "description", defaultValue = "Consulta médica agendada no Edifício Inovare.") String description) {
+
+        String ics = generateCalendarIcsUseCase.execute(title, start, end, location, description);
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"consulta-inovare.ics\"")
+                .header(HttpHeaders.CONTENT_TYPE, "text/calendar; charset=UTF-8")
+                .body(ics);
+    }
+
     private String resolveDisplayDate(String appointmentId) {
         if (appointmentId != null && appointmentId.length() >= 13 && (appointmentId.startsWith("INOV-") || appointmentId.startsWith("IMG-"))) {
             try {
                 String datePart = appointmentId.substring(5, 13);
                 LocalDate parsedDate = LocalDate.parse(datePart, DateTimeFormatter.ofPattern("yyyyMMdd"));
-                LocalDate today = LocalDate.now(CLINIC_ZONE);
+                LocalDate today = LocalDate.now(AccessWindowCalculator.CLINIC_ZONE);
                 if (parsedDate.equals(today)) {
                     return "Hoje";
                 } else if (parsedDate.equals(today.plusDays(1))) {
@@ -880,67 +591,5 @@ public class AccessController {
             } catch (Exception ignored) {}
         }
         return "Hoje";
-    }
-
-    /**
-     * Endpoint para download e adição de evento iCalendar (.ics) nativo no iOS / Apple Calendar e Outlook.
-     * Retorna o arquivo com MIME text/calendar para que o iOS Safari abra diretamente o app nativo do Calendário.
-     */
-    @GetMapping(value = "/calendar/event.ics", produces = "text/calendar;charset=UTF-8")
-    public ResponseEntity<String> getCalendarEventIcs(
-            @RequestParam(value = "title", defaultValue = "Consulta Médica - Inovare") String title,
-            @RequestParam(value = "start", required = false) String start,
-            @RequestParam(value = "end", required = false) String end,
-            @RequestParam(value = "location", defaultValue = "Edifício Inovare, Ponta Grossa - PR") String location,
-            @RequestParam(value = "description", defaultValue = "Consulta médica agendada no Edifício Inovare.") String description) {
-
-        String uid = "inovare-" + System.currentTimeMillis() + "@itsm-inovare.ctrls.dev.br";
-        String nowUtc = DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'").withZone(ZoneOffset.UTC).format(Instant.now());
-
-        String dtStart = (start != null && !start.isBlank()) ? start : nowUtc;
-        String dtEnd = (end != null && !end.isBlank()) ? end : dtStart;
-
-        String ics = String.join("\r\n",
-                "BEGIN:VCALENDAR",
-                "VERSION:2.0",
-                "PRODID:-//Inovare Servicos de Saude//ITSM Acesso//PT",
-                "CALSCALE:GREGORIAN",
-                "METHOD:PUBLISH",
-                "BEGIN:VEVENT",
-                "UID:" + uid,
-                "DTSTAMP:" + nowUtc,
-                "DTSTART:" + dtStart,
-                "DTEND:" + dtEnd,
-                "SUMMARY:" + escapeIcs(title),
-                "DESCRIPTION:" + escapeIcs(description),
-                "LOCATION:" + escapeIcs(location),
-                "STATUS:CONFIRMED",
-                "BEGIN:VALARM",
-                "TRIGGER:-P1D",
-                "ACTION:DISPLAY",
-                "DESCRIPTION:Lembrete de Consulta Médica (Amanhã)",
-                "END:VALARM",
-                "BEGIN:VALARM",
-                "TRIGGER:-PT1H",
-                "ACTION:DISPLAY",
-                "DESCRIPTION:Lembrete: Sua consulta é em 1 hora",
-                "END:VALARM",
-                "END:VEVENT",
-                "END:VCALENDAR"
-        );
-
-        return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"consulta-inovare.ics\"")
-                .header(HttpHeaders.CONTENT_TYPE, "text/calendar; charset=UTF-8")
-                .body(ics);
-    }
-
-    private String escapeIcs(String text) {
-        if (text == null) return "";
-        return text.replace("\\", "\\\\")
-                .replace(";", "\\;")
-                .replace(",", "\\,")
-                .replace("\n", "\\n")
-                .replace("\r", "");
     }
 }
