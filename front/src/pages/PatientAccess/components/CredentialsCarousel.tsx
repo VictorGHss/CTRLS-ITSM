@@ -214,18 +214,33 @@ export const CredentialsCarousel: React.FC<CredentialsCarouselProps> = ({
                         type="button"
                         onClick={onReactivateAccess}
                         disabled={isReactivating}
-                        className="w-full py-2 px-3 bg-amber-50 hover:bg-amber-100 border border-amber-200/90 text-amber-900 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 active:scale-[0.98] shadow-xs cursor-pointer disabled:opacity-60"
+                        className="w-full py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 active:scale-[0.98] shadow-xs cursor-pointer disabled:opacity-60 border"
+                        style={{
+                          backgroundColor: `${clinicTheme.secondaryColor}40`,
+                          borderColor: `${clinicTheme.primaryColor}50`,
+                          color: clinicTheme.primaryDarkColor
+                        }}
                         title="Se a catraca não liberar na entrada ou saída, clique para renovar o acesso"
                       >
-                        <RefreshCw className={`w-3.5 h-3.5 text-amber-700 shrink-0 ${isReactivating ? 'animate-spin' : ''}`} />
+                        <RefreshCw 
+                          className={`w-3.5 h-3.5 shrink-0 ${isReactivating ? 'animate-spin' : ''}`}
+                          style={{ color: clinicTheme.primaryDarkColor }}
+                        />
                         <span>{isReactivating ? 'Gerando Novo QR Code...' : 'Problemas na catraca? Atualizar QR Code'}</span>
                       </button>
                       {reactivateMessage && (
-                        <div className={`p-2 rounded-xl text-[11px] font-medium text-center flex items-center justify-center gap-1.5 transition-all ${
-                          reactivateMessage.type === 'success'
-                            ? 'bg-emerald-50 border border-emerald-200 text-emerald-800'
-                            : 'bg-red-50 border border-red-200 text-red-800'
-                        }`}>
+                        <div 
+                          className="p-2 rounded-xl text-[11px] font-medium text-center flex items-center justify-center gap-1.5 transition-all border"
+                          style={reactivateMessage.type === 'success' ? {
+                            backgroundColor: `${clinicTheme.secondaryColor}60`,
+                            borderColor: clinicTheme.primaryColor,
+                            color: clinicTheme.primaryDarkColor
+                          } : {
+                            backgroundColor: '#fef2f2',
+                            borderColor: '#fecaca',
+                            color: '#991b1b'
+                          }}
+                        >
                           <span>{reactivateMessage.type === 'success' ? '✅' : '⚠️'}</span>
                           <span>{reactivateMessage.text}</span>
                         </div>
@@ -256,20 +271,25 @@ export const CredentialsCarousel: React.FC<CredentialsCarouselProps> = ({
                         }
                       }}
                       disabled={savingIndex === idx}
-                      className={`flex-1 py-2 px-2.5 rounded-xl text-[11px] font-bold transition-all flex items-center justify-center gap-1.5 active:scale-[0.98] shadow-xs cursor-pointer border ${
-                        savedIndex === idx
-                          ? 'bg-emerald-100 border-emerald-300 text-emerald-900'
-                          : 'bg-emerald-50 hover:bg-emerald-100 border-emerald-200 text-emerald-800'
-                      }`}
+                      className="flex-1 py-2 px-2.5 rounded-xl text-[11px] font-bold transition-all flex items-center justify-center gap-1.5 active:scale-[0.98] shadow-xs cursor-pointer border hover:bg-slate-50"
+                      style={savedIndex === idx ? {
+                        backgroundColor: `${clinicTheme.secondaryColor}65`,
+                        borderColor: clinicTheme.primaryColor,
+                        color: clinicTheme.primaryDarkColor
+                      } : {
+                        backgroundColor: '#ffffff',
+                        borderColor: `${clinicTheme.primaryColor}45`,
+                        color: clinicTheme.primaryDarkColor
+                      }}
                     >
                       {savedIndex === idx ? (
                         <>
-                          <Check className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                          <Check className="w-3.5 h-3.5 shrink-0" style={{ color: clinicTheme.primaryDarkColor }} />
                           <span>Salvo no Celular!</span>
                         </>
                       ) : (
                         <>
-                          <Download className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                          <Download className="w-3.5 h-3.5 shrink-0" style={{ color: clinicTheme.primaryColor }} />
                           <span>{savingIndex === idx ? 'Salvando...' : 'Salvar no Celular'}</span>
                         </>
                       )}
@@ -283,10 +303,15 @@ export const CredentialsCarousel: React.FC<CredentialsCarouselProps> = ({
                         setSharingIndex(null);
                       }}
                       disabled={sharingIndex === idx}
-                      className="py-2 px-3 bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 rounded-xl text-[11px] font-bold transition-all flex items-center justify-center gap-1.5 active:scale-[0.98] shadow-xs cursor-pointer shrink-0"
+                      className="py-2 px-3 rounded-xl text-[11px] font-bold transition-all flex items-center justify-center gap-1.5 active:scale-[0.98] shadow-xs cursor-pointer shrink-0 border hover:bg-slate-50"
+                      style={{
+                        backgroundColor: '#ffffff',
+                        borderColor: `${clinicTheme.primaryColor}45`,
+                        color: clinicTheme.primaryDarkColor
+                      }}
                       title="Compartilhar QR Code"
                     >
-                      <Share2 className="w-3.5 h-3.5 text-slate-600 shrink-0" />
+                      <Share2 className="w-3.5 h-3.5 shrink-0" style={{ color: clinicTheme.primaryColor }} />
                       <span>{sharingIndex === idx ? '...' : 'Compartilhar'}</span>
                     </button>
                   </div>

@@ -253,20 +253,25 @@ export const FullscreenQrModal: React.FC<FullscreenQrModalProps> = ({
                 }
               }}
               disabled={isSaving}
-              className={`flex-1 py-2.5 px-3 rounded-2xl font-bold flex items-center justify-center gap-2 text-xs sm:text-sm shadow-sm transition-all active:scale-[0.98] border cursor-pointer ${
-                isSaved
-                  ? 'bg-emerald-100 border-emerald-300 text-emerald-900'
-                  : 'bg-emerald-50 hover:bg-emerald-100 border-emerald-300 text-emerald-900'
-              }`}
+              className="flex-1 py-2.5 px-3 rounded-2xl font-bold flex items-center justify-center gap-2 text-xs sm:text-sm shadow-sm transition-all active:scale-[0.98] border cursor-pointer hover:bg-slate-50"
+              style={isSaved ? {
+                backgroundColor: `${clinicTheme?.secondaryColor || '#E6F4EA'}65`,
+                borderColor: primaryColor,
+                color: primaryDarkColor
+              } : {
+                backgroundColor: '#ffffff',
+                borderColor: `${primaryColor}45`,
+                color: primaryDarkColor
+              }}
             >
               {isSaved ? (
                 <>
-                  <Check className="w-4 h-4 text-emerald-700 shrink-0" />
+                  <Check className="w-4 h-4 shrink-0" style={{ color: primaryDarkColor }} />
                   <span>Salvo no Celular!</span>
                 </>
               ) : (
                 <>
-                  <Download className="w-4 h-4 text-emerald-700 shrink-0" />
+                  <Download className="w-4 h-4 shrink-0" style={{ color: primaryColor }} />
                   <span>{isSaving ? 'Salvando...' : 'Salvar no Celular'}</span>
                 </>
               )}
@@ -280,10 +285,15 @@ export const FullscreenQrModal: React.FC<FullscreenQrModalProps> = ({
                 setIsSharing(false);
               }}
               disabled={isSharing}
-              className="py-2.5 px-3 rounded-2xl font-bold flex items-center justify-center gap-1.5 text-xs sm:text-sm shadow-sm transition-all active:scale-[0.98] border border-slate-300 bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer shrink-0"
+              className="py-2.5 px-3 rounded-2xl font-bold flex items-center justify-center gap-1.5 text-xs sm:text-sm shadow-sm transition-all active:scale-[0.98] border cursor-pointer shrink-0 hover:bg-slate-50"
+              style={{
+                backgroundColor: '#ffffff',
+                borderColor: `${primaryColor}45`,
+                color: primaryDarkColor
+              }}
               title="Compartilhar Imagem do QR Code"
             >
-              <Share2 className="w-4 h-4 text-slate-600 shrink-0" />
+              <Share2 className="w-4 h-4 shrink-0" style={{ color: primaryColor }} />
               <span>{isSharing ? '...' : 'Compartilhar'}</span>
             </button>
           </div>
