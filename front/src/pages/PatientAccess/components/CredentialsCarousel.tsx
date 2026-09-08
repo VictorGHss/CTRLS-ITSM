@@ -208,6 +208,34 @@ export const CredentialsCarousel: React.FC<CredentialsCarouselProps> = ({
                     <span>Ampliar QR Code</span>
                   </button>
 
+                  {onReactivateAccess && (
+                    <div className="flex flex-col gap-1">
+                      <button
+                        type="button"
+                        onClick={onReactivateAccess}
+                        disabled={isReactivating}
+                        className="w-full py-2 px-3 bg-amber-50 hover:bg-amber-100 border border-amber-200/90 text-amber-900 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 active:scale-[0.98] shadow-xs cursor-pointer disabled:opacity-60"
+                        title="Se a catraca não liberar na entrada ou saída, clique para renovar o acesso"
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 text-amber-700 shrink-0 ${isReactivating ? 'animate-spin' : ''}`} />
+                        <span>{isReactivating ? 'Gerando Novo QR Code...' : 'Problemas na catraca? Atualizar QR Code'}</span>
+                      </button>
+                      {reactivateMessage && (
+                        <div className={`p-2 rounded-xl text-[11px] font-medium text-center flex items-center justify-center gap-1.5 transition-all ${
+                          reactivateMessage.type === 'success'
+                            ? 'bg-emerald-50 border border-emerald-200 text-emerald-800'
+                            : 'bg-red-50 border border-red-200 text-red-800'
+                        }`}>
+                          <span>{reactivateMessage.type === 'success' ? '✅' : '⚠️'}</span>
+                          <span>{reactivateMessage.text}</span>
+                        </div>
+                      )}
+                      <p className="text-[10px] text-slate-500 text-center font-medium leading-relaxed px-1">
+                        💡 Se a catraca não liberar na <strong>entrada</strong> ou <strong>saída</strong>, clique acima para renovar.
+                      </p>
+                    </div>
+                  )}
+
                   <div className="flex gap-2">
                     <button
                       type="button"
@@ -403,32 +431,6 @@ export const CredentialsCarousel: React.FC<CredentialsCarouselProps> = ({
           </button>
         )}
 
-        {onReactivateAccess && (
-          <div className="flex flex-col gap-1.5">
-            <button
-              type="button"
-              onClick={onReactivateAccess}
-              disabled={isReactivating}
-              className="w-full py-3 px-4 bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 rounded-2xl text-xs font-bold transition-all flex items-center justify-center gap-2 active:scale-[0.98] shadow-sm cursor-pointer disabled:opacity-60"
-            >
-              <RefreshCw className={`w-4 h-4 text-amber-700 ${isReactivating ? 'animate-spin' : ''}`} />
-              <span>{isReactivating ? 'Gerando Novo QR Code...' : 'Problemas na catraca? Atualizar QR Code'}</span>
-            </button>
-            {reactivateMessage && (
-              <div className={`p-2.5 rounded-xl text-xs font-medium text-center flex items-center justify-center gap-1.5 transition-all ${
-                reactivateMessage.type === 'success'
-                  ? 'bg-emerald-50 border border-emerald-200 text-emerald-800'
-                  : 'bg-red-50 border border-red-200 text-red-800'
-              }`}>
-                <span>{reactivateMessage.type === 'success' ? '✅' : '⚠️'}</span>
-                <span>{reactivateMessage.text}</span>
-              </div>
-            )}
-            <p className="text-[10px] text-slate-500 text-center font-medium leading-relaxed px-2">
-              💡 Se a catraca não liberar na <strong>entrada</strong> ou na <strong>saída</strong>, clique acima para renovar seu acesso imediatamente.
-            </p>
-          </div>
-        )}
 
         {onResetAccess && (
           <button

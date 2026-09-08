@@ -6,12 +6,12 @@ interface CompanionModalProps {
   isOpen: boolean;
   companionName: string;
   companionCpf: string;
-  companionBirthDate: string;
+  companionBirthDate?: string;
   companionSubmitLoading: boolean;
   companionSubmitError: string | null;
   onNameChange: (val: string) => void;
   onCpfChange: (val: string) => void;
-  onBirthDateChange: (val: string) => void;
+  onBirthDateChange?: (val: string) => void;
   onSubmit: (e: React.FormEvent) => void;
   onClose: () => void;
   clinicTheme?: ClinicTheme;
@@ -21,12 +21,10 @@ export const CompanionModal: React.FC<CompanionModalProps> = ({
   isOpen,
   companionName,
   companionCpf,
-  companionBirthDate,
   companionSubmitLoading,
   companionSubmitError,
   onNameChange,
   onCpfChange,
-  onBirthDateChange,
   onSubmit,
   onClose,
   clinicTheme,
@@ -54,7 +52,7 @@ export const CompanionModal: React.FC<CompanionModalProps> = ({
           </div>
           <h3 className="text-md font-bold text-slate-800">Cadastrar Acompanhante</h3>
           <p className="text-[11px] text-slate-500 leading-relaxed max-w-[280px] mx-auto mt-1">
-            Informe os dados para cadastrar o acompanhante nas catracas físicas de acesso.
+            Informe o nome e CPF para cadastrar o acompanhante nas catracas físicas de acesso.
           </p>
         </div>
 
@@ -99,37 +97,6 @@ export const CompanionModal: React.FC<CompanionModalProps> = ({
                 }}
                 disabled={companionSubmitLoading}
                 className="w-full py-3 px-4 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 transition-all text-xs font-mono font-semibold text-slate-700"
-              />
-            </div>
-
-            {/* Data de Nascimento (Opcional) */}
-            <div>
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                Data de Nascimento <span className="text-[9px] text-slate-400 font-normal">(Opcional)</span>
-              </label>
-              <input
-                type="text"
-                inputMode="numeric"
-                placeholder="DD/MM/AAAA (opcional)"
-                value={companionBirthDate}
-                onChange={(e) => {
-                  const val = e.target.value.trim();
-                  const ymd = val.match(/^(\d{4})[-/](\d{2})[-/](\d{2})/);
-                  if (ymd) {
-                    onBirthDateChange(`${ymd[3]}/${ymd[2]}/${ymd[1]}`);
-                    return;
-                  }
-                  const digits = val.replace(/\D/g, '').substring(0, 8);
-                  let masked = digits;
-                  if (digits.length > 4) {
-                    masked = `${digits.substring(0, 2)}/${digits.substring(2, 4)}/${digits.substring(4)}`;
-                  } else if (digits.length > 2) {
-                    masked = `${digits.substring(0, 2)}/${digits.substring(2)}`;
-                  }
-                  onBirthDateChange(masked);
-                }}
-                disabled={companionSubmitLoading}
-                className="w-full py-3 px-4 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 transition-all text-xs font-semibold text-slate-700"
               />
             </div>
           </div>

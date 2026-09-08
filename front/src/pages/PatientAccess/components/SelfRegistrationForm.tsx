@@ -1,5 +1,5 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react';
-import { User, CreditCard, Phone, Calendar, UserPlus, ArrowRight, Search, CheckCircle2, AlertCircle, ShieldCheck, Plus, Trash2, Stethoscope, MapPin, X, Sparkles, Clock } from 'lucide-react';
+import { User, CreditCard, Calendar, UserPlus, ArrowRight, Search, CheckCircle2, AlertCircle, ShieldCheck, Plus, Trash2, Stethoscope, MapPin, X, Sparkles, Clock } from 'lucide-react';
 import { type ClinicTheme, DOCTOR_SUGGESTIONS, type DoctorSuggestion, resolveDoctorLocation } from '../utils/clinicThemes';
 import type { AccessCredential } from '../types';
 import api from '../../../services/api';
@@ -856,39 +856,6 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center gap-1">
-                  <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                  Nascimento <span className="text-[10px] text-slate-400 font-normal">(opcional)</span>
-                </label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={birthDate}
-                  onChange={(e) => setBirthDate(maskDate(e.target.value))}
-                  placeholder="DD/MM/AAAA"
-                  maxLength={10}
-                  className="w-full px-3.5 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-semibold text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none transition-all font-mono form-input-themed"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center gap-1">
-                  <Phone className="w-3.5 h-3.5 text-slate-400" />
-                  WhatsApp <span className="text-[10px] text-slate-400 font-normal">(opcional)</span>
-                </label>
-                <input
-                  type="tel"
-                  inputMode="numeric"
-                  value={phone}
-                  onChange={(e) => setPhone(maskPhone(e.target.value))}
-                  placeholder="(42) 99999-9999"
-                  maxLength={15}
-                  className="w-full px-3.5 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-semibold text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none transition-all font-mono form-input-themed"
-                />
-              </div>
-            </div>
-
             {/* Checkbox e Lista de Acompanhantes (Múltiplos / Ilimitados) */}
             <div className="pt-2 border-t border-slate-100">
               <label className="flex items-center gap-2.5 cursor-pointer py-1.5 select-none">
@@ -954,24 +921,15 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
                           className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none transition-all form-input-themed"
                         />
                       </div>
-                      <div className="grid grid-cols-2 gap-2">
+                      <div>
                         <input
                           type="text"
                           inputMode="numeric"
                           value={comp.cpf}
                           onChange={(e) => updateCompanion(comp.id, 'cpf', maskCpf(e.target.value))}
-                          placeholder="CPF *"
+                          placeholder="CPF do Acompanhante *"
                           maxLength={14}
                           className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none transition-all font-mono form-input-themed"
-                        />
-                        <input
-                          type="text"
-                          inputMode="numeric"
-                          value={comp.birthDate}
-                          onChange={(e) => updateCompanion(comp.id, 'birthDate', maskDate(e.target.value))}
-                          placeholder="Nasc. (opcional)"
-                          maxLength={10}
-                          className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none transition-all form-input-themed"
                         />
                       </div>
                     </div>
