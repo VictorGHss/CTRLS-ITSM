@@ -445,8 +445,24 @@ public class AccessService {
                     .map(companion -> executor.submit(() -> {
                         // Isolamento e resiliência (Fail-Safe) por tarefa
                         try {
+                            String compCleanCpf = companion.cpf() != null ? companion.cpf().replaceAll("\\D", "") : "";
+                            String pCleanCpf = (finalCpf != null && !finalCpf.isBlank()) ? finalCpf.replaceAll("\\D", "") : "";
+
+                            // 1. Previne que o acompanhante seja cadastrado com o mesmo CPF do paciente titular
+                            if (!compCleanCpf.isBlank() && !pCleanCpf.isBlank() && compCleanCpf.equals(pCleanCpf)) {
+                                log.warn("[AccessService] Acompanhante '{}' possui o mesmo CPF do paciente titular ({}). Ignorando para evitar conflito na catraca.", companion.name(), compCleanCpf);
+                                return (Void) null;
+                            }
+                            // 2. Previne que o acompanhante tenha o mesmo nome do titular
+                            if (accessInfo.name() != null && companion.name() != null 
+                                    && companion.name().trim().equalsIgnoreCase(accessInfo.name().trim())) {
+                                log.warn("[AccessService] Acompanhante '{}' possui o mesmo nome do paciente titular. Ignorando.", companion.name());
+                                return (Void) null;
+                            }
+
                             boolean alreadyRegisteredWithRealCred = existingAppCreds.stream()
-                                .anyMatch(c -> c.getName().equalsIgnoreCase(companion.name().trim()) 
+                                .anyMatch(c -> (c.getName().equalsIgnoreCase(companion.name().trim())
+                                                || (!compCleanCpf.isBlank() && c.getCpf() != null && c.getCpf().replaceAll("\\D", "").equals(compCleanCpf)))
                                             && c.getUserType() == UserType.COMPANION
                                             && !c.getAccessCredential().startsWith("CRED-"));
                             if (alreadyRegisteredWithRealCred) {
@@ -490,11 +506,34 @@ public class AccessService {
     public AccessCredential registerCompanion(String appointmentId, CompanionAccessInfo companion) {
         log.info("[AccessService] Processando cadastro individual de acompanhante '{}' para agendamento {}", companion.name(), appointmentId);
 
+        // Validação anti-duplicação e anti-conflito de catraca:
+        // O acompanhante não pode ser a mesma pessoa do paciente titular nem outro acompanhante já cadastrado.
+        List<AccessCredential> existingCreds = accessCredentialRepositoryPort.findByAppointmentId(appointmentId);
+        String companionCleanCpf = companion.cpf() != null ? companion.cpf().replaceAll("\\D", "") : "";
+        String companionCleanName = companion.name() != null ? companion.name().trim() : "";
+
+        if (existingCreds != null && !existingCreds.isEmpty()) {
+            for (AccessCredential cred : existingCreds) {
+                String existingCleanCpf = cred.getCpf() != null ? cred.getCpf().replaceAll("\\D", "") : "";
+                if (!companionCleanCpf.isBlank() && !existingCleanCpf.isBlank() && companionCleanCpf.equals(existingCleanCpf)) {
+                    if (cred.getUserType() == UserType.PATIENT) {
+                        throw new IllegalArgumentException("O CPF informado pertence ao paciente titular. Cada pessoa precisa de seu próprio documento para liberar a catraca.");
+                    } else {
+                        throw new IllegalArgumentException("Já existe um acompanhante cadastrado com este CPF (" + cred.getName() + ").");
+                    }
+                }
+                if (cred.getUserType() == UserType.PATIENT && cred.getName() != null 
+                        && cred.getName().trim().equalsIgnoreCase(companionCleanName) && companionCleanName.length() >= 3) {
+                    throw new IllegalArgumentException("O acompanhante não pode ser a mesma pessoa do paciente titular.");
+                }
+            }
+        }
+
         if (appointmentId != null && (appointmentId.startsWith("IMG-") || appointmentId.startsWith("INOV-"))) {
             LocalDate date = LocalDate.now(CLINIC_ZONE);
             LocalTime openingTime = LocalTime.of(6, 0);
             LocalTime closingTime = LocalTime.of(23, 59);
-            String docName = accessCredentialRepositoryPort.findByAppointmentId(appointmentId).stream()
+            String docName = (existingCreds != null ? existingCreds : List.<AccessCredential>of()).stream()
                     .filter(c -> c != null && c.getDoctorName() != null && !c.getDoctorName().isBlank())
                     .map(c -> c.getDoctorName())
                     .findFirst()
@@ -918,6 +957,28 @@ public class AccessService {
         String cleanCpf = rawCpf.replaceAll("\\D", "");
         if (cleanCpf.length() != 11) {
             throw new IllegalArgumentException("CPF inválido. Deve conter 11 dígitos.");
+        }
+
+        // Validação anti-conflito de catraca para acompanhantes no auto-cadastro
+        if (companions != null && !companions.isEmpty()) {
+            java.util.Set<String> seenCompanionCpfs = new java.util.HashSet<>();
+            for (CompanionAccessInfo comp : companions) {
+                if (comp != null && comp.name() != null && !comp.name().isBlank()) {
+                    String compCpf = comp.cpf() != null ? comp.cpf().replaceAll("\\D", "") : "";
+                    if (!compCpf.isBlank() && compCpf.equals(cleanCpf)) {
+                        throw new IllegalArgumentException("O acompanhante '" + comp.name() + "' possui o mesmo CPF do paciente titular. Cada pessoa precisa de seu próprio documento para liberar a catraca.");
+                    }
+                    if (comp.name().trim().equalsIgnoreCase(name.trim()) && name.trim().length() >= 3) {
+                        throw new IllegalArgumentException("O acompanhante '" + comp.name() + "' não pode ser a mesma pessoa do paciente titular.");
+                    }
+                    if (!compCpf.isBlank()) {
+                        if (seenCompanionCpfs.contains(compCpf)) {
+                            throw new IllegalArgumentException("Foram informados acompanhantes duplicados com o mesmo CPF. Cada pessoa deve possuir um CPF único.");
+                        }
+                        seenCompanionCpfs.add(compCpf);
+                    }
+                }
+            }
         }
 
         LocalDate today = LocalDate.now(CLINIC_ZONE);

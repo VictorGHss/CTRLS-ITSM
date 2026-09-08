@@ -1,6 +1,7 @@
 package br.dev.ctrls.inovareti.modules.access.domain.service;
 
 import br.dev.ctrls.inovareti.modules.access.domain.model.AccessCredential;
+import br.dev.ctrls.inovareti.modules.access.domain.model.CompanionAccessInfo;
 import br.dev.ctrls.inovareti.modules.access.domain.model.FeegowPatientAccessInfo;
 import br.dev.ctrls.inovareti.modules.access.domain.model.GerAcessoRequest;
 import br.dev.ctrls.inovareti.modules.access.domain.model.GerAcessoResponse;
@@ -121,5 +122,59 @@ class AccessServiceCpfValidationTest {
         verify(gerAcessoClientPort).registerAccess(any(GerAcessoRequest.class));
         // Verifica que persistiu a credencial real
         verify(accessCredentialRepositoryPort).save(any(AccessCredential.class));
+    }
+
+    @Test
+    @DisplayName("Deveria rejeitar cadastro individual de acompanhante com CPF idêntico ao do paciente titular")
+    void shouldRejectCompanionWhenCpfIsSameAsPatient() {
+        String appointmentId = "3470777";
+        String patientCpf = "13821025930";
+
+        AccessCredential patientCred = AccessCredential.builder()
+                .appointmentId(appointmentId)
+                .name("MARIA DA SILVA")
+                .cpf(patientCpf)
+                .userType(br.dev.ctrls.inovareti.modules.access.domain.model.UserType.PATIENT)
+                .build();
+
+        when(accessCredentialRepositoryPort.findByAppointmentId(appointmentId)).thenReturn(List.of(patientCred));
+
+        CompanionAccessInfo companion = new CompanionAccessInfo(
+                "MARIA DA SILVA",
+                "138.210.259-30", // Mesmo CPF
+                null,
+                null,
+                null
+        );
+
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> {
+            accessService.registerCompanion(appointmentId, companion);
+        });
+    }
+
+    @Test
+    @DisplayName("Deveria rejeitar auto-cadastro quando o acompanhante informado possuir o mesmo CPF do paciente titular")
+    void shouldRejectSelfRegistrationWhenCompanionHasSameCpfAsPatient() {
+        String patientCpf = "13821025930";
+        CompanionAccessInfo companion = new CompanionAccessInfo(
+                "ACOMPANHANTE TESTE",
+                patientCpf,
+                null,
+                null,
+                null
+        );
+
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> {
+            accessService.processSelfRegistration(
+                    "JOAO PACIENTE",
+                    patientCpf,
+                    "42999999999",
+                    "1990-01-01",
+                    "Clínica da Imagem",
+                    null,
+                    null,
+                    List.of(companion)
+            );
+        });
     }
 }

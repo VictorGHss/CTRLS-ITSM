@@ -303,6 +303,25 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
           setErrorMessage(`O CPF do Acompanhante #${i + 1} (${c.name}) é inválido perante a Receita Federal. Por favor, confira os números digitados.`);
           return;
         }
+
+        // Previne que o acompanhante tenha o mesmo CPF do paciente titular
+        if (cleanCompCpf === cleanCpf) {
+          setErrorMessage(`O CPF do Acompanhante #${i + 1} não pode ser o mesmo do paciente titular. Cada pessoa precisa do seu próprio CPF para liberar a catraca.`);
+          return;
+        }
+
+        // Previne que o acompanhante tenha o mesmo nome do paciente titular
+        if (c.name.trim().toUpperCase() === name.trim().toUpperCase() && name.trim().length >= 3) {
+          setErrorMessage(`O acompanhante #${i + 1} não pode ter o mesmo nome do paciente titular.`);
+          return;
+        }
+
+        // Previne acompanhantes duplicados entre si
+        if (companionsPayload.some(cp => cp.cpf === cleanCompCpf)) {
+          setErrorMessage(`Foram informados acompanhantes duplicados com o mesmo CPF. Cada pessoa deve ter um CPF único.`);
+          return;
+        }
+
         companionsPayload.push({
           name: c.name.trim(),
           cpf: cleanCompCpf,
@@ -920,6 +939,11 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
                           placeholder={`Nome do Acompanhante #${idx + 1} *`}
                           className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none transition-all form-input-themed"
                         />
+                        {comp.name.trim().length >= 3 && name.trim().length >= 3 && comp.name.trim().toUpperCase() === name.trim().toUpperCase() && (
+                          <div className="flex items-center gap-1 mt-1 text-[11px] font-semibold text-rose-600 bg-rose-50 border border-rose-200 rounded px-2 py-0.5 animate-fadeIn">
+                            <span>⚠️ O acompanhante não pode ser o próprio paciente titular.</span>
+                          </div>
+                        )}
                       </div>
                       <div>
                         <input
@@ -931,6 +955,16 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
                           maxLength={14}
                           className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none transition-all font-mono form-input-themed"
                         />
+                        {comp.cpf.replace(/\D/g, '') === cpf.replace(/\D/g, '') && cpf.replace(/\D/g, '').length === 11 && (
+                          <div className="flex items-center gap-1 mt-1 text-[11px] font-semibold text-rose-600 bg-rose-50 border border-rose-200 rounded px-2 py-0.5 animate-fadeIn">
+                            <span>⚠️ Não pode ser o mesmo CPF do paciente titular.</span>
+                          </div>
+                        )}
+                        {companions.some((other, oIdx) => oIdx !== idx && other.cpf.replace(/\D/g, '') === comp.cpf.replace(/\D/g, '') && comp.cpf.replace(/\D/g, '').length === 11) && (
+                          <div className="flex items-center gap-1 mt-1 text-[11px] font-semibold text-rose-600 bg-rose-50 border border-rose-200 rounded px-2 py-0.5 animate-fadeIn">
+                            <span>⚠️ CPF duplicado com outro acompanhante.</span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))}

@@ -621,6 +621,27 @@ export default function PatientAccess() {
       return;
     }
 
+    // 1. Não pode ter o mesmo CPF do paciente titular
+    const patientCred = credentials.find(c => c.userType === 'PATIENT');
+    const patientCleanCpf = patientCred?.cpf ? patientCred.cpf.replace(/\D/g, '') : '';
+    if (patientCleanCpf && cleanCpf === patientCleanCpf) {
+      setCompanionSubmitError('O CPF informado pertence ao paciente titular. Cada pessoa precisa de seu próprio CPF para liberar a catraca.');
+      return;
+    }
+
+    // 2. Não pode ter o mesmo nome do titular
+    if (patientCred?.name && companionName.trim().toUpperCase() === patientCred.name.trim().toUpperCase()) {
+      setCompanionSubmitError('O acompanhante não pode ser o próprio paciente titular.');
+      return;
+    }
+
+    // 3. Não pode ter o mesmo CPF de um acompanhante já cadastrado
+    const existingComp = credentials.find(c => c.userType === 'COMPANION' && c.cpf?.replace(/\D/g, '') === cleanCpf);
+    if (existingComp) {
+      setCompanionSubmitError(`Já existe um acompanhante cadastrado com este CPF (${existingComp.name}).`);
+      return;
+    }
+
     setCompanionSubmitLoading(true);
     setCompanionSubmitError(null);
 
@@ -696,9 +717,10 @@ export default function PatientAccess() {
       } else {
         setIsCompanionModalOpen(false);
       }
-    } catch (err: unknown) {
+    } catch (err: any) {
       console.error('[PatientAccess] Falha ao cadastrar acompanhante:', err);
-      setCompanionSubmitError('Erro ao cadastrar acompanhante. Tente novamente.');
+      const apiMsg = err?.response?.data?.message || err?.response?.data?.error;
+      setCompanionSubmitError(apiMsg || 'Erro ao cadastrar acompanhante. Tente novamente.');
     } finally {
       setCompanionSubmitLoading(false);
     }
@@ -953,6 +975,9 @@ export default function PatientAccess() {
         companionName={companionName}
         companionCpf={companionCpf}
         companionBirthDate={companionBirthDate}
+        patientCpf={credentials.find(c => c.userType === 'PATIENT')?.cpf}
+        patientName={credentials.find(c => c.userType === 'PATIENT')?.name}
+        existingCompanionsCpfs={credentials.filter(c => c.userType === 'COMPANION').map(c => c.cpf || '').filter(Boolean)}
         companionSubmitLoading={companionSubmitLoading}
         companionSubmitError={companionSubmitError}
         onNameChange={setCompanionName}

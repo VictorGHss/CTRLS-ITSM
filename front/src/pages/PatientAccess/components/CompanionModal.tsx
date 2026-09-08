@@ -7,6 +7,9 @@ interface CompanionModalProps {
   companionName: string;
   companionCpf: string;
   companionBirthDate?: string;
+  patientCpf?: string;
+  patientName?: string;
+  existingCompanionsCpfs?: string[];
   companionSubmitLoading: boolean;
   companionSubmitError: string | null;
   onNameChange: (val: string) => void;
@@ -21,6 +24,9 @@ export const CompanionModal: React.FC<CompanionModalProps> = ({
   isOpen,
   companionName,
   companionCpf,
+  patientCpf,
+  patientName,
+  existingCompanionsCpfs,
   companionSubmitLoading,
   companionSubmitError,
   onNameChange,
@@ -34,6 +40,21 @@ export const CompanionModal: React.FC<CompanionModalProps> = ({
   const primaryColor = clinicTheme?.primaryColor || '#00875F';
   const primaryDarkColor = clinicTheme?.primaryDarkColor || '#00583F';
   const secondaryColor = clinicTheme?.secondaryColor || '#E6F4EA';
+
+  const cleanCompCpf = companionCpf.replace(/\D/g, '');
+  const cleanPatientCpf = patientCpf ? patientCpf.replace(/\D/g, '') : '';
+  const isSameCpfAsPatient = cleanPatientCpf.length === 11 && cleanCompCpf === cleanPatientCpf;
+  const isDuplicateCompanionCpf = (existingCompanionsCpfs || []).some(
+    c => c.replace(/\D/g, '') === cleanCompCpf && cleanCompCpf.length === 11
+  );
+  const isSameNameAsPatient = Boolean(
+    patientName &&
+    companionName.trim().length >= 3 &&
+    patientName.trim().length >= 3 &&
+    companionName.trim().toUpperCase() === patientName.trim().toUpperCase()
+  );
+
+  const hasConflict = isSameCpfAsPatient || isDuplicateCompanionCpf || isSameNameAsPatient;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
@@ -70,6 +91,12 @@ export const CompanionModal: React.FC<CompanionModalProps> = ({
                 disabled={companionSubmitLoading}
                 className="w-full py-3 px-4 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 transition-all text-xs font-semibold text-slate-700"
               />
+              {isSameNameAsPatient && (
+                <div className="text-[11px] font-semibold text-rose-600 bg-rose-50 border border-rose-200 rounded-xl py-1.5 px-3 flex items-center gap-1.5 mt-1.5 animate-fadeIn">
+                  <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                  <span>O acompanhante não pode ser o próprio paciente titular.</span>
+                </div>
+              )}
             </div>
 
             {/* CPF */}
@@ -96,15 +123,29 @@ export const CompanionModal: React.FC<CompanionModalProps> = ({
                   onCpfChange(masked);
                 }}
                 disabled={companionSubmitLoading}
-                className="w-full py-3 px-4 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 transition-all text-xs font-mono font-semibold text-slate-700"
+                className={`w-full py-3 px-4 border rounded-xl focus:outline-none focus:ring-2 transition-all text-xs font-mono font-semibold text-slate-700 ${
+                  isSameCpfAsPatient || isDuplicateCompanionCpf ? 'border-rose-300 bg-rose-50/40' : 'border-slate-200'
+                }`}
               />
+              {isSameCpfAsPatient && (
+                <div className="text-[11px] font-semibold text-rose-600 bg-rose-50 border border-rose-200 rounded-xl py-1.5 px-3 flex items-center gap-1.5 mt-1.5 animate-fadeIn">
+                  <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                  <span>Este CPF pertence ao paciente titular. O acompanhante deve possuir seu próprio CPF para liberar a catraca.</span>
+                </div>
+              )}
+              {isDuplicateCompanionCpf && (
+                <div className="text-[11px] font-semibold text-rose-600 bg-rose-50 border border-rose-200 rounded-xl py-1.5 px-3 flex items-center gap-1.5 mt-1.5 animate-fadeIn">
+                  <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                  <span>Já existe um acompanhante cadastrado com este CPF.</span>
+                </div>
+              )}
             </div>
           </div>
 
           {companionSubmitError && (
             <div className="text-[11px] font-semibold text-red-600 bg-red-50 border border-red-100 rounded-xl py-2 px-3 flex items-center gap-1.5 justify-center">
-              <AlertTriangle className="w-3.5 h-3.5" />
-              {companionSubmitError}
+              <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+              <span>{companionSubmitError}</span>
             </div>
           )}
 
@@ -119,14 +160,14 @@ export const CompanionModal: React.FC<CompanionModalProps> = ({
             </button>
             <button
               type="submit"
-              disabled={companionSubmitLoading || !companionName.trim() || companionCpf.replace(/\D/g, '').length !== 11}
+              disabled={companionSubmitLoading || !companionName.trim() || cleanCompCpf.length !== 11 || hasConflict}
               className={`flex-1 py-3 rounded-xl text-xs font-bold transition-all shadow-md flex items-center justify-center gap-2 ${
-                companionName.trim() && companionCpf.replace(/\D/g, '').length === 11 && !companionSubmitLoading
+                companionName.trim() && cleanCompCpf.length === 11 && !companionSubmitLoading && !hasConflict
                   ? 'text-white hover:scale-[1.01] active:scale-[0.99] cursor-pointer'
                   : 'bg-slate-100 text-slate-400 cursor-not-allowed shadow-none'
               }`}
               style={
-                companionName.trim() && companionCpf.replace(/\D/g, '').length === 11 && !companionSubmitLoading
+                companionName.trim() && cleanCompCpf.length === 11 && !companionSubmitLoading && !hasConflict
                   ? { backgroundImage: `linear-gradient(to right, ${primaryColor}, ${primaryDarkColor})` }
                   : undefined
               }
