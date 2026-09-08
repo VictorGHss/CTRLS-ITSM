@@ -1,6 +1,6 @@
 // Página de listagem e cadastro de usuários
-import { useEffect, useState, useMemo, useCallback } from 'react';
-import { PlusCircle, X, Upload, Pencil, KeyRound, ShieldOff, Bell, BellOff, Search, ArrowDownWideNarrow } from 'lucide-react';
+import { useEffect, useState, useCallback } from 'react';
+import { PlusCircle, X, Upload, Search, ArrowDownWideNarrow } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { getAllUsers, createUser, getSectors, resetUserPassword, adminReset2FA } from '../../services/userService';
 import type { User, Sector, CreateUserDto } from '../../types/models';
@@ -8,8 +8,18 @@ import { useAuth } from '../../contexts/AuthContext';
 import BulkImportModal from './BulkImportModal';
 import EditUserModal from './EditUserModal';
 import NewUserModal from './NewUserModal';
+import { UserTable } from './UserTable';
+import { UserDetailsModal } from './UserDetailsModal';
+import { ResetPasswordConfirmModal } from './ResetPasswordConfirmModal';
+import { Reset2FAConfirmModal } from './Reset2FAConfirmModal';
 import PageHero from '@/components/ui/PageHero';
 import { useDebounce } from '@/hooks/useDebounce';
+
+const ROLE_LABELS: Record<string, string> = {
+  ADMIN: 'Administrador',
+  TECHNICIAN: 'Técnico',
+  USER: 'Usuário',
+};
 
 export default function Users() {
   const { user: authenticatedUser, invalidateTwoFactorVerification } = useAuth();
@@ -47,6 +57,15 @@ export default function Users() {
     receives_it_notifications: true,
   });
 
+  async function loadSectors() {
+    try {
+      const data = await getSectors(true);
+      setSectors(data);
+    } catch {
+      toast.error('Erro ao carregar setores.');
+    }
+  }
+
   useEffect(() => {
     void loadSectors();
   }, []);
@@ -78,13 +97,16 @@ export default function Users() {
     void loadUsers();
   }, [loadUsers]);
 
-  async function loadSectors() {
-    try {
-      const data = await getSectors(true);
-      setSectors(data);
-    } catch {
-      toast.error('Erro ao carregar setores.');
-    }
+  function resetForm() {
+    setFormData({
+      name: '',
+      email: '',
+      password: '',
+      role: 'USER',
+      sectorId: '',
+      contaAzulId: '',
+      receives_it_notifications: true,
+    });
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -115,18 +137,6 @@ export default function Users() {
     } finally {
       setSubmitting(false);
     }
-  }
-
-  function resetForm() {
-    setFormData({
-      name: '',
-      email: '',
-      password: '',
-      role: 'USER',
-      sectorId: '',
-      contaAzulId: '',
-      receives_it_notifications: true,
-    });
   }
 
   async function handleConfirmResetPassword() {
@@ -165,16 +175,6 @@ export default function Users() {
     }
   }
 
-  const roleLabels = {
-    ADMIN: 'Administrador',
-    TECHNICIAN: 'Técnico',
-    USER: 'Usuário',
-  } as const;
-
-  const filteredAndSortedUsers = useMemo(() => {
-    return users;
-  }, [users]);
-
   return (
     <main className="w-full max-w-full px-4 sm:px-6 lg:px-8 py-8">
       <title>Equipe e Usuários — Inovare TI</title>
@@ -187,14 +187,14 @@ export default function Users() {
           <>
             <button
               onClick={() => setShowImportModal(true)}
-              className="flex items-center gap-2 rounded-xl bg-brand-primary px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-primary-dark"
+              className="flex items-center gap-2 rounded-xl bg-brand-primary px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-primary-dark cursor-pointer"
             >
               <Upload size={17} />
               Importar Planilha
             </button>
             <button
               onClick={() => setShowModal(true)}
-              className="flex items-center gap-2 rounded-xl bg-brand-primary px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-primary-dark"
+              className="flex items-center gap-2 rounded-xl bg-brand-primary px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-primary-dark cursor-pointer"
             >
               <PlusCircle size={17} />
               Novo Usuário
@@ -203,7 +203,7 @@ export default function Users() {
         )}
       />
 
-      {/* ── Search & Filter Controls ── */}
+      {/* Barra de Pesquisa e Filtro */}
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
         <div className="relative flex-1 max-w-md">
           <input
@@ -225,7 +225,7 @@ export default function Users() {
                 setSearchQuery('');
                 setCurrentPage(0);
               }}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
             >
               <X size={16} />
             </button>
@@ -251,104 +251,17 @@ export default function Users() {
         </div>
       </div>
 
-      <div className="rounded-2xl border border-slate-200 bg-white shadow-sm p-6">
-        {loading ? (
-          <div className="p-12 text-center">
-            <div className="animate-pulse space-y-3">
-              <div className="h-4 bg-slate-200 rounded w-3/4 mx-auto" />
-              <div className="h-4 bg-slate-200 rounded w-1/2 mx-auto" />
-            </div>
-          </div>
-        ) : filteredAndSortedUsers.length === 0 ? (
-          <p className="text-center text-slate-400 py-12 text-sm">
-            {searchQuery ? 'Nenhum usuário correspondente à pesquisa.' : 'Nenhum usuário cadastrado.'}
-          </p>
-        ) : (
-          <>
-            <div className="overflow-x-auto">
-              <table className="w-full table-auto text-sm">
-                <thead>
-                  <tr>
-                    <th className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-slate-400">Nome</th>
-                    <th className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-slate-400">E-mail</th>
-                    <th className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-slate-400">Setor</th>
-                    <th className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-slate-400">Nível de Acesso</th>
-                    <th className="px-4 py-3 text-center text-[10px] font-bold uppercase tracking-widest text-slate-400">Alertas Discord</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {filteredAndSortedUsers.map((currentUser) => (
-                    <tr
-                      key={currentUser.id}
-                      onClick={() => setSelectedUser(currentUser)}
-                      className="cursor-pointer transition-colors hover:bg-orange-50/40"
-                    >
-                      <td className="px-4 py-3 font-medium text-slate-800">{currentUser.name}</td>
-                      <td className="px-4 py-3 text-slate-600">{currentUser.email}</td>
-                      <td className="px-4 py-3 text-slate-600">{currentUser.sectorName}</td>
-                      <td className="px-4 py-3">
-                        <span
-                          className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            currentUser.role === 'ADMIN'
-                              ? 'bg-red-100 text-red-700'
-                              : currentUser.role === 'TECHNICIAN'
-                                ? 'bg-brand-secondary/40 text-brand-primary-dark'
-                                : 'bg-slate-100 text-slate-700'
-                          }`}
-                        >
-                          {roleLabels[currentUser.role]}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        <span
-                          className="inline-flex"
-                          title={
-                            currentUser.receives_it_notifications
-                              ? 'Recebe alertas de chamados e SLA no Discord'
-                              : 'Não recebe alertas de chamados e SLA no Discord'
-                          }
-                        >
-                          {currentUser.receives_it_notifications ? (
-                            <Bell size={16} className="text-brand-primary" />
-                          ) : (
-                            <BellOff size={16} className="text-slate-400" />
-                          )}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Paginação */}
-            {totalPages > 1 && (
-              <div className="mt-6 flex items-center justify-between border-t border-slate-100 pt-6">
-                <p className="text-xs text-slate-500 font-medium">
-                  A mostrar página <span className="font-semibold text-slate-800">{currentPage + 1}</span> de{' '}
-                  <span className="font-semibold text-slate-800">{totalPages}</span>
-                </p>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setCurrentPage((prev) => Math.max(0, prev - 1))}
-                    disabled={currentPage === 0}
-                    className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Anterior
-                  </button>
-                  <button
-                    onClick={() => setCurrentPage((prev) => Math.min(totalPages - 1, prev + 1))}
-                    disabled={currentPage >= totalPages - 1}
-                    className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Seguinte
-                  </button>
-                </div>
-              </div>
-            )}
-          </>
-        )}
-      </div>
+      {/* Tabela de Usuários com Paginação */}
+      <UserTable
+        users={users}
+        loading={loading}
+        searchQuery={searchQuery}
+        roleLabels={ROLE_LABELS}
+        onSelectUser={setSelectedUser}
+        currentPage={currentPage}
+        totalPages={totalPages}
+        onPageChange={setCurrentPage}
+      />
 
       <NewUserModal
         isOpen={showModal}
@@ -365,56 +278,23 @@ export default function Users() {
         onCheckContaAzul={setCheckingContaAzul}
       />
 
-      {selectedUser && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg mx-4 p-6">
-            <div className="flex items-center justify-between mb-5">
-              <h2 className="text-lg font-bold text-slate-800">Gestão de Usuário</h2>
-              <button
-                onClick={() => setSelectedUser(null)}
-                className="p-1 rounded-lg hover:bg-slate-200 transition-colors"
-              >
-                <X size={18} className="text-slate-500" />
-              </button>
-            </div>
-
-            <div className="space-y-2 text-sm mb-6">
-              <p><span className="font-semibold text-slate-700">Nome:</span> <span className="text-slate-600">{selectedUser.name}</span></p>
-              <p><span className="font-semibold text-slate-700">E-mail:</span> <span className="text-slate-600">{selectedUser.email}</span></p>
-              <p><span className="font-semibold text-slate-700">Setor:</span> <span className="text-slate-600">{selectedUser.sectorName}</span></p>
-              <p><span className="font-semibold text-slate-700">Perfil:</span> <span className="text-slate-600">{roleLabels[selectedUser.role]}</span></p>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-              <button
-                onClick={() => {
-                  setEditingUser(selectedUser);
-                }}
-                className="inline-flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 text-sm font-semibold transition-colors"
-              >
-                <Pencil size={15} />
-                Editar Dados
-              </button>
-
-              <button
-                onClick={() => setResetTargetUser(selectedUser)}
-                className="inline-flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-100 text-sm font-semibold transition-colors"
-              >
-                <KeyRound size={15} />
-                Redefinir Senha
-              </button>
-
-              <button
-                onClick={() => setReset2FATargetUser(selectedUser)}
-                className="inline-flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg bg-red-50 text-red-700 hover:bg-red-100 text-sm font-semibold transition-colors"
-              >
-                <ShieldOff size={15} />
-                Resetar 2FA
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <UserDetailsModal
+        user={selectedUser}
+        roleLabels={ROLE_LABELS}
+        onClose={() => setSelectedUser(null)}
+        onEdit={(user) => {
+          setSelectedUser(null);
+          setEditingUser(user);
+        }}
+        onResetPassword={(user) => {
+          setSelectedUser(null);
+          setResetTargetUser(user);
+        }}
+        onReset2FA={(user) => {
+          setSelectedUser(null);
+          setReset2FATargetUser(user);
+        }}
+      />
 
       <BulkImportModal
         isOpen={showImportModal}
@@ -429,89 +309,19 @@ export default function Users() {
         onSuccess={loadUsers}
       />
 
-      {resetTargetUser && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm mx-4 p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-bold text-slate-800">Redefinir Senha</h2>
-              <button
-                onClick={() => setResetTargetUser(null)}
-                className="p-1 rounded-lg hover:bg-slate-200 transition-colors"
-                disabled={resettingPassword}
-              >
-                <X size={18} className="text-slate-500" />
-              </button>
-            </div>
-            <p className="text-sm text-slate-600 mb-6">
-              Tem certeza que deseja redefinir a senha de{' '}
-              <strong className="text-slate-800">{resetTargetUser.name}</strong> para{' '}
-              <strong className="text-slate-800">"Mudar@123"</strong>?<br />
-              <span className="text-slate-500 mt-1 inline-block">
-                O usuário terá de criar uma nova senha no próximo login.
-              </span>
-            </p>
-            <div className="flex justify-end gap-3">
-              <button
-                onClick={() => setResetTargetUser(null)}
-                disabled={resettingPassword}
-                className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-60"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={() => void handleConfirmResetPassword()}
-                disabled={resettingPassword}
-                className="flex items-center gap-2 bg-amber-500 hover:bg-amber-600 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
-              >
-                <KeyRound size={15} />
-                {resettingPassword ? 'Redefinindo...' : 'Confirmar Redefinição'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ResetPasswordConfirmModal
+        targetUser={resetTargetUser}
+        loading={resettingPassword}
+        onClose={() => setResetTargetUser(null)}
+        onConfirm={handleConfirmResetPassword}
+      />
 
-      {reset2FATargetUser && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm mx-4 p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-bold text-slate-800">Resetar 2FA</h2>
-              <button
-                onClick={() => setReset2FATargetUser(null)}
-                className="p-1 rounded-lg hover:bg-slate-200 transition-colors"
-                disabled={resetting2FA}
-              >
-                <X size={18} className="text-slate-500" />
-              </button>
-            </div>
-            <p className="text-sm text-slate-600 mb-6">
-              Tem certeza que deseja resetar o 2FA de{' '}
-              <strong className="text-slate-800">{reset2FATargetUser.name}</strong>?<br />
-              <span className="text-red-500 mt-1 inline-block text-xs">
-                ⚠️ O autenticador atual será removido. O usuário precisará configurar um novo na página de Perfil.
-              </span>
-            </p>
-            <div className="flex justify-end gap-3">
-              <button
-                onClick={() => setReset2FATargetUser(null)}
-                disabled={resetting2FA}
-                className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-60"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={() => void handleConfirmReset2FA()}
-                disabled={resetting2FA}
-                className="flex items-center gap-2 bg-red-500 hover:bg-red-600 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
-              >
-                <ShieldOff size={15} />
-                {resetting2FA ? 'Resetando...' : 'Confirmar Reset 2FA'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <Reset2FAConfirmModal
+        targetUser={reset2FATargetUser}
+        loading={resetting2FA}
+        onClose={() => setReset2FATargetUser(null)}
+        onConfirm={handleConfirmReset2FA}
+      />
     </main>
   );
 }
-
