@@ -208,10 +208,9 @@ public class SelfRegistrationUseCase {
             patientCred.setDoctorName(doctorName);
             patientCred.setAccessCredential(credentialValue);
             patientCred.setLocator(locatorValue);
-            patientCred.setCreatedAt(LocalDateTime.now());
+            patientCred.setCreatedAt(LocalDateTime.now(AccessWindowCalculator.CLINIC_ZONE));
         } else {
             patientCred = AccessCredential.builder()
-                    .id(UUID.randomUUID())
                     .appointmentId(appointmentId)
                     .name(name.trim().toUpperCase())
                     .cpf(cleanCpf)
@@ -220,7 +219,7 @@ public class SelfRegistrationUseCase {
                     .userType(UserType.PATIENT)
                     .accessCredential(credentialValue)
                     .locator(locatorValue)
-                    .createdAt(LocalDateTime.now())
+                    .createdAt(LocalDateTime.now(AccessWindowCalculator.CLINIC_ZONE))
                     .build();
         }
         accessCredentialRepositoryPort.save(patientCred);

@@ -178,4 +178,44 @@ class AccessServiceCpfValidationTest {
             );
         });
     }
+
+    @Test
+    @DisplayName("Deveria salvar novo acompanhante com ID nulo para delegação ao gerador JPA")
+    void shouldSaveNewCompanionWithNullIdForJpaGeneration() {
+        String appointmentId = "3474407";
+        when(accessCredentialRepositoryPort.findByAppointmentId(appointmentId)).thenReturn(List.of());
+
+        FeegowPatientAccessInfo accessInfo = new FeegowPatientAccessInfo(
+                appointmentId,
+                "100",
+                "PACIENTE TITULAR",
+                "13821025930",
+                LocalDate.now(),
+                LocalTime.of(14, 0),
+                "8",
+                "Dr. Teste",
+                "42999999999"
+        );
+        when(feegowClientPort.fetchPatientAccessInfo(appointmentId)).thenReturn(Optional.of(accessInfo));
+        when(gerAcessoClientPort.registerAccess(any())).thenReturn(Optional.of(
+                new GerAcessoResponse("201", "Sucesso", null, null, null, "H675YE", "000099312943")
+        ));
+        when(accessCredentialRepositoryPort.save(any(AccessCredential.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        CompanionAccessInfo companion = new CompanionAccessInfo(
+                "Patricia Fernandes novak",
+                "09453974960",
+                null,
+                null,
+                null
+        );
+
+        AccessCredential saved = accessService.registerCompanion(appointmentId, companion);
+
+        assertThat(saved).isNotNull();
+        assertThat(saved.getId()).isNull();
+        assertThat(saved.getAccessCredential()).isEqualTo("000099312943");
+        assertThat(saved.getLocator()).isEqualTo("H675YE");
+        verify(accessCredentialRepositoryPort).save(argThat(c -> c.getId() == null));
+    }
 }

@@ -163,18 +163,37 @@ public class RegisterCompanionUseCase {
             log.warn("[RegisterCompanion] Gerada credencial contingencial para acompanhante: Nome={}, Token={}", companion.name(), token);
         }
 
-        AccessCredential cred = AccessCredential.builder()
-            .id(UUID.randomUUID())
-            .appointmentId(appointmentId)
-            .name(companion.name())
-            .cpf(companionCpf.isBlank() ? null : companionCpf)
-            .phone(companion.phone() != null ? companion.phone().replaceAll("\\D", "") : null)
-            .doctorName(doctorName)
-            .userType(UserType.COMPANION)
-            .accessCredential(token)
-            .locator(locator)
-            .createdAt(LocalDateTime.now())
-            .build();
+        // Verifica se já existe um registro salvo no banco para este acompanhante no agendamento
+        Optional<AccessCredential> existingCredOpt = accessCredentialRepositoryPort
+            .findByAppointmentId(appointmentId).stream()
+            .filter(c -> c.getName() != null && c.getName().trim().equalsIgnoreCase(companion.name().trim()) && c.getUserType() == UserType.COMPANION)
+            .findFirst();
+
+        String cleanCompPhone = companion.phone() != null ? companion.phone().replaceAll("\\D", "") : null;
+        if (cleanCompPhone != null && cleanCompPhone.isBlank()) cleanCompPhone = null;
+
+        AccessCredential cred;
+        if (existingCredOpt.isPresent()) {
+            cred = existingCredOpt.get();
+            cred.setCpf(companionCpf.isBlank() ? null : companionCpf);
+            if (cleanCompPhone != null) cred.setPhone(cleanCompPhone);
+            if (doctorName != null && !doctorName.isBlank()) cred.setDoctorName(doctorName);
+            cred.setAccessCredential(token);
+            cred.setLocator(locator);
+            cred.setCreatedAt(LocalDateTime.now(AccessWindowCalculator.CLINIC_ZONE));
+        } else {
+            cred = AccessCredential.builder()
+                .appointmentId(appointmentId)
+                .name(companion.name().trim())
+                .cpf(companionCpf.isBlank() ? null : companionCpf)
+                .phone(cleanCompPhone)
+                .doctorName(doctorName)
+                .userType(UserType.COMPANION)
+                .accessCredential(token)
+                .locator(locator)
+                .createdAt(LocalDateTime.now(AccessWindowCalculator.CLINIC_ZONE))
+                .build();
+        }
 
         AccessCredential saved = accessCredentialRepositoryPort.save(cred);
         log.info("[RegisterCompanion] Credencial de acompanhante salva com sucesso. ID: {}, Nome: {}", saved.getId(), saved.getName());

@@ -92,7 +92,6 @@ public class AccessController {
         }
 
         AccessCredential credential = AccessCredential.builder()
-            .id(UUID.randomUUID())
             .appointmentId("TEST-APP-" + doctorId + "-" + System.currentTimeMillis())
             .name("PACIENTE TESTE DOCTORID " + doctorId)
             .cpf("123.456.789-00")
