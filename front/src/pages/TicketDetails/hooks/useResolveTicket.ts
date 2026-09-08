@@ -1,8 +1,12 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { toast } from 'react-toastify';
 
-import { getAssetCategories, getAssets, getItems, getAssetById } from '@/services/inventoryService';
-import type { Asset, AssetCategory, Item, ResolveTicketRequest, Ticket, User } from '@/types/models';
+import type { ResolveTicketRequest, Ticket, User } from '@/types/models';
+import { useDeliveryItemsState, type ResolveTicketItemState } from './useDeliveryItemsState';
+import { useEquipmentDeliveryState } from './useEquipmentDeliveryState';
+import { useResolveRecipients } from './useResolveRecipients';
+
+export type { ResolveTicketItemState };
 
 interface UseResolveTicketParams {
   isOpen: boolean;
@@ -12,14 +16,6 @@ interface UseResolveTicketParams {
   ticket?: Ticket;
   initialNotes?: string;
   users?: User[];
-}
-
-export interface ResolveTicketItemState {
-  id: string;
-  itemId: string;
-  itemName: string;
-  quantity: number;
-  recipientUserId: string;
 }
 
 /**
@@ -36,12 +32,71 @@ export function useResolveTicket({
   users = [],
 }: UseResolveTicketParams) {
   const [resolutionNotes, setResolutionNotes] = useState('');
-  const [recipientUserId, setRecipientUserId] = useState('');
-  const [assetUsers, setAssetUsers] = useState<{ id: string; name: string }[]>([]);
-  const [loadingAssetUsers, setLoadingAssetUsers] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Lista de insumos que serão entregues e deduzidos na resolução
-  const [itemsToDeliver, setItemsToDeliver] = useState<ResolveTicketItemState[]>([]);
+  // Estados para a funcionalidade de registrar manutenção de ativo no fechamento
+  const [registerMaintenance, setRegisterMaintenance] = useState(false);
+  const [maintAssetId, setMaintAssetId] = useState('');
+  const [maintType, setMaintType] = useState<'PREVENTIVE' | 'CORRECTIVE' | 'UPGRADE' | 'TRANSFER'>('CORRECTIVE');
+  const [maintDescription, setMaintDescription] = useState('');
+  const [maintCost, setMaintCost] = useState('');
+
+  // Sub-hooks especializados
+  const {
+    itemsToDeliver,
+    hasAutoInventoryDeduction,
+    handleRecipientChange,
+    handleSplitItem,
+    handleRemoveSplitItem,
+    handleItemQuantityChange,
+    resetDeliveryItems,
+  } = useDeliveryItemsState(isOpen, ticket);
+
+  const {
+    recipientUserId,
+    setRecipientUserId,
+    assetUsers,
+    loadingAssetUsers,
+    ticketUsers,
+    availableRecipients,
+    resetRecipients,
+  } = useResolveRecipients(isOpen, ticket, users);
+
+  const {
+    deliverEquipment,
+    setDeliverEquipment,
+    deliveryType,
+    setDeliveryType,
+    assetMode,
+    setAssetMode,
+    assets,
+    items,
+    assetCategories,
+    allAssets,
+    selectedAssetId,
+    setSelectedAssetId,
+    selectedItemId,
+    setSelectedItemId,
+    quantity,
+    setQuantity,
+    newAssetName,
+    setNewAssetName,
+    newAssetCategoryId,
+    setNewAssetCategoryId,
+    newAssetPatrimonyCode,
+    setNewAssetPatrimonyCode,
+    newAssetSpecifications,
+    setNewAssetSpecifications,
+    linkInsumosToAsset,
+    setLinkInsumosToAsset,
+    targetAssetId,
+    setTargetAssetId,
+    loadingAssets,
+    loadingItems,
+    loadingAssetCategories,
+    loadingAllAssets,
+    resetEquipmentDelivery,
+  } = useEquipmentDeliveryState(isOpen);
 
   useEffect(() => {
     if (isOpen) {
@@ -55,368 +110,16 @@ export function useResolveTicket({
     }
   }, [isOpen, ticket]);
 
-  // Inicializa a lista de insumos com base no chamado
-  useEffect(() => {
-    if (isOpen && ticket) {
-      const initialItems: ResolveTicketItemState[] = [];
-      
-      // 1. Se o chamado tem múltiplos itens solicitados cadastrados
-      if (ticket.requestedItems && ticket.requestedItems.length > 0) {
-        ticket.requestedItems.forEach((ri, idx) => {
-          initialItems.push({
-            id: `${ri.itemId}-${idx}-${Date.now()}`,
-            itemId: ri.itemId,
-            itemName: ri.itemName || 'Material de Consumo',
-            quantity: ri.quantity,
-            recipientUserId: ticket.requesterId,
-          });
-        });
-      } 
-      // 2. Fallback para chamado com item único de inventário legado
-      else if (ticket.requestedItemId && ticket.requestedQuantity) {
-        initialItems.push({
-          id: `${ticket.requestedItemId}-0-${Date.now()}`,
-          itemId: ticket.requestedItemId,
-          itemName: ticket.requestedItemName || 'Material de Consumo',
-          quantity: ticket.requestedQuantity,
-          recipientUserId: ticket.requesterId,
-        });
-      }
-
-      setItemsToDeliver(initialItems);
-    }
-  }, [isOpen, ticket]);
-
-  const [deliverEquipment, setDeliverEquipment] = useState(false);
-  const [deliveryType, setDeliveryType] = useState<'asset' | 'item'>('asset');
-  const [assetMode, setAssetMode] = useState<'existing' | 'new'>('existing');
-
-  const [assets, setAssets] = useState<Asset[]>([]);
-  const [items, setItems] = useState<Item[]>([]);
-  const [assetCategories, setAssetCategories] = useState<AssetCategory[]>([]);
-
-  const [selectedAssetId, setSelectedAssetId] = useState('');
-  const [selectedItemId, setSelectedItemId] = useState('');
-
-  // Novos estados para a Vertical 3: Módulo de Chamados — Vínculo de Alocações
-  const [linkInsumosToAsset, setLinkInsumosToAsset] = useState(false);
-  const [targetAssetId, setTargetAssetId] = useState('');
-  const [allAssets, setAllAssets] = useState<Asset[]>([]);
-  const [loadingAllAssets, setLoadingAllAssets] = useState(false);
-  const [quantity, setQuantity] = useState(1);
-
-  // Estados para a funcionalidade de registrar manutenção de ativo no fechamento
-  const [registerMaintenance, setRegisterMaintenance] = useState(false);
-  const [maintAssetId, setMaintAssetId] = useState('');
-  const [maintType, setMaintType] = useState<'PREVENTIVE' | 'CORRECTIVE' | 'UPGRADE' | 'TRANSFER'>('CORRECTIVE');
-  const [maintDescription, setMaintDescription] = useState('');
-  const [maintCost, setMaintCost] = useState('');
-
-  const [newAssetName, setNewAssetName] = useState('');
-  const [newAssetCategoryId, setNewAssetCategoryId] = useState('');
-  const [newAssetPatrimonyCode, setNewAssetPatrimonyCode] = useState('');
-  const [newAssetSpecifications, setNewAssetSpecifications] = useState('');
-
-  const [loadingAssets, setLoadingAssets] = useState(false);
-  const [loadingItems, setLoadingItems] = useState(false);
-  const [loadingAssetCategories, setLoadingAssetCategories] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Filtra as funcionárias originalmente vinculadas ao chamado para a entrega nominal
-  const ticketUsers = useMemo(() => {
-    if (!ticket) return [];
-    const ids = new Set([ticket.requesterId, ...(ticket.additionalUserIds || [])].filter(Boolean) as string[]);
-    
-    // Filtra utilizadores globais vinculados
-    const filtered = users.filter((u) => ids.has(u.id));
-    
-    // Assegura que a requerente esteja presente na lista
-    if (!filtered.some((u) => u.id === ticket.requesterId)) {
-      filtered.push({
-        id: ticket.requesterId,
-        name: ticket.requesterName || 'Requerente',
-        email: '',
-        role: 'USER',
-        sectorId: '',
-        sectorName: '',
-        location: '',
-        discordUserId: null,
-        contaAzulId: null,
-        receives_it_notifications: false,
-      } as User);
-    }
-    
-    return filtered.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-  }, [users, ticket]);
-
-  // Lista expandida com todos os usuários/médicos da clínica para seleção flexível (com solicitante no topo)
-  const availableRecipients = useMemo(() => {
-    const linkedIds = new Set([ticket?.requesterId, ...(ticket?.additionalUserIds || [])].filter(Boolean) as string[]);
-
-    const linked: { id: string; name: string }[] = [];
-    const others: { id: string; name: string }[] = [];
-
-    users.forEach((u) => {
-      if (linkedIds.has(u.id)) {
-        const isReq = u.id === ticket?.requesterId;
-        linked.push({
-          id: u.id,
-          name: `${u.name}${isReq ? ' (Solicitante)' : ' (Vinculado)'}`,
-        });
-      } else {
-        others.push({
-          id: u.id,
-          name: u.name || 'Sem nome',
-        });
-      }
-    });
-
-    // Se o solicitante não veio no array geral users, adiciona manualmente
-    if (ticket?.requesterId && !linked.some((l) => l.id === ticket.requesterId)) {
-      linked.unshift({
-        id: ticket.requesterId,
-        name: `${ticket.requesterName || 'Solicitante'} (Solicitante)`,
-      });
-    }
-
-    linked.sort((a, b) => a.name.localeCompare(b.name));
-    others.sort((a, b) => a.name.localeCompare(b.name));
-
-    return [...linked, ...others];
-  }, [users, ticket]);
-
-  // Se houver insumos a entregar atrelados ao chamado, ativa a dedução automática
-  const hasAutoInventoryDeduction = useMemo(
-    () => itemsToDeliver.length > 0,
-    [itemsToDeliver],
-  );
-
-  // Carrega ativos disponíveis quando o fluxo de entrega de patrimônio estiver ativo.
-  useEffect(() => {
-    async function loadAssets() {
-      if (!isOpen || !deliverEquipment || deliveryType !== 'asset' || assetMode !== 'existing') {
-        setAssets([]);
-        return;
-      }
-
-      setLoadingAssets(true);
-      try {
-        const allAssetsPage = await getAssets();
-        const availableAssets = allAssetsPage.content.filter((asset) => !asset.userId);
-        setAssets(availableAssets);
-        setSelectedAssetId('');
-      } catch {
-        toast.error('Erro ao carregar equipamentos disponíveis.');
-        setAssets([]);
-      } finally {
-        setLoadingAssets(false);
-      }
-    }
-
-    void loadAssets();
-  }, [assetMode, deliverEquipment, deliveryType, isOpen]);
-
-  // Carrega categorias para cadastro de novo ativo.
-  useEffect(() => {
-    async function loadAssetCategories() {
-      if (!isOpen || !deliverEquipment || deliveryType !== 'asset' || assetMode !== 'new') {
-        setAssetCategories([]);
-        return;
-      }
-
-      setLoadingAssetCategories(true);
-      try {
-        const data = await getAssetCategories();
-        setAssetCategories(data);
-      } catch {
-        toast.error('Erro ao carregar categorias de ativo.');
-        setAssetCategories([]);
-      } finally {
-        setLoadingAssetCategories(false);
-      }
-    }
-
-    void loadAssetCategories();
-  }, [assetMode, deliverEquipment, deliveryType, isOpen]);
-
-  // Carrega todos os ativos sem filtro de usuário para a vinculação opcional de insumos
-  useEffect(() => {
-    async function loadAllAssets() {
-      if (!isOpen) {
-        setAllAssets([]);
-        return;
-      }
-      setLoadingAllAssets(true);
-      try {
-        const allAssetsPage = await getAssets({ page: 0, size: 1000 });
-        setAllAssets(allAssetsPage.content || []);
-      } catch (err) {
-        console.error('Erro ao carregar lista geral de ativos:', err);
-      } finally {
-        setLoadingAllAssets(false);
-      }
-    }
-    void loadAllAssets();
-  }, [isOpen]);
-
-
-
-  // Carrega os usuários associados ao ativo do chamado
-  useEffect(() => {
-    async function loadAssetUsers() {
-      if (!isOpen || !ticket?.assetId) {
-        setAssetUsers([]);
-        setRecipientUserId('');
-        return;
-      }
-
-      setLoadingAssetUsers(true);
-      try {
-        const asset = await getAssetById(ticket.assetId);
-        if (asset && asset.userIds && asset.assignedToNames) {
-          const mappedUsers = asset.userIds.map((id, index) => ({
-            id,
-            name: asset.assignedToNames?.[index] || id,
-          }));
-          setAssetUsers(mappedUsers);
-          if (mappedUsers.length > 0) {
-            setRecipientUserId(mappedUsers[0].id);
-          }
-        } else {
-          setAssetUsers([]);
-          setRecipientUserId('');
-        }
-      } catch {
-        setAssetUsers([]);
-        setRecipientUserId('');
-      } finally {
-        setLoadingAssetUsers(false);
-      }
-    }
-
-    void loadAssetUsers();
-  }, [isOpen, ticket?.assetId]);
-
-  // Carrega itens de consumo com estoque disponível.
-  useEffect(() => {
-    async function loadItems() {
-      if (!isOpen || !deliverEquipment || deliveryType !== 'item') {
-        setItems([]);
-        return;
-      }
-
-      setLoadingItems(true);
-      try {
-        const allItemsPage = await getItems({ size: 1000 });
-        const availableItems = allItemsPage.content.filter((item) => item.currentStock > 0);
-        setItems(availableItems);
-        setSelectedItemId('');
-      } catch {
-        toast.error('Erro ao carregar materiais disponíveis.');
-        setItems([]);
-      } finally {
-        setLoadingItems(false);
-      }
-    }
-
-    void loadItems();
-  }, [deliverEquipment, deliveryType, isOpen]);
-
   function resetForm() {
     setResolutionNotes('');
-    setDeliverEquipment(false);
-    setDeliveryType('asset');
-    setAssetMode('existing');
-    setSelectedAssetId('');
-    setSelectedItemId('');
-    setQuantity(1);
-    setNewAssetName('');
-    setNewAssetCategoryId('');
-    setNewAssetPatrimonyCode('');
-    setNewAssetSpecifications('');
-    setRecipientUserId('');
-    setAssetUsers([]);
-    setItemsToDeliver([]);
-    setLinkInsumosToAsset(false);
-    setTargetAssetId('');
+    resetEquipmentDelivery();
+    resetRecipients();
+    resetDeliveryItems();
     setRegisterMaintenance(false);
     setMaintAssetId(ticket?.assetId || '');
     setMaintType('CORRECTIVE');
     setMaintDescription('');
     setMaintCost('');
-  }
-
-  function handleRecipientChange(rowId: string, recipientId: string) {
-    setItemsToDeliver((prev) =>
-      prev.map((item) =>
-        item.id === rowId ? { ...item, recipientUserId: recipientId } : item
-      )
-    );
-  }
-
-  function handleSplitItem(rowId: string) {
-    setItemsToDeliver((prev) => {
-      const itemIndex = prev.findIndex((item) => item.id === rowId);
-      if (itemIndex === -1) return prev;
-
-      const targetItem = prev[itemIndex];
-      if (targetItem.quantity <= 1) {
-        toast.warning('A quantidade mínima para divisão é 2 unidades.');
-        return prev;
-      }
-
-      // Diminui a quantidade da linha atual em 1
-      const updatedTarget = {
-        ...targetItem,
-        quantity: targetItem.quantity - 1,
-      };
-
-      // Cria a nova linha desmembrada com quantidade 1 e destinatário em branco para escolha
-      const newSplitRow: ResolveTicketItemState = {
-        id: `${targetItem.itemId}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-        itemId: targetItem.itemId,
-        itemName: targetItem.itemName,
-        quantity: 1,
-        recipientUserId: '',
-      };
-
-      const newItems = [...prev];
-      newItems.splice(itemIndex, 1, updatedTarget);
-      newItems.splice(itemIndex + 1, 0, newSplitRow);
-      return newItems;
-    });
-  }
-
-  function handleRemoveSplitItem(rowId: string) {
-    setItemsToDeliver((prev) => {
-      const targetItem = prev.find((item) => item.id === rowId);
-      if (!targetItem) return prev;
-
-      // Localiza outra linha do mesmo insumo para devolver a quantidade
-      const otherRowIndex = prev.findIndex((item) => item.itemId === targetItem.itemId && item.id !== rowId);
-      if (otherRowIndex === -1) {
-        return prev;
-      }
-
-      const updatedOther = {
-        ...prev[otherRowIndex],
-        quantity: prev[otherRowIndex].quantity + targetItem.quantity,
-      };
-
-      const remaining = prev.filter((item) => item.id !== rowId);
-      const newOtherIdx = remaining.findIndex((item) => item.id === prev[otherRowIndex].id);
-      if (newOtherIdx !== -1) {
-        remaining[newOtherIdx] = updatedOther;
-      }
-      return remaining;
-    });
-  }
-
-  function handleItemQuantityChange(rowId: string, newQty: number) {
-    if (newQty < 1) return;
-    setItemsToDeliver((prev) =>
-      prev.map((item) => (item.id === rowId ? { ...item, quantity: newQty } : item))
-    );
   }
 
   function validateBeforeSubmit() {
@@ -500,7 +203,7 @@ export function useResolveTicket({
           id: `${selectedItemId}-${Date.now()}`,
           itemId: selectedItemId,
           itemName: items.find((i) => i.id === selectedItemId)?.name || 'Insumo',
-          quantity: quantity,
+          quantity,
           recipientUserId: recipientUserId || requesterId,
         });
       }
@@ -539,7 +242,6 @@ export function useResolveTicket({
         };
         payload.recipientUserId = recipientUserId || undefined;
       } else if (deliverEquipment && deliveryType === 'item') {
-        // Envia recipientUserId global se necessário, mas os itens já vão com destinatário individual
         payload.recipientUserId = recipientUserId || undefined;
       }
 
@@ -597,13 +299,11 @@ export function useResolveTicket({
     handleItemQuantityChange,
     ticketUsers,
     availableRecipients,
-    // Novos campos expostos para vinculação da alocação de insumos
     linkInsumosToAsset,
     setLinkInsumosToAsset,
     targetAssetId,
     setTargetAssetId,
     loadingAllAssets,
-    // Estados de registro de manutenção
     registerMaintenance,
     setRegisterMaintenance,
     maintAssetId,
