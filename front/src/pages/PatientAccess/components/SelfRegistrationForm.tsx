@@ -1,37 +1,17 @@
-import React, { useState, useRef, useMemo, useEffect } from 'react';
-import { User, CreditCard, Calendar, UserPlus, ArrowRight, Search, CheckCircle2, AlertCircle, ShieldCheck, Plus, Trash2, Stethoscope, MapPin, X, Sparkles, Clock } from 'lucide-react';
-import { type ClinicTheme, DOCTOR_SUGGESTIONS, type DoctorSuggestion, resolveDoctorLocation } from '../utils/clinicThemes';
-import type { AccessCredential } from '../types';
+import React, { useState, useCallback, useMemo } from 'react';
+import { User, CreditCard, Calendar, UserPlus, ArrowRight, Search, CheckCircle2, AlertCircle, ShieldCheck, Sparkles, Clock } from 'lucide-react';
+import type { ClinicTheme, DoctorSuggestion } from '../utils/clinicThemes';
+import { resolveDoctorLocation } from '../utils/clinicThemes';
+import type { AccessCredential, CompanionEntry, FeegowAppointmentItem } from '../types';
 import api from '../../../services/api';
 import { getApiErrorMessage } from '../../../lib/apiError';
 import { isValidCpf } from '../utils/cpfValidator';
-
-interface CompanionEntry {
-  id: string;
-  name: string;
-  cpf: string;
-  birthDate: string;
-}
-
-export interface FeegowAppointmentItem {
-  appointmentId: string;
-  doctorName: string;
-  specialty: string;
-  date: string;
-  time: string;
-  formattedDateTime: string;
-  isToday: boolean;
-  location?: string;
-}
-
-export interface FeegowLookupResponse {
-  found: boolean;
-  patientName?: string;
-  birthDate?: string;
-  phone?: string;
-  appointments: FeegowAppointmentItem[];
-  message?: string;
-}
+import { maskCpf } from '../utils/masks';
+import { useDoctorAutocomplete } from '../hooks/useDoctorAutocomplete';
+import { useFeegowLookup } from '../hooks/useFeegowLookup';
+import { FeegowAppointmentPicker } from './FeegowAppointmentPicker';
+import { DoctorAutocompleteInput } from './DoctorAutocompleteInput';
+import { CompanionFormList } from './CompanionFormList';
 
 interface SelfRegistrationFormProps {
   clinicTheme: ClinicTheme;
@@ -48,9 +28,12 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
   const [birthDate, setBirthDate] = useState('');
 
   // Estados de Data da Consulta / Visita
-  const today = new Date();
-  const tomorrow = new Date();
-  tomorrow.setDate(today.getDate() + 1);
+  const today = useMemo(() => new Date(), []);
+  const tomorrow = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return d;
+  }, []);
 
   const toISODate = (d: Date) => d.toLocaleDateString('sv-SE'); // YYYY-MM-DD
   const formatPillDate = (d: Date) => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
@@ -58,22 +41,24 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
   const [dateSelection, setDateSelection] = useState<'today' | 'tomorrow' | 'custom'>('today');
   const [customDate, setCustomDate] = useState<string>('');
 
-  // Médico ou Especialidade com Busca Autocomplete (ativado após digitar 3 caracteres)
-  const [doctorInput, setDoctorInput] = useState<string>('');
-  const [selectedLocation, setSelectedLocation] = useState<string | null>(null);
-  const [isDoctorDropdownOpen, setIsDoctorDropdownOpen] = useState<boolean>(false);
-  const doctorDropdownRef = useRef<HTMLDivElement>(null);
-
-  // Estados de Busca Automática Inteligente no Feegow
-  const [isSearchingFeegow, setIsSearchingFeegow] = useState(false);
-  const [feegowLookupDone, setFeegowLookupDone] = useState(false);
-  const [feegowAppointments, setFeegowAppointments] = useState<FeegowAppointmentItem[]>([]);
-  const [selectedFeegowApptId, setSelectedFeegowApptId] = useState<string | null>(null);
+  // Modo Manual vs Feegow
   const [manualDoctorMode, setManualDoctorMode] = useState(false);
 
-  // Seleciona um agendamento localizado no Feegow
-  const selectFeegowAppointment = (appt: FeegowAppointmentItem) => {
-    setSelectedFeegowApptId(appt.appointmentId);
+  // Hook de Autocomplete de Médico
+  const {
+    doctorInput,
+    setDoctorInput,
+    selectedLocation,
+    setSelectedLocation,
+    isDoctorDropdownOpen,
+    setIsDoctorDropdownOpen,
+    doctorDropdownRef,
+    filteredDoctors,
+    handleSelectDoctor
+  } = useDoctorAutocomplete();
+
+  // Seleção de Agendamento vindo do Feegow
+  const handleFeegowAppointmentSelected = useCallback((appt: FeegowAppointmentItem) => {
     setManualDoctorMode(false);
     if (appt.doctorName) {
       setDoctorInput(appt.doctorName);
@@ -90,164 +75,34 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
         setCustomDate(appt.date);
       }
     }
-  };
+  }, [clinicTheme.floorInfo, setDoctorInput, setSelectedLocation, tomorrow]);
 
-  // Efeito de busca automática no Feegow com debounce ao digitar os 11 dígitos do CPF
-  useEffect(() => {
-    const cleanCpf = cpf.replace(/\D/g, '');
-    if (cleanCpf.length !== 11) {
-      setFeegowAppointments([]);
-      setSelectedFeegowApptId(null);
-      setFeegowLookupDone(false);
-      setManualDoctorMode(false);
-      return;
-    }
+  // Hook de Consulta Inteligente no Feegow
+  const {
+    isSearchingFeegow,
+    feegowLookupDone,
+    feegowAppointments,
+    selectedFeegowApptId,
+    setSelectedFeegowApptId,
+    selectFeegowAppointment
+  } = useFeegowLookup({
+    cpf,
+    clinicId: clinicTheme.id,
+    name,
+    phone,
+    birthDate,
+    manualDoctorMode,
+    setName,
+    setPhone,
+    setBirthDate,
+    onAppointmentSelected: handleFeegowAppointmentSelected
+  });
 
-    let isMounted = true;
-    const timer = setTimeout(async () => {
-      setIsSearchingFeegow(true);
-      try {
-        const resp = await api.post<FeegowLookupResponse>(
-          '/v1/access/feegow-lookup',
-          {
-            cpf: cleanCpf,
-            clinic: clinicTheme.id
-          },
-          {
-            headers: { 'X-Skip-Interceptor': 'true' }
-          }
-        );
-
-        if (!isMounted) return;
-
-        if (resp.data && resp.data.found) {
-          setFeegowLookupDone(true);
-          if (resp.data.patientName && (!name.trim() || !manualDoctorMode)) {
-            setName(resp.data.patientName);
-          }
-          if (resp.data.phone && (!phone.trim() || !manualDoctorMode)) {
-            setPhone(maskPhone(resp.data.phone));
-          }
-          if (resp.data.birthDate && (!birthDate.trim() || !manualDoctorMode)) {
-            setBirthDate(maskDate(resp.data.birthDate));
-          }
-
-          const appts = resp.data.appointments || [];
-          setFeegowAppointments(appts);
-
-          if (appts.length > 0 && !manualDoctorMode) {
-            const chosen = appts.find(a => a.isToday) || appts[0];
-            selectFeegowAppointment(chosen);
-          }
-        }
-      } catch (err) {
-        console.warn('[SelfRegistrationForm] Falha defensiva ao consultar Feegow:', err);
-      } finally {
-        if (isMounted) setIsSearchingFeegow(false);
-      }
-    }, 450);
-
-    return () => {
-      isMounted = false;
-      clearTimeout(timer);
-    };
-  }, [cpf, clinicTheme.id]);
-
-  // Fecha o dropdown ao clicar fora do componente
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (doctorDropdownRef.current && !doctorDropdownRef.current.contains(event.target as Node)) {
-        setIsDoctorDropdownOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, []);
-
-  // Filtra as opções de médicos e especialidades quando há 3 ou mais caracteres
-  const filteredDoctors = useMemo(() => {
-    const q = doctorInput.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-    if (q.length < 3) return [];
-
-    return DOCTOR_SUGGESTIONS.filter(item => {
-      const normName = item.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-      const normSpec = (item.specialty || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-      const normLoc = item.location.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-      return normName.includes(q) || normSpec.includes(q) || normLoc.includes(q);
-    });
-  }, [doctorInput]);
-
-  const handleSelectDoctor = (doc: DoctorSuggestion) => {
-    setDoctorInput(doc.name);
-    setSelectedLocation(doc.location);
-    setIsDoctorDropdownOpen(false);
-  };
-
-  // Acompanhantes (Múltiplos / Ilimitados)
+  // Acompanhantes
   const [hasCompanion, setHasCompanion] = useState(false);
   const [companions, setCompanions] = useState<CompanionEntry[]>([
     { id: 'comp-1', name: '', cpf: '', birthDate: '' }
   ]);
-
-  // Campos de Consulta
-  const [lookupCpf, setLookupCpf] = useState('');
-
-  // Estados de Controle
-  const [loading, setLoading] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
-  // Máscaras de entrada
-  const maskCpf = (val: string) => {
-    return val
-      .replace(/\D/g, '')
-      .slice(0, 11)
-      .replace(/(\d{3})(\d)/, '$1.$2')
-      .replace(/(\d{3})(\d)/, '$1.$2')
-      .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
-  };
-
-  const maskPhone = (val: string) => {
-    if (!val) return '';
-    let raw = val.trim();
-    if (raw.startsWith('+55')) {
-      raw = raw.slice(3);
-    }
-    raw = raw.replace(/\D/g, '');
-    // Se vier com o código de país 55 (ex: 5542991617188 ou 554232201000 - 12 ou 13 dígitos), remove o 55
-    if (raw.startsWith('55') && (raw.length === 12 || raw.length === 13)) {
-      raw = raw.slice(2);
-    }
-    raw = raw.slice(0, 11);
-    if (raw.length <= 10) {
-      return raw.replace(/(\d{2})(\d{4})(\d{0,4})/, '($1) $2-$3').replace(/-$/, '');
-    }
-    return raw.replace(/(\d{2})(\d{5})(\d{0,4})/, '($1) $2-$3').replace(/-$/, '');
-  };
-
-  const maskDate = (val: string) => {
-    if (!val) return '';
-    const trimmed = val.trim();
-
-    // Se vier no formato ano primeiro: YYYY-MM-DD ou YYYY/MM/DD
-    const ymdMatch = trimmed.match(/^(\d{4})[-/](\d{2})[-/](\d{2})/);
-    if (ymdMatch) {
-      return `${ymdMatch[3]}/${ymdMatch[2]}/${ymdMatch[1]}`;
-    }
-
-    // Se vier no formato dia primeiro com traço: DD-MM-YYYY
-    const dmyMatch = trimmed.match(/^(\d{2})-(\d{2})-(\d{4})/);
-    if (dmyMatch) {
-      return `${dmyMatch[1]}/${dmyMatch[2]}/${dmyMatch[3]}`;
-    }
-
-    return trimmed
-      .replace(/\D/g, '')
-      .slice(0, 8)
-      .replace(/(\d{2})(\d)/, '$1/$2')
-      .replace(/(\d{2})(\d)/, '$1/$2');
-  };
 
   const addCompanionField = () => {
     setCompanions(prev => [
@@ -270,6 +125,13 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
     setCompanions(prev => prev.map(c => c.id === id ? { ...c, [field]: value } : c));
   };
 
+  // Campos de Consulta por CPF
+  const [lookupCpf, setLookupCpf] = useState('');
+
+  // Estados de Controle de Submissão
+  const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
   const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
@@ -286,7 +148,7 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
     }
 
     // Validação dos acompanhantes (se selecionado)
-    let companionsPayload: Array<{ name: string; cpf: string; birthDate?: string }> = [];
+    const companionsPayload: Array<{ name: string; cpf: string; birthDate?: string }> = [];
     if (hasCompanion) {
       if (companions.length === 0) {
         setErrorMessage('Por favor, informe os dados do acompanhante ou desmarque a opção.');
@@ -374,9 +236,9 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
       } else {
         setErrorMessage('Não foi possível gerar as credenciais de acesso. Tente novamente.');
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[SelfRegistration] Erro ao submeter cadastro:', err);
-      const msg = err.response?.data?.message || 'Erro ao processar o check-in. Verifique os dados e tente novamente.';
+      const msg = getApiErrorMessage(err, 'Erro ao processar o check-in. Verifique os dados e tente novamente.');
       setErrorMessage(msg);
     } finally {
       setLoading(false);
@@ -416,7 +278,7 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
           'Nenhum agendamento ativo encontrado para este CPF nos próximos 7 dias. Se sua consulta for hoje ou se você veio para uma visita, emita seu QR Code na aba "Novo Cadastro" acima.'
         );
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[SelfRegistration] Erro ao consultar CPF:', err);
       const msg = getApiErrorMessage(err, 'Não foi possível consultar seu CPF no momento. Tente novamente.');
       setErrorMessage(msg);
@@ -537,100 +399,20 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
             </div>
 
             {/* Card de Consulta Localizada no Feegow */}
-            {feegowAppointments.length > 0 && !manualDoctorMode && (
-              <div 
-                className="p-4 rounded-2xl border shadow-xs space-y-3 animate-in fade-in slide-in-from-top-2 duration-200"
-                style={{
-                  backgroundColor: `${clinicTheme.secondaryColor}20`,
-                  borderColor: `${clinicTheme.primaryColor}35`
+            {!manualDoctorMode && (
+              <FeegowAppointmentPicker
+                clinicTheme={clinicTheme}
+                appointments={feegowAppointments}
+                selectedAppointmentId={selectedFeegowApptId}
+                onSelectAppointment={selectFeegowAppointment}
+                onSwitchToManual={() => {
+                  setManualDoctorMode(true);
+                  setSelectedFeegowApptId(null);
                 }}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span 
-                      className="w-6 h-6 rounded-full text-white flex items-center justify-center text-xs font-bold shadow-xs"
-                      style={{ backgroundColor: clinicTheme.primaryColor }}
-                    >
-                      ✓
-                    </span>
-                    <div>
-                      <span 
-                        className="text-xs font-extrabold block leading-tight"
-                        style={{ color: clinicTheme.primaryDarkColor }}
-                      >
-                        Consulta Localizada no Feegow!
-                      </span>
-                      <span className="text-[10.5px] text-slate-600 font-medium">
-                        Médico, horário e local pré-selecionados
-                      </span>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setManualDoctorMode(true);
-                      setSelectedFeegowApptId(null);
-                    }}
-                    className="text-[11px] font-bold text-slate-500 hover:text-slate-800 underline decoration-slate-300 underline-offset-2 transition-colors cursor-pointer"
-                  >
-                    Alterar médico
-                  </button>
-                </div>
-
-                <div className="space-y-2 pt-0.5">
-                  {feegowAppointments.map((appt) => {
-                    const isSelected = selectedFeegowApptId === appt.appointmentId;
-                    const resolvedFloor = resolveDoctorLocation(appt.doctorName, clinicTheme.floorInfo);
-                    return (
-                      <div
-                        key={appt.appointmentId}
-                        onClick={() => selectFeegowAppointment(appt)}
-                        className="p-3 rounded-xl border transition-all cursor-pointer flex flex-col gap-1.5"
-                        style={isSelected ? {
-                          backgroundColor: '#ffffff',
-                          borderColor: clinicTheme.primaryColor,
-                          boxShadow: `0 0 0 1.5px ${clinicTheme.primaryColor}50`
-                        } : {
-                          backgroundColor: 'rgba(255, 255, 255, 0.7)',
-                          borderColor: `${clinicTheme.primaryColor}25`
-                        }}
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-extrabold text-slate-800 flex items-center gap-1.5">
-                            <Stethoscope className="w-3.5 h-3.5 shrink-0" style={{ color: clinicTheme.primaryColor }} />
-                            {appt.doctorName || clinicTheme.name}
-                          </span>
-                          <span 
-                            className="text-[10px] font-extrabold px-2 py-0.5 rounded-full"
-                            style={appt.isToday ? {
-                              backgroundColor: `${clinicTheme.secondaryColor}60`,
-                              color: clinicTheme.primaryDarkColor
-                            } : {
-                              backgroundColor: '#f1f5f9',
-                              color: '#475569'
-                            }}
-                          >
-                            {appt.formattedDateTime}
-                          </span>
-                        </div>
-
-                        <div className="flex items-center justify-between text-[11px] text-slate-500 pt-0.5 border-t border-slate-100">
-                          <span className="font-medium truncate max-w-[55%]">
-                            {appt.specialty || 'Consulta'}
-                          </span>
-                          <span className="font-bold text-slate-700 flex items-center gap-1 shrink-0">
-                            <MapPin className="w-3 h-3" style={{ color: clinicTheme.primaryColor }} />
-                            {resolvedFloor}
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
+              />
             )}
 
-            {/* Modo Manual de Consulta / Data (exibido se não houver consulta no Feegow ou se paciente clicar em Alterar) */}
+            {/* Modo Manual de Consulta / Data */}
             {(feegowAppointments.length === 0 || manualDoctorMode) && (
               <div className="space-y-4">
                 {manualDoctorMode && feegowAppointments.length > 0 && (
@@ -653,7 +435,7 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
 
                 {/* Seleção de Data da Consulta / Atendimento */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
                     <Calendar className="w-3.5 h-3.5 text-slate-400" />
                     Data da Consulta / Atendimento *
                   </label>
@@ -725,137 +507,19 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
                   )}
                 </div>
 
-                {/* Campo de Busca de Médico / Especialidade (Dropdown após 3 caracteres) */}
-                {clinicTheme.id === 'inovare' && (
-                  <div className="relative" ref={doctorDropdownRef}>
-                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center justify-between">
-                      <span className="flex items-center gap-1.5">
-                        <Stethoscope className="w-3.5 h-3.5 text-slate-400" />
-                        Médico / Especialidade <span className="text-[10px] text-slate-400 font-normal">(opcional)</span>
-                      </span>
-                      {doctorInput && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setDoctorInput('');
-                            setSelectedLocation(null);
-                            setIsDoctorDropdownOpen(false);
-                          }}
-                          className="text-[10px] font-bold text-slate-400 hover:text-red-500 transition-colors flex items-center gap-0.5 cursor-pointer"
-                        >
-                          <X className="w-3 h-3" /> Limpar
-                        </button>
-                      )}
-                    </label>
-
-                    <div className="relative">
-                      <input
-                        type="text"
-                        value={doctorInput}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setDoctorInput(val);
-                          setSelectedLocation(null);
-                          if (val.trim().length >= 3) {
-                            setIsDoctorDropdownOpen(true);
-                          } else {
-                            setIsDoctorDropdownOpen(false);
-                          }
-                        }}
-                        onFocus={() => {
-                          if (doctorInput.trim().length >= 3) {
-                            setIsDoctorDropdownOpen(true);
-                          }
-                        }}
-                        placeholder="Digite o nome do médico ou setor (ex: Brenda, Ginecologia...)"
-                        className="w-full pl-3.5 pr-9 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none transition-all form-input-themed"
-                      />
-                      {doctorInput && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setDoctorInput('');
-                            setSelectedLocation(null);
-                            setIsDoctorDropdownOpen(false);
-                          }}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded-full hover:bg-slate-200/50 transition-all cursor-pointer"
-                          title="Limpar médico"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                    </div>
-
-                    {/* Dica discreta ao digitar menos de 3 caracteres */}
-                    {doctorInput.trim().length > 0 && doctorInput.trim().length < 3 && (
-                      <p className="text-[10px] font-medium text-slate-400 mt-1 pl-1">
-                        Digite mais {3 - doctorInput.trim().length} letra(s) para pesquisar médicos...
-                      </p>
-                    )}
-
-                    {/* Dropdown Flutuante após 3 caracteres */}
-                    {isDoctorDropdownOpen && doctorInput.trim().length >= 3 && (
-                      <div className="absolute left-0 right-0 z-50 mt-1.5 bg-white border border-slate-200 rounded-2xl shadow-xl shadow-slate-300/50 max-h-56 overflow-y-auto divide-y divide-slate-100 animate-in fade-in zoom-in-95 duration-150">
-                        {filteredDoctors.length > 0 ? (
-                          filteredDoctors.map((doc, idx) => (
-                            <button
-                              key={`${doc.name}-${idx}`}
-                              type="button"
-                              onClick={() => handleSelectDoctor(doc)}
-                              className="w-full px-3.5 py-2.5 text-left hover:bg-slate-50 flex items-start justify-between gap-2 transition-colors cursor-pointer"
-                            >
-                              <div>
-                                <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                                  <User className="w-3 h-3 text-slate-400 shrink-0" />
-                                  {doc.name}
-                                </div>
-                                <div className="text-[10px] font-medium text-slate-500 mt-0.5 flex items-center gap-1">
-                                  <MapPin className="w-2.5 h-2.5 text-slate-400 shrink-0" />
-                                  {doc.location}
-                                </div>
-                              </div>
-                              {doc.specialty && (
-                                <span 
-                                  className="shrink-0 text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-lg"
-                                  style={{
-                                    backgroundColor: `${clinicTheme.secondaryColor}40`,
-                                    color: clinicTheme.primaryDarkColor
-                                  }}
-                                >
-                                  {doc.specialty}
-                                </span>
-                              )}
-                            </button>
-                          ))
-                        ) : (
-                          <div className="p-3 text-center">
-                            <p className="text-xs font-semibold text-slate-600">Nenhum médico encontrado</p>
-                            <p className="text-[10px] text-slate-400 mt-0.5">
-                              Você pode manter "{doctorInput}" ou apagar para recepção geral.
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Badge com a localização confirmada */}
-                    {(selectedLocation || (doctorInput && resolveDoctorLocation(doctorInput) !== '1º Andar - Lado Direito')) && (
-                      <div 
-                        className="mt-2 p-2 rounded-xl border flex items-center gap-2 text-[11px] font-semibold animate-in fade-in duration-150"
-                        style={{
-                          backgroundColor: `${clinicTheme.secondaryColor}30`,
-                          borderColor: `${clinicTheme.primaryColor}30`,
-                          color: clinicTheme.primaryDarkColor
-                        }}
-                      >
-                        <MapPin className="w-3.5 h-3.5 shrink-0" style={{ color: clinicTheme.primaryColor }} />
-                        <span className="truncate">
-                          {selectedLocation || resolveDoctorLocation(doctorInput)}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                )}
+                {/* Autocomplete de Médico */}
+                <DoctorAutocompleteInput
+                  clinicTheme={clinicTheme}
+                  doctorInput={doctorInput}
+                  setDoctorInput={setDoctorInput}
+                  selectedLocation={selectedLocation}
+                  setSelectedLocation={setSelectedLocation}
+                  isDoctorDropdownOpen={isDoctorDropdownOpen}
+                  setIsDoctorDropdownOpen={setIsDoctorDropdownOpen}
+                  doctorDropdownRef={doctorDropdownRef}
+                  filteredDoctors={filteredDoctors}
+                  handleSelectDoctor={(doc: DoctorSuggestion) => handleSelectDoctor(doc)}
+                />
               </div>
             )}
 
@@ -875,102 +539,18 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
               />
             </div>
 
-            {/* Checkbox e Lista de Acompanhantes (Múltiplos / Ilimitados) */}
-            <div className="pt-2 border-t border-slate-100">
-              <label className="flex items-center gap-2.5 cursor-pointer py-1.5 select-none">
-                <input
-                  type="checkbox"
-                  checked={hasCompanion}
-                  onChange={(e) => setHasCompanion(e.target.checked)}
-                  className="w-4 h-4 rounded border-slate-300"
-                  style={{ accentColor: clinicTheme.primaryColor }}
-                />
-                <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                  <UserPlus className="w-3.5 h-3.5" style={{ color: clinicTheme.primaryColor }} />
-                  Vou levar acompanhante(s)
-                </span>
-              </label>
-
-              {hasCompanion && (
-                <div 
-                  className="mt-3 p-4 rounded-2xl space-y-3.5 animate-in fade-in duration-200 border"
-                  style={{
-                    backgroundColor: clinicTheme.secondaryColor,
-                    borderColor: `${clinicTheme.primaryColor}25`
-                  }}
-                >
-                  <div className="flex items-center justify-between">
-                    <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: clinicTheme.primaryDarkColor }}>
-                      Acompanhantes ({companions.length})
-                    </p>
-                    <button
-                      type="button"
-                      onClick={addCompanionField}
-                      className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-xl bg-white border shadow-sm transition-all hover:scale-105 active:scale-95 cursor-pointer"
-                      style={{ color: clinicTheme.primaryDarkColor, borderColor: `${clinicTheme.primaryColor}30` }}
-                    >
-                      <Plus className="w-3 h-3" />
-                      + Adicionar outro
-                    </button>
-                  </div>
-
-                  {companions.map((comp, idx) => (
-                    <div key={comp.id} className="p-3 bg-white rounded-xl border border-slate-200/80 shadow-xs space-y-2 relative">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-extrabold uppercase text-slate-500 tracking-wider">
-                          Acompanhante #{idx + 1}
-                        </span>
-                        {companions.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => removeCompanionField(comp.id)}
-                            className="text-slate-400 hover:text-red-500 transition-colors p-1 cursor-pointer"
-                            title="Remover acompanhante"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                      </div>
-                      <div>
-                        <input
-                          type="text"
-                          value={comp.name}
-                          onChange={(e) => updateCompanion(comp.id, 'name', e.target.value)}
-                          placeholder={`Nome do Acompanhante #${idx + 1} *`}
-                          className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none transition-all form-input-themed"
-                        />
-                        {comp.name.trim().length >= 3 && name.trim().length >= 3 && comp.name.trim().toUpperCase() === name.trim().toUpperCase() && (
-                          <div className="flex items-center gap-1 mt-1 text-[11px] font-semibold text-rose-600 bg-rose-50 border border-rose-200 rounded px-2 py-0.5 animate-fadeIn">
-                            <span>⚠️ O acompanhante não pode ser o próprio paciente titular.</span>
-                          </div>
-                        )}
-                      </div>
-                      <div>
-                        <input
-                          type="text"
-                          inputMode="numeric"
-                          value={comp.cpf}
-                          onChange={(e) => updateCompanion(comp.id, 'cpf', maskCpf(e.target.value))}
-                          placeholder="CPF do Acompanhante *"
-                          maxLength={14}
-                          className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none transition-all font-mono form-input-themed"
-                        />
-                        {comp.cpf.replace(/\D/g, '') === cpf.replace(/\D/g, '') && cpf.replace(/\D/g, '').length === 11 && (
-                          <div className="flex items-center gap-1 mt-1 text-[11px] font-semibold text-rose-600 bg-rose-50 border border-rose-200 rounded px-2 py-0.5 animate-fadeIn">
-                            <span>⚠️ Não pode ser o mesmo CPF do paciente titular.</span>
-                          </div>
-                        )}
-                        {companions.some((other, oIdx) => oIdx !== idx && other.cpf.replace(/\D/g, '') === comp.cpf.replace(/\D/g, '') && comp.cpf.replace(/\D/g, '').length === 11) && (
-                          <div className="flex items-center gap-1 mt-1 text-[11px] font-semibold text-rose-600 bg-rose-50 border border-rose-200 rounded px-2 py-0.5 animate-fadeIn">
-                            <span>⚠️ CPF duplicado com outro acompanhante.</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+            {/* Lista de Acompanhantes */}
+            <CompanionFormList
+              clinicTheme={clinicTheme}
+              hasCompanion={hasCompanion}
+              setHasCompanion={setHasCompanion}
+              companions={companions}
+              addCompanionField={addCompanionField}
+              removeCompanionField={removeCompanionField}
+              updateCompanion={updateCompanion}
+              patientName={name}
+              patientCpf={cpf}
+            />
 
             {/* Botão de Envio */}
             <button
@@ -994,6 +574,7 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
                 </>
               )}
             </button>
+            
           </form>
         )}
 

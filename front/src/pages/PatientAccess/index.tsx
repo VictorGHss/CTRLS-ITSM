@@ -13,43 +13,56 @@ import { CredentialsCarousel } from './components/CredentialsCarousel';
 import { PatientAccessFooter } from './components/PatientAccessFooter';
 import { SelfRegistrationForm } from './components/SelfRegistrationForm';
 import { isValidCpf } from './utils/cpfValidator';
+import { useWakeLock } from './hooks/useWakeLock';
+import { usePatientAccessAuth } from './hooks/usePatientAccessAuth';
 
 export default function PatientAccess() {
   const { appointmentId } = useParams<{ appointmentId: string }>();
 
-  // --- Tema e Identidade Visual Dinâmica da Clínica ---
+  // Tema e Identidade Visual Dinâmica da Clínica
   const clinicTheme = useMemo(() => {
     return resolveClinicTheme(new URLSearchParams(window.location.search), window.location.pathname);
-  }, [appointmentId]);
+  }, []);
 
-  // --- Estados de controle do desafio de identidade (2FA por telefone) ---
-  const [isVerified, setIsVerified] = useState<boolean>(false);
-  const [digits, setDigits] = useState<string[]>(['', '', '', '']);
-  const inputRef0 = useRef<HTMLInputElement>(null);
-  const inputRef1 = useRef<HTMLInputElement>(null);
-  const inputRef2 = useRef<HTMLInputElement>(null);
-  const inputRef3 = useRef<HTMLInputElement>(null);
-  const inputRefs = useMemo(() => [inputRef0, inputRef1, inputRef2, inputRef3], []);
-  const [challengeLoading, setChallengeLoading] = useState<boolean>(false);
-  const [challengeError, setChallengeError] = useState<string | null>(null);
+  // Hook central de Autenticação, Cache Offline e Polling
+  const {
+    isVerified,
+    digits,
+    inputRefs,
+    challengeLoading,
+    challengeError,
+    credentials,
+    setCredentials,
+    verifiedPhoneDigits,
+    setVerifiedPhoneDigits,
+    verifiedToken,
+    setVerifiedToken,
+    isPublicRoute,
+    defaultPrefix,
+    saveCredentialsWithOfflineCache,
+    handleResetAccess,
+    handleDigitChange,
+    handleDigitKeyDown,
+    handleUnlock
+  } = usePatientAccessAuth({ appointmentId, clinicTheme });
 
-  // --- Estados de controle das credenciais retornadas após o desafio ---
-  const [credentials, setCredentials] = useState<AccessCredential[]>([]);
+  // Controles de Visualização e Modais
   const [fullscreenCard, setFullscreenCard] = useState<number | null>(null);
   const modalRef = useRef<HTMLDivElement>(null);
   const [activeCardIndex, setActiveCardIndex] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // --- Fallback de CPF ---
-  const [verifiedPhoneDigits, setVerifiedPhoneDigits] = useState<string>('');
-  const [verifiedToken, setVerifiedToken] = useState<string>('');
+  // Screen Wake Lock API enquanto QR Code está em tela cheia
+  useWakeLock(fullscreenCard !== null);
+
+  // Fallback de CPF
   const [cpfInput, setCpfInput] = useState<string>('');
   const [cpfSubmitLoading, setCpfSubmitLoading] = useState<boolean>(false);
   const [cpfSubmitError, setCpfSubmitError] = useState<string | null>(null);
   const [isEditingCpf, setIsEditingCpf] = useState<boolean>(false);
   const [editingCredential, setEditingCredential] = useState<AccessCredential | null>(null);
 
-  // --- Cadastro de Acompanhantes e Reativação ---
+  // Cadastro de Acompanhantes e Reativação
   const [isCompanionModalOpen, setIsCompanionModalOpen] = useState<boolean>(false);
   const [companionName, setCompanionName] = useState<string>('');
   const [companionCpf, setCompanionCpf] = useState<string>('');
@@ -58,319 +71,6 @@ export default function PatientAccess() {
   const [companionSubmitError, setCompanionSubmitError] = useState<string | null>(null);
   const [isReactivating, setIsReactivating] = useState<boolean>(false);
   const [reactivateMessage, setReactivateMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-
-  // Screen Wake Lock API: impede que o ecrã do telemóvel apague enquanto o QR Code está em tela cheia
-  useEffect(() => {
-    let activeLock: WakeLockSentinel | null = null;
-
-    const acquireLock = async () => {
-      if (fullscreenCard !== null && 'wakeLock' in navigator && navigator.wakeLock) {
-        try {
-          activeLock = await navigator.wakeLock.request('screen');
-        } catch (err: unknown) {
-          console.warn('[WakeLock] Erro ao solicitar trava de tela:', err);
-        }
-      }
-    };
-
-    void acquireLock();
-
-    return () => {
-      if (activeLock) {
-        activeLock.release()
-          .catch((err: unknown) => console.warn('[WakeLock] Erro ao liberar trava de tela:', err));
-      }
-    };
-  }, [fullscreenCard]);
-
-  const isPublicRoute = clinicTheme.id === 'imagem' || clinicTheme.id === 'inovare' || appointmentId === 'imagem' || appointmentId === 'inovare';
-  const defaultPrefix = clinicTheme.id === 'inovare' ? 'INOV-' : 'IMG-';
-
-  const saveCredentialsWithOfflineCache = (
-    data: AccessCredential[],
-    authInfo?: { token?: string; phoneDigits?: string }
-  ) => {
-    // Garante que todas as credenciais possuam appointmentId definido
-    const todayDigits = new Date().toLocaleDateString('sv-SE').replace(/-/g, '');
-    const normalizedData = (data || []).map(c => {
-      const fallbackAppId = c.cpf ? `${defaultPrefix}${todayDigits}-${c.cpf.replace(/\D/g, '')}` : undefined;
-      return {
-        ...c,
-        appointmentId: (c.appointmentId && c.appointmentId !== 'imagem' && c.appointmentId !== 'inovare')
-          ? c.appointmentId
-          : (appointmentId && appointmentId !== 'imagem' && appointmentId !== 'inovare')
-            ? appointmentId
-            : fallbackAppId
-      };
-    });
-
-    setCredentials(normalizedData);
-    setIsVerified(true);
-    if (normalizedData.length > 0) {
-      try {
-        if (appointmentId && appointmentId !== 'imagem' && appointmentId !== 'inovare') {
-          localStorage.setItem(`patient_access_credentials_${appointmentId}`, JSON.stringify(normalizedData));
-          if (authInfo?.token) {
-            localStorage.setItem(`patient_access_token_${appointmentId}`, authInfo.token);
-          }
-          if (authInfo?.phoneDigits) {
-            localStorage.setItem(`patient_access_phone_${appointmentId}`, authInfo.phoneDigits);
-          }
-        }
-        // Se for auto-cadastro público (Imagem ou Inovare), salva também no cache permanente do tema com a data de emissão e data alvo
-        if (isPublicRoute) {
-          const todayStr = new Date().toLocaleDateString('sv-SE'); // 'YYYY-MM-DD'
-          let targetDate = todayStr;
-          const firstAppId = normalizedData[0]?.appointmentId;
-          const firstAppDateTime = normalizedData[0]?.appointmentDateTime;
-
-          if (firstAppId && firstAppId.length >= 13 && (firstAppId.startsWith('INOV-') || firstAppId.startsWith('IMG-'))) {
-            const y = firstAppId.substring(5, 9);
-            const m = firstAppId.substring(9, 11);
-            const d = firstAppId.substring(11, 13);
-            targetDate = `${y}-${m}-${d}`;
-          } else if (firstAppDateTime) {
-            const dmyMatch = firstAppDateTime.match(/(\d{2})\/(\d{2})\/(\d{4})/);
-            if (dmyMatch) {
-              targetDate = `${dmyMatch[3]}-${dmyMatch[2]}-${dmyMatch[1]}`;
-            } else {
-              const ymdMatch = firstAppDateTime.match(/(\d{4})-(\d{2})-(\d{2})/);
-              if (ymdMatch) {
-                targetDate = `${ymdMatch[1]}-${ymdMatch[2]}-${ymdMatch[3]}`;
-              }
-            }
-          }
-          localStorage.setItem(`patient_access_${clinicTheme.id}_last_credentials`, JSON.stringify({
-            savedDate: todayStr,
-            targetDate: targetDate,
-            credentials: normalizedData
-          }));
-        }
-      } catch {
-        // Ignora falhas de gravação do localStorage
-      }
-    }
-  };
-
-  const handleResetAccess = () => {
-    try {
-      localStorage.removeItem(`patient_access_${clinicTheme.id}_last_credentials`);
-      localStorage.removeItem('patient_access_imagem_last_credentials');
-      localStorage.removeItem('patient_access_inovare_last_credentials');
-      if (appointmentId && appointmentId !== 'imagem' && appointmentId !== 'inovare') {
-        localStorage.removeItem(`patient_access_credentials_${appointmentId}`);
-        localStorage.removeItem(`patient_access_token_${appointmentId}`);
-        localStorage.removeItem(`patient_access_phone_${appointmentId}`);
-      }
-    } catch {
-      // Ignora erro
-    }
-    setCredentials([]);
-    setIsVerified(false);
-  };
-
-  const refreshCredentials = async (silent = false) => {
-    if (!appointmentId || appointmentId === 'imagem' || appointmentId === 'inovare') return;
-    const params = new URLSearchParams(window.location.search);
-    const token = (params.get('t') || params.get('token') || verifiedToken || localStorage.getItem(`patient_access_token_${appointmentId}`) || '').trim();
-    const phoneDigits = (params.get('p') || params.get('auth') || verifiedPhoneDigits || localStorage.getItem(`patient_access_phone_${appointmentId}`) || '').trim();
-
-    if (!token && !phoneDigits) return;
-
-    if (!silent) setChallengeLoading(true);
-    try {
-      const query = token 
-        ? `t=${encodeURIComponent(token)}` 
-        : `phoneDigits=${encodeURIComponent(phoneDigits)}`;
-      
-      const response = await api.get<AccessCredential[]>(
-        `/v1/access/credentials/${appointmentId}?${query}`,
-        {
-          headers: {
-            'X-Skip-Interceptor': 'true'
-          }
-        }
-      );
-      if (response.data && response.data.length > 0) {
-        saveCredentialsWithOfflineCache(response.data, { token, phoneDigits });
-        if (token) setVerifiedToken(token);
-        if (phoneDigits) setVerifiedPhoneDigits(phoneDigits);
-      }
-    } catch (err: unknown) {
-      console.warn('[PatientAccess] Erro ao revalidar credenciais com o servidor:', err);
-    } finally {
-      if (!silent) setChallengeLoading(false);
-    }
-  };
-
-  // Desbloqueio automático via Magic Link (?t=...) ou parâmetro de telefone (?p=...)
-  useEffect(() => {
-    if (!appointmentId || appointmentId === 'imagem' || appointmentId === 'inovare') return;
-    const params = new URLSearchParams(window.location.search);
-    const tokenParam = (params.get('t') || params.get('token') || '').trim();
-    const phoneDigitsParam = (params.get('p') || params.get('auth') || '').trim();
-
-    if (tokenParam || phoneDigitsParam) {
-      void refreshCredentials(false);
-    }
-  }, [appointmentId]);
-
-  // Recupera credenciais em cache local (PWA Offline-First) com Revalidação em Background
-  useEffect(() => {
-    try {
-      const todayStr = new Date().toLocaleDateString('sv-SE'); // 'YYYY-MM-DD'
-
-      if (isPublicRoute) {
-        const cacheKey = `patient_access_${clinicTheme.id}_last_credentials`;
-        const cachedRaw = localStorage.getItem(cacheKey) || (clinicTheme.id === 'imagem' ? localStorage.getItem('patient_access_imagem_last_credentials') : null);
-        if (cachedRaw) {
-          try {
-            const parsed = JSON.parse(cachedRaw);
-            let creds: AccessCredential[] = [];
-            let savedDate: string | null = null;
-
-            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && Array.isArray(parsed.credentials)) {
-              creds = parsed.credentials;
-              savedDate = parsed.savedDate;
-            } else if (Array.isArray(parsed)) {
-              creds = parsed;
-            }
-
-            // Expira o cache APENAS se a data do agendamento/consulta já tiver passado (anterior a hoje)
-            let effectiveDate = parsed.targetDate || savedDate;
-            const hasFutureOrTodayAppt = creds.some(c => {
-              if (!c.appointmentDateTime) return false;
-              const dmy = c.appointmentDateTime.match(/(\d{2})\/(\d{2})\/(\d{4})/);
-              if (dmy) {
-                const dateStr = `${dmy[3]}-${dmy[2]}-${dmy[1]}`;
-                return dateStr >= todayStr;
-              }
-              const ymd = c.appointmentDateTime.match(/(\d{4})-(\d{2})-(\d{2})/);
-              if (ymd) {
-                const dateStr = `${ymd[1]}-${ymd[2]}-${ymd[3]}`;
-                return dateStr >= todayStr;
-              }
-              return false;
-            });
-
-            if (hasFutureOrTodayAppt) {
-              effectiveDate = todayStr;
-            }
-
-            if (effectiveDate && effectiveDate < todayStr) {
-              console.log(`[PatientAccess] Cache de auto-cadastro (${clinicTheme.id}) expirado pois a consulta era em (${effectiveDate}). Expirando para nova emissão.`);
-              localStorage.removeItem(cacheKey);
-              setCredentials([]);
-              setIsVerified(false);
-              return;
-            }
-
-            if (creds.length > 0) {
-              console.log(`[PatientAccess] Credenciais (${clinicTheme.id}) de hoje restauradas do cache`);
-              setCredentials(creds);
-              setIsVerified(true);
-              if (navigator.onLine) {
-                const patientCpf = creds.find(c => c.cpf)?.cpf?.replace(/\D/g, '');
-                if (patientCpf) {
-                  void revalidatePublicCredentials(patientCpf);
-                }
-              }
-            }
-          } catch {
-            localStorage.removeItem(cacheKey);
-          }
-        }
-        return;
-      }
-
-      if (appointmentId && appointmentId !== 'imagem' && appointmentId !== 'inovare') {
-        const key = `patient_access_credentials_${appointmentId}`;
-        const cached = localStorage.getItem(key);
-        if (cached) {
-          const parsed = JSON.parse(cached) as AccessCredential[];
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            const hasBlocked = parsed.some(c => c.credentialCode === 'BLOCKED_OUTSIDE_WINDOW');
-            const savedToken = localStorage.getItem(`patient_access_token_${appointmentId}`);
-            const savedPhone = localStorage.getItem(`patient_access_phone_${appointmentId}`);
-            
-            if (savedToken) setVerifiedToken(savedToken);
-            if (savedPhone) setVerifiedPhoneDigits(savedPhone);
-
-            // Se tiver credenciais bloqueadas e não tiver credencial salva para revalidar, exige autenticação nova
-            if (hasBlocked && !savedToken && !savedPhone && !window.location.search.includes('t=') && !window.location.search.includes('p=')) {
-              console.log('[PatientAccess] Cache continha bloqueio antigo sem credencial salva. Solicitando desafio novamente.');
-              setIsVerified(false);
-            } else {
-              console.log('[PatientAccess] Credenciais restauradas do cache offline');
-              setCredentials(parsed);
-              setIsVerified(true);
-              // Revalida em background imediatamente para atualizar horários/bloqueios
-              if (navigator.onLine) {
-                void refreshCredentials(true);
-              }
-            }
-          }
-        }
-      }
-    } catch {
-      // Ignora falhas de leitura do localStorage
-    }
-  }, [appointmentId, clinicTheme.id, isPublicRoute]);
-
-  // Auto-refresh inteligente: revalida quando o app volta para o primeiro plano ou quando há cartões bloqueados
-  useEffect(() => {
-    const hasBlocked = credentials.some(c => c.credentialCode === 'BLOCKED_OUTSIDE_WINDOW');
-    
-    // Polling a cada 20 segundos enquanto houver cartão bloqueado (para liberar automaticamente assim que entrar na janela de 2h)
-    let interval: ReturnType<typeof setInterval> | null = null;
-    if (hasBlocked && isVerified) {
-      interval = setInterval(() => {
-        if (navigator.onLine) {
-          void refreshCredentials(true);
-        }
-      }, 20000);
-    }
-
-    // Revalidar imediatamente quando o paciente desbloqueia o celular ou volta para a aba do navegador
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && navigator.onLine && isVerified) {
-        if (isPublicRoute) {
-          const patientCpf = credentials.find(c => c.cpf)?.cpf?.replace(/\D/g, '');
-          if (patientCpf) {
-            void revalidatePublicCredentials(patientCpf);
-          }
-        } else {
-          void refreshCredentials(true);
-        }
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    return () => {
-      if (interval) clearInterval(interval);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [credentials, isVerified, verifiedToken, verifiedPhoneDigits, isPublicRoute]);
-
-  const openFullscreen = (index: number) => {
-    if (credentials[index]?.credentialCode === 'BLOCKED_OUTSIDE_WINDOW') return;
-    setFullscreenCard(index);
-    setTimeout(() => {
-      if (modalRef.current && modalRef.current.requestFullscreen) {
-        modalRef.current.requestFullscreen().catch(() => {});
-      }
-    }, 50);
-  };
-
-  const closeFullscreen = () => {
-    setFullscreenCard(null);
-    if (document.fullscreenElement) {
-      document.exitFullscreen().catch(() => {});
-    }
-  };
-
-
 
   // Monitora saída da tela cheia nativa do browser para sincronizar o estado do React
   useEffect(() => {
@@ -395,63 +95,58 @@ export default function PatientAccess() {
     }
   }, [isVerified, inputRefs]);
 
-  const handleDigitChange = (index: number, val: string) => {
-    setChallengeError(null);
-    const numericVal = val.replace(/\D/g, '');
-    if (!numericVal) {
-      const newDigits = [...digits];
-      newDigits[index] = '';
-      setDigits(newDigits);
-      return;
-    }
-    const newDigits = [...digits];
-    newDigits[index] = numericVal.substring(numericVal.length - 1);
-    setDigits(newDigits);
+  const openFullscreen = (index: number) => {
+    if (credentials[index]?.credentialCode === 'BLOCKED_OUTSIDE_WINDOW') return;
+    setFullscreenCard(index);
+    setTimeout(() => {
+      if (modalRef.current && modalRef.current.requestFullscreen) {
+        modalRef.current.requestFullscreen().catch(() => {});
+      }
+    }, 50);
+  };
 
-    if (index < 3) {
-      inputRefs[index + 1].current?.focus();
+  const closeFullscreen = () => {
+    setFullscreenCard(null);
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(() => {});
     }
   };
 
-  const handleDigitKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Backspace' && !digits[index] && index > 0) {
-      const newDigits = [...digits];
-      newDigits[index - 1] = '';
-      setDigits(newDigits);
-      inputRefs[index - 1].current?.focus();
+  const scrollToCard = (index: number) => {
+    if (scrollRef.current) {
+      const width = scrollRef.current.clientWidth;
+      scrollRef.current.scrollTo({
+        left: index * (width * 0.85),
+        behavior: 'smooth'
+      });
+      setActiveCardIndex(index);
     }
   };
 
-  const handleUnlock = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!appointmentId || digits.some(d => d === '')) return;
-
-    const phoneDigits = digits.join('');
-    setChallengeLoading(true);
-    setChallengeError(null);
-
-    try {
-      console.log('[PatientAccess] Enviando desafio de 4 dígitos para o agendamento:', appointmentId);
-      const response = await api.get<AccessCredential[]>(
-        `/v1/access/credentials/${appointmentId}?phoneDigits=${phoneDigits}`,
-        {
-          headers: {
-            'X-Skip-Interceptor': 'true'
-          }
-        }
-      );
-      saveCredentialsWithOfflineCache(response.data || [], { phoneDigits });
-      setVerifiedPhoneDigits(phoneDigits);
-    } catch (err: unknown) {
-      console.error('[PatientAccess] Falha no desafio de segurança:', err);
-      setChallengeError('Código inválido. Tente novamente.');
-      setDigits(['', '', '', '']);
-      setTimeout(() => inputRefs[0].current?.focus(), 50);
-    } finally {
-      setChallengeLoading(false);
-    }
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const target = e.currentTarget;
+    const scrollLeft = target.scrollLeft;
+    const width = target.clientWidth;
+    const index = Math.round(scrollLeft / (width * 0.85));
+    setActiveCardIndex(Math.min(Math.max(index, 0), credentials.length - 1));
   };
 
+  const getActiveAppointmentId = (): string | undefined => {
+    if (appointmentId && appointmentId !== 'imagem' && appointmentId !== 'inovare') {
+      return appointmentId;
+    }
+    const fromCred = credentials.find(c => c.appointmentId && c.appointmentId !== 'imagem' && c.appointmentId !== 'inovare')?.appointmentId;
+    if (fromCred) return fromCred;
+    const patientCred = credentials.find(c => c.userType === 'PATIENT' && c.cpf) || credentials.find(c => c.cpf);
+    if (patientCred?.appointmentId && patientCred.appointmentId !== 'imagem' && patientCred.appointmentId !== 'inovare') {
+      return patientCred.appointmentId;
+    }
+    if (patientCred?.cpf) {
+      const todayDigits = new Date().toLocaleDateString('sv-SE').replace(/-/g, '');
+      return `${defaultPrefix}${todayDigits}-${patientCred.cpf.replace(/\D/g, '')}`;
+    }
+    return undefined;
+  };
 
   const handleCpfSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -482,7 +177,6 @@ export default function PatientAccess() {
     setCpfSubmitLoading(true);
     setCpfSubmitError(null);
 
-    // Recupera o token / phoneDigits com fallback abrangente (URL, state e localStorage)
     const token = (
       new URLSearchParams(window.location.search).get('t') ||
       new URLSearchParams(window.location.search).get('token') ||
@@ -502,7 +196,6 @@ export default function PatientAccess() {
     ).trim();
 
     try {
-      console.log('[PatientAccess] Enviando CPF para validação:', cleanCpf, 'agendamento alvo:', targetId, 'editingCredential:', editingCredential);
       const validateRes = await api.post<{ authorized: boolean; requiresCpfFallback?: boolean; message?: string }>(
         '/v1/access/validate',
         {
@@ -524,7 +217,6 @@ export default function PatientAccess() {
         return;
       }
 
-      // Re-busca todas as credenciais do grupo pelo agendamento principal da rota ou pelo targetId
       const rootId = (appointmentId && appointmentId !== 'inovare' && appointmentId !== 'imagem') ? appointmentId : targetId;
       const query = token
         ? `t=${encodeURIComponent(token)}`
@@ -555,7 +247,6 @@ export default function PatientAccess() {
         console.warn('[PatientAccess] Busca por appointmentId após CPF falhou, tentando lookup por CPF:', fetchErr);
       }
 
-      // Fallback para auto-cadastros: busca as credenciais recém-emitidas pelo CPF
       try {
         const lookupRes = await api.post<AccessCredential[]>('/v1/access/lookup-by-cpf', {
           cpf: cleanCpf,
@@ -584,23 +275,6 @@ export default function PatientAccess() {
     }
   };
 
-  const getActiveAppointmentId = (): string | undefined => {
-    if (appointmentId && appointmentId !== 'imagem' && appointmentId !== 'inovare') {
-      return appointmentId;
-    }
-    const fromCred = credentials.find(c => c.appointmentId && c.appointmentId !== 'imagem' && c.appointmentId !== 'inovare')?.appointmentId;
-    if (fromCred) return fromCred;
-    const patientCred = credentials.find(c => c.userType === 'PATIENT' && c.cpf) || credentials.find(c => c.cpf);
-    if (patientCred?.appointmentId && patientCred.appointmentId !== 'imagem' && patientCred.appointmentId !== 'inovare') {
-      return patientCred.appointmentId;
-    }
-    if (patientCred?.cpf) {
-      const todayDigits = new Date().toLocaleDateString('sv-SE').replace(/-/g, '');
-      return `${defaultPrefix}${todayDigits}-${patientCred.cpf.replace(/\D/g, '')}`;
-    }
-    return undefined;
-  };
-
   const handleCompanionSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const targetAppointmentId = getActiveAppointmentId();
@@ -621,7 +295,6 @@ export default function PatientAccess() {
       return;
     }
 
-    // 1. Não pode ter o mesmo CPF do paciente titular
     const patientCred = credentials.find(c => c.userType === 'PATIENT');
     const patientCleanCpf = patientCred?.cpf ? patientCred.cpf.replace(/\D/g, '') : '';
     if (patientCleanCpf && cleanCpf === patientCleanCpf) {
@@ -629,13 +302,11 @@ export default function PatientAccess() {
       return;
     }
 
-    // 2. Não pode ter o mesmo nome do titular
     if (patientCred?.name && companionName.trim().toUpperCase() === patientCred.name.trim().toUpperCase()) {
       setCompanionSubmitError('O acompanhante não pode ser o próprio paciente titular.');
       return;
     }
 
-    // 3. Não pode ter o mesmo CPF de um acompanhante já cadastrado
     const existingComp = credentials.find(c => c.userType === 'COMPANION' && c.cpf?.replace(/\D/g, '') === cleanCpf);
     if (existingComp) {
       setCompanionSubmitError(`Já existe um acompanhante cadastrado com este CPF (${existingComp.name}).`);
@@ -645,9 +316,14 @@ export default function PatientAccess() {
     setCompanionSubmitLoading(true);
     setCompanionSubmitError(null);
 
+    interface CompanionCreatedResponse {
+      locator?: string;
+      accessCredential?: string;
+      credentialCode?: string;
+    }
+
     try {
-      console.log('[PatientAccess] Cadastrando acompanhante:', companionName, 'para agendamento:', targetAppointmentId);
-      const postResponse = await api.post<any>(
+      const postResponse = await api.post<AccessCredential[] | CompanionCreatedResponse>(
         `/v1/access/companions/${targetAppointmentId}`,
         {
           name: companionName.trim(),
@@ -663,26 +339,28 @@ export default function PatientAccess() {
 
       let updatedList: AccessCredential[] = [];
 
-      // 1. Se a API já retornou a lista completa de credenciais atualizada
       if (Array.isArray(postResponse.data) && postResponse.data.length > 0) {
         updatedList = postResponse.data;
-      } else if (postResponse.data && (postResponse.data.accessCredential || postResponse.data.credentialCode)) {
-        // 2. Se retornou uma credencial avulsa criada, adiciona ao estado existente
-        const newComp: AccessCredential = {
-          appointmentId: targetAppointmentId,
-          name: companionName.trim().toUpperCase(),
-          userType: 'COMPANION',
-          locator: postResponse.data.locator || '',
-          credentialCode: postResponse.data.accessCredential || postResponse.data.credentialCode || '',
-          cpf: cleanCpf,
-          doctorName: credentials[0]?.doctorName || 'Clínica Inovare',
-          appointmentDateTime: credentials[0]?.appointmentDateTime || 'Hoje',
-          opensAt: '06:00',
-          closesAt: '23:00'
-        };
-        updatedList = [...credentials, newComp];
-      } else {
-        // 3. Fallback: tenta buscar via GET
+      } else if (postResponse.data && typeof postResponse.data === 'object') {
+        const obj = postResponse.data as CompanionCreatedResponse;
+        if (obj.accessCredential || obj.credentialCode) {
+          const newComp: AccessCredential = {
+            appointmentId: targetAppointmentId,
+            name: companionName.trim().toUpperCase(),
+            userType: 'COMPANION',
+            locator: obj.locator || '',
+            credentialCode: obj.accessCredential || obj.credentialCode || '',
+            cpf: cleanCpf,
+            doctorName: credentials[0]?.doctorName || 'Clínica Inovare',
+            appointmentDateTime: credentials[0]?.appointmentDateTime || 'Hoje',
+            opensAt: '06:00',
+            closesAt: '23:00'
+          };
+          updatedList = [...credentials, newComp];
+        }
+      }
+
+      if (updatedList.length === 0) {
         try {
           const query = verifiedToken
             ? `t=${encodeURIComponent(verifiedToken)}`
@@ -717,35 +395,12 @@ export default function PatientAccess() {
       } else {
         setIsCompanionModalOpen(false);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[PatientAccess] Falha ao cadastrar acompanhante:', err);
-      const apiMsg = err?.response?.data?.message || err?.response?.data?.error;
-      setCompanionSubmitError(apiMsg || 'Erro ao cadastrar acompanhante. Tente novamente.');
+      const apiMsg = getApiErrorMessage(err, 'Erro ao cadastrar acompanhante. Tente novamente.');
+      setCompanionSubmitError(apiMsg);
     } finally {
       setCompanionSubmitLoading(false);
-    }
-  };
-
-  const revalidatePublicCredentials = async (patientCpf: string) => {
-    if (!patientCpf) return;
-    try {
-      const response = await api.post<AccessCredential[]>(
-        '/v1/access/lookup-by-cpf',
-        {
-          cpf: patientCpf,
-          clinic: clinicTheme.id
-        },
-        {
-          headers: {
-            'X-Skip-Interceptor': 'true'
-          }
-        }
-      );
-      if (response.data && response.data.length > 0) {
-        saveCredentialsWithOfflineCache(response.data);
-      }
-    } catch (err) {
-      console.warn('[PatientAccess] Revalidação silenciosa pública falhou:', err);
     }
   };
 
@@ -753,7 +408,6 @@ export default function PatientAccess() {
     const targetAppointmentId = getActiveAppointmentId();
 
     if (!targetAppointmentId) {
-      console.warn('[PatientAccess] Não foi possível reativar: ID do agendamento ausente.');
       setReactivateMessage({ type: 'error', text: 'Não foi possível identificar o agendamento. Recarregue a página.' });
       setTimeout(() => setReactivateMessage(null), 5000);
       return;
@@ -762,7 +416,6 @@ export default function PatientAccess() {
     setIsReactivating(true);
     setReactivateMessage(null);
     try {
-      console.log('[PatientAccess] Reativando acesso físico:', targetAppointmentId);
       const response = await api.post<AccessCredential[]>(
         `/v1/access/reactivate/${targetAppointmentId}`,
         {},
@@ -788,25 +441,6 @@ export default function PatientAccess() {
     } finally {
       setIsReactivating(false);
     }
-  };
-
-  const scrollToCard = (index: number) => {
-    if (scrollRef.current) {
-      const width = scrollRef.current.clientWidth;
-      scrollRef.current.scrollTo({
-        left: index * (width * 0.85),
-        behavior: 'smooth'
-      });
-      setActiveCardIndex(index);
-    }
-  };
-
-  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
-    const target = e.currentTarget;
-    const scrollLeft = target.scrollLeft;
-    const width = target.clientWidth;
-    const index = Math.round(scrollLeft / (width * 0.85));
-    setActiveCardIndex(Math.min(Math.max(index, 0), credentials.length - 1));
   };
 
   // === TELA DE AUTO-CHECKIN OU DESAFIO DE IDENTIDADE (2FA) ===

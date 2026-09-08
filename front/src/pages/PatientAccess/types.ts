@@ -16,9 +16,37 @@ export interface AccessCredential {
   id?: string;
 }
 
+export interface CompanionEntry {
+  id: string;
+  name: string;
+  cpf: string;
+  birthDate: string;
+}
+
+export interface FeegowAppointmentItem {
+  appointmentId: string;
+  doctorName: string;
+  specialty: string;
+  date: string;
+  time: string;
+  formattedDateTime: string;
+  isToday: boolean;
+  location?: string;
+}
+
+export interface FeegowLookupResponse {
+  found: boolean;
+  patientName?: string;
+  birthDate?: string;
+  phone?: string;
+  appointments: FeegowAppointmentItem[];
+  message?: string;
+}
+
 export const formatCpf = (cpf?: string) => {
   if (!cpf) return '';
   const clean = cpf.replace(/\D/g, '');
   if (clean.length !== 11) return cpf;
   return `${clean.substring(0, 3)}.${clean.substring(3, 6)}.${clean.substring(6, 9)}-${clean.substring(9)}`;
 };
+
