@@ -16,8 +16,8 @@ import org.springframework.web.client.RestClient;
 @Configuration
 public class GestaoDsClientConfig {
 
-    @Bean("gestaoDsRestClient")
-    public RestClient gestaoDsRestClient(GestaoDsProperties properties) {
+    @Bean("gestaoDsHttpRestClient")
+    public RestClient gestaoDsHttpRestClient(GestaoDsProperties properties) {
         HttpClient httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofMillis(properties.getConnectTimeoutMs()))
                 .build();

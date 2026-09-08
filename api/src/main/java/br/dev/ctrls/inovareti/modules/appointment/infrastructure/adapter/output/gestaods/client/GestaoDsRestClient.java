@@ -34,7 +34,7 @@ public class GestaoDsRestClient {
     private final ObjectMapper objectMapper;
 
     public GestaoDsRestClient(
-            @Qualifier("gestaoDsRestClient") RestClient restClient,
+            @Qualifier("gestaoDsHttpRestClient") RestClient restClient,
             GestaoDsProperties properties,
             ObjectMapper objectMapper) {
         this.restClient = restClient;
