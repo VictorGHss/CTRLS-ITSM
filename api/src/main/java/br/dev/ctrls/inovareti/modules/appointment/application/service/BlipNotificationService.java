@@ -30,6 +30,8 @@ public class BlipNotificationService {
     private final br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentSessionRepositoryPort appointmentSessionRepository;
     private final BlipAppointmentFormatter blipAppointmentFormatter;
     private final BlipReviewNotificationService blipReviewNotificationService;
+    private final br.dev.ctrls.inovareti.modules.appointment.domain.port.output.DoctorConfigurationRepository doctorConfigurationRepository;
+    private final br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentDoctorMappingRepositoryPort appointmentDoctorMappingRepository;
 
     @org.springframework.beans.factory.annotation.Value("${notification.blocked-doctor-ids:46}")
     private String rawBlockedDoctorIds = "46";
@@ -75,6 +77,24 @@ public class BlipNotificationService {
             br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentSessionRepositoryPort appointmentSessionRepository,
             BlipAppointmentFormatter blipAppointmentFormatter,
             BlipReviewNotificationService blipReviewNotificationService) {
+        this(limeClient, blipTemplateParameterResolver, motorProperties, blipPayloadBuilder, blipContextService,
+             appointmentSessionRepository, blipAppointmentFormatter, blipReviewNotificationService, null, null);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public BlipNotificationService(
+            BlipLIMEClient limeClient,
+            BlipTemplateParameterResolver blipTemplateParameterResolver,
+            AppointmentMotorProperties motorProperties,
+            BlipPayloadBuilder blipPayloadBuilder,
+            BlipContextService blipContextService,
+            br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentSessionRepositoryPort appointmentSessionRepository,
+            BlipAppointmentFormatter blipAppointmentFormatter,
+            BlipReviewNotificationService blipReviewNotificationService,
+            @org.springframework.beans.factory.annotation.Autowired(required = false)
+            br.dev.ctrls.inovareti.modules.appointment.domain.port.output.DoctorConfigurationRepository doctorConfigurationRepository,
+            @org.springframework.beans.factory.annotation.Autowired(required = false)
+            br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentDoctorMappingRepositoryPort appointmentDoctorMappingRepository) {
         this.limeClient = limeClient;
         this.blipTemplateParameterResolver = blipTemplateParameterResolver;
         this.motorProperties = motorProperties;
@@ -83,6 +103,8 @@ public class BlipNotificationService {
         this.appointmentSessionRepository = appointmentSessionRepository;
         this.blipAppointmentFormatter = blipAppointmentFormatter;
         this.blipReviewNotificationService = blipReviewNotificationService;
+        this.doctorConfigurationRepository = doctorConfigurationRepository;
+        this.appointmentDoctorMappingRepository = appointmentDoctorMappingRepository;
     }
 
     public List<BlipTemplateDto> fetchTemplatesFromBlip() {
@@ -482,10 +504,13 @@ public class BlipNotificationService {
 
         String status = String.valueOf(response.getOrDefault("status", "unknown"));
 
-        if ("failure".equalsIgnoreCase(status) || "error".equalsIgnoreCase(status) || "offline-queued".equalsIgnoreCase(status) || "timeout".equalsIgnoreCase(status)) {
+        if ("failure".equalsIgnoreCase(status) || "error".equalsIgnoreCase(status)
+                || "offline-queued".equalsIgnoreCase(status) || "timeout".equalsIgnoreCase(status)
+                || "resource-error".equalsIgnoreCase(status) || "rate-limited".equalsIgnoreCase(status)
+                || "network-unreachable".equalsIgnoreCase(status) || "client-error".equalsIgnoreCase(status)) {
             Object reasonObj = response.get("reason");
-            String reasonStr = reasonObj != null ? reasonObj.toString() : "desconhecida";
-            log.error("[LIME-FAILURE] Disparo de template '{}' rejeitado pelo Blip (destinatário={}). Status: {}, Motivo: {}",
+            String reasonStr = reasonObj != null ? reasonObj.toString() : String.valueOf(response.getOrDefault("message", status));
+            log.error("[LIME-FAILURE] Disparo de template '{}' falhou/rejeitado no Blip (destinatário={}). Status: {}, Motivo: {}",
                 templateName, recipient, status, reasonStr);
             throw new br.dev.ctrls.inovareti.modules.appointment.domain.exception.BlipNotificationException(
                 "Envio de template '" + templateName + "' falhou no Blip. Status: " + status + ", Motivo: " + reasonStr
@@ -633,7 +658,12 @@ public class BlipNotificationService {
             return false;
         }
 
-        // 2. Verificação de Sandbox / Allowlist (testDoctorIds e activeDoctorIds)
+        // 2. Se o motor estiver configurado explicitamente em modo de teste, restringe a testDoctorIds
+        if (motorProperties.isTestMode()) {
+            return motorProperties.getTestDoctorIds().contains(docId);
+        }
+
+        // 3. Em modo de produção:
         if (motorProperties.getTestDoctorIds().contains(docId)) {
             return true;
         }
@@ -641,8 +671,25 @@ public class BlipNotificationService {
             return true;
         }
 
-        // 3. Comportamento Padrão: Se nenhuma allowlist específica estiver ativa, permite por padrão (fail-open)
-        if (motorProperties.getTestDoctorIds().isEmpty() && motorProperties.getActiveDoctorIds().isEmpty()) {
+        try {
+            Long id = Long.parseLong(docId);
+            if (doctorConfigurationRepository != null) {
+                var configOpt = doctorConfigurationRepository.findById(id);
+                if (configOpt.isPresent() && configOpt.get().isConfigActive()) {
+                    return true;
+                }
+            }
+        } catch (Exception ignored) {}
+
+        if (appointmentDoctorMappingRepository != null) {
+            var mappingOpt = appointmentDoctorMappingRepository.findByProfissionalId(docId);
+            if (mappingOpt.isPresent()) {
+                return true;
+            }
+        }
+
+        // 4. Se nenhuma restrição manual de activeDoctorIds estiver ativa no properties, permite por padrão (fail-open)
+        if (motorProperties.getActiveDoctorIds().isEmpty()) {
             return true;
         }
 

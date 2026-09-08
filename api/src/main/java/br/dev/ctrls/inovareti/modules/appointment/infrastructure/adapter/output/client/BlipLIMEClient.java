@@ -69,7 +69,7 @@ public class BlipLIMEClient implements BlipClientPort {
             // (~250ms por request). Com pool, reutiliza conexões existentes reduzindo para ~50ms.
             org.apache.hc.client5.http.config.ConnectionConfig connectionConfig =
                 org.apache.hc.client5.http.config.ConnectionConfig.custom()
-                    .setConnectTimeout(org.apache.hc.core5.util.Timeout.ofMilliseconds(3000))
+                    .setConnectTimeout(org.apache.hc.core5.util.Timeout.ofMilliseconds(5000))
                     .build();
 
             org.apache.hc.client5.http.impl.classic.CloseableHttpClient httpClient =
@@ -83,11 +83,11 @@ public class BlipLIMEClient implements BlipClientPort {
                             .setDefaultConnectionConfig(connectionConfig)
                             .build()
                     )
-                    // Configura timeout de conexão (3s) e leitura (10s) por request para evitar thread hanging
+                    // Configura timeout de conexão (5s) e leitura (25s) por request para suportar picos de carga do Meta/Blip
                     .setDefaultRequestConfig(
                         org.apache.hc.client5.http.config.RequestConfig.custom()
-                            .setConnectionRequestTimeout(org.apache.hc.core5.util.Timeout.ofMilliseconds(3000))
-                            .setResponseTimeout(org.apache.hc.core5.util.Timeout.ofMilliseconds(10000))
+                            .setConnectionRequestTimeout(org.apache.hc.core5.util.Timeout.ofMilliseconds(5000))
+                            .setResponseTimeout(org.apache.hc.core5.util.Timeout.ofMilliseconds(25000))
                             .build()
                     )
                     // Desativa retries automáticos de HTTP em caso de status 429 ou 4xx para evitar travamentos
@@ -99,7 +99,7 @@ public class BlipLIMEClient implements BlipClientPort {
             blipRestTemplate.setMessageConverters(new ArrayList<>(injectedRestTemplate.getMessageConverters()));
             blipRestTemplate.setInterceptors(new ArrayList<>(injectedRestTemplate.getInterceptors()));
             blipRestTemplate.setErrorHandler(injectedRestTemplate.getErrorHandler());
-            log.info("Blip RestTemplate configurado com pool de conexões HTTP (max=100, connectTimeout=3s, readTimeout=10s, retryStrategy=0)");
+            log.info("Blip RestTemplate configurado com pool de conexões HTTP (max=100, connectTimeout=5s, readTimeout=25s, retryStrategy=0)");
         } catch (Exception ex) {
             log.warn("Falha ao configurar Blip RestTemplate com pool; usando RestTemplate injetado", ex);
             blipRestTemplate = injectedRestTemplate;
@@ -243,10 +243,10 @@ public class BlipLIMEClient implements BlipClientPort {
         Map<String, Object> finalPayload = payload;
 
         try {
-            if (!blipConcurrencySemaphore.tryAcquire(2, java.util.concurrent.TimeUnit.SECONDS)) {
-                log.warn("[BLIP-RATE-LIMIT] Limite de concorrência para a API do Blip atingido (15 requisições ativas). Rejeitando chamada rápido e agendando retry.");
+            if (!blipConcurrencySemaphore.tryAcquire(15, java.util.concurrent.TimeUnit.SECONDS)) {
+                log.warn("[BLIP-RATE-LIMIT] Limite de concorrência para a API do Blip atingido (15 requisições ativas após 15s de espera). Rejeitando chamada rápido e agendando retry.");
                 scheduleAsyncRetry(finalPayload, actualScope, true);
-                return Map.of("status", "rate-limited", "message", "Concurrency limit reached");
+                return Map.of("status", "rate-limited", "message", "Concurrency limit reached after wait");
             }
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
@@ -386,10 +386,10 @@ public class BlipLIMEClient implements BlipClientPort {
     )
     public Map<String, Object> executeMessage(Map<String, Object> payload, AuthorizationScope scope) {
         try {
-            if (!blipConcurrencySemaphore.tryAcquire(2, java.util.concurrent.TimeUnit.SECONDS)) {
-                log.warn("[BLIP-RATE-LIMIT] Limite de concorrência para a API do Blip atingido (15 requisições ativas). Rejeitando chamada de forma rápida.");
+            if (!blipConcurrencySemaphore.tryAcquire(15, java.util.concurrent.TimeUnit.SECONDS)) {
+                log.warn("[BLIP-RATE-LIMIT] Limite de concorrência para a API do Blip atingido (15 requisições ativas após 15s de espera). Rejeitando chamada de forma rápida.");
                 scheduleAsyncRetry(payload, scope, false);
-                return Map.of("status", "rate-limited", "message", "Concurrency limit reached");
+                return Map.of("status", "rate-limited", "message", "Concurrency limit reached after wait");
             }
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();

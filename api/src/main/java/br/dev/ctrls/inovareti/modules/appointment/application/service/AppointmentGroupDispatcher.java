@@ -56,7 +56,7 @@ public class AppointmentGroupDispatcher {
     @Nullable
     private final NoopAppointmentSendIdempotencyService noopAppointmentSendIdempotencyService;
 
-    @Value("${APP_APPOINTMENT_BLIP_INGEST_CONCURRENCY:20}")
+    @Value("${APP_APPOINTMENT_BLIP_INGEST_CONCURRENCY:10}")
     private int blipIngestConcurrency;
 
     private Semaphore blipSemaphore;

@@ -185,6 +185,17 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return problem;
     }
 
+    @ExceptionHandler({org.springframework.security.core.AuthenticationException.class, org.springframework.security.authentication.BadCredentialsException.class})
+    public ProblemDetail handleAuthenticationException(Exception ex, HttpServletRequest request) {
+        log.warn("[AUTENTICAÇÃO] Falha de autenticação (401): {} | URI: {}", ex.getMessage(), resolveRequestUrl(request));
+        ProblemDetail problem = ProblemDetail.forStatus(HttpStatus.UNAUTHORIZED);
+        problem.setTitle("Falha na autenticação");
+        problem.setDetail(ex.getMessage() != null && !ex.getMessage().isBlank() ? ex.getMessage() : "Usuário inexistente ou senha inválida");
+        problem.setInstance(java.net.URI.create(resolveRequestUrl(request)));
+        attachTraceId(problem);
+        return problem;
+    }
+
     @ExceptionHandler(ContaAzulHttpException.class)
     public ProblemDetail handleContaAzulHttpException(ContaAzulHttpException ex, HttpServletRequest request) {
         HttpStatus status = HttpStatus.resolve(ex.getStatusCode());

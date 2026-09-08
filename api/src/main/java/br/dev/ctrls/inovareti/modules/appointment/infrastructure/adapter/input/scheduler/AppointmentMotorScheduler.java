@@ -30,19 +30,12 @@ public class AppointmentMotorScheduler {
 
         log.info("Scheduler de ingestão de agendamentos iniciado");
 
-        java.util.List<String> targetDoctorIds = new java.util.ArrayList<>();
-        if (properties.getActiveDoctorIds() != null && !properties.getActiveDoctorIds().isEmpty()) {
-            targetDoctorIds.addAll(properties.getActiveDoctorIds());
-        }
-        if (properties.getTestDoctorIds() != null && !properties.getTestDoctorIds().isEmpty()) {
-            targetDoctorIds.addAll(properties.getTestDoctorIds());
-        }
-
-        if (!targetDoctorIds.isEmpty()) {
-            log.info("Scheduler direcionando ingestão para os médicos selecionados: {}", targetDoctorIds);
-            ingestAppointmentsUseCase.execute(targetDoctorIds);
+        if (properties.isTestMode()) {
+            java.util.List<String> testDocs = properties.getTestDoctorIds();
+            log.info("Scheduler em modo TESTE. Direcionando para os médicos de teste: {}", testDocs);
+            ingestAppointmentsUseCase.execute(testDocs);
         } else {
-            log.info("Nenhum médico configurado especificamente. Iniciando ingestão genérica.");
+            log.info("Scheduler em modo PRODUÇÃO. Executando ingestão completa para todos os médicos ativos e configurados.");
             ingestAppointmentsUseCase.execute();
         }
     }

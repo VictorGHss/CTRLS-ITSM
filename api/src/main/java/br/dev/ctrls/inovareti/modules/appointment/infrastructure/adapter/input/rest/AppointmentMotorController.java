@@ -60,6 +60,7 @@ public class AppointmentMotorController {
     private final Environment env;
     private final ObjectMapper objectMapper;
     private final org.springframework.core.task.AsyncTaskExecutor applicationTaskExecutor;
+    private final br.dev.ctrls.inovareti.modules.appointment.domain.port.output.DoctorConfigurationRepository doctorConfigurationRepository;
 
     @Value("${blip.webhook.secret}")
     private String blipWebhookSecret;
@@ -71,12 +72,20 @@ public class AppointmentMotorController {
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Map<String, Object>> motorConfig() {
         String mode = appointmentMotorProperties.isTestMode() ? "TEST" : "PROD";
+        java.util.Set<String> activeDocs = new java.util.LinkedHashSet<>(appointmentMotorProperties.getActiveDoctorIds());
+        if (doctorConfigurationRepository != null) {
+            doctorConfigurationRepository.findByIsActiveTrue().forEach(c -> {
+                if (c.getFeegowProfissionalId() != null) {
+                    activeDocs.add(String.valueOf(c.getFeegowProfissionalId()));
+                }
+            });
+        }
         return ResponseEntity.ok(Map.of(
                 "enabled", appointmentMotorProperties.isEnabled(),
                 "testMode", appointmentMotorProperties.isTestMode(),
                 "testDoctorId", appointmentMotorProperties.getTestDoctorId() != null ? appointmentMotorProperties.getTestDoctorId() : "",
                 "testDoctorIds", appointmentMotorProperties.getTestDoctorIds() != null ? appointmentMotorProperties.getTestDoctorIds() : java.util.List.of(),
-                "activeDoctorIds", appointmentMotorProperties.getActiveDoctorIds() != null ? appointmentMotorProperties.getActiveDoctorIds() : java.util.List.of(),
+                "activeDoctorIds", new java.util.ArrayList<>(activeDocs),
                 "mode", mode));
     }
 
@@ -131,7 +140,14 @@ public class AppointmentMotorController {
                     log.info("[TRIGGER-MANUAL] Iniciando execução para médicos específicos: {} (forceSend={}, testPhone={}, customDates={})", specificDocs, forceSend, testPhone, customDates);
                     ingestAppointmentsUseCase.execute(specificDocs, forceSend, testPhone, customDates);
                 } else if (Boolean.TRUE.equals(production)) {
-                    java.util.List<String> activeDoctorIds = new java.util.ArrayList<>(appointmentMotorProperties.getActiveDoctorIds());
+                    java.util.Set<String> activeDoctorIds = new java.util.LinkedHashSet<>(appointmentMotorProperties.getActiveDoctorIds());
+                    if (doctorConfigurationRepository != null) {
+                        doctorConfigurationRepository.findByIsActiveTrue().forEach(c -> {
+                            if (c.getFeegowProfissionalId() != null) {
+                                activeDoctorIds.add(String.valueOf(c.getFeegowProfissionalId()));
+                            }
+                        });
+                    }
                     
                     if (excludeRaw != null && !excludeRaw.isBlank()) {
                         java.util.List<String> excludeList = java.util.Arrays.stream(excludeRaw.split(","))
@@ -143,8 +159,9 @@ public class AppointmentMotorController {
                         activeDoctorIds.removeAll(excludeList);
                     }
                     
-                    log.info("[TRIGGER-MANUAL] Iniciando execução de produção em segundo plano para os médicos: {} (forceSend={}, testPhone={}, customDates={})", activeDoctorIds, forceSend, testPhone, customDates);
-                    ingestAppointmentsUseCase.execute(activeDoctorIds, forceSend, testPhone, customDates);
+                    java.util.List<String> activeList = new java.util.ArrayList<>(activeDoctorIds);
+                    log.info("[TRIGGER-MANUAL] Iniciando execução de produção em segundo plano para os médicos: {} (forceSend={}, testPhone={}, customDates={})", activeList, forceSend, testPhone, customDates);
+                    ingestAppointmentsUseCase.execute(activeList.isEmpty() ? null : activeList, forceSend, testPhone, customDates);
                 } else {
                     log.info("[TRIGGER-MANUAL] Iniciando execução manual em segundo plano (respeitando configurações globais, forceSend={}, testPhone={}, customDates={}).", forceSend, testPhone, customDates);
                     ingestAppointmentsUseCase.execute(null, forceSend, testPhone, customDates);

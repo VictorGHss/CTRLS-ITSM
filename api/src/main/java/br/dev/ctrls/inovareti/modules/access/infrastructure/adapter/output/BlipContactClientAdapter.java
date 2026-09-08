@@ -368,22 +368,32 @@ public class BlipContactClientAdapter implements BlipContactClientPort {
             }
 
             try {
-                @SuppressWarnings("rawtypes")
-                ResponseEntity<Map> response = restClient.post()
+                ResponseEntity<String> response = restClient.post()
                         .uri(path)
                         .header("Authorization", authKey)
                         .contentType(MediaType.APPLICATION_JSON)
+                        .accept(MediaType.APPLICATION_JSON)
                         .body(command)
                         .retrieve()
-                        .toEntity(Map.class);
+                        .toEntity(String.class);
 
-                if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                    Object status = response.getBody().get("status");
-                    if ("success".equalsIgnoreCase(String.valueOf(status))) {
-                        log.info("[BlipContact-Adapter] Sincronização concluída com sucesso no Blip para {}", identity);
-                        return true;
+                if (response.getStatusCode().is2xxSuccessful()) {
+                    String rawBody = response.getBody();
+                    if (rawBody != null && !rawBody.isBlank()) {
+                        try {
+                            com.fasterxml.jackson.databind.JsonNode root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(rawBody);
+                            if (root.has("status") && "success".equalsIgnoreCase(root.get("status").asText())) {
+                                log.info("[BlipContact-Adapter] Sincronização concluída com sucesso no Blip para {}", identity);
+                                return true;
+                            } else {
+                                log.warn("[BlipContact-Adapter] Blip retornou status de falha no comando para {}. Body={}", identity, rawBody);
+                            }
+                        } catch (Exception parseEx) {
+                            log.debug("[BlipContact-Adapter] Resposta não-JSON do Blip para {}, considerando 2xx como sucesso. Body={}", identity, rawBody);
+                            return true;
+                        }
                     } else {
-                        log.warn("[BlipContact-Adapter] Blip retornou status de falha no comando: {}. Body={}", status, response.getBody());
+                        return true;
                     }
                 } else {
                     log.warn("[BlipContact-Adapter] Blip respondeu com HTTP status: {}", response.getStatusCode());
@@ -395,7 +405,7 @@ public class BlipContactClientAdapter implements BlipContactClientPort {
                 if (msg.contains("429") || msg.contains("1015") || msg.toLowerCase().contains("too many requests") || msg.toLowerCase().contains("cloudflare")) {
                     log.warn("[BlipContact-Adapter] [HTTP 429] Rate limit (Cloudflare Error 1015) atingido no Blip para {}. Abortando envio.", identity);
                 } else {
-                    log.error("[BlipContact-Adapter] Falha de comunicação com o Blip para a identidade {}: {}", identity, ex.getMessage());
+                    log.warn("[BlipContact-Adapter] Falha de comunicação com o Blip para a identidade {}: {}", identity, ex.getMessage());
                 }
             }
         } catch (Exception ex) {

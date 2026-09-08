@@ -73,4 +73,100 @@ public class BlipNotificationServiceTest {
         assertFalse(BlipNotificationService.isStaticZeroParamTemplate(""));
         assertFalse(BlipNotificationService.isStaticZeroParamTemplate(null));
     }
+
+    @Test
+    public void testDoctorConfiguredInDatabaseAllowed() {
+        var docRepo = mock(br.dev.ctrls.inovareti.modules.appointment.domain.port.output.DoctorConfigurationRepository.class);
+        var mappingRepo = mock(br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentDoctorMappingRepositoryPort.class);
+
+        var activeDocConfig = br.dev.ctrls.inovareti.modules.appointment.domain.model.DoctorConfiguration.builder()
+                .feegowProfissionalId(32L)
+                .isActive(true)
+                .build();
+
+        org.mockito.Mockito.when(docRepo.findById(32L)).thenReturn(java.util.Optional.of(activeDocConfig));
+
+        BlipNotificationService customService = new BlipNotificationService(
+                mock(BlipLIMEClient.class),
+                mock(BlipTemplateParameterResolver.class),
+                properties,
+                mock(BlipPayloadBuilder.class),
+                mock(BlipContextService.class),
+                mock(AppointmentSessionRepositoryPort.class),
+                mock(BlipAppointmentFormatter.class),
+                mock(BlipReviewNotificationService.class),
+                docRepo,
+                mappingRepo
+        );
+
+        // Properties has only active doctor 8, but doctor 32 is in DB
+        properties.setActiveDoctorIds(java.util.List.of("8"));
+
+        assertTrue(customService.isDoctorAllowed("32"), "Médico 32 ativo no banco deve ser permitido mesmo se activeDoctorIds contiver apenas outros médicos");
+        assertFalse(customService.isDoctorAllowed("999"), "Médico 999 não existente no banco nem no properties deve ser negado quando activeDoctorIds estiver restrito");
+    }
+
+    @Test
+    public void testDoctorConfiguredInMappingRepoAllowed() {
+        var docRepo = mock(br.dev.ctrls.inovareti.modules.appointment.domain.port.output.DoctorConfigurationRepository.class);
+        var mappingRepo = mock(br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentDoctorMappingRepositoryPort.class);
+
+        var mapping = br.dev.ctrls.inovareti.modules.appointment.domain.model.AppointmentDoctorMapping.builder()
+                .profissionalId("15")
+                .profissionalNome("Dr. Teste")
+                .build();
+
+        org.mockito.Mockito.when(mappingRepo.findByProfissionalId("15")).thenReturn(java.util.Optional.of(mapping));
+
+        BlipNotificationService customService = new BlipNotificationService(
+                mock(BlipLIMEClient.class),
+                mock(BlipTemplateParameterResolver.class),
+                properties,
+                mock(BlipPayloadBuilder.class),
+                mock(BlipContextService.class),
+                mock(AppointmentSessionRepositoryPort.class),
+                mock(BlipAppointmentFormatter.class),
+                mock(BlipReviewNotificationService.class),
+                docRepo,
+                mappingRepo
+        );
+
+        properties.setActiveDoctorIds(java.util.List.of("8"));
+
+        assertTrue(customService.isDoctorAllowed("15"), "Médico 15 mapeado na tabela deve ser permitido");
+    }
+
+    @Test
+    public void testSendTemplateMessageThrowsOnResourceError() {
+        BlipLIMEClient mockLime = mock(BlipLIMEClient.class);
+        BlipTemplateParameterResolver mockResolver = mock(BlipTemplateParameterResolver.class);
+        BlipPayloadBuilder mockPayload = mock(BlipPayloadBuilder.class);
+
+        org.mockito.Mockito.when(mockLime.executeCommand(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(java.util.Map.of("status", "resource-error", "message", "Read timed out"));
+
+        org.mockito.Mockito.when(mockResolver.buildDynamicParameters(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(java.util.List.of(java.util.Map.of("text", "João")));
+
+        BlipNotificationService serviceWithMock = new BlipNotificationService(
+                mockLime,
+                mockResolver,
+                properties,
+                mockPayload,
+                mock(BlipContextService.class),
+                mock(AppointmentSessionRepositoryPort.class),
+                mock(BlipAppointmentFormatter.class),
+                mock(BlipReviewNotificationService.class)
+        );
+
+        var data = new br.dev.ctrls.inovareti.modules.appointment.application.dto.AppointmentTemplateData(
+                "1", "100", "João", "42999999999", "1", "Dr. A", "Geral", "Unidade", "2026-09-08", "08/09", "10:00", "2026-09-08"
+        );
+
+        org.junit.jupiter.api.Assertions.assertThrows(
+                br.dev.ctrls.inovareti.modules.appointment.domain.exception.BlipNotificationException.class,
+                () -> serviceWithMock.sendTemplateMessage("5542999999999", "confirmacao_consulta_v6_itsm", data),
+                "Deve lançar BlipNotificationException quando Blip responder resource-error em vez de fingir sucesso"
+        );
+    }
 }

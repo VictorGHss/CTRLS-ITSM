@@ -243,8 +243,7 @@ public class SendAppointmentTemplateUseCase {
             }
             boolean syncSuccess = blipContactClientPort.syncContact(session.getPhoneNumber(), templateData.patientName(), cpf, resolvedQueue, session.getDoctorProfissionalId());
             if (!syncSuccess) {
-                log.error("[SendAppointmentTemplateUseCase] Sincronização obrigatória de contato falhou para {}. Abortando envio de template.", session.getPhoneNumber());
-                return false;
+                log.warn("[SendAppointmentTemplateUseCase] Sincronização de contato falhou para {}. Prosseguindo com envio do template de forma resiliente.", session.getPhoneNumber());
             }
 
             // Injeção preventiva de metadados no Blip antes da transmissão do template
