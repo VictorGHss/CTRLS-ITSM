@@ -46,7 +46,7 @@ public class GerAcessoRestClientAdapter implements GerAcessoClientPort {
 
     @Override
     public Optional<GerAcessoResponse> registerAccess(GerAcessoRequest request) {
-        log.info("[GerAcesso-Adapter] Realizando requisição POST para cadastrar visitante CPF: {}", request.cpf());
+        log.info("[GerAcesso-Adapter] Realizando requisição POST para cadastrar visitante CPF: {}", maskCpf(request.cpf()));
         try {
             String token = gerAcessoProperties.getToken();
             // Garante o formato 'Bearer ' caso já não tenha sido inserido na variável
@@ -72,12 +72,23 @@ public class GerAcessoRestClientAdapter implements GerAcessoClientPort {
 
         } catch (org.springframework.web.client.RestClientResponseException rre) {
             log.error("[GerAcesso-Adapter] Erro HTTP {} na requisição para GerAcesso. CPF={}. Body da resposta: {}", 
-                    rre.getStatusCode(), request.cpf(), rre.getResponseBodyAsString(), rre);
+                    rre.getStatusCode(), maskCpf(request.cpf()), rre.getResponseBodyAsString(), rre);
             return Optional.empty();
         } catch (Exception ex) {
             log.error("[GerAcesso-Adapter] Erro na requisição HTTP para GerAcesso. CPF={}. Erro: {}", 
-                    request.cpf(), ex.getMessage(), ex);
+                    maskCpf(request.cpf()), ex.getMessage(), ex);
             return Optional.empty();
         }
+    }
+
+    private String maskCpf(String cpf) {
+        if (cpf == null || cpf.isBlank()) {
+            return "N/A";
+        }
+        String clean = cpf.replaceAll("\\D", "");
+        if (clean.length() == 11) {
+            return "***." + clean.substring(3, 6) + ".***-" + clean.substring(9, 11);
+        }
+        return "***";
     }
 }

@@ -59,7 +59,7 @@ public class PatientWebhookController {
 
         log.info("[PatientWebhookController] Requisição recebida para cadastrar paciente.");
 
-        if (secretKey == null || secretKey.trim().isEmpty() || apiKey == null || !secretKey.equals(apiKey)) {
+        if (!isKeyAuthorized(apiKey)) {
             log.warn("[PatientWebhookController] Acesso não autorizado ao cadastro de paciente. X-API-KEY ausente ou inválida.");
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
@@ -92,9 +92,9 @@ public class PatientWebhookController {
             @RequestHeader(value = "X-API-KEY", required = false) String apiKey,
             @RequestParam(value = "cpf", required = false) String cpf) {
 
-        log.info("[PatientWebhookController] Requisição recebida para consultar agendamentos do CPF: {}", cpf);
+        log.info("[PatientWebhookController] Requisição recebida para consultar agendamentos do CPF: {}", maskCpf(cpf));
 
-        if (secretKey == null || secretKey.trim().isEmpty() || apiKey == null || !secretKey.equals(apiKey)) {
+        if (!isKeyAuthorized(apiKey)) {
             log.warn("[PatientWebhookController] Acesso não autorizado à consulta de agendamentos. X-API-KEY ausente ou inválida.");
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
@@ -103,7 +103,7 @@ public class PatientWebhookController {
             PatientAppointmentsResponse response = patientWebhookService.getFutureAppointments(cpf);
             return ResponseEntity.ok(response);
         } catch (Exception ex) {
-            log.error("[PatientWebhookController] Erro ao consultar agendamentos do paciente: {}", ex.getMessage(), ex);
+            log.error("[PatientWebhookController] Erro ao consultar agendamentos no Feegow: {}", ex.getMessage(), ex);
             return ResponseEntity.ok(PatientAppointmentsResponse.builder()
                     .status("error")
                     .total(0)
@@ -111,5 +111,26 @@ public class PatientWebhookController {
                     .agendamentos(java.util.List.of())
                     .build());
         }
+    }
+
+    private boolean isKeyAuthorized(String apiKey) {
+        if (secretKey == null || secretKey.isBlank() || apiKey == null || apiKey.isBlank()) {
+            return false;
+        }
+        return java.security.MessageDigest.isEqual(
+            secretKey.trim().getBytes(java.nio.charset.StandardCharsets.UTF_8),
+            apiKey.trim().getBytes(java.nio.charset.StandardCharsets.UTF_8)
+        );
+    }
+
+    private String maskCpf(String cpf) {
+        if (cpf == null || cpf.isBlank()) {
+            return "N/A";
+        }
+        String clean = cpf.replaceAll("\\D", "");
+        if (clean.length() == 11) {
+            return "***." + clean.substring(3, 6) + ".***-" + clean.substring(9, 11);
+        }
+        return "***";
     }
 }

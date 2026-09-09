@@ -42,6 +42,10 @@ public class ContaAzulTokenService {
     private final java.util.concurrent.locks.ReentrantLock tokenLock = new java.util.concurrent.locks.ReentrantLock();
 
     public String buildAuthorizationUrl(String redirectUri) {
+        return buildAuthorizationUrl(redirectUri, null);
+    }
+
+    public String buildAuthorizationUrl(String redirectUri, String state) {
         String resolvedRedirectUri = StringUtils.hasText(redirectUri) ? redirectUri : properties.getRedirectUri();
         if (resolvedRedirectUri == null) {
             resolvedRedirectUri = "";
@@ -59,11 +63,17 @@ public class ContaAzulTokenService {
         
         String encodedRedirectUri = java.net.URLEncoder.encode(resolvedRedirectUri, java.nio.charset.StandardCharsets.UTF_8);
         
-        String authorizationUrl = String.format("%s?response_type=code&client_id=%s&redirect_uri=%s&scope=sales",
+        StringBuilder authUrlBuilder = new StringBuilder();
+        authUrlBuilder.append(String.format("%s?response_type=code&client_id=%s&redirect_uri=%s&scope=sales",
                 baseAuthUrl,
                 properties.getClientId(),
-                encodedRedirectUri);
+                encodedRedirectUri));
+
+        if (StringUtils.hasText(state)) {
+            authUrlBuilder.append("&state=").append(java.net.URLEncoder.encode(state, java.nio.charset.StandardCharsets.UTF_8));
+        }
         
+        String authorizationUrl = authUrlBuilder.toString();
         log.debug("URL de autorização construída: {}", authorizationUrl);
         return authorizationUrl;
     }

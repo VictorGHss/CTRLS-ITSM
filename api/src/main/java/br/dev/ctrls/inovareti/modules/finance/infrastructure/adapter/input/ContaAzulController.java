@@ -8,6 +8,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -94,12 +95,21 @@ public class ContaAzulController {
         this(contaAzulTokenService, contaAzulClient, contaAzulAutomationService, properties, frontendProperties, Optional.empty(), Optional.empty());
     }
 
+    // Cache de estados OAuth para prevenção de ataques CSRF (RFC 6749 Seção 10.12)
+    private static final com.github.benmanes.caffeine.cache.Cache<String, Boolean> OAUTH_STATE_CACHE = 
+            com.github.benmanes.caffeine.cache.Caffeine.newBuilder()
+                    .expireAfterWrite(java.time.Duration.ofMinutes(15))
+                    .maximumSize(500)
+                    .build();
+
     /**
-     * Inicia o fluxo de autorização OAuth com a Conta Azul.
+     * Inicia o fluxo de autorização OAuth com a Conta Azul com proteção CSRF via parâmetro state.
      */
     @GetMapping("/authorize")
     public void startAuthorization(HttpServletResponse response) throws IOException {
-        String authorizationUrl = contaAzulTokenService.buildAuthorizationUrl(properties.getRedirectUri());
+        String state = UUID.randomUUID().toString();
+        OAUTH_STATE_CACHE.put(state, Boolean.TRUE);
+        String authorizationUrl = contaAzulTokenService.buildAuthorizationUrl(properties.getRedirectUri(), state);
         response.sendRedirect(authorizationUrl);
     }
 
@@ -113,16 +123,26 @@ public class ContaAzulController {
     }
 
     /**
-     * Callback de redirecionamento recebido do OAuth da Conta Azul.
+     * Callback de redirecionamento recebido do OAuth da Conta Azul com validação CSRF.
      */
     @GetMapping("/callback")
     public RedirectView callback(
             @RequestParam(value = "code", required = false) String code,
+            @RequestParam(value = "state", required = false) String state,
             @RequestParam(value = "error", required = false) String error,
             @RequestParam(value = "error_description", required = false) String errorDescription) {
         if (StringUtils.hasText(error)) {
             log.warn("Callback OAuth da ContaAzul retornou erro do provedor: {} - {}", error, errorDescription);
             return new RedirectView(buildFinanceiroErrorRedirectUrl(error, errorDescription));
+        }
+
+        // Validação CSRF via parâmetro state caso tenha sido fornecido
+        if (state != null) {
+            if (!Boolean.TRUE.equals(OAUTH_STATE_CACHE.getIfPresent(state))) {
+                log.warn("[SEGURANÇA] Callback OAuth da ContaAzul com 'state' inválido ou expirado (CSRF detectado). State: {}", state);
+                return new RedirectView(buildFinanceiroErrorRedirectUrl("invalid_oauth_state", "Sessão de autorização expirada ou inválida."));
+            }
+            OAUTH_STATE_CACHE.invalidate(state);
         }
 
         if (!StringUtils.hasText(code)) {

@@ -71,10 +71,18 @@ public class RawBodyLoggingFilter extends OncePerRequestFilter {
             return false;
         }
 
-        return uri.startsWith(BLIP_WEBHOOK_PREFIX) 
-            || uri.contains(WS_PATH_FRAGMENT)
-            || uri.contains("/actuator")
-            || uri.contains("/notifications");
+        String lower = uri.toLowerCase();
+        return lower.startsWith(BLIP_WEBHOOK_PREFIX) 
+            || lower.contains(WS_PATH_FRAGMENT)
+            || lower.contains("/actuator")
+            || lower.contains("/notifications")
+            || lower.contains("/auth")
+            || lower.contains("/vault")
+            || lower.contains("/self-registration")
+            || lower.contains("/credentials")
+            || lower.contains("/users")
+            || lower.contains("/reset-initial-password")
+            || lower.contains("/change-password");
     }
 
     private Charset resolveCharset(String encoding) {

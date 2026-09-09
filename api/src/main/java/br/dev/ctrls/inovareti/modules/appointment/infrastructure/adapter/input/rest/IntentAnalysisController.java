@@ -57,7 +57,13 @@ public class IntentAnalysisController {
 
         log.info("[IntentAnalysisController] Requisição recebida para extração de intenção.");
 
-        if (secretKey == null || secretKey.trim().isEmpty() || apiKey == null || !secretKey.equals(apiKey)) {
+        boolean isAuthorized = secretKey != null && !secretKey.isBlank() && apiKey != null && !apiKey.isBlank()
+            && java.security.MessageDigest.isEqual(
+                secretKey.trim().getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                apiKey.trim().getBytes(java.nio.charset.StandardCharsets.UTF_8)
+            );
+
+        if (!isAuthorized) {
             log.warn("[IntentAnalysisController] Acesso não autorizado ao webhook de intenção. X-API-KEY ausente ou inválida.");
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }

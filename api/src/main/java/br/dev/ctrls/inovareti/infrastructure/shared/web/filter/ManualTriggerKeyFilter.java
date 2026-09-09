@@ -33,6 +33,7 @@ public class ManualTriggerKeyFilter extends OncePerRequestFilter {
     private static final String HEADER_NAME = "X-Inovare-Token";
 
     private final String expectedKey = System.getenv("APP_BLIP_SECURITY_WEBHOOK_TOKEN");
+    private final String manualTriggerKey = System.getenv("MANUAL_TRIGGER_KEY");
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
@@ -52,8 +53,8 @@ public class ManualTriggerKeyFilter extends OncePerRequestFilter {
             HEADER_NAME,
             request.getHeader(HEADER_NAME) != null);
 
-        if (expectedKey == null || expectedKey.isBlank()) {
-            log.error("[TOKEN WEBHOOK] Acesso Negado: variável de ambiente APP_BLIP_SECURITY_WEBHOOK_TOKEN ausente. método={}, caminho={}, status=401",
+        if ((expectedKey == null || expectedKey.isBlank()) && (manualTriggerKey == null || manualTriggerKey.isBlank())) {
+            log.error("[TOKEN WEBHOOK] Acesso Negado: variáveis de ambiente de token ausentes. método={}, caminho={}, status=401",
                 method,
                 path);
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
@@ -62,11 +63,20 @@ public class ManualTriggerKeyFilter extends OncePerRequestFilter {
 
         String headerValue = request.getHeader(HEADER_NAME);
         boolean keyMatch = false;
-        if (headerValue != null && expectedKey != null && !expectedKey.isBlank()) {
-            keyMatch = java.security.MessageDigest.isEqual(
-                expectedKey.getBytes(java.nio.charset.StandardCharsets.UTF_8),
-                headerValue.getBytes(java.nio.charset.StandardCharsets.UTF_8)
-            );
+        if (headerValue != null && !headerValue.isBlank()) {
+            byte[] headerBytes = headerValue.trim().getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            if (manualTriggerKey != null && !manualTriggerKey.isBlank()) {
+                keyMatch = java.security.MessageDigest.isEqual(
+                    manualTriggerKey.trim().getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                    headerBytes
+                );
+            }
+            if (!keyMatch && expectedKey != null && !expectedKey.isBlank()) {
+                keyMatch = java.security.MessageDigest.isEqual(
+                    expectedKey.trim().getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                    headerBytes
+                );
+            }
         }
 
         if (!keyMatch) {

@@ -12,6 +12,7 @@ import br.dev.ctrls.inovareti.modules.access.infrastructure.security.AccessSecur
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.FeegowPatient;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.PatientExternalPort;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -49,6 +50,7 @@ public class ValidateAccessChallengeUseCase {
         this(feegowClientPort, patientExternalPort, accessCredentialRepositoryPort, new AccessSecurityGuard());
     }
 
+    @Autowired
     public ValidateAccessChallengeUseCase(
             FeegowClientPort feegowClientPort,
             PatientExternalPort patientExternalPort,

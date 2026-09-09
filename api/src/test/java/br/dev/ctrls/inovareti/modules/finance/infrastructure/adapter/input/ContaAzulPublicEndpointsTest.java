@@ -1,5 +1,7 @@
 package br.dev.ctrls.inovareti.modules.finance.infrastructure.adapter.input;
 
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
@@ -40,14 +42,14 @@ class ContaAzulPublicEndpointsTest {
         var controller = new ContaAzulController(this.tokenService, client, automation, properties, frontendProperties);
         this.mvc = MockMvcBuilders.standaloneSetup(controller).build();
 
-        when(tokenService.buildAuthorizationUrl("http://localhost/api/financeiro/callback"))
+        when(tokenService.buildAuthorizationUrl(eq("http://localhost/api/financeiro/callback"), anyString()))
             .thenReturn("https://contaazul.example/authorize?x=1");
 
         mvc.perform(get("/financeiro/contaazul/authorize"))
             .andExpect(status().is3xxRedirection())
             .andExpect(redirectedUrl("https://contaazul.example/authorize?x=1"));
 
-        verify(tokenService).buildAuthorizationUrl("http://localhost/api/financeiro/callback");
+        verify(tokenService).buildAuthorizationUrl(eq("http://localhost/api/financeiro/callback"), anyString());
     }
 
     @Test
@@ -91,6 +93,28 @@ class ContaAzulPublicEndpointsTest {
             .andExpect(redirectedUrl("http://localhost:5173/financeiro?success=false&error=access_denied&error_description=usuario+negou"));
 
         verify(tokenService, never()).exchangeAuthorizationCode("abc", "http://localhost/api/financeiro/callback");
+    }
+
+    @Test
+    void callbackWithInvalidStateRedirectsToFrontendWithFailureParams() throws Exception {
+        this.tokenService = Mockito.mock(ContaAzulTokenService.class);
+        var client = Mockito.mock(ContaAzulClient.class);
+        var automation = Mockito.mock(ContaAzulAutomationService.class);
+        var properties = Mockito.mock(br.dev.ctrls.inovareti.modules.finance.infrastructure.config.ContaAzulProperties.class);
+        when(properties.getRedirectUri()).thenReturn("http://localhost/api/financeiro/callback");
+        var frontendProperties = Mockito.mock(br.dev.ctrls.inovareti.config.FrontendProperties.class);
+        when(frontendProperties.getUrl()).thenReturn("http://localhost:5173/");
+
+        var controller = new ContaAzulController(this.tokenService, client, automation, properties, frontendProperties);
+        this.mvc = MockMvcBuilders.standaloneSetup(controller).build();
+
+        mvc.perform(get("/financeiro/contaazul/callback")
+                .param("code", "abc")
+                .param("state", "unrecognized_state_token"))
+            .andExpect(status().is3xxRedirection())
+            .andExpect(redirectedUrl("http://localhost:5173/financeiro?success=false&error=invalid_oauth_state&error_description=Sess%C3%A3o+de+autoriza%C3%A7%C3%A3o+expirada+ou+inv%C3%A1lida."));
+
+        verify(tokenService, never()).exchangeAuthorizationCode(anyString(), anyString());
     }
 }
 
