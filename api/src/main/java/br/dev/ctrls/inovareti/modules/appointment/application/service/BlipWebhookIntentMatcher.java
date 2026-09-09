@@ -81,13 +81,30 @@ public class BlipWebhookIntentMatcher {
     public static boolean isConfirmationOrAlterationIntentText(String text) {
         if (text == null || text.isBlank()) return false;
 
-        String rawTrimmed = text.trim().toLowerCase();
-        String cleaned = rawTrimmed.replaceAll("[^a-z0-9áàâãéèêíïóôõöúçñ\\s]", " ").replaceAll("\\s+", " ").trim();
+        String rawTrimmed = text.trim();
+        String[] lines = rawTrimmed.split("\\r?\\n");
+        if (lines.length > 1) {
+            for (int i = lines.length - 1; i >= 0; i--) {
+                String l = lines[i].trim();
+                if (l.isBlank()) {
+                    continue;
+                }
+                if (l.matches("^\\d{1,2}:\\d{2}(?::\\d{2})?$")) {
+                    continue;
+                }
+                if (l.matches("^\\d{1,2}[/\\-]\\d{1,2}[/\\-]\\d{2,4}$")) {
+                    continue;
+                }
+                rawTrimmed = l;
+                break;
+            }
+        }
+        String cleaned = rawTrimmed.toLowerCase().replaceAll("[^a-z0-9áàâãéèêíïóôõöúçñ\\s]", " ").replaceAll("\\s+", " ").trim();
 
-        // 1. Regra de Tamanho: Se o texto tiver mais de 25 caracteres ou mais de 3 palavras -> false
-        if (cleaned.length() > 25) return false;
+        // 1. Regra de Tamanho: Se o texto tiver mais de 35 caracteres ou mais de 4 palavras -> false
+        if (cleaned.length() > 35) return false;
         String[] words = cleaned.split(" ");
-        if (words.length > 3) return false;
+        if (words.length > 4) return false;
 
         // 2. Guarda de Negação/Condicional: Se o texto contiver palavras de negação ou condição -> false
         for (String w : words) {

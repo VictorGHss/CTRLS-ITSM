@@ -116,7 +116,7 @@ public class ConfirmBlipWebhookActionHandler implements BlipWebhookActionHandler
 
         final String requiresCpfFallback = "false";
 
-        // Salva o ID do agendamento, CPF e telefone no contexto do Blip para persistência
+        // Salva o ID do agendamento, CPF e telefone no contexto do Blip para persistência antes da transição de estado
         try {
             String rawPhoneDigits = userPhone != null ? userPhone.replaceAll("\\D", "") : "";
             String plainPhone = (rawPhoneDigits.startsWith("55") && rawPhoneDigits.length() > 11) ? rawPhoneDigits.substring(2) : rawPhoneDigits;
@@ -130,34 +130,30 @@ public class ConfirmBlipWebhookActionHandler implements BlipWebhookActionHandler
                 log.warn("[CONFIRM] Falha ao gerar Magic Token para agendamento {}: {}", appointmentId, e.getMessage());
             }
 
-            blipContextService.setUserContextForUser(userPhone, "idAgendamentoFeegow", appointmentId);
-            blipContextService.setUserContextForUser(userPhone, "appointmentId", appointmentId);
-            blipContextService.setUserContextForUser(userPhone, "contact.phoneNumber", plainPhone);
-            blipContextService.setUserContextForUser(userPhone, "phoneNumber", plainPhone);
-            blipContextService.setUserContextForUser(userPhone, "tokenAcesso", tokenAcesso);
-            blipContextService.setUserContextForUser(userPhone, "urlAcesso", accessUrl);
-            blipContextService.setVariable(userPhone, "requiresCpfFallback", requiresCpfFallback);
-            blipContextService.setContactExtra(userPhone, "requiresCpfFallback", requiresCpfFallback);
-            blipContextService.setContactExtra(userPhone, "phoneNumber", plainPhone);
-            blipContextService.setContactExtra(userPhone, "telefone", plainPhone);
-            blipContextService.setContactExtra(userPhone, "tokenAcesso", tokenAcesso);
-            blipContextService.setContactExtra(userPhone, "urlAcesso", accessUrl);
+            java.util.Map<String, String> contextFields = new java.util.LinkedHashMap<>();
+            contextFields.put("idAgendamentoFeegow", appointmentId);
+            contextFields.put("appointmentId", appointmentId);
+            contextFields.put("contact.phoneNumber", plainPhone);
+            contextFields.put("phoneNumber", plainPhone);
+            contextFields.put("tokenAcesso", tokenAcesso);
+            contextFields.put("urlAcesso", accessUrl);
+            contextFields.put("requiresCpfFallback", requiresCpfFallback);
+
+            java.util.Map<String, String> extras = new java.util.LinkedHashMap<>();
+            extras.put("requiresCpfFallback", requiresCpfFallback);
+            extras.put("phoneNumber", plainPhone);
+            extras.put("telefone", plainPhone);
+            extras.put("tokenAcesso", tokenAcesso);
+            extras.put("urlAcesso", accessUrl);
+
+            blipContextService.setUserContextFieldsInParallel(userPhone, contextFields);
+            blipContextService.updateContactExtras(userPhone, extras);
 
             if (fromIdentity != null && !fromIdentity.isBlank() && !fromIdentity.equalsIgnoreCase(userPhone)) {
-                blipContextService.setUserContextForUser(fromIdentity, "idAgendamentoFeegow", appointmentId);
-                blipContextService.setUserContextForUser(fromIdentity, "appointmentId", appointmentId);
-                blipContextService.setUserContextForUser(fromIdentity, "contact.phoneNumber", plainPhone);
-                blipContextService.setUserContextForUser(fromIdentity, "phoneNumber", plainPhone);
-                blipContextService.setUserContextForUser(fromIdentity, "tokenAcesso", tokenAcesso);
-                blipContextService.setUserContextForUser(fromIdentity, "urlAcesso", accessUrl);
-                blipContextService.setVariable(fromIdentity, "requiresCpfFallback", requiresCpfFallback);
-                blipContextService.setContactExtra(fromIdentity, "requiresCpfFallback", requiresCpfFallback);
-                blipContextService.setContactExtra(fromIdentity, "phoneNumber", plainPhone);
-                blipContextService.setContactExtra(fromIdentity, "telefone", plainPhone);
-                blipContextService.setContactExtra(fromIdentity, "tokenAcesso", tokenAcesso);
-                blipContextService.setContactExtra(fromIdentity, "urlAcesso", accessUrl);
+                blipContextService.setUserContextFieldsInParallel(fromIdentity, contextFields);
+                blipContextService.updateContactExtras(fromIdentity, extras);
             }
-            log.info("[CONFIRM] ID do agendamento ({}), tokenAcesso ({}) e contexto salvos no Blip com sucesso.", appointmentId, tokenAcesso);
+            log.info("[CONFIRM] ID do agendamento ({}), tokenAcesso ({}) e contexto salvos no Blip com sucesso antes de setMasterState.", appointmentId, tokenAcesso);
         } catch (Exception ex) {
             log.warn("[CONFIRM] Falha ao salvar ID do agendamento ou telefone no contexto: {}", ex.getMessage());
         }
@@ -266,7 +262,7 @@ public class ConfirmBlipWebhookActionHandler implements BlipWebhookActionHandler
                 List<String> tunnelIdentities = new ArrayList<>();
                 String subbotId = blipProperties.getSubbotId();
                 String subbotLocalPart = null;
-                if (subbotId != null && !subbotId.isBlank() && !subbotId.toLowerCase().contains("fluxov1")) {
+                if (subbotId != null && !subbotId.isBlank()) {
                     subbotLocalPart = subbotId.trim();
                     if (subbotLocalPart.contains("@")) {
                         subbotLocalPart = subbotLocalPart.substring(0, subbotLocalPart.indexOf('@'));
@@ -294,7 +290,7 @@ public class ConfirmBlipWebhookActionHandler implements BlipWebhookActionHandler
                 for (var rec : reconciliations) {
                     if (rec.getBlipGuid() != null && !rec.getBlipGuid().isBlank()) {
                         String tunnelId = rec.getBlipGuid().trim() + "@tunnel.msging.net";
-                        if (!tunnelIdentities.contains(tunnelId) && !tunnelId.toLowerCase().contains("fluxov1")) {
+                        if (!tunnelIdentities.contains(tunnelId)) {
                             tunnelIdentities.add(tunnelId);
                         }
                     }
@@ -311,14 +307,20 @@ public class ConfirmBlipWebhookActionHandler implements BlipWebhookActionHandler
                                 accessUrl = "https://itsm-inovare.ctrls.dev.br/" + feegowAppointmentId + "?t=" + tokenAcesso;
                             } catch (Exception ignored) {}
 
-                            blipContextService.setUserContextForUser(tunnelId, "idAgendamentoFeegow", feegowAppointmentId);
-                            blipContextService.setUserContextForUser(tunnelId, "appointmentId", feegowAppointmentId);
-                            blipContextService.setUserContextForUser(tunnelId, "tokenAcesso", tokenAcesso);
-                            blipContextService.setUserContextForUser(tunnelId, "urlAcesso", accessUrl);
-                            blipContextService.setVariable(tunnelId, "requiresCpfFallback", requiresCpfFallback);
-                            blipContextService.setContactExtra(tunnelId, "requiresCpfFallback", requiresCpfFallback);
-                            blipContextService.setContactExtra(tunnelId, "tokenAcesso", tokenAcesso);
-                            blipContextService.setContactExtra(tunnelId, "urlAcesso", accessUrl);
+                            java.util.Map<String, String> tunnelCtx = new java.util.LinkedHashMap<>();
+                            tunnelCtx.put("idAgendamentoFeegow", feegowAppointmentId);
+                            tunnelCtx.put("appointmentId", feegowAppointmentId);
+                            tunnelCtx.put("tokenAcesso", tokenAcesso);
+                            tunnelCtx.put("urlAcesso", accessUrl);
+                            tunnelCtx.put("requiresCpfFallback", requiresCpfFallback);
+                            blipContextService.setUserContextFieldsInParallel(tunnelId, tunnelCtx);
+
+                            java.util.Map<String, String> tunnelExtras = new java.util.LinkedHashMap<>();
+                            tunnelExtras.put("requiresCpfFallback", requiresCpfFallback);
+                            tunnelExtras.put("tokenAcesso", tokenAcesso);
+                            tunnelExtras.put("urlAcesso", accessUrl);
+                            blipContextService.updateContactExtras(tunnelId, tunnelExtras);
+
                             blipContextService.setMasterState(tunnelId, targetBot, confirmSuccessBlockId);
                         } catch (Exception ex) {
                             log.warn("[CONFIRM] Falha ao salvar ID ou redirecionar no túnel: {}", ex.getMessage());

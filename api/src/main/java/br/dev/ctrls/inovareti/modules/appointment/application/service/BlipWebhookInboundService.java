@@ -11,7 +11,7 @@ import org.springframework.util.StringUtils;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import lombok.RequiredArgsConstructor;
+import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentSessionRepositoryPort;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -19,7 +19,6 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 @Observed
 public class BlipWebhookInboundService {
 
@@ -27,6 +26,22 @@ public class BlipWebhookInboundService {
 
     private final BlipContextService blipContextService;
     private final ObjectMapper objectMapper;
+    private final AppointmentSessionRepositoryPort appointmentSessionRepository;
+
+    public BlipWebhookInboundService(BlipContextService blipContextService, ObjectMapper objectMapper) {
+        this(blipContextService, objectMapper, null);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public BlipWebhookInboundService(
+            BlipContextService blipContextService,
+            ObjectMapper objectMapper,
+            @org.springframework.beans.factory.annotation.Autowired(required = false)
+            AppointmentSessionRepositoryPort appointmentSessionRepository) {
+        this.blipContextService = blipContextService;
+        this.objectMapper = objectMapper;
+        this.appointmentSessionRepository = appointmentSessionRepository;
+    }
 
     public record ParsedInbound(
             String from,
@@ -355,7 +370,33 @@ public class BlipWebhookInboundService {
 
         String breadcrumbId = blipContextService.getUserContext(from, LAST_PENDING_APPOINTMENT_ID_CONTEXT_KEY);
         if (!StringUtils.hasText(breadcrumbId)) {
+            breadcrumbId = blipContextService.getUserContext(from, "idAgendamentoFeegow");
+        }
+        if (!StringUtils.hasText(breadcrumbId)) {
+            breadcrumbId = blipContextService.getUserContext(from, "appointmentId");
+        }
+        if (!StringUtils.hasText(breadcrumbId)) {
             log.debug("[WEBHOOK] Contexto '{}' não encontrado para {}", LAST_PENDING_APPOINTMENT_ID_CONTEXT_KEY, from);
+            if (appointmentSessionRepository != null) {
+                try {
+                    String cleanPhone = from.contains("@") ? from.substring(0, from.indexOf('@')) : from;
+                    cleanPhone = cleanPhone.replaceAll("\\D", "");
+                    var activeSessions = appointmentSessionRepository.findActiveByPhoneNumber(cleanPhone);
+                    if ((activeSessions == null || activeSessions.isEmpty()) && cleanPhone.startsWith("55")) {
+                        activeSessions = appointmentSessionRepository.findActiveByPhoneNumber(cleanPhone.substring(2));
+                    }
+                    if (activeSessions != null && !activeSessions.isEmpty()) {
+                        for (var s : activeSessions) {
+                            if (s.getFeegowAppointmentId() != null && !s.getFeegowAppointmentId().isBlank()) {
+                                log.info("[WEBHOOK] AppointmentId recuperado via fallback de banco de dados para {}: {}", from, s.getFeegowAppointmentId());
+                                return s.getFeegowAppointmentId().trim();
+                            }
+                        }
+                    }
+                } catch (Exception ex) {
+                    log.warn("[WEBHOOK] Falha ao consultar fallback de agendamento por banco de dados para {}: {}", from, ex.getMessage());
+                }
+            }
             return null;
         }
         return breadcrumbId.trim();

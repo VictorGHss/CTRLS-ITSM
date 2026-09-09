@@ -43,15 +43,24 @@ public class BlipIntentResolver {
         if (text == null || text.isBlank()) return WebhookIntent.UNKNOWN;
 
         String rawTrimmed = text.trim();
-        // Se for resposta encapsulada de template com múltiplas linhas, extrai a última linha não vazia
+        // Se for resposta encapsulada de template com múltiplas linhas, extrai a última linha não vazia que não seja timestamp / metadado
         String[] lines = rawTrimmed.split("\\r?\\n");
         if (lines.length > 1) {
             for (int i = lines.length - 1; i >= 0; i--) {
                 String l = lines[i].trim();
-                if (!l.isBlank()) {
-                    rawTrimmed = l;
-                    break;
+                if (l.isBlank()) {
+                    continue;
                 }
+                // Ignora timestamps isolados (ex: "09:10", "7:00", "09:10:00")
+                if (l.matches("^\\d{1,2}:\\d{2}(?::\\d{2})?$")) {
+                    continue;
+                }
+                // Ignora datas isoladas (ex: "10/09/2026", "10-09-2026")
+                if (l.matches("^\\d{1,2}[/\\-]\\d{1,2}[/\\-]\\d{2,4}$")) {
+                    continue;
+                }
+                rawTrimmed = l;
+                break;
             }
         }
 

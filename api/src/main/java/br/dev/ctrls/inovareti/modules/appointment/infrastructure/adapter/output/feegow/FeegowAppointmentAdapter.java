@@ -326,17 +326,36 @@ public class FeegowAppointmentAdapter implements AppointmentExternalPort {
             log.info("[FEEGOW] Resposta bruta do statusUpdate: {} - {}", statusCode, responseBody);
 
             if (statusCode >= 200 && statusCode < 300) {
+                if (responseBody != null && !responseBody.isBlank()) {
+                    try {
+                        com.fasterxml.jackson.databind.JsonNode rootNode = objectMapper.readTree(responseBody);
+                        if (rootNode.has("success") && !rootNode.get("success").asBoolean(true)) {
+                            String errorMsg = rootNode.has("message") ? rootNode.get("message").asText() : "Erro retornado pelo Feegow";
+                            log.error("[FEEGOW] Falha lógica ao atualizar status (success=false). appointmentId={}, statusId={}, msg={}",
+                                    normalizedAppointmentId, normalizedStatusId, errorMsg);
+                            throw new RuntimeException("Feegow retornou erro na atualização de status: " + errorMsg);
+                        }
+                    } catch (JsonProcessingException ex) {
+                        log.debug("[FEEGOW] Não foi possível deserializar resposta como JSON. Mantendo status HTTP {}", statusCode);
+                    }
+                }
                 log.info("Status do agendamento {} atualizado para {} na Feegow", appointmentId, statusId);
             } else {
-                log.error("Não foi possível atualizar status do agendamento na Feegow (fluxo Blip segue). appointmentId={}, statusId={}, statusCode={}, responseBody={}",
+                log.error("Não foi possível atualizar status do agendamento na Feegow. appointmentId={}, statusId={}, statusCode={}, responseBody={}",
                         normalizedAppointmentId, normalizedStatusId, statusCode, abbreviateResponseBody(responseBody));
+                throw new RuntimeException("Erro HTTP Feegow (" + statusCode + "): " + abbreviateResponseBody(responseBody));
             }
         } catch (RestClientResponseException ex) {
             log.error("Falha HTTP ao atualizar status na Feegow. appointmentId={}, statusId={}, statusCode={}, responseBody={}",
                     normalizedAppointmentId, normalizedStatusId, ex.getStatusCode().value(), abbreviateResponseBody(ex.getResponseBodyAsString()));
-        } catch (JsonProcessingException | RuntimeException ex) {
-            log.error("Erro inesperado ao atualizar status na Feegow (fluxo Blip não interrompido). appointmentId={}, statusId={}",
+            throw ex;
+        } catch (JsonProcessingException ex) {
+            log.error("Erro ao serializar payload para Feegow. appointmentId={}, statusId={}", normalizedAppointmentId, normalizedStatusId, ex);
+            throw new RuntimeException("Erro de serialização JSON", ex);
+        } catch (RuntimeException ex) {
+            log.error("Erro inesperado ao atualizar status na Feegow. appointmentId={}, statusId={}",
                     normalizedAppointmentId, normalizedStatusId, ex);
+            throw ex;
         }
     }
 
