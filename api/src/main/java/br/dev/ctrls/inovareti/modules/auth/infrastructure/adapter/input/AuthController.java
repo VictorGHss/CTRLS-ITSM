@@ -71,7 +71,7 @@ public class AuthController {
             return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
                     .body(Map.of(
                             "error", "Too Many Requests",
-                            "message", "Muitas tentativas falhas de login. Acesso temporariamente bloqueado por 10 minutos para proteger sua conta."
+                            "message", "Muitas tentativas falhas de login. Acesso temporariamente bloqueado por 2 minutos para proteger sua conta."
                     ));
         }
 
@@ -86,7 +86,7 @@ public class AuthController {
                 return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
                         .body(Map.of(
                                 "error", "Too Many Requests",
-                                "message", "Limite de tentativas excedido. Acesso temporariamente bloqueado por 10 minutos."
+                                "message", "Limite de tentativas excedido. Acesso temporariamente bloqueado por 2 minutos."
                         ));
             }
             throw ex;
@@ -125,7 +125,7 @@ public class AuthController {
             return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
                     .body(Map.of(
                             "error", "Too Many Requests",
-                            "message", "Muitas tentativas incorretas de código 2FA. Verificação temporariamente bloqueada por 10 minutos."
+                            "message", "Muitas tentativas incorretas de código 2FA. Verificação temporariamente bloqueada por 2 minutos."
                     ));
         }
 
@@ -144,7 +144,7 @@ public class AuthController {
                     return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
                             .body(Map.of(
                                     "error", "Too Many Requests",
-                                    "message", "Limite de tentativas de 2FA excedido. Verificação bloqueada por 10 minutos."
+                                    "message", "Limite de tentativas de 2FA excedido. Verificação bloqueada por 2 minutos."
                             ));
                 }
             }

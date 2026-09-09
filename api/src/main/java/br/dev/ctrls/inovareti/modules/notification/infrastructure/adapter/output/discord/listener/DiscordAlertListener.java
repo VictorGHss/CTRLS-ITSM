@@ -32,6 +32,9 @@ public class DiscordAlertListener {
     @Value("${discord.operational.webhook.url:}")
     private String operationalWebhookUrl;
 
+    @Value("${discord.webhook.url:}")
+    private String defaultWebhookUrl;
+
     @Value("${discord.bot.operational-channel-id:}")
     private String operationalChannelId;
 
@@ -85,6 +88,56 @@ public class DiscordAlertListener {
             }
         } else {
             log.warn("[DISCORD-ALERT] Sem canais de comunicação configurados para alertas operacionais de estoque.");
+        }
+    }
+
+    /**
+     * Captura o evento de bloqueio por tentativas de login/2FA de forma assíncrona
+     * e despacha um alerta imediato de segurança para o canal do Discord.
+     */
+    @Async
+    @EventListener
+    public void handleAuthLockoutEvent(br.dev.ctrls.inovareti.modules.auth.application.event.AuthLockoutEvent event) {
+        log.warn("[DISCORD-ALERT] Processando alerta de bloqueio de segurança para '{}' (IP: {})",
+                event.email(), event.clientIp());
+
+        String targetWebhook = (operationalWebhookUrl != null && !operationalWebhookUrl.isBlank())
+                ? operationalWebhookUrl
+                : defaultWebhookUrl;
+
+        if (targetWebhook != null && !targetWebhook.isBlank()) {
+            try {
+                Map<String, Object> embed = Map.of(
+                    "title", "🚨 [SEGURANÇA] Bloqueio Temporário Ativado",
+                    "description", String.format("Acesso temporariamente suspenso devido a excesso de tentativas consecutivas incorretas.\n\n**Detalhes da Ocorrência:**\n- **Identificador / E-mail**: `%s`\n- **IP de Origem**: `%s`\n- **Motivo**: %s\n- **Tentativas Falhas**: `%d`\n- **Duração do Bloqueio**: `%d minutos`",
+                        event.email(), event.clientIp(), event.reason(), event.attempts(), event.lockoutMinutes()),
+                    "color", 15158332 // Vermelho (#E74C3C)
+                );
+                discordWebhookService.sendWebhook(targetWebhook, embed, UUID.randomUUID().toString(), "security-lockout");
+                log.info("[DISCORD-ALERT] Alerta de bloqueio de segurança despachado com sucesso via Webhook.");
+                return;
+            } catch (Exception ex) {
+                log.warn("[DISCORD-ALERT] Falha ao enviar alerta de segurança via Webhook: {}. Tentando via JDA...", ex.getMessage());
+            }
+        }
+
+        JDA jda = jdaProvider.getIfAvailable();
+        if (jda != null && operationalChannelId != null && !operationalChannelId.isBlank()) {
+            try {
+                TextChannel canal = jda.getTextChannelById(operationalChannelId);
+                if (canal != null) {
+                    var embed = new EmbedBuilder()
+                        .setColor(0xE74C3C) // Vermelho
+                        .setTitle("🚨 [SEGURANÇA] Bloqueio Temporário Ativado")
+                        .setDescription(String.format("Acesso temporariamente suspenso devido a excesso de tentativas consecutivas incorretas.\n\n**Detalhes da Ocorrência:**\n- **Identificador / E-mail**: `%s`\n- **IP de Origem**: `%s`\n- **Motivo**: %s\n- **Tentativas Falhas**: `%d`\n- **Duração do Bloqueio**: `%d minutos`",
+                            event.email(), event.clientIp(), event.reason(), event.attempts(), event.lockoutMinutes()))
+                        .build();
+                    canal.sendMessageEmbeds(embed).queue();
+                    log.info("[DISCORD-ALERT] Alerta de segurança despachado com sucesso via JDA bot.");
+                }
+            } catch (Exception ex) {
+                log.error("[DISCORD-ALERT] Falha no fallback de notificação de segurança via JDA: {}", ex.getMessage(), ex);
+            }
         }
     }
 }

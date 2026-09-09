@@ -4,7 +4,9 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
@@ -24,7 +26,7 @@ public class AuthSecurityGuard {
 
     public static final int MAX_FAILED_LOGIN_ATTEMPTS = 5;
     public static final int MAX_FAILED_TOTP_ATTEMPTS = 5;
-    public static final Duration LOCKOUT_DURATION = Duration.ofMinutes(10);
+    public static final Duration LOCKOUT_DURATION = Duration.ofMinutes(2);
 
     private static final String REDIS_PREFIX_LOGIN_ATTEMPTS_EMAIL = "auth:attempts:login:email:";
     private static final String REDIS_PREFIX_LOGIN_ATTEMPTS_IP = "auth:attempts:login:ip:";
@@ -35,17 +37,26 @@ public class AuthSecurityGuard {
     private static final String REDIS_PREFIX_TOTP_LOCK = "auth:locked:totp:";
 
     private final ObjectProvider<StringRedisTemplate> redisTemplateProvider;
+    private final ApplicationEventPublisher eventPublisher;
 
     // Fallbacks locais em memória (Caffeine) caso o Redis esteja indisponível
     private final Cache<String, AtomicInteger> localAttemptsCache;
     private final Cache<String, Boolean> localLockoutCache;
 
     public AuthSecurityGuard() {
-        this(null);
+        this(null, null);
     }
 
     public AuthSecurityGuard(ObjectProvider<StringRedisTemplate> redisTemplateProvider) {
+        this(redisTemplateProvider, null);
+    }
+
+    @Autowired
+    public AuthSecurityGuard(
+            ObjectProvider<StringRedisTemplate> redisTemplateProvider,
+            ApplicationEventPublisher eventPublisher) {
         this.redisTemplateProvider = redisTemplateProvider;
+        this.eventPublisher = eventPublisher;
 
         this.localAttemptsCache = Caffeine.newBuilder()
                 .expireAfterWrite(LOCKOUT_DURATION)
@@ -107,6 +118,19 @@ public class AuthSecurityGuard {
         if (maxAttempts >= MAX_FAILED_LOGIN_ATTEMPTS) {
             log.warn("[SEGURANÇA] Bloqueio de login ativado por {} minutos após {} tentativas falhas. Email: {}, IP: {}",
                     LOCKOUT_DURATION.toMinutes(), maxAttempts, email, clientIp);
+            if (eventPublisher != null) {
+                try {
+                    eventPublisher.publishEvent(new br.dev.ctrls.inovareti.modules.auth.application.event.AuthLockoutEvent(
+                            email != null ? email : "desconhecido",
+                            clientIp != null ? clientIp : "desconhecido",
+                            "Falha consecutiva de autenticação (senha incorreta)",
+                            maxAttempts,
+                            (int) LOCKOUT_DURATION.toMinutes()
+                    ));
+                } catch (Exception ex) {
+                    log.warn("[AuthSecurityGuard] Falha ao publicar evento de lockout: {}", ex.getMessage());
+                }
+            }
         }
         return maxAttempts;
     }
@@ -142,6 +166,19 @@ public class AuthSecurityGuard {
         if (attempts >= MAX_FAILED_TOTP_ATTEMPTS) {
             log.warn("[SEGURANÇA] Validação de 2FA bloqueada por {} minutos para o usuário {} após {} falhas.",
                     LOCKOUT_DURATION.toMinutes(), userId, attempts);
+            if (eventPublisher != null) {
+                try {
+                    eventPublisher.publishEvent(new br.dev.ctrls.inovareti.modules.auth.application.event.AuthLockoutEvent(
+                            userId.toString(),
+                            "Sessão 2FA Autenticada",
+                            "Falha consecutiva no código TOTP/2FA do Cofre",
+                            attempts,
+                            (int) LOCKOUT_DURATION.toMinutes()
+                    ));
+                } catch (Exception ex) {
+                    log.warn("[AuthSecurityGuard] Falha ao publicar evento de lockout TOTP: {}", ex.getMessage());
+                }
+            }
         }
         return attempts;
     }
