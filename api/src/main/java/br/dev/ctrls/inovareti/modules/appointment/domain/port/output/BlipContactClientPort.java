@@ -1,4 +1,4 @@
-package br.dev.ctrls.inovareti.modules.access.domain.port.output;
+package br.dev.ctrls.inovareti.modules.appointment.domain.port.output;
 
 /**
  * Porta de saída para sincronização ativa de contatos com a API do Blip.

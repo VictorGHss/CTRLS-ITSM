@@ -18,6 +18,7 @@ import { formatCpf } from '../types';
 import type { AccessCredential } from '../types';
 import { resolveDoctorLocation, resolveDoctorSpecialty } from '../utils/clinicThemes';
 import type { ClinicTheme } from '../utils/clinicThemes';
+import { isValidCpf } from '../utils/cpfValidator';
 import { AddToCalendarMenu } from './AddToCalendarMenu';
 import { shareQrCodeImage, downloadQrCodeImage } from '../utils/shareQrCode';
 
@@ -26,7 +27,7 @@ interface CredentialCardProps {
   idx: number;
   clinicTheme: ClinicTheme;
   onOpenFullscreen: (index: number) => void;
-  onReactivateAccess?: () => Promise<void>;
+  onReactivateAccess?: (cred?: AccessCredential) => Promise<void>;
   isReactivating?: boolean;
   reactivateMessage?: { type: 'success' | 'error'; text: string } | null;
   onEditCpf?: (cred?: AccessCredential) => void;
@@ -46,7 +47,9 @@ export const CredentialCard: React.FC<CredentialCardProps> = ({
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
-  const isPendingCpf = cred.credentialCode.startsWith('CRED-') || cred.credentialCode === 'CPF_MISSING';
+  const cleanCpfDigits = cred.cpf ? cred.cpf.replace(/\D/g, '') : '';
+  const hasInvalidCpf = !cleanCpfDigits || cleanCpfDigits.length !== 11 || !isValidCpf(cleanCpfDigits);
+  const isPendingCpf = cred.credentialCode === 'CPF_MISSING' || cred.locator === 'CPF_MISSING' || hasInvalidCpf;
   const isBlockedWindow = cred.credentialCode === 'BLOCKED_OUTSIDE_WINDOW';
   const isReleased = !isPendingCpf && !isBlockedWindow;
 
@@ -188,7 +191,7 @@ export const CredentialCard: React.FC<CredentialCardProps> = ({
               <div className="flex flex-col gap-1">
                 <button
                   type="button"
-                  onClick={onReactivateAccess}
+                  onClick={() => onReactivateAccess?.(cred)}
                   disabled={isReactivating}
                   className="w-full py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 active:scale-[0.98] shadow-xs cursor-pointer disabled:opacity-60 border"
                   style={{

@@ -37,28 +37,41 @@ public class ReactivateAccessUseCase {
     private final DoctorAccessResolver doctorAccessResolver;
 
     public List<AccessCredential> reactivateAccess(String appointmentId) {
-        log.info("[ReactivateAccess] Reativando acesso físico para o agendamento ID: {}", appointmentId);
+        log.info("[ReactivateAccess] Reativando acesso físico para o agendamento ID/CPF: {}", appointmentId);
 
         List<AccessCredential> existingList = accessCredentialRepositoryPort.findByAppointmentId(appointmentId);
         if (existingList == null || existingList.isEmpty()) {
-            String potentialDigits = appointmentId != null ? appointmentId.replaceAll("\\D", "") : "";
-            if (potentialDigits.length() >= 11) {
-                String cleanCpf = potentialDigits.length() == 11 ? potentialDigits : potentialDigits.substring(potentialDigits.length() - 11);
-                List<AccessCredential> byCpf = accessCredentialRepositoryPort.findByCpf(cleanCpf);
-                if (byCpf != null && !byCpf.isEmpty()) {
-                    LocalDate today = LocalDate.now(AccessWindowCalculator.CLINIC_ZONE);
-                    existingList = byCpf.stream()
-                        .filter(c -> c.getCreatedAt() != null && c.getCreatedAt().toLocalDate().equals(today))
-                        .toList();
-                    if (existingList.isEmpty()) {
-                        String latestAppId = byCpf.getLast().getAppointmentId();
+            String cleanDigits = appointmentId != null ? appointmentId.replaceAll("\\D", "") : "";
+            if (!cleanDigits.isBlank()) {
+                String cleanCpf = cleanDigits.length() == 11 ? cleanDigits : (cleanDigits.length() > 11 ? cleanDigits.substring(cleanDigits.length() - 11) : cleanDigits);
+                if (cleanCpf.length() == 11) {
+                    List<AccessCredential> byCpf = accessCredentialRepositoryPort.findByCpf(cleanCpf);
+                    if (byCpf != null && !byCpf.isEmpty()) {
+                        LocalDate today = LocalDate.now(AccessWindowCalculator.CLINIC_ZONE);
+                        String todayPattern = today.format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd"));
                         existingList = byCpf.stream()
-                            .filter(c -> latestAppId.equals(c.getAppointmentId()))
+                            .filter(c -> (c.getCreatedAt() != null && c.getCreatedAt().toLocalDate().equals(today))
+                                      || (c.getAppointmentId() != null && c.getAppointmentId().contains(todayPattern)))
                             .toList();
-                    }
-                    if (!existingList.isEmpty()) {
-                        log.info("[ReactivateAccess] Credencial localizada via fallback de CPF ({}). AppointmentId real: {}", 
-                                cleanCpf, existingList.getFirst().getAppointmentId());
+                        if (existingList.isEmpty()) {
+                            String latestAppId = byCpf.stream()
+                                .max((a, b) -> {
+                                    LocalDateTime tA = a.getCreatedAt() != null ? a.getCreatedAt() : LocalDateTime.MIN;
+                                    LocalDateTime tB = b.getCreatedAt() != null ? b.getCreatedAt() : LocalDateTime.MIN;
+                                    return tA.compareTo(tB);
+                                })
+                                .map(c -> c.getAppointmentId())
+                                .orElse(null);
+                            if (latestAppId != null) {
+                                existingList = byCpf.stream()
+                                    .filter(c -> latestAppId.equals(c.getAppointmentId()))
+                                    .toList();
+                            }
+                        }
+                        if (!existingList.isEmpty()) {
+                            log.info("[ReactivateAccess] Credencial localizada via fallback de CPF ({}). AppointmentId real: {}", 
+                                    cleanCpf, existingList.getFirst().getAppointmentId());
+                        }
                     }
                 }
             }
@@ -84,7 +97,9 @@ public class ReactivateAccessUseCase {
             } catch (Exception ex) {
                 log.warn("[ReactivateAccess] Não foi possível resolver dados do médico para reativação do agendamento {}: {}", effectiveAppId, ex.getMessage());
             }
-        } else {
+        }
+
+        if (matricula.isBlank() && doctorCpf.isBlank()) {
             String doctorName = "";
             for (AccessCredential c : existingList) {
                 if (c != null && c.getDoctorName() != null && !c.getDoctorName().isBlank()) {
@@ -101,11 +116,14 @@ public class ReactivateAccessUseCase {
             }
         }
 
-        LocalDate today = LocalDate.now(AccessWindowCalculator.CLINIC_ZONE);
-        LocalDateTime startWindow = LocalDateTime.of(today, LocalTime.of(6, 0));
+        LocalDateTime now = LocalDateTime.now(AccessWindowCalculator.CLINIC_ZONE);
+        LocalDate today = now.toLocalDate();
+        // Margem de 2 minutos no passado para evitar rejeição por relógio dessincronizado da catraca
+        LocalDateTime startWindow = now.minusMinutes(2);
         LocalDateTime endWindow = LocalDateTime.of(today, LocalTime.of(23, 59));
         String startVisit = startWindow.format(AccessWindowCalculator.GERACESSO_DATE_FORMATTER);
         String endVisit = endWindow.format(AccessWindowCalculator.GERACESSO_DATE_FORMATTER);
+        log.info("[ReactivateAccess] Renovando visita na GerAcesso com janela imediata: {} até {}", startVisit, endVisit);
 
         List<AccessCredential> updatedList = new ArrayList<>();
 
@@ -116,7 +134,7 @@ public class ReactivateAccessUseCase {
                 log.warn("[ReactivateAccess] CPF inválido ({}) para '{}'. Ativando contingência.", cleanCpf, cred.getName());
                 String newCredentialValue = "CRED-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
                 cred.setAccessCredential(newCredentialValue);
-                cred.setCreatedAt(LocalDateTime.now(AccessWindowCalculator.CLINIC_ZONE));
+                cred.setCreatedAt(now);
                 updatedList.add(accessCredentialRepositoryPort.save(cred));
                 continue;
             }
@@ -152,7 +170,7 @@ public class ReactivateAccessUseCase {
 
             cred.setAccessCredential(newCredentialValue);
             cred.setLocator(newLocator);
-            cred.setCreatedAt(LocalDateTime.now(AccessWindowCalculator.CLINIC_ZONE));
+            cred.setCreatedAt(now);
             updatedList.add(accessCredentialRepositoryPort.save(cred));
         }
 

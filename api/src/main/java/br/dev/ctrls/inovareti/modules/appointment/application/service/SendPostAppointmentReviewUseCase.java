@@ -15,6 +15,7 @@ import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.DoctorConfi
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.FeegowAppointment;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.PatientExternalPort;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.FeegowPatient;
+import br.dev.ctrls.inovareti.modules.appointment.infrastructure.adapter.output.client.BlipContactClientAdapter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -166,7 +167,7 @@ public class SendPostAppointmentReviewUseCase {
                             }
                             if (patient.name() != null && !patient.name().isBlank()) {
                                 String cleanPName = patient.name().trim();
-                                if (!br.dev.ctrls.inovareti.modules.access.infrastructure.adapter.output.BlipContactClientAdapter.isInvalidName(cleanPName)) {
+                                if (!BlipContactClientAdapter.isInvalidName(cleanPName)) {
                                     patientName = cleanPName;
                                 }
                             }

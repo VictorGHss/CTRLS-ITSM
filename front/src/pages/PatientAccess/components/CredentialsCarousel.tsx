@@ -12,7 +12,7 @@ interface CredentialsCarouselProps {
   scrollToCard: (index: number) => void;
   onOpenFullscreen: (index: number) => void;
   onOpenCompanionModal: () => void;
-  onReactivateAccess?: () => Promise<void>;
+  onReactivateAccess?: (cred?: AccessCredential) => Promise<void>;
   onResetAccess?: () => void;
   onEditCpf?: (cred?: AccessCredential) => void;
   isReactivating?: boolean;
@@ -110,7 +110,7 @@ export const CredentialsCarousel: React.FC<CredentialsCarouselProps> = ({
       >
         {credentials.map((cred, idx) => (
           <CredentialCard
-            key={cred.id || cred.credentialCode || idx}
+            key={cred.id || `${cred.credentialCode}-${idx}`}
             cred={cred}
             idx={idx}
             clinicTheme={clinicTheme}

@@ -1,4 +1,4 @@
-package br.dev.ctrls.inovareti.modules.communication.infrastructure.config;
+package br.dev.ctrls.inovareti.modules.notification.infrastructure.config;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
@@ -23,6 +23,7 @@ public class DiscordProperties {
     public static class Bot {
         private boolean enabled;
         private String token;
+        private String adminIds;
     }
 
     @Getter

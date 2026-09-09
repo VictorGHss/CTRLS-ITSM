@@ -1,4 +1,4 @@
-package br.dev.ctrls.inovareti.modules.appointment.application.service;
+package br.dev.ctrls.inovareti.modules.appointment.application.usecase;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -17,7 +17,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Caso de uso/serviço responsável pela validação, re-checagem estrita e deduplicação no envio de lembretes de agendamentos.
+ * Caso de uso responsável pela validação, re-checagem estrita e deduplicação no envio de lembretes de agendamentos.
  */
 @Slf4j
 @Service

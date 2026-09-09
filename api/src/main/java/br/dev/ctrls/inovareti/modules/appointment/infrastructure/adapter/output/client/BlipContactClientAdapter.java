@@ -1,7 +1,12 @@
-package br.dev.ctrls.inovareti.modules.access.infrastructure.adapter.output;
+package br.dev.ctrls.inovareti.modules.appointment.infrastructure.adapter.output.client;
 
-import br.dev.ctrls.inovareti.modules.access.domain.port.output.BlipContactClientPort;
+import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.BlipContactClientPort;
 import br.dev.ctrls.inovareti.modules.appointment.infrastructure.config.AppointmentMotorProperties;
+import br.dev.ctrls.inovareti.modules.appointment.infrastructure.config.BlipProperties;
+import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.BlipUserIdentityReconciliationRepositoryPort;
+import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentSessionRepositoryPort;
+import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.PatientExternalPort;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
@@ -21,10 +26,11 @@ import java.util.UUID;
 public class BlipContactClientAdapter implements BlipContactClientPort {
 
     private final AppointmentMotorProperties properties;
-    private final br.dev.ctrls.inovareti.modules.appointment.infrastructure.config.BlipProperties blipProperties;
-    private final br.dev.ctrls.inovareti.modules.appointment.domain.port.output.BlipUserIdentityReconciliationRepositoryPort reconciliationRepository;
-    private final br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentSessionRepositoryPort appointmentSessionRepository;
-    private final br.dev.ctrls.inovareti.modules.appointment.domain.port.output.PatientExternalPort patientExternalPort;
+    private final BlipProperties blipProperties;
+    private final BlipUserIdentityReconciliationRepositoryPort reconciliationRepository;
+    private final AppointmentSessionRepositoryPort appointmentSessionRepository;
+    private final PatientExternalPort patientExternalPort;
+    private final ObjectMapper objectMapper;
 
     private RestClient restClient;
 
@@ -46,23 +52,26 @@ public class BlipContactClientAdapter implements BlipContactClientPort {
     public BlipContactClientAdapter(
             AppointmentMotorProperties properties,
             @org.springframework.beans.factory.annotation.Autowired(required = false)
-            br.dev.ctrls.inovareti.modules.appointment.infrastructure.config.BlipProperties blipProperties,
+            BlipProperties blipProperties,
             @org.springframework.beans.factory.annotation.Autowired(required = false)
-            br.dev.ctrls.inovareti.modules.appointment.domain.port.output.BlipUserIdentityReconciliationRepositoryPort reconciliationRepository,
+            BlipUserIdentityReconciliationRepositoryPort reconciliationRepository,
             @org.springframework.beans.factory.annotation.Autowired(required = false)
-            br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentSessionRepositoryPort appointmentSessionRepository,
+            AppointmentSessionRepositoryPort appointmentSessionRepository,
             @org.springframework.beans.factory.annotation.Autowired(required = false)
-            br.dev.ctrls.inovareti.modules.appointment.domain.port.output.PatientExternalPort patientExternalPort
+            PatientExternalPort patientExternalPort,
+            @org.springframework.beans.factory.annotation.Autowired(required = false)
+            ObjectMapper objectMapper
     ) {
         this.properties = properties;
         this.blipProperties = blipProperties;
         this.reconciliationRepository = reconciliationRepository;
         this.appointmentSessionRepository = appointmentSessionRepository;
         this.patientExternalPort = patientExternalPort;
+        this.objectMapper = objectMapper != null ? objectMapper : new ObjectMapper();
     }
 
     public BlipContactClientAdapter(AppointmentMotorProperties properties) {
-        this(properties, null, null, null, null);
+        this(properties, null, null, null, null, null);
     }
 
     @PostConstruct
@@ -381,7 +390,7 @@ public class BlipContactClientAdapter implements BlipContactClientPort {
                     String rawBody = response.getBody();
                     if (rawBody != null && !rawBody.isBlank()) {
                         try {
-                            com.fasterxml.jackson.databind.JsonNode root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(rawBody);
+                            com.fasterxml.jackson.databind.JsonNode root = objectMapper.readTree(rawBody);
                             if (root.has("status") && "success".equalsIgnoreCase(root.get("status").asText())) {
                                 log.info("[BlipContact-Adapter] Sincronização concluída com sucesso no Blip para {}", identity);
                                 return true;

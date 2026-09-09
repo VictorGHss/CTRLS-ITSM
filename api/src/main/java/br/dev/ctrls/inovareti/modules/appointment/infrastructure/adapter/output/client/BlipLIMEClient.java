@@ -54,11 +54,21 @@ public class BlipLIMEClient implements BlipClientPort {
     private volatile List<BlipQueue> cachedQueuesList = null;
     private static final long QUEUES_CACHE_TTL_MS = 30 * 60 * 1000L; // 30 minutos
 
+    private final ObjectMapper objectMapper;
     private RestTemplate blipRestTemplate;
 
     public BlipLIMEClient(RestTemplate restTemplate, AppointmentMotorProperties properties) {
+        this(restTemplate, properties, null);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public BlipLIMEClient(
+            RestTemplate restTemplate,
+            AppointmentMotorProperties properties,
+            @org.springframework.beans.factory.annotation.Autowired(required = false) ObjectMapper objectMapper) {
         this.injectedRestTemplate = restTemplate;
         this.properties = properties;
+        this.objectMapper = objectMapper != null ? objectMapper : new ObjectMapper();
     }
 
     @PostConstruct
@@ -291,7 +301,7 @@ public class BlipLIMEClient implements BlipClientPort {
 
             log.debug("Enviando comando LIME (Scope: {}) para a URL: {}", actualScope, url);
             try {
-                log.debug("Payload completo: {}", new ObjectMapper().writeValueAsString(finalPayload));
+                log.debug("Payload completo: {}", objectMapper.writeValueAsString(finalPayload));
             } catch (JsonProcessingException ignored) {
                 log.debug("Payload completo: {}", finalPayload);
             }

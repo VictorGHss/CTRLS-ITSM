@@ -25,7 +25,7 @@ import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionTemplate;
 
-import br.dev.ctrls.inovareti.modules.access.domain.port.output.BlipContactClientPort;
+import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.BlipContactClientPort;
 import br.dev.ctrls.inovareti.modules.appointment.application.usecase.HandleBlipWebhookUseCase.BlipWebhookPayload;
 import br.dev.ctrls.inovareti.modules.appointment.application.usecase.HandleBlipWebhookUseCase.WebhookResult;
 import br.dev.ctrls.inovareti.modules.appointment.domain.model.AppointmentDoctorMapping;

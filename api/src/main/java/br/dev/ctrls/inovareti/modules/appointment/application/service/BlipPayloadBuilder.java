@@ -4,7 +4,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import br.dev.ctrls.inovareti.modules.appointment.application.dto.AudienceDto;
@@ -14,7 +16,16 @@ import br.dev.ctrls.inovareti.modules.appointment.application.dto.MessageDto;
 @Component
 public class BlipPayloadBuilder {
 
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private final ObjectMapper objectMapper;
+
+    public BlipPayloadBuilder() {
+        this(new ObjectMapper());
+    }
+
+    @Autowired
+    public BlipPayloadBuilder(ObjectMapper objectMapper) {
+        this.objectMapper = objectMapper != null ? objectMapper : new ObjectMapper();
+    }
 
     /**
      * Formata um telefone de destinatário no formato E.164 estrito com o sinal '+' (ex: "+5542999999999").
@@ -96,11 +107,11 @@ public class BlipPayloadBuilder {
                 .build();
 
         @SuppressWarnings("unchecked")
-        Map<String, Object> campaign = OBJECT_MAPPER.convertValue(campaignDto, Map.class);
+        Map<String, Object> campaign = objectMapper.convertValue(campaignDto, Map.class);
         @SuppressWarnings("unchecked")
-        Map<String, Object> audience = OBJECT_MAPPER.convertValue(audienceDto, Map.class);
+        Map<String, Object> audience = objectMapper.convertValue(audienceDto, Map.class);
         @SuppressWarnings("unchecked")
-        Map<String, Object> message = OBJECT_MAPPER.convertValue(messageDto, Map.class);
+        Map<String, Object> message = objectMapper.convertValue(messageDto, Map.class);
 
         Map<String, Object> resource = Map.of(
             "campaign", campaign,

@@ -14,7 +14,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import org.springframework.transaction.support.TransactionTemplate;
 
-import br.dev.ctrls.inovareti.modules.access.infrastructure.adapter.output.BlipContactClientAdapter;
+import br.dev.ctrls.inovareti.modules.appointment.infrastructure.adapter.output.client.BlipContactClientAdapter;
 import br.dev.ctrls.inovareti.modules.appointment.application.service.AppointmentTemplateDataBuilder;
 import br.dev.ctrls.inovareti.modules.appointment.domain.model.AppointmentSession;
 import br.dev.ctrls.inovareti.modules.appointment.domain.model.DoctorConfiguration;

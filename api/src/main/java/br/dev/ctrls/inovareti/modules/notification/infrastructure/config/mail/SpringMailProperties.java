@@ -1,4 +1,4 @@
-package br.dev.ctrls.inovareti.modules.communication.infrastructure.config;
+package br.dev.ctrls.inovareti.modules.notification.infrastructure.config.mail;
 
 import java.util.HashMap;
 import java.util.Map;

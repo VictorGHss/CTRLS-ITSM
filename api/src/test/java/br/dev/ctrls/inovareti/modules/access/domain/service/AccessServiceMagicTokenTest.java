@@ -6,7 +6,6 @@ import br.dev.ctrls.inovareti.modules.access.domain.port.output.AccessCredential
 import br.dev.ctrls.inovareti.modules.access.domain.port.output.FeegowClientPort;
 import br.dev.ctrls.inovareti.modules.access.domain.port.output.GerAcessoClientPort;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentExternalPort;
-import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.DoctorConfigurationRepository;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.PatientExternalPort;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -42,7 +41,7 @@ class AccessServiceMagicTokenTest {
     private PatientExternalPort patientExternalPort;
 
     @Mock
-    private DoctorConfigurationRepository doctorConfigurationRepository;
+    private br.dev.ctrls.inovareti.modules.access.domain.port.output.DoctorAccessMetadataPort doctorAccessMetadataPort;
 
     @Mock
     private br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentSessionRepositoryPort appointmentSessionRepository;
@@ -57,7 +56,7 @@ class AccessServiceMagicTokenTest {
                 patientExternalPort,
                 accessCredentialRepositoryPort,
                 gerAcessoClientPort,
-                doctorConfigurationRepository,
+                doctorAccessMetadataPort,
                 appointmentSessionRepository
         );
     }

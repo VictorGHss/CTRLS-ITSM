@@ -2,24 +2,30 @@ package br.dev.ctrls.inovareti.modules.access.application.usecase;
 
 import br.dev.ctrls.inovareti.modules.access.domain.model.AccessCredential;
 import br.dev.ctrls.inovareti.modules.access.domain.model.CpfValidator;
+import br.dev.ctrls.inovareti.modules.access.domain.model.FeegowPatientAccessInfo;
 import br.dev.ctrls.inovareti.modules.access.domain.model.UserType;
 import br.dev.ctrls.inovareti.modules.access.domain.port.output.AccessCredentialRepositoryPort;
+import br.dev.ctrls.inovareti.modules.access.domain.port.output.FeegowClientPort;
 import br.dev.ctrls.inovareti.modules.access.domain.service.AccessWindowCalculator;
+import br.dev.ctrls.inovareti.modules.access.infrastructure.adapter.input.dto.AccessCredentialResponse;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentExternalPort;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.FeegowAppointment;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.FeegowPatient;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.PatientExternalPort;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -29,13 +35,39 @@ import java.util.UUID;
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class LookupCredentialsByCpfUseCase {
+
+    private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
+    private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+    private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm");
 
     private final AccessCredentialRepositoryPort accessCredentialRepositoryPort;
     private final PatientExternalPort patientExternalPort;
     private final AppointmentExternalPort appointmentExternalPort;
     private final ProcessAccessRequestUseCase processAccessRequestUseCase;
+    private final FeegowClientPort feegowClientPort;
+
+    public LookupCredentialsByCpfUseCase(
+            AccessCredentialRepositoryPort accessCredentialRepositoryPort,
+            PatientExternalPort patientExternalPort,
+            AppointmentExternalPort appointmentExternalPort,
+            ProcessAccessRequestUseCase processAccessRequestUseCase) {
+        this(accessCredentialRepositoryPort, patientExternalPort, appointmentExternalPort, processAccessRequestUseCase, null);
+    }
+
+    @Autowired
+    public LookupCredentialsByCpfUseCase(
+            AccessCredentialRepositoryPort accessCredentialRepositoryPort,
+            PatientExternalPort patientExternalPort,
+            AppointmentExternalPort appointmentExternalPort,
+            ProcessAccessRequestUseCase processAccessRequestUseCase,
+            @Autowired(required = false) FeegowClientPort feegowClientPort) {
+        this.accessCredentialRepositoryPort = accessCredentialRepositoryPort;
+        this.patientExternalPort = patientExternalPort;
+        this.appointmentExternalPort = appointmentExternalPort;
+        this.processAccessRequestUseCase = processAccessRequestUseCase;
+        this.feegowClientPort = feegowClientPort;
+    }
 
     public List<AccessCredential> lookupCredentialsByCpf(String rawCpf, String clinic) {
         if (rawCpf == null || rawCpf.isBlank()) return List.of();
@@ -151,5 +183,127 @@ public class LookupCredentialsByCpfUseCase {
         });
 
         return result.isEmpty() ? baseList : result;
+    }
+
+    /**
+     * Executa a busca completa de credenciais de acesso por CPF, enriquecendo os dados com
+     * informações de agendamento do Feegow, regras de janela de acesso e formatação de resposta.
+     */
+    public List<AccessCredentialResponse> execute(String rawCpf, String clinic) {
+        List<AccessCredential> credentials = lookupCredentialsByCpf(rawCpf, clinic);
+        if (credentials.isEmpty()) {
+            return List.of();
+        }
+
+        List<AccessCredentialResponse> responseList = new ArrayList<>();
+        Map<String, Optional<FeegowPatientAccessInfo>> feegowCache = new HashMap<>();
+        LocalDate today = LocalDate.now(AccessWindowCalculator.CLINIC_ZONE);
+        LocalDate maxAllowed = today.plusDays(7);
+
+        for (AccessCredential cred : credentials) {
+            String appointmentId = cred.getAppointmentId();
+            String doctorName = cred.getDoctorName();
+            String appointmentDateDisplay = resolveDisplayDate(appointmentId);
+            String opensAt = "06:00";
+            String closesAt = "23:59";
+
+            if (appointmentId != null && appointmentId.length() >= 13 && (appointmentId.startsWith("INOV-") || appointmentId.startsWith("IMG-"))) {
+                try {
+                    String datePart = appointmentId.substring(5, 13);
+                    LocalDate parsedDate = LocalDate.parse(datePart, DateTimeFormatter.ofPattern("yyyyMMdd"));
+                    if (parsedDate.isBefore(today) || parsedDate.isAfter(maxAllowed)) {
+                        continue;
+                    }
+                } catch (Exception ignored) {}
+            }
+
+            if (appointmentId != null && !appointmentId.startsWith("INOV-") && !appointmentId.startsWith("IMG-")) {
+                if (feegowClientPort != null) {
+                    try {
+                        Optional<FeegowPatientAccessInfo> accessInfoOpt = feegowCache.computeIfAbsent(
+                            appointmentId,
+                            feegowClientPort::fetchPatientAccessInfo
+                        );
+                        if (accessInfoOpt.isPresent()) {
+                            FeegowPatientAccessInfo info = accessInfoOpt.get();
+                            if (info.appointmentDate() != null) {
+                                if (info.appointmentDate().isBefore(today) || info.appointmentDate().isAfter(maxAllowed)) {
+                                    continue;
+                                }
+                            }
+                            if (info.doctorName() != null && !info.doctorName().isBlank()) {
+                                doctorName = info.doctorName();
+                                if (cred.getDoctorName() == null || cred.getDoctorName().isBlank()) {
+                                    cred.setDoctorName(doctorName);
+                                    accessCredentialRepositoryPort.save(cred);
+                                }
+                            }
+                            if (info.appointmentDate() != null) {
+                                if (info.appointmentTime() != null) {
+                                    appointmentDateDisplay = LocalDateTime.of(info.appointmentDate(), info.appointmentTime())
+                                            .format(DATE_TIME_FORMATTER);
+                                    opensAt = info.appointmentTime().minusMinutes(120).format(TIME_FORMATTER);
+                                    closesAt = info.appointmentTime().plusMinutes(120).format(TIME_FORMATTER);
+                                } else {
+                                    appointmentDateDisplay = info.appointmentDate().format(DATE_FORMATTER);
+                                    opensAt = "08:00";
+                                }
+                            }
+                        }
+                    } catch (Exception ex) {
+                        log.warn("[LookupCredentialsByCpf] Erro ao buscar detalhes Feegow no lookup por CPF para {}: {}", appointmentId, ex.getMessage());
+                    }
+                }
+            }
+
+            if (doctorName == null || doctorName.isBlank()) {
+                boolean isInovare = (clinic != null && clinic.toLowerCase().contains("inovare"))
+                        || (appointmentId != null && appointmentId.startsWith("INOV-"));
+                doctorName = isInovare ? "Inovare – Serviços de Saúde" : "Clínica Da Imagem - Unidade Inovare";
+            }
+
+            responseList.add(new AccessCredentialResponse(
+                cred.getAppointmentId(),
+                cred.getName(),
+                cred.getUserType() != null ? cred.getUserType() : UserType.PATIENT,
+                cred.getLocator(),
+                cred.getAccessCredential(),
+                cred.getCpf(),
+                doctorName,
+                appointmentDateDisplay,
+                opensAt,
+                closesAt
+            ));
+        }
+
+        if (responseList.isEmpty()) {
+            return List.of();
+        }
+
+        responseList.sort((a, b) -> {
+            if (a.userType() == UserType.PATIENT && b.userType() != UserType.PATIENT) return -1;
+            if (a.userType() != UserType.PATIENT && b.userType() == UserType.PATIENT) return 1;
+            return 0;
+        });
+
+        return responseList;
+    }
+
+    private String resolveDisplayDate(String appointmentId) {
+        if (appointmentId != null && appointmentId.length() >= 13 && (appointmentId.startsWith("INOV-") || appointmentId.startsWith("IMG-"))) {
+            try {
+                String datePart = appointmentId.substring(5, 13);
+                LocalDate parsedDate = LocalDate.parse(datePart, DateTimeFormatter.ofPattern("yyyyMMdd"));
+                LocalDate today = LocalDate.now(AccessWindowCalculator.CLINIC_ZONE);
+                if (parsedDate.equals(today)) {
+                    return "Hoje";
+                } else if (parsedDate.equals(today.plusDays(1))) {
+                    return "Amanhã (" + parsedDate.format(DateTimeFormatter.ofPattern("dd/MM")) + ")";
+                } else {
+                    return parsedDate.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"));
+                }
+            } catch (Exception ignored) {}
+        }
+        return "Hoje";
     }
 }

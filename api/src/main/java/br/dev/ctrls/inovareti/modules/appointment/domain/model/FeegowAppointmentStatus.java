@@ -18,6 +18,7 @@ public enum FeegowAppointmentStatus {
     NAO_COMPARECEU(6, "Não compareceu"),
     MARCADO_CONFIRMADO(7, "Marcado - confirmado"),
     DESMARCADO_PACIENTE(11, "Desmarcado pelo paciente"),
+    DESMARCADO_OUTRO(12, "Desmarcado - outro / sistema"),
     REMARCADO(15, "Remarcado"),
     DESMARCADO_PROFISSIONAL(16, "Desmarcado pelo profissional"),
     AGUARDANDO_TRIAGEM(101, "Aguardando | Triagem"),
@@ -75,6 +76,7 @@ public enum FeegowAppointmentStatus {
     public boolean isCancelledOrMissed() {
         return this == NAO_COMPARECEU
                 || this == DESMARCADO_PACIENTE
+                || this == DESMARCADO_OUTRO
                 || this == DESMARCADO_PROFISSIONAL;
     }
 

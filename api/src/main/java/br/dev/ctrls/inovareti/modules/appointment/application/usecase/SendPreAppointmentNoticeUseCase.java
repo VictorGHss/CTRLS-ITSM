@@ -11,6 +11,7 @@ import br.dev.ctrls.inovareti.modules.appointment.application.service.Appointmen
 import br.dev.ctrls.inovareti.modules.appointment.application.service.BlipNotificationService;
 import br.dev.ctrls.inovareti.modules.appointment.domain.model.AppointmentSession;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentSessionRepositoryPort;
+import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.BlipContactClientPort;
 import br.dev.ctrls.inovareti.modules.appointment.infrastructure.config.AppointmentMotorProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,12 +32,12 @@ public class SendPreAppointmentNoticeUseCase {
     private final AppointmentTemplateDataBuilder appointmentTemplateDataBuilder;
     private final BlipNotificationService blipNotificationService;
     private final AppointmentMotorProperties appointmentMotorProperties;
-    private final br.dev.ctrls.inovareti.modules.access.domain.port.output.BlipContactClientPort blipContactClientPort;
+    private final BlipContactClientPort blipContactClientPort;
     private final br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentDoctorMappingRepositoryPort appointmentDoctorMappingRepository;
     private final br.dev.ctrls.inovareti.modules.appointment.application.service.BlipContextService blipContextService;
     private final br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentExternalPort appointmentExternalPort;
     private final br.dev.ctrls.inovareti.modules.appointment.domain.port.output.PatientExternalPort patientExternalPort;
-    private final br.dev.ctrls.inovareti.modules.appointment.application.service.SendAppointmentReminderUseCase sendAppointmentReminderUseCase;
+    private final SendAppointmentReminderUseCase sendAppointmentReminderUseCase;
     private final br.dev.ctrls.inovareti.modules.appointment.application.service.AppointmentFilterService appointmentFilterService;
 
     public void execute() {

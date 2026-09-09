@@ -18,7 +18,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import org.springframework.beans.factory.ObjectProvider;
-import br.dev.ctrls.inovareti.modules.access.domain.port.output.BlipContactClientPort;
+import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.BlipContactClientPort;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 

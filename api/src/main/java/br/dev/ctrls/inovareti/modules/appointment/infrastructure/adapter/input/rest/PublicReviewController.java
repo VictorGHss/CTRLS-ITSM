@@ -1,6 +1,7 @@
 package br.dev.ctrls.inovareti.modules.appointment.infrastructure.adapter.input.rest;
 
 import java.net.URI;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -20,6 +21,10 @@ import lombok.extern.slf4j.Slf4j;
 public class PublicReviewController {
 
     public static final String CLINIC_FALLBACK_URL = "https://search.google.com/local/writereview?placeid=ChIJN3Bz2lwa6JQRzi0rQrcYanw";
+
+    @Value("${app.review.clinic-fallback-url:" + CLINIC_FALLBACK_URL + "}")
+    private String clinicFallbackUrl = CLINIC_FALLBACK_URL;
+
     private final DoctorConfigurationRepository doctorConfigurationRepository;
 
     /**
@@ -33,7 +38,9 @@ public class PublicReviewController {
     @GetMapping({"/review/{doctorId}", "/v1/doctors/configurations/review/{doctorId}", "/api/review/{doctorId}"})
     public ResponseEntity<Void> redirectToGoogleReview(@PathVariable String doctorId) {
         log.info("[REVIEW-REDIRECT] Solicitação de redirecionamento para avaliação do médico ID='{}'", doctorId);
-        String targetUrl = CLINIC_FALLBACK_URL;
+        String targetUrl = clinicFallbackUrl != null && !clinicFallbackUrl.isBlank()
+                ? clinicFallbackUrl.trim()
+                : "https://search.google.com/local/writereview?placeid=ChIJN3Bz2lwa6JQRzi0rQrcYanw";
         if (doctorId != null && !doctorId.isBlank()) {
             try {
                 Long id = Long.parseLong(doctorId.trim());

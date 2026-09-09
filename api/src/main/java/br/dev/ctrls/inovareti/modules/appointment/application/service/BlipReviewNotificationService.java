@@ -6,6 +6,7 @@ import java.util.UUID;
 
 import org.springframework.stereotype.Service;
 
+import br.dev.ctrls.inovareti.modules.appointment.infrastructure.adapter.output.client.BlipContactClientAdapter;
 import br.dev.ctrls.inovareti.modules.appointment.infrastructure.adapter.output.client.BlipLIMEClient;
 import io.micrometer.observation.annotation.Observed;
 import lombok.RequiredArgsConstructor;
@@ -53,7 +54,7 @@ public class BlipReviewNotificationService {
             String trimmedP = patientName.trim();
             boolean isInvalid = trimmedP.matches("(?i).*[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}.*")
                 || trimmedP.matches("^\\d+$")
-                || br.dev.ctrls.inovareti.modules.access.infrastructure.adapter.output.BlipContactClientAdapter.isInvalidName(trimmedP);
+                || BlipContactClientAdapter.isInvalidName(trimmedP);
             if (!isInvalid) {
                 safePatientName = trimmedP;
             }
@@ -62,7 +63,7 @@ public class BlipReviewNotificationService {
         String safeDoctorName = "Clínica Inovare";
         if (doctorName != null && !doctorName.isBlank() && !"null".equalsIgnoreCase(doctorName.trim())) {
             String trimmedD = doctorName.trim();
-            if (!br.dev.ctrls.inovareti.modules.access.infrastructure.adapter.output.BlipContactClientAdapter.isInvalidName(trimmedD)) {
+            if (!BlipContactClientAdapter.isInvalidName(trimmedD)) {
                 safeDoctorName = trimmedD;
             }
         }

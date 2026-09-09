@@ -7,7 +7,6 @@ import br.dev.ctrls.inovareti.modules.access.domain.port.output.FeegowClientPort
 import br.dev.ctrls.inovareti.modules.access.domain.port.output.GerAcessoClientPort;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentExternalPort;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentSessionRepositoryPort;
-import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.DoctorConfigurationRepository;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.FeegowAppointment;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.FeegowPatient;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.PatientExternalPort;
@@ -50,7 +49,7 @@ class AccessServiceCpfLookupTest {
     private PatientExternalPort patientExternalPort;
 
     @Mock
-    private DoctorConfigurationRepository doctorConfigurationRepository;
+    private br.dev.ctrls.inovareti.modules.access.domain.port.output.DoctorAccessMetadataPort doctorAccessMetadataPort;
 
     @Mock
     private AppointmentSessionRepositoryPort appointmentSessionRepository;
@@ -65,7 +64,7 @@ class AccessServiceCpfLookupTest {
                 patientExternalPort,
                 accessCredentialRepositoryPort,
                 gerAcessoClientPort,
-                doctorConfigurationRepository,
+                doctorAccessMetadataPort,
                 appointmentSessionRepository
         );
     }
@@ -174,3 +173,4 @@ class AccessServiceCpfLookupTest {
                 .build();
     }
 }
+

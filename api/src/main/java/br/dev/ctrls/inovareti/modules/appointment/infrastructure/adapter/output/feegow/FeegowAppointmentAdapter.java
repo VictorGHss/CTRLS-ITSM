@@ -57,6 +57,7 @@ public class FeegowAppointmentAdapter implements AppointmentExternalPort {
     private static final DateTimeFormatter FEEGOW_RESPONSE_DATE_FORMAT = DateTimeFormatter.ofPattern("dd-MM-yyyy");
     private static final DateTimeFormatter FEEGOW_RESPONSE_TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm");
     private static final DateTimeFormatter FEEGOW_RESPONSE_TIME_WITH_SECONDS_FORMAT = DateTimeFormatter.ofPattern("HH:mm:ss");
+    private static final int DEFAULT_CANCELLATION_REASON_ID = 1;
 
     private final AppointmentMotorProperties properties;
     private final FeegowProperties feegowProperties;
@@ -131,9 +132,9 @@ public class FeegowAppointmentAdapter implements AppointmentExternalPort {
                 if (parsedAppointment == null) {
                     continue;
                 }
-                // Filtro por status para ignorar agendamentos 'CANCELADOS' ou 'FALTAS'
-                String status = parsedAppointment.statusId();
-                if ("11".equals(status) || "12".equals(status)) {
+                // Filtro por status para ignorar agendamentos cancelados, desmarcados ou faltas
+                FeegowAppointmentStatus apptStatus = FeegowAppointmentStatus.fromId(parsedAppointment.statusId());
+                if (apptStatus.isCancelledOrMissed()) {
                     continue;
                 }
                 // Filtro para buscar apenas agendamentos com data maior ou igual a LocalDate.now()
@@ -279,13 +280,14 @@ public class FeegowAppointmentAdapter implements AppointmentExternalPort {
         String statusUpdateUrl = feegowProperties.getStatusUpdateUrl();
         URI uri = URI.create(statusUpdateUrl);
 
-        int statusIdInt = 7;
+        int confirmedStatusId = FeegowAppointmentStatus.MARCADO_CONFIRMADO.getId();
+        int statusIdInt = confirmedStatusId;
         try {
             statusIdInt = Integer.parseInt(normalizedStatusId);
         } catch (NumberFormatException ignored) {}
 
-        // FEEGOW-STATUS-GUARD: Impede regressão de status para 7 (CONFIRMED) se o agendamento já estiver em estado avançado no Feegow ou na clínica
-        if (statusIdInt == 7) {
+        // FEEGOW-STATUS-GUARD: Impede regressão de status para CONFIRMED se o agendamento já estiver em estado avançado no Feegow ou na clínica
+        if (statusIdInt == confirmedStatusId) {
             try {
                 FeegowAppointment currentAppt = findById(normalizedAppointmentId);
                 if (currentAppt != null && currentAppt.statusId() != null) {
@@ -507,7 +509,7 @@ public class FeegowAppointmentAdapter implements AppointmentExternalPort {
     }
 
     private String resolveConfirmedStatusId() {
-        return "7";
+        return String.valueOf(FeegowAppointmentStatus.MARCADO_CONFIRMADO.getId());
     }
 
     private Object normalizeAppointmentIdForPayload(String value) {
@@ -556,8 +558,7 @@ public class FeegowAppointmentAdapter implements AppointmentExternalPort {
         String cancelUrl = feegowProperties.getCancelUrl();
         URI uri = URI.create(cancelUrl);
 
-        // O motivo_id padrão para cancelamento pelo paciente / sistema é 1
-        int motivoId = 1;
+        int motivoId = DEFAULT_CANCELLATION_REASON_ID;
 
         FeegowCancelPayload payload = new FeegowCancelPayload(
                 normalizeAppointmentIdForPayload(normalizedAppointmentId),

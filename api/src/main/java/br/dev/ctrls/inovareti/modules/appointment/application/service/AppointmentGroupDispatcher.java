@@ -15,7 +15,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
-import br.dev.ctrls.inovareti.modules.access.domain.port.output.BlipContactClientPort;
+import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.BlipContactClientPort;
 import br.dev.ctrls.inovareti.modules.appointment.application.usecase.SendAppointmentTemplateUseCase;
 import br.dev.ctrls.inovareti.modules.appointment.domain.model.AppointmentCategory;
 import br.dev.ctrls.inovareti.modules.appointment.domain.model.AppointmentSession;

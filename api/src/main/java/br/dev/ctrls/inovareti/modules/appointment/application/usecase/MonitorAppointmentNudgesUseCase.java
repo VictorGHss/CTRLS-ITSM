@@ -23,6 +23,7 @@ import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.Appointment
 import br.dev.ctrls.inovareti.modules.appointment.infrastructure.config.AppointmentMotorProperties;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentExternalPort;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.FeegowAppointment;
+import br.dev.ctrls.inovareti.modules.appointment.infrastructure.adapter.output.client.BlipContactClientAdapter;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.PatientExternalPort;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.FeegowPatient;
 import lombok.RequiredArgsConstructor;
@@ -308,7 +309,7 @@ public class MonitorAppointmentNudgesUseCase {
                     if (s.getPatientId() != null && !s.getPatientId().isBlank()) {
                         try {
                             FeegowPatient p = patientExternalPort.patientInfo(s.getPatientId());
-                            if (p != null && p.name() != null && !p.name().isBlank() && !br.dev.ctrls.inovareti.modules.access.infrastructure.adapter.output.BlipContactClientAdapter.isInvalidName(p.name())) {
+                            if (p != null && p.name() != null && !p.name().isBlank() && !BlipContactClientAdapter.isInvalidName(p.name())) {
                                 patientName = p.name().trim();
                                 break;
                             }

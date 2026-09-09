@@ -5,8 +5,8 @@ import io.micrometer.observation.annotation.Observed;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import br.dev.ctrls.inovareti.modules.communication.infrastructure.config.FinanceMailProperties;
-import br.dev.ctrls.inovareti.modules.communication.infrastructure.config.SpringMailProperties;
+import br.dev.ctrls.inovareti.modules.notification.infrastructure.config.mail.FinanceMailProperties;
+import br.dev.ctrls.inovareti.modules.notification.infrastructure.config.mail.SpringMailProperties;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;

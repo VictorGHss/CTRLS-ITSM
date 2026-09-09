@@ -32,41 +32,13 @@ public class BlipNotificationService {
     private final BlipReviewNotificationService blipReviewNotificationService;
     private final DoctorEligibilityService doctorEligibilityService;
 
-    @org.springframework.beans.factory.annotation.Value("${notification.blocked-doctor-ids:46}")
-    private String rawBlockedDoctorIds = "46";
-
-    private java.util.Set<String> parsedBlockedDoctorIds = new java.util.HashSet<>();
-
-    @jakarta.annotation.PostConstruct
-    public void initBlockedDoctorIds() {
-        parseBlockedDoctorIds(this.rawBlockedDoctorIds);
+    public java.util.Set<String> getBlockedDoctorIds() {
+        return doctorEligibilityService != null ? doctorEligibilityService.getBlockedDoctorIds() : java.util.Collections.emptySet();
     }
 
     public void setRawBlockedDoctorIds(String rawBlockedDoctorIds) {
-        this.rawBlockedDoctorIds = rawBlockedDoctorIds;
-        parseBlockedDoctorIds(rawBlockedDoctorIds);
         if (doctorEligibilityService != null) {
             doctorEligibilityService.setBlockedDoctorIdsRaw(rawBlockedDoctorIds);
-        }
-    }
-
-    public java.util.Set<String> getBlockedDoctorIds() {
-        if (parsedBlockedDoctorIds.isEmpty() && rawBlockedDoctorIds != null && !rawBlockedDoctorIds.isBlank()) {
-            parseBlockedDoctorIds(rawBlockedDoctorIds);
-        }
-        return parsedBlockedDoctorIds;
-    }
-
-    private synchronized void parseBlockedDoctorIds(String raw) {
-        this.parsedBlockedDoctorIds = new java.util.HashSet<>();
-        if (raw != null && !raw.isBlank()) {
-            String[] tokens = raw.split("[,;\\s]+");
-            for (String token : tokens) {
-                String trimmed = token.trim();
-                if (!trimmed.isEmpty()) {
-                    this.parsedBlockedDoctorIds.add(trimmed);
-                }
-            }
         }
     }
 

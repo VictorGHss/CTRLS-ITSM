@@ -6,8 +6,8 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import br.dev.ctrls.inovareti.modules.communication.infrastructure.config.FinanceMailProperties;
-import br.dev.ctrls.inovareti.modules.communication.infrastructure.config.SpringMailProperties;
+import br.dev.ctrls.inovareti.modules.notification.infrastructure.config.mail.FinanceMailProperties;
+import br.dev.ctrls.inovareti.modules.notification.infrastructure.config.mail.SpringMailProperties;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;

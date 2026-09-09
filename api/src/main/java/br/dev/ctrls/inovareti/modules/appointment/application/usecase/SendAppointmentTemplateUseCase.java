@@ -24,6 +24,7 @@ import br.dev.ctrls.inovareti.modules.appointment.domain.model.AppointmentSessio
 import br.dev.ctrls.inovareti.modules.appointment.domain.model.AppointmentSessionStatus;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentConfigRepositoryPort;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentSessionRepositoryPort;
+import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.BlipContactClientPort;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.BlipUserIdentityReconciliationRepositoryPort;
 import br.dev.ctrls.inovareti.modules.appointment.infrastructure.config.AppointmentMotorProperties;
 import br.dev.ctrls.inovareti.modules.appointment.infrastructure.config.BlipProperties;
@@ -54,7 +55,7 @@ public class SendAppointmentTemplateUseCase {
     private final AppointmentMotorProperties appointmentMotorProperties;
     private final BlipProperties blipProperties;
     private final BlipUserIdentityReconciliationRepositoryPort blipUserIdentityReconciliationRepository;
-    private final br.dev.ctrls.inovareti.modules.access.domain.port.output.BlipContactClientPort blipContactClientPort;
+    private final BlipContactClientPort blipContactClientPort;
     private final br.dev.ctrls.inovareti.modules.appointment.domain.port.output.PatientExternalPort patientExternalPort;
     private final br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentDoctorMappingRepositoryPort appointmentDoctorMappingRepository;
     private final org.springframework.core.task.AsyncTaskExecutor applicationTaskExecutor;

@@ -1,4 +1,4 @@
-package br.dev.ctrls.inovareti.modules.communication.infrastructure.config;
+package br.dev.ctrls.inovareti.modules.notification.infrastructure.config.mail;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;

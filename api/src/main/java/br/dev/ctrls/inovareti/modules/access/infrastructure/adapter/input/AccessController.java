@@ -1,5 +1,6 @@
 package br.dev.ctrls.inovareti.modules.access.infrastructure.adapter.input;
 
+import br.dev.ctrls.inovareti.core.shared.domain.model.exception.NotFoundException;
 import br.dev.ctrls.inovareti.modules.access.application.usecase.GenerateCalendarIcsUseCase;
 import br.dev.ctrls.inovareti.modules.access.application.usecase.GetCredentialsUseCase;
 import br.dev.ctrls.inovareti.modules.access.application.usecase.LookupCredentialsByCpfUseCase;
@@ -46,7 +47,6 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -302,100 +302,7 @@ public class AccessController {
 
         log.info("[AccessControl] Busca de credenciais ativas por CPF: {} (IP: {})", maskCpf(request.cpf()), clientIp);
         try {
-            List<AccessCredential> credentials = lookupCredentialsByCpfUseCase.lookupCredentialsByCpf(request.cpf(), request.clinic());
-            if (credentials.isEmpty()) {
-                return ResponseEntity.ok(List.of());
-            }
-
-            List<AccessCredentialResponse> responseList = new ArrayList<>();
-            Map<String, Optional<FeegowPatientAccessInfo>> feegowCache = new HashMap<>();
-            LocalDate today = LocalDate.now(AccessWindowCalculator.CLINIC_ZONE);
-            LocalDate maxAllowed = today.plusDays(7);
-
-            for (AccessCredential cred : credentials) {
-                String appointmentId = cred.getAppointmentId();
-                String doctorName = cred.getDoctorName();
-                String appointmentDateDisplay = resolveDisplayDate(appointmentId);
-                String opensAt = "06:00";
-                String closesAt = "23:59";
-
-                if (appointmentId != null && appointmentId.length() >= 13 && (appointmentId.startsWith("INOV-") || appointmentId.startsWith("IMG-"))) {
-                    try {
-                        String datePart = appointmentId.substring(5, 13);
-                        LocalDate parsedDate = LocalDate.parse(datePart, DateTimeFormatter.ofPattern("yyyyMMdd"));
-                        if (parsedDate.isBefore(today) || parsedDate.isAfter(maxAllowed)) {
-                            continue;
-                        }
-                    } catch (Exception ignored) {}
-                }
-
-                if (appointmentId != null && !appointmentId.startsWith("INOV-") && !appointmentId.startsWith("IMG-")) {
-                    try {
-                        Optional<FeegowPatientAccessInfo> accessInfoOpt = feegowCache.computeIfAbsent(
-                            appointmentId,
-                            feegowClientPort::fetchPatientAccessInfo
-                        );
-                        if (accessInfoOpt.isPresent()) {
-                            FeegowPatientAccessInfo info = accessInfoOpt.get();
-                            if (info.appointmentDate() != null) {
-                                if (info.appointmentDate().isBefore(today) || info.appointmentDate().isAfter(maxAllowed)) {
-                                    continue;
-                                }
-                            }
-                            if (info.doctorName() != null && !info.doctorName().isBlank()) {
-                                doctorName = info.doctorName();
-                                if (cred.getDoctorName() == null || cred.getDoctorName().isBlank()) {
-                                    cred.setDoctorName(doctorName);
-                                    accessCredentialRepositoryPort.save(cred);
-                                }
-                            }
-                            if (info.appointmentDate() != null) {
-                                if (info.appointmentTime() != null) {
-                                    appointmentDateDisplay = LocalDateTime.of(info.appointmentDate(), info.appointmentTime())
-                                            .format(DATE_TIME_FORMATTER);
-                                    opensAt = info.appointmentTime().minusMinutes(120).format(TIME_FORMATTER);
-                                    closesAt = info.appointmentTime().plusMinutes(120).format(TIME_FORMATTER);
-                                } else {
-                                    appointmentDateDisplay = info.appointmentDate().format(DATE_FORMATTER);
-                                    opensAt = "08:00";
-                                }
-                            }
-                        }
-                    } catch (Exception ex) {
-                        log.warn("[AccessControl] Erro ao buscar detalhes Feegow no lookup por CPF para {}: {}", appointmentId, ex.getMessage());
-                    }
-                }
-
-                if (doctorName == null || doctorName.isBlank()) {
-                    boolean isInovare = (request.clinic() != null && request.clinic().toLowerCase().contains("inovare"))
-                            || (appointmentId != null && appointmentId.startsWith("INOV-"));
-                    doctorName = isInovare ? "Inovare – Serviços de Saúde" : "Clínica Da Imagem - Unidade Inovare";
-                }
-
-                responseList.add(new AccessCredentialResponse(
-                    cred.getAppointmentId(),
-                    cred.getName(),
-                    cred.getUserType() != null ? cred.getUserType() : UserType.PATIENT,
-                    cred.getLocator(),
-                    cred.getAccessCredential(),
-                    cred.getCpf(),
-                    doctorName,
-                    appointmentDateDisplay,
-                    opensAt,
-                    closesAt
-                ));
-            }
-
-            if (responseList.isEmpty()) {
-                return ResponseEntity.ok(List.of());
-            }
-
-            responseList.sort((a, b) -> {
-                if (a.userType() == UserType.PATIENT && b.userType() != UserType.PATIENT) return -1;
-                if (a.userType() != UserType.PATIENT && b.userType() == UserType.PATIENT) return 1;
-                return 0;
-            });
-
+            List<AccessCredentialResponse> responseList = lookupCredentialsByCpfUseCase.execute(request.cpf(), request.clinic());
             return ResponseEntity.ok(responseList);
         } catch (Exception ex) {
             log.error("[AccessControl] Erro ao buscar por CPF: {}", ex.getMessage(), ex);
@@ -478,6 +385,10 @@ public class AccessController {
                 .toList();
 
             return ResponseEntity.ok(responseList);
+        } catch (NotFoundException ex) {
+            log.warn("[AccessControl] Agendamento não localizado para reativação: {}", appointmentId);
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("message", "Nenhuma credencial encontrada para reativar. Verifique os dados ou procure a recepção."));
         } catch (Exception ex) {
             log.error("[AccessControl] Erro ao reativar acesso para {}: {}", appointmentId, ex.getMessage(), ex);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)

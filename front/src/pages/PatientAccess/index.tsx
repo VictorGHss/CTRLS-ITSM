@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { Clock } from 'lucide-react';
 import api from '../../services/api';
+import { getApiErrorMessage } from '../../lib/apiError';
 import { resolveClinicTheme } from './utils/clinicThemes';
 import { TwoFactorAuthChallenge } from './components/TwoFactorAuthChallenge';
 import { FullscreenQrModal } from './components/FullscreenQrModal';
@@ -119,8 +120,17 @@ export default function PatientAccess() {
   const [isReactivating, setIsReactivating] = useState<boolean>(false);
   const [reactivateMessage, setReactivateMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  const handleReactivateAccess = async () => {
-    const targetAppointmentId = getActiveAppointmentId();
+  const handleReactivateAccess = async (targetCred?: AccessCredential) => {
+    const activeCardCred = targetCred || credentials[activeCardIndex] || credentials[0];
+    const targetAppointmentId =
+      activeCardCred?.appointmentId &&
+      activeCardCred.appointmentId !== 'imagem' &&
+      activeCardCred.appointmentId !== 'inovare'
+        ? activeCardCred.appointmentId
+        : activeCardCred?.cpf
+          ? activeCardCred.cpf.replace(/\D/g, '')
+          : getActiveAppointmentId() || appointmentId;
+
     if (!targetAppointmentId) {
       setReactivateMessage({ type: 'error', text: 'Não foi possível identificar o agendamento. Recarregue a página.' });
       setTimeout(() => setReactivateMessage(null), 5000);
@@ -131,7 +141,7 @@ export default function PatientAccess() {
     setReactivateMessage(null);
     try {
       const response = await api.post<AccessCredential[]>(
-        `/v1/access/reactivate/${targetAppointmentId}`,
+        `/v1/access/reactivate/${encodeURIComponent(targetAppointmentId)}`,
         {},
         { headers: { 'X-Skip-Interceptor': 'true' } }
       );
@@ -146,7 +156,8 @@ export default function PatientAccess() {
       }
     } catch (err: unknown) {
       console.error('[PatientAccess] Falha ao reativar acesso:', err);
-      setReactivateMessage({ type: 'error', text: 'Erro ao reativar acesso na catraca. Tente novamente.' });
+      const msg = getApiErrorMessage(err, 'Erro ao reativar acesso na catraca. Tente novamente.');
+      setReactivateMessage({ type: 'error', text: msg });
       setTimeout(() => setReactivateMessage(null), 5000);
     } finally {
       setIsReactivating(false);

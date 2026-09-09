@@ -16,7 +16,6 @@ import br.dev.ctrls.inovareti.modules.access.domain.port.output.FeegowClientPort
 import br.dev.ctrls.inovareti.modules.access.domain.port.output.GerAcessoClientPort;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentExternalPort;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentSessionRepositoryPort;
-import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.DoctorConfigurationRepository;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.PatientExternalPort;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -70,10 +69,10 @@ public class AccessService {
             PatientExternalPort patientExternalPort,
             AccessCredentialRepositoryPort accessCredentialRepositoryPort,
             GerAcessoClientPort gerAcessoClientPort,
-            DoctorConfigurationRepository doctorConfigurationRepository,
+            br.dev.ctrls.inovareti.modules.access.domain.port.output.DoctorAccessMetadataPort doctorAccessMetadataPort,
             AppointmentSessionRepositoryPort appointmentSessionRepository) {
 
-        DoctorAccessResolver doctorAccessResolver = new DoctorAccessResolver(doctorConfigurationRepository);
+        DoctorAccessResolver doctorAccessResolver = new DoctorAccessResolver(doctorAccessMetadataPort);
         AccessWindowCalculator accessWindowCalculator = new AccessWindowCalculator();
 
         this.validateAccessChallengeUseCase = new ValidateAccessChallengeUseCase(
@@ -91,7 +90,7 @@ public class AccessService {
                 this.validateAccessChallengeUseCase, this.registerCompanionUseCase, this.selfRegistrationUseCase
         );
         this.lookupCredentialsByCpfUseCase = new LookupCredentialsByCpfUseCase(
-                accessCredentialRepositoryPort, patientExternalPort, appointmentExternalPort, this.processAccessRequestUseCase
+                accessCredentialRepositoryPort, patientExternalPort, appointmentExternalPort, this.processAccessRequestUseCase, feegowClientPort
         );
         this.reactivateAccessUseCase = new ReactivateAccessUseCase(
                 accessCredentialRepositoryPort, feegowClientPort, gerAcessoClientPort, doctorAccessResolver
