@@ -404,7 +404,16 @@ export function usePatientAccessAuth({ appointmentId, clinicTheme }: UsePatientA
       setVerifiedPhoneDigits(phoneDigits);
     } catch (err: unknown) {
       console.error('[usePatientAccessAuth] Falha no desafio de segurança:', err);
-      setChallengeError('Código inválido. Tente novamente.');
+      let errorMsg = 'Código inválido. Tente novamente.';
+      if (err && typeof err === 'object' && 'response' in err) {
+        const axErr = err as { response?: { data?: { detail?: string; message?: string } } };
+        if (axErr.response?.data?.detail) {
+          errorMsg = axErr.response.data.detail;
+        } else if (axErr.response?.data?.message) {
+          errorMsg = axErr.response.data.message;
+        }
+      }
+      setChallengeError(errorMsg);
       setDigits(['', '', '', '']);
       setTimeout(() => inputRefs[0].current?.focus(), 50);
     } finally {

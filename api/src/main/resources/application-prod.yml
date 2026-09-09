@@ -86,6 +86,8 @@ app:
       secret: ${ENCRYPTION_SECRET} # Chave para criptografia AES de tokens sensíveis no banco
   vault:
     encryption-key: ${VAULT_ENCRYPTION_KEY} # Chave de encriptação auxiliar
+  access:
+    magic-token-secret: ${APP_ACCESS_MAGIC_TOKEN_SECRET:inovare_magic_access_token_secret_key_2026}
 
   # Acesso ao Painel Frontend
   frontend:

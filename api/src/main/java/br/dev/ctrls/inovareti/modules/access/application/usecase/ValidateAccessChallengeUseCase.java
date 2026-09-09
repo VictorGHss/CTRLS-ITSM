@@ -8,10 +8,11 @@ import br.dev.ctrls.inovareti.modules.access.domain.model.UserType;
 import br.dev.ctrls.inovareti.modules.access.domain.port.output.AccessCredentialRepositoryPort;
 import br.dev.ctrls.inovareti.modules.access.domain.port.output.FeegowClientPort;
 import br.dev.ctrls.inovareti.modules.access.domain.service.AccessWindowCalculator;
+import br.dev.ctrls.inovareti.modules.access.infrastructure.security.AccessSecurityGuard;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.FeegowPatient;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.PatientExternalPort;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import javax.crypto.Mac;
@@ -31,14 +32,33 @@ import java.util.concurrent.ConcurrentMap;
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class ValidateAccessChallengeUseCase {
 
-    private static final String MAGIC_TOKEN_SECRET = "inovare_magic_access_token_secret_key_2026";
+    @Value("${app.access.magic-token-secret:inovare_magic_access_token_secret_key_2026}")
+    private String magicTokenSecret = "inovare_magic_access_token_secret_key_2026";
 
     private final FeegowClientPort feegowClientPort;
     private final PatientExternalPort patientExternalPort;
     private final AccessCredentialRepositoryPort accessCredentialRepositoryPort;
+    private final AccessSecurityGuard accessSecurityGuard;
+
+    public ValidateAccessChallengeUseCase(
+            FeegowClientPort feegowClientPort,
+            PatientExternalPort patientExternalPort,
+            AccessCredentialRepositoryPort accessCredentialRepositoryPort) {
+        this(feegowClientPort, patientExternalPort, accessCredentialRepositoryPort, new AccessSecurityGuard());
+    }
+
+    public ValidateAccessChallengeUseCase(
+            FeegowClientPort feegowClientPort,
+            PatientExternalPort patientExternalPort,
+            AccessCredentialRepositoryPort accessCredentialRepositoryPort,
+            AccessSecurityGuard accessSecurityGuard) {
+        this.feegowClientPort = feegowClientPort;
+        this.patientExternalPort = patientExternalPort;
+        this.accessCredentialRepositoryPort = accessCredentialRepositoryPort;
+        this.accessSecurityGuard = accessSecurityGuard != null ? accessSecurityGuard : new AccessSecurityGuard();
+    }
 
     private final ConcurrentMap<String, FeegowPatient> patientCache = new ConcurrentHashMap<>();
 
@@ -76,7 +96,10 @@ public class ValidateAccessChallengeUseCase {
             }
             String raw = appointmentId + ":" + cleanPhone;
             Mac mac = Mac.getInstance("HmacSHA256");
-            mac.init(new SecretKeySpec(MAGIC_TOKEN_SECRET.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+            byte[] secretBytes = (magicTokenSecret != null && !magicTokenSecret.isBlank())
+                    ? magicTokenSecret.getBytes(StandardCharsets.UTF_8)
+                    : "inovare_magic_access_token_secret_key_2026".getBytes(StandardCharsets.UTF_8);
+            mac.init(new SecretKeySpec(secretBytes, "HmacSHA256"));
             byte[] hash = mac.doFinal(raw.getBytes(StandardCharsets.UTF_8));
             StringBuilder sb = new StringBuilder();
             for (int i = 0; i < 8; i++) {
@@ -95,6 +118,11 @@ public class ValidateAccessChallengeUseCase {
     public FeegowPatientAccessInfo validateAccessChallenge(String appointmentId, String phoneDigits, String token) {
         log.info("[ValidateAccessChallenge] Validando credenciais para o agendamento ID: {} (token={})", 
                 appointmentId, token != null && !token.isBlank() ? "presente" : "ausente");
+
+        if (accessSecurityGuard.isAppointmentLocked(appointmentId)) {
+            log.warn("[ValidateAccessChallenge] Agendamento {} bloqueado por excesso de tentativas falhas.", appointmentId);
+            throw new InvalidChallengeException("Muitas tentativas incorretas. Por motivos de segurança, o acesso para este agendamento foi bloqueado por 15 minutos. Tente novamente mais tarde ou solicite suporte na recepção.");
+        }
 
         // Tratamento para auto-check-in da Clínica da Imagem ou Inovare
         if (appointmentId != null && (appointmentId.startsWith("IMG-") || appointmentId.startsWith("INOV-"))) {
@@ -155,6 +183,7 @@ public class ValidateAccessChallengeUseCase {
                     || expectedToken2.equalsIgnoreCase(trimmedToken) 
                     || expectedToken3.equalsIgnoreCase(trimmedToken)) {
                 log.info("[ValidateAccessChallenge] Magic Token criptográfico validado com sucesso para o agendamento {}", appointmentId);
+                accessSecurityGuard.resetFailedAttempts(appointmentId);
                 return accessInfo;
             }
             log.warn("[ValidateAccessChallenge] Token de acesso inválido para agendamento {}. Esperado: {}, Recebido: {}", 
@@ -174,6 +203,11 @@ public class ValidateAccessChallengeUseCase {
      */
     public FeegowPatientAccessInfo validatePhoneChallenge(String appointmentId, String phoneDigits) {
         log.info("[ValidateAccessChallenge] Validando desafio de telefone para o agendamento ID: {}", appointmentId);
+
+        if (accessSecurityGuard.isAppointmentLocked(appointmentId)) {
+            log.warn("[ValidateAccessChallenge] Agendamento {} bloqueado por excesso de tentativas falhas.", appointmentId);
+            throw new InvalidChallengeException("Muitas tentativas incorretas. Por motivos de segurança, o acesso para este agendamento foi bloqueado por 15 minutos. Tente novamente mais tarde ou solicite suporte na recepção.");
+        }
         
         Optional<FeegowPatientAccessInfo> accessInfoOpt = feegowClientPort.fetchPatientAccessInfo(appointmentId);
         if (accessInfoOpt.isEmpty()) {
@@ -181,8 +215,8 @@ public class ValidateAccessChallengeUseCase {
             throw new NotFoundException("Agendamento não encontrado.");
         }
 
+        FeegowPatient mainPatient = getPatientInfoWithCache(accessInfoOpt.get().patientId());
         FeegowPatientAccessInfo accessInfo = accessInfoOpt.get();
-        FeegowPatient mainPatient = getPatientInfoWithCache(accessInfo.patientId());
         
         String phone = mainPatient != null && mainPatient.phone() != null && !mainPatient.phone().isBlank() 
                 ? mainPatient.phone() 
@@ -202,11 +236,18 @@ public class ValidateAccessChallengeUseCase {
         String cleanInputDigits = phoneDigits != null ? phoneDigits.replaceAll("\\D", "") : "";
 
         if (!lastFourDigits.equals(cleanInputDigits)) {
-            log.warn("[ValidateAccessChallenge] Falha no desafio de segurança para agendamento {}. Esperado: {}, Recebido: {}", 
-                    appointmentId, lastFourDigits, cleanInputDigits);
-            throw new InvalidChallengeException("Os dígitos informados estão incorretos. Por favor, tente novamente.");
+            int attempts = accessSecurityGuard.recordFailedAttempt(appointmentId);
+            log.warn("[ValidateAccessChallenge] Falha no desafio de segurança para agendamento {} (tentativa {}/{}). Esperado: {}, Recebido: {}", 
+                    appointmentId, attempts, AccessSecurityGuard.MAX_FAILED_CHALLENGE_ATTEMPTS, lastFourDigits, cleanInputDigits);
+
+            if (attempts >= AccessSecurityGuard.MAX_FAILED_CHALLENGE_ATTEMPTS) {
+                throw new InvalidChallengeException("Muitas tentativas incorretas. Por motivos de segurança, o acesso para este agendamento foi bloqueado por 15 minutos. Tente novamente mais tarde ou solicite suporte na recepção.");
+            }
+            int remaining = AccessSecurityGuard.MAX_FAILED_CHALLENGE_ATTEMPTS - attempts;
+            throw new InvalidChallengeException("Os dígitos informados estão incorretos. Você possui mais " + remaining + " tentativa(s).");
         }
         
+        accessSecurityGuard.resetFailedAttempts(appointmentId);
         log.info("[ValidateAccessChallenge] Desafio de segurança validado com sucesso para agendamento {}", appointmentId);
         return accessInfo;
     }

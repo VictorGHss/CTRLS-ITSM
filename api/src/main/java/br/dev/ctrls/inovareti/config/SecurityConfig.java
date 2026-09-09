@@ -79,6 +79,8 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, "/v1/appointments/blip/webhook", "/v1/appointments/blip/webhook/").permitAll()
                 .requestMatchers(HttpMethod.GET, "/financeiro/contaazul/authorize", "/financeiro/contaazul/callback").permitAll()
                 .requestMatchers(HttpMethod.GET, "/v1/admin/faqs", "/v1/admin/faqs/**", "/api/v1/admin/faqs", "/api/v1/admin/faqs/**").permitAll()
+                // Proteção de segurança: endpoint de geração/recuperação de token de acesso restrito a administradores
+                .requestMatchers("/v1/access/token/**", "/api/v1/access/token/**").hasRole("ADMIN")
                 .requestMatchers("/v1/access/**", "/api/v1/access/**").permitAll()
                 .requestMatchers("/review/**", "/api/review/**", "/v1/doctors/configurations/review/**", "/api/v1/doctors/configurations/review/**").permitAll()
                 .requestMatchers("/uploads/**", "/api/uploads/**").permitAll()

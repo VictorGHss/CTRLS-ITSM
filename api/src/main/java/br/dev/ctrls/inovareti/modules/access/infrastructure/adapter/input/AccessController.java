@@ -24,12 +24,15 @@ import br.dev.ctrls.inovareti.modules.access.infrastructure.adapter.input.dto.Cp
 import br.dev.ctrls.inovareti.modules.access.infrastructure.adapter.input.dto.FeegowPreRegistrationLookupResponse;
 import br.dev.ctrls.inovareti.modules.access.infrastructure.adapter.input.dto.SelfRegistrationRequest;
 import br.dev.ctrls.inovareti.modules.access.infrastructure.config.InovareMotorProperties;
+import br.dev.ctrls.inovareti.modules.access.infrastructure.security.AccessSecurityGuard;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -77,6 +80,7 @@ public class AccessController {
     private final RegisterCompanionUseCase registerCompanionUseCase;
     private final ValidateAccessChallengeUseCase validateAccessChallengeUseCase;
     private final GenerateCalendarIcsUseCase generateCalendarIcsUseCase;
+    private final AccessSecurityGuard accessSecurityGuard;
 
     /**
      * Endpoint de teste manual para validação de acesso das catracas.
@@ -271,8 +275,15 @@ public class AccessController {
      * Endpoint de consulta prévia no Feegow ao digitar o CPF no formulário de auto-cadastro.
      */
     @PostMapping("/feegow-lookup")
-    public ResponseEntity<FeegowPreRegistrationLookupResponse> feegowLookup(@RequestBody @Valid CpfLookupRequest request) {
-        log.info("[AccessControl] Requisição de consulta prévia no Feegow para CPF: {}", request.cpf());
+    public ResponseEntity<?> feegowLookup(@RequestBody @Valid CpfLookupRequest request, HttpServletRequest httpRequest) {
+        String clientIp = accessSecurityGuard.extractClientIp(httpRequest);
+        if (!accessSecurityGuard.tryAcquireCpfLookup(clientIp)) {
+            log.warn("[AccessControl] Rate limit excedido para consulta prévia Feegow por CPF pelo IP: {}", clientIp);
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                    .body(Map.of("message", "Muitas consultas realizadas em pouco tempo. Por favor, aguarde um minuto e tente novamente."));
+        }
+
+        log.info("[AccessControl] Requisição de consulta prévia no Feegow para CPF: {} (IP: {})", request.cpf(), clientIp);
         FeegowPreRegistrationLookupResponse response = lookupFeegowPreRegistrationUseCase.execute(request.cpf(), request.clinic());
         return ResponseEntity.ok(response);
     }
@@ -281,8 +292,15 @@ public class AccessController {
      * Endpoint de consulta rápida de credenciais ativas pelo CPF.
      */
     @PostMapping("/lookup-by-cpf")
-    public ResponseEntity<?> lookupByCpf(@RequestBody @Valid CpfLookupRequest request) {
-        log.info("[AccessControl] Busca de credenciais ativas por CPF: {}", request.cpf());
+    public ResponseEntity<?> lookupByCpf(@RequestBody @Valid CpfLookupRequest request, HttpServletRequest httpRequest) {
+        String clientIp = accessSecurityGuard.extractClientIp(httpRequest);
+        if (!accessSecurityGuard.tryAcquireCpfLookup(clientIp)) {
+            log.warn("[AccessControl] Rate limit excedido para busca de credenciais por CPF pelo IP: {}", clientIp);
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                    .body(Map.of("message", "Muitas consultas realizadas em pouco tempo. Por favor, aguarde um minuto e tente novamente."));
+        }
+
+        log.info("[AccessControl] Busca de credenciais ativas por CPF: {} (IP: {})", request.cpf(), clientIp);
         try {
             List<AccessCredential> credentials = lookupCredentialsByCpfUseCase.lookupCredentialsByCpf(request.cpf(), request.clinic());
             if (credentials.isEmpty()) {
@@ -538,7 +556,9 @@ public class AccessController {
 
     /**
      * Endpoint de geração/recuperação de Magic Token e URL direta de acesso para chatbots ou integrações.
+     * Restrito a administradores autenticados.
      */
+    @PreAuthorize("hasRole('ADMIN')")
     @GetMapping("/token/{idAgendamento}")
     public ResponseEntity<?> getAccessToken(@PathVariable("idAgendamento") String idAgendamento) {
         Optional<FeegowPatientAccessInfo> accessInfoOpt = feegowClientPort.fetchPatientAccessInfo(idAgendamento);
