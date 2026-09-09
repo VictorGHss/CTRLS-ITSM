@@ -6,6 +6,7 @@ import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -14,6 +15,7 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.access.expression.WebExpressionAuthorizationManager;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.context.SecurityContextHolderFilter;
 import org.springframework.web.cors.CorsConfiguration;
@@ -46,10 +48,11 @@ public class SecurityConfig {
 
     /**
      * Define a cadeia de filtros de segurança:
-     * - CSRF desabilitado globalmente (API stateless e webhooks externos)
-     * - CORS habilitado (permite o servidor Vite em localhost:5173)
+     * - CSRF desabilitado (API REST stateless com Bearer JWT e webhooks externos)
      * - Gerenciamento de sessão: STATELESS
-     * - Rotas pública: POST /api/auth/login e POST /api/auth/reset-initial-password
+     * - CORS habilitado (permite o servidor Vite em localhost:5173)
+     * - Cabeçalhos de segurança OWASP (HSTS, Anti-Clickjacking FrameOptions, Nosniff e Anti-Cache)
+     * - Rotas públicas: POST /api/auth/login e POST /api/auth/reset-initial-password
      * - Demais rotas: autenticadas
      * - Filtro JWT executado antes do UsernamePasswordAuthenticationFilter
      */
@@ -58,9 +61,18 @@ public class SecurityConfig {
         // CSRF desabilitado globalmente (API stateless + webhooks externos).
         // Evita 403 em túneis (ex.: Pinggy) enquanto integrações não enviam token CSRF.
         http
-                .csrf(csrf -> csrf.disable())
+            .csrf(csrf -> csrf.disable())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+            .headers(headers -> headers
+                .contentTypeOptions(Customizer.withDefaults())
+                .frameOptions(frame -> frame.deny())
+                .httpStrictTransportSecurity(hsts -> hsts
+                    .includeSubDomains(true)
+                    .maxAgeInSeconds(31536000)
+                )
+                .cacheControl(Customizer.withDefaults())
+            )
             .authorizeHttpRequests(authorize -> authorize
                 // Preflight OPTIONS liberado para CORS antes de qualquer outra regra
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
@@ -90,8 +102,15 @@ public class SecurityConfig {
                 .requestMatchers("/auth/login", "/auth/reset-initial-password").permitAll()
                 .requestMatchers("/auth/2fa/**").authenticated()
                 
-                // Libera endpoints do Actuator (Prometheus, Health, Metrics) para monitoramento em tempo real
-                .requestMatchers("/actuator/**", "/api/actuator/**").permitAll()
+                // Endpoints de diagnóstico e integridade do Actuator:
+                // - /actuator/health liberado publicamente (show-details=never ativo em prod)
+                .requestMatchers("/actuator/health", "/api/actuator/health", "/actuator/health/**", "/api/actuator/health/**").permitAll()
+                // - Métricas detalhadas (Prometheus, Metrics, Info) acessíveis a usuários autenticados ou redes privadas (Docker/Loopback)
+                .requestMatchers("/actuator/**", "/api/actuator/**").access(
+                    new WebExpressionAuthorizationManager(
+                        "isAuthenticated() or hasIpAddress('127.0.0.1') or hasIpAddress('::1') or hasIpAddress('10.0.0.0/8') or hasIpAddress('172.16.0.0/12') or hasIpAddress('192.168.0.0/16')"
+                    )
+                )
                 
                 // Libera endpoints de documentação Swagger UI e especificações da API
                 .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()

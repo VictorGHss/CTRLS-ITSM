@@ -24,15 +24,21 @@ import br.dev.ctrls.inovareti.modules.auth.application.service.ResetInitialPassw
 import br.dev.ctrls.inovareti.modules.auth.application.service.TwoFactorAuthService;
 import br.dev.ctrls.inovareti.modules.auth.application.service.TwoFactorResetService;
 import br.dev.ctrls.inovareti.modules.auth.domain.port.output.TokenPort;
+import br.dev.ctrls.inovareti.modules.auth.infrastructure.security.AuthSecurityGuard;
 import br.dev.ctrls.inovareti.modules.user.domain.model.User;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
+
+import java.util.Map;
 
 /**
  * Controlador REST para os endpoints de autenticação.
  * Caminho base: /api/auth
  */
+@Slf4j
 @RestController
 @RequestMapping("/auth")
 @RequiredArgsConstructor
@@ -45,6 +51,7 @@ public class AuthController {
     private final TwoFactorAuthService twoFactorAuthService;
     private final TwoFactorResetService twoFactorResetService;
     private final TokenPort tokenPort;
+    private final AuthSecurityGuard authSecurityGuard;
 
     /**
      * Autentica o usuário e retorna um token JWT assinado.
@@ -55,10 +62,35 @@ public class AuthController {
      */
     @PreAuthorize("permitAll()")
     @PostMapping("/login")
-    public ResponseEntity<AuthResponseDTO> login(
+    public ResponseEntity<?> login(
             @Valid @RequestBody AuthRequestDTO request,
             HttpServletRequest httpRequest) {
-        return ResponseEntity.ok(loginUseCase.execute(request, getClientIp(httpRequest)));
+        String clientIp = authSecurityGuard.extractClientIp(httpRequest);
+        if (authSecurityGuard.isLoginBlocked(request.email(), clientIp)) {
+            log.warn("[AUTH-LOCKOUT] Tentativa de login bloqueada para email '{}' pelo IP '{}'", request.email(), clientIp);
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                    .body(Map.of(
+                            "error", "Too Many Requests",
+                            "message", "Muitas tentativas falhas de login. Acesso temporariamente bloqueado por 10 minutos para proteger sua conta."
+                    ));
+        }
+
+        try {
+            AuthResponseDTO response = loginUseCase.execute(request, clientIp);
+            authSecurityGuard.recordLoginSuccess(request.email(), clientIp);
+            return ResponseEntity.ok(response);
+        } catch (org.springframework.security.authentication.BadCredentialsException ex) {
+            int attempts = authSecurityGuard.recordLoginFailure(request.email(), clientIp);
+            int remaining = Math.max(0, AuthSecurityGuard.MAX_FAILED_LOGIN_ATTEMPTS - attempts);
+            if (remaining == 0) {
+                return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                        .body(Map.of(
+                                "error", "Too Many Requests",
+                                "message", "Limite de tentativas excedido. Acesso temporariamente bloqueado por 10 minutos."
+                        ));
+            }
+            throw ex;
+        }
     }
 
     @PreAuthorize("permitAll()")
@@ -84,13 +116,40 @@ public class AuthController {
     }
 
     @PostMapping("/2fa/verify")
-    public ResponseEntity<AuthResponseDTO> verifyTwoFactor(
+    public ResponseEntity<?> verifyTwoFactor(
             @Valid @RequestBody TwoFactorVerifyRequestDTO request,
             HttpServletRequest httpRequest) {
-        return ResponseEntity.ok(twoFactorAuthService.verifyCode(
-                getAuthenticatedUserId(),
-                request.code(),
-                getClientIp(httpRequest)));
+        UUID userId = getAuthenticatedUserId();
+        if (authSecurityGuard.isTotpBlocked(userId)) {
+            log.warn("[AUTH-LOCKOUT] Verificação 2FA bloqueada por excesso de tentativas para usuário '{}'", userId);
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                    .body(Map.of(
+                            "error", "Too Many Requests",
+                            "message", "Muitas tentativas incorretas de código 2FA. Verificação temporariamente bloqueada por 10 minutos."
+                    ));
+        }
+
+        try {
+            AuthResponseDTO response = twoFactorAuthService.verifyCode(
+                    userId,
+                    request.code(),
+                    getClientIp(httpRequest));
+            authSecurityGuard.recordTotpSuccess(userId);
+            return ResponseEntity.ok(response);
+        } catch (BadRequestException ex) {
+            if ("Invalid 2FA code.".equals(ex.getMessage())) {
+                int attempts = authSecurityGuard.recordTotpFailure(userId);
+                int remaining = Math.max(0, AuthSecurityGuard.MAX_FAILED_TOTP_ATTEMPTS - attempts);
+                if (remaining == 0) {
+                    return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                            .body(Map.of(
+                                    "error", "Too Many Requests",
+                                    "message", "Limite de tentativas de 2FA excedido. Verificação bloqueada por 10 minutos."
+                            ));
+                }
+            }
+            throw ex;
+        }
     }
 
     /**

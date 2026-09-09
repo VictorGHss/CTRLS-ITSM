@@ -41,7 +41,13 @@ public class PublicReviewController {
                 if (configOpt.isPresent()) {
                     String docUrl = configOpt.get().getGoogleReviewUrl();
                     if (docUrl != null && !docUrl.isBlank()) {
-                        targetUrl = docUrl.trim();
+                        String candidate = docUrl.trim();
+                        // Prevenção de Open Redirect / esquemas maliciosos (javascript:, data:, etc.): exige estritamente HTTPS
+                        if (candidate.toLowerCase().startsWith("https://")) {
+                            targetUrl = candidate;
+                        } else {
+                            log.warn("[REVIEW-REDIRECT] URL de avaliação rejeitada por protocolo não-HTTPS ('{}') para o médico ID={}. Usando fallback seguro.", candidate, id);
+                        }
                     }
                 }
             } catch (NumberFormatException nfe) {
