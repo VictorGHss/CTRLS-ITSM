@@ -16,6 +16,19 @@ public class BlipProperties {
     
     private Blocks blocks = new Blocks();
     private Texts texts = new Texts(); // Adicionado para mapear as mensagens
+    private Webhook webhook = new Webhook();
+    private Integration integration = new Integration();
+
+    @Data
+    public static class Webhook {
+        private String secret;
+        private String token;
+    }
+
+    @Data
+    public static class Integration {
+        private String token;
+    }
 
     @Data
     public static class Blocks {

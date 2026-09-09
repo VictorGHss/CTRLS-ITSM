@@ -581,5 +581,15 @@
     "name": "notification.blocked-doctor-ids",
     "type": "java.lang.String",
     "description": "A description for 'notification.blocked-doctor-ids'"
+  },
+  {
+    "name": "app.access.magic-token-secret",
+    "type": "java.lang.String",
+    "description": "Chave secreta HMAC para geração e validação dos Magic Tokens de acesso dos pacientes."
+  },
+  {
+    "name": "blip.integration.token",
+    "type": "java.lang.String",
+    "description": "Token de autenticação para webhooks e integrações Blip."
   }
 ]}
