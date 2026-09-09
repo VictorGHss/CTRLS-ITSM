@@ -1,5 +1,5 @@
 import React from 'react';
-import { MapPin, MessageCircle, Instagram, Facebook, Phone, Github } from 'lucide-react';
+import { MapPin, MessageCircle, Instagram, Facebook, Phone } from 'lucide-react';
 import { CLINIC_THEMES } from '../utils/clinicThemes';
 import type { ClinicTheme } from '../utils/clinicThemes';
 
@@ -100,18 +100,8 @@ export const PatientAccessFooter: React.FC<PatientAccessFooterProps> = ({ clinic
       </div>
 
       <div className="border-t border-slate-100 pt-4 flex flex-col items-center gap-2">
-        <p className="text-xs text-slate-400 flex items-center justify-center gap-1">
-          Feito por
-          <Github className="inline w-4 h-4 mx-1 text-slate-400" />
-          <a
-            href="https://github.com/VictorGHss"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="font-bold transition-colors underline underline-offset-2 hover:opacity-80"
-            style={{ color: theme.primaryColor }}
-          >
-            VictorGHss
-          </a>
+        <p className="text-xs text-slate-500 font-semibold text-center">
+          {isImagem ? 'Clínica da Imagem © Todos os direitos reservados' : 'Clínica Inovare © Todos os direitos reservados'}
         </p>
       </div>
     </footer>

@@ -173,6 +173,36 @@ export const FullscreenQrModal: React.FC<FullscreenQrModalProps> = ({
             📏 Mantenha a 15 cm da catraca (não encoste no vidro!)
           </span>
         </div>
+
+        {/* Abas Rápidas no Modo Tela Cheia: Alternar entre Titular e Acompanhante */}
+        {hasMultiple && (
+          <div className="flex gap-1.5 p-1 bg-slate-100 rounded-xl border border-slate-200 mt-2.5 w-full shadow-xs">
+            {credentials.map((c, idx) => {
+              const isSelected = currentIndex === idx;
+              const isPatient = c.userType === 'PATIENT';
+              const shortName = c.name
+                ? c.name.trim().split(' ')[0]
+                : isPatient ? 'Titular' : `Acomp. ${idx}`;
+
+              return (
+                <button
+                  key={c.id || c.credentialCode || idx}
+                  type="button"
+                  onClick={() => onSwitchCard(idx)}
+                  className={`flex-1 py-1.5 px-2 rounded-lg text-[11px] font-bold transition-all flex items-center justify-center gap-1 cursor-pointer truncate ${
+                    isSelected
+                      ? 'bg-white text-slate-800 shadow-xs border border-slate-200/90'
+                      : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  <span className="truncate">
+                    {isPatient ? `Titular: ${shortName}` : `Acomp.: ${shortName}`}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Central QR Code com Setas Laterais */}

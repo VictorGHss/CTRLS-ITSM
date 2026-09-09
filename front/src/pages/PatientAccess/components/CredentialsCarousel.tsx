@@ -1,5 +1,5 @@
 import React from 'react';
-import { User, MapPin, CreditCard } from 'lucide-react';
+import { User, Users, MapPin, CreditCard } from 'lucide-react';
 import type { AccessCredential } from '../types';
 import type { ClinicTheme } from '../utils/clinicThemes';
 import { CredentialCard } from './CredentialCard';
@@ -51,6 +51,55 @@ export const CredentialsCarousel: React.FC<CredentialsCarouselProps> = ({
           </span>
         )}
       </div>
+
+      {/* Abas Rápidas e Claras: Alternar entre Titular e Acompanhante */}
+      {credentials.length > 1 && (
+        <div className="flex gap-2 p-1.5 bg-slate-100/90 rounded-2xl border border-slate-200/80 shadow-xs">
+          {credentials.map((cred, idx) => {
+            const isSelected = activeCardIndex === idx;
+            const isPatient = cred.userType === 'PATIENT';
+            const shortName = cred.name
+              ? cred.name.trim().split(' ')[0]
+              : isPatient ? 'Titular' : `Acompanhante ${idx}`;
+
+            return (
+              <button
+                key={cred.id || cred.credentialCode || idx}
+                type="button"
+                onClick={() => scrollToCard(idx)}
+                className={`flex-1 py-2.5 px-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer select-none ${
+                  isSelected
+                    ? 'bg-white text-slate-800 shadow-sm border border-slate-200/80'
+                    : 'text-slate-500 hover:text-slate-700 hover:bg-white/50'
+                }`}
+              >
+                {isPatient ? (
+                  <User
+                    className="w-3.5 h-3.5 shrink-0"
+                    style={{ color: isSelected ? clinicTheme.primaryColor : undefined }}
+                  />
+                ) : (
+                  <Users
+                    className="w-3.5 h-3.5 shrink-0"
+                    style={{ color: isSelected ? '#4f46e5' : undefined }}
+                  />
+                )}
+                <span className="truncate max-w-[130px]">
+                  {isPatient ? `Titular: ${shortName}` : `Acomp.: ${shortName}`}
+                </span>
+                {isSelected && (
+                  <span
+                    className="w-1.5 h-1.5 rounded-full shrink-0"
+                    style={{
+                      backgroundColor: isPatient ? clinicTheme.primaryColor : '#4f46e5'
+                    }}
+                  />
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* Slider de rolagem horizontal com snap CSS */}
       <div

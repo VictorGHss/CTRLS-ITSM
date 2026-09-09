@@ -181,7 +181,7 @@ export const CredentialCard: React.FC<CredentialCardProps> = ({
               }}
             >
               <Maximize2 className="w-3.5 h-3.5" />
-              <span>Ampliar QR Code</span>
+              <span>Aumentar na tela inteira</span>
             </button>
 
             {onReactivateAccess && (
