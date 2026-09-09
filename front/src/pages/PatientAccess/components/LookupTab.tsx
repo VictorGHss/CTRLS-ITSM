@@ -68,7 +68,7 @@ export const LookupTab: React.FC<LookupTabProps> = ({
       <div>
         <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
           <CreditCard className="w-3.5 h-3.5 text-slate-400" />
-          Digite seu CPF cadastrado
+          Digite seu CPF
         </label>
         <input
           type="text"

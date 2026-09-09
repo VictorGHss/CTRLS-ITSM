@@ -98,7 +98,7 @@ export const SelfRegistrationForm: React.FC<SelfRegistrationFormProps> = ({ clin
         <div className="mt-6 pt-4 border-t border-slate-100 text-center">
           <p className="text-[11px] text-slate-400 font-semibold flex items-center justify-center gap-1.5">
             <CheckCircle2 className="w-3.5 h-3.5" style={{ color: clinicTheme.primaryColor }} />
-            Acesso integrado às catracas do Edifício Inovare
+            Acesso integrado às catracas da clinica Inovare
           </p>
         </div>
       </div>

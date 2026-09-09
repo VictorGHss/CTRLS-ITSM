@@ -69,9 +69,9 @@ export const CLINIC_THEMES: Record<string, ClinicTheme> = {
     floorInfo: 'Térreo — Clínica da Imagem',
     phone: '(42) 3026-2620',
     openingHours: 'Segunda à sexta: 08h às 19h',
-    instagramUrl: 'https://www.instagram.com/clinicadaimagempg?utm_source=ig_web_button_share_sheet&igsi=ZDNlZDc0MzIxNw==',
-    facebookUrl: 'https://www.facebook.com/clinicadaimagempg?utm_source=ig&utm_medium=social&utm_content=link_in_bio',
-    whatsappUrl: 'https://wa.me/554230262620',
+    instagramUrl: 'https://www.instagram.com/clinicadaimagempg',
+    facebookUrl: 'https://www.facebook.com/clinicadaimagempg',
+    whatsappUrl: 'https://wa.me/5542999876740',
   },
 };
 
