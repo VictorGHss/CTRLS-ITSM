@@ -21,6 +21,7 @@ public class AppointmentMotorScheduler {
     private final AppointmentMotorProperties properties;
     private final IngestAppointmentsUseCase ingestAppointmentsUseCase;
     private final MonitorAppointmentNudgesUseCase monitorAppointmentNudgesUseCase;
+    private final br.dev.ctrls.inovareti.modules.appointment.application.service.DoctorEligibilityService doctorEligibilityService;
 
     @Scheduled(cron = "${app.appointment.motor.ingestion-cron}")
     public void ingestDPlusOneAppointments() {
@@ -35,8 +36,9 @@ public class AppointmentMotorScheduler {
             log.info("Scheduler em modo TESTE. Direcionando para os médicos de teste: {}", testDocs);
             ingestAppointmentsUseCase.execute(testDocs);
         } else {
-            log.info("Scheduler em modo PRODUÇÃO. Executando ingestão completa para todos os médicos ativos e configurados.");
-            ingestAppointmentsUseCase.execute();
+            java.util.List<String> activeDocs = doctorEligibilityService.getActiveAllowedDoctorIds();
+            log.info("Scheduler em modo PRODUÇÃO. Executando ingestão completa para médicos ativos e configurados: {}", activeDocs);
+            ingestAppointmentsUseCase.execute(activeDocs);
         }
     }
 

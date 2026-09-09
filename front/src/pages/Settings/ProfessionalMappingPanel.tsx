@@ -75,7 +75,7 @@ export default function ProfessionalMappingPanel() {
 
   const filteredMappings = useMemo(() => {
     return mappings.filter((row) => {
-      const isInactive = row.blipQueueId === 'inactive';
+      const isInactive = row.blipQueueId === 'inactive' || row.ignoreAutoSchedule;
       if (showInactive) return true;
       return !isInactive;
     });
@@ -128,14 +128,19 @@ export default function ProfessionalMappingPanel() {
         const m = mappingById.get(proId);
         const c = configById.get(proId);
 
+        let initialQueueId = m?.blipQueueId || m?.blip_queue_id || c?.blipQueueId || '';
+        if (c?.isActive === false && (!initialQueueId || initialQueueId === '')) {
+          initialQueueId = 'inactive';
+        }
+
         return {
           id: m?.id,
           profissionalId: proId,
-          blipQueueId: m?.blipQueueId || m?.blip_queue_id || c?.blipQueueId || '',
+          blipQueueId: initialQueueId,
           itsmUserId: m?.itsmUserId || m?.itsm_user_id || '',
           discordWebhookUrl: m?.discordWebhookUrl || m?.discord_webhook_url || '',
           profissionalNome: m?.profissionalNome || m?.profissional_nome || c?.doctorName || p?.name || `Sem nome (ID ${proId})`,
-          ignoreAutoSchedule: m?.ignoreAutoSchedule ?? m?.ignore_auto_schedule ?? false,
+          ignoreAutoSchedule: m?.ignoreAutoSchedule ?? m?.ignore_auto_schedule ?? (c?.isActive === false),
           gerAcessoMatricula: c?.gerAcessoMatricula || '',
           gerAcessoCpf: c?.gerAcessoCpf || '',
           displayTimeOffsetMinutes: c?.displayTimeOffsetMinutes ?? 0,
@@ -172,9 +177,18 @@ export default function ProfessionalMappingPanel() {
 
   function updateField(profissionalId: string, field: keyof MergedDoctorMapping, value: string | boolean | number) {
     setMappings((current) =>
-      current.map((m) =>
-        String(m.profissionalId) === String(profissionalId) ? { ...m, [field]: value } : m
-      )
+      current.map((m) => {
+        if (String(m.profissionalId) === String(profissionalId)) {
+          const updated = { ...m, [field]: value };
+          if (field === 'blipQueueId' && value === 'inactive') {
+            updated.ignoreAutoSchedule = true;
+          } else if (field === 'blipQueueId' && value !== 'inactive' && m.blipQueueId === 'inactive') {
+            updated.ignoreAutoSchedule = false;
+          }
+          return updated;
+        }
+        return m;
+      })
     );
   }
 
@@ -183,29 +197,36 @@ export default function ProfessionalMappingPanel() {
       setSaving(true);
 
       // 1. Save appointment doctor mappings
-      const mappingPayload = mappings.map((m) => ({
-        profissionalId: String(m.profissionalId),
-        blipQueueId: String(m.blipQueueId ?? '').trim(),
-        itsmUserId: String(m.itsmUserId ?? '').trim(),
-        discordWebhookUrl: String(m.discordWebhookUrl ?? '').trim(),
-        profissionalNome: String(m.profissionalNome ?? '').trim(),
-        ignoreAutoSchedule: Boolean(m.ignoreAutoSchedule),
-      }));
+      const mappingPayload = mappings.map((m) => {
+        const isInactive = m.blipQueueId === 'inactive' || m.ignoreAutoSchedule;
+        return {
+          profissionalId: String(m.profissionalId),
+          blipQueueId: String(m.blipQueueId ?? '').trim(),
+          itsmUserId: String(m.itsmUserId ?? '').trim(),
+          discordWebhookUrl: String(m.discordWebhookUrl ?? '').trim(),
+          profissionalNome: String(m.profissionalNome ?? '').trim(),
+          ignoreAutoSchedule: isInactive ? true : Boolean(m.ignoreAutoSchedule),
+        };
+      });
 
       // 2. Save doctor configs (GerAcesso credentials + Custom Scheduling Rules + Google Review URL)
       const configPayloads = mappings
         .filter((m) => m.profissionalId && !isNaN(Number(m.profissionalId)))
-        .map((m) => ({
-          feegowProfissionalId: Number(m.profissionalId),
-          doctorName: String(m.profissionalNome ?? '').trim(),
-          gerAcessoMatricula: String(m.gerAcessoMatricula ?? '').trim(),
-          gerAcessoCpf: String(m.gerAcessoCpf ?? '').replaceAll(/\D/g, '').trim(),
-          blipQueueId: String(m.blipQueueId ?? '').trim(),
-          blipQueueName: blipQueues.find((q) => q.id === m.blipQueueId)?.name || '',
-          displayTimeOffsetMinutes: Number(m.displayTimeOffsetMinutes ?? 0),
-          advanceNoticeDays: Number(m.advanceNoticeDays ?? 1),
-          googleReviewUrl: String(m.googleReviewUrl ?? '').trim(),
-        }));
+        .map((m) => {
+          const isInactive = m.blipQueueId === 'inactive' || m.ignoreAutoSchedule;
+          return {
+            feegowProfissionalId: Number(m.profissionalId),
+            doctorName: String(m.profissionalNome ?? '').trim(),
+            gerAcessoMatricula: String(m.gerAcessoMatricula ?? '').trim(),
+            gerAcessoCpf: String(m.gerAcessoCpf ?? '').replaceAll(/\D/g, '').trim(),
+            blipQueueId: String(m.blipQueueId ?? '').trim(),
+            blipQueueName: blipQueues.find((q) => q.id === m.blipQueueId)?.name || '',
+            displayTimeOffsetMinutes: Number(m.displayTimeOffsetMinutes ?? 0),
+            advanceNoticeDays: Number(m.advanceNoticeDays ?? 1),
+            googleReviewUrl: String(m.googleReviewUrl ?? '').trim(),
+            isActive: !isInactive,
+          };
+        });
 
       // Fire both save calls
       const [mappingResp] = await Promise.all([
@@ -330,7 +351,7 @@ export default function ProfessionalMappingPanel() {
                     ? `Sem nome (ID ${profissionalId})`
                     : 'ID ausente';
                 const isMissingId = !profissionalId;
-                const isInactiveRow = row.blipQueueId === 'inactive';
+                const isInactiveRow = row.blipQueueId === 'inactive' || row.ignoreAutoSchedule;
 
                 const rowOptions = [
                   { id: '', name: 'Nenhuma fila selecionada' },
@@ -339,12 +360,27 @@ export default function ProfessionalMappingPanel() {
                 ];
 
                 return (
-                  <tr key={`${row.profissionalId}-${idx}`} className={`hover:bg-slate-50/80 transition-colors ${isInactiveRow ? 'bg-slate-100/50 opacity-70' : ''}`}>
+                  <tr key={`${row.profissionalId}-${idx}`} className={`hover:bg-slate-50/80 transition-colors ${isInactiveRow ? 'bg-slate-100/60 opacity-75' : ''}`}>
                     <td className={`px-4 py-3 align-middle font-mono text-xs ${isMissingId ? 'text-rose-600' : 'text-slate-650'}`}>
                       {isMissingId ? 'ID ausente' : profissionalId}
                     </td>
                     <td className="px-4 py-3 align-middle">
-                      <span className="font-semibold text-slate-800">{row.profissionalNome || resolvedFeegowName}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-slate-800">{row.profissionalNome || resolvedFeegowName}</span>
+                        {isInactiveRow ? (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-700 border border-rose-200">
+                            🚫 Inativo
+                          </span>
+                        ) : row.blipQueueId ? (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-200">
+                            ✓ Ativo
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-700 border border-amber-200">
+                            Sem fila
+                          </span>
+                        )}
+                      </div>
                     </td>
 
                     <td className="px-4 py-3 align-middle min-w-[200px]">

@@ -44,5 +44,6 @@ export interface DoctorConfiguration {
   displayTimeOffsetMinutes?: number;
   advanceNoticeDays?: number;
   googleReviewUrl?: string;
+  isActive?: boolean;
 }
 

@@ -58,6 +58,7 @@ public class SendAppointmentTemplateUseCase {
     private final br.dev.ctrls.inovareti.modules.appointment.domain.port.output.PatientExternalPort patientExternalPort;
     private final br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentDoctorMappingRepositoryPort appointmentDoctorMappingRepository;
     private final org.springframework.core.task.AsyncTaskExecutor applicationTaskExecutor;
+    private final br.dev.ctrls.inovareti.modules.appointment.application.service.DoctorEligibilityService doctorEligibilityService;
 
     /**
      * Executa o envio a partir de um contexto de despacho resolvido previamente.
@@ -67,6 +68,12 @@ public class SendAppointmentTemplateUseCase {
             appointmentConfigRepository.findByCategory(category)
                 .orElseThrow(() -> new NotFoundException("Configuração não encontrada para categoria " + category))
         );
+
+        if (ctx.doctorProfissionalId() != null && !ctx.doctorProfissionalId().isBlank() 
+                && doctorEligibilityService != null && !doctorEligibilityService.isDoctorAllowed(ctx.doctorProfissionalId())) {
+            log.warn("[ELIGIBILITY] Disparo de template bloqueado para contexto: médico ID '{}' não está autorizado.", ctx.doctorProfissionalId());
+            return false;
+        }
 
         log.info("[DISPATCH CTX] Enviando template com dados pré-resolvidos: paciente='{}', médico='{}', data='{}', hora='{}'",
             ctx.patientName(), ctx.doctorName(), ctx.appointmentDateShort(), ctx.appointmentTime());
@@ -198,6 +205,11 @@ public class SendAppointmentTemplateUseCase {
      * Executa o envio com base em uma sessão de agendamento, consultando dados externos síncronos.
      */
     public boolean execute(AppointmentSession session, AppointmentCategory category) {
+        if (session == null) {
+            log.warn("[SendAppointmentTemplateUseCase] Sessão nula informada para envio de template.");
+            return false;
+        }
+
         AppointmentConfig config = transactionTemplate.execute(status ->
             appointmentConfigRepository.findByCategory(category)
                 .orElseThrow(() -> new NotFoundException("Configuração não encontrada para categoria " + category))
@@ -208,6 +220,12 @@ public class SendAppointmentTemplateUseCase {
                 log.info("[ATTENDANCE-GUARD] Contato {} possui ticket aberto no Desk. Abortando envio de template para categoria {}.", session.getPhoneNumber(), category);
                 return false;
             }
+        }
+
+        if (session.getDoctorProfissionalId() != null && !session.getDoctorProfissionalId().isBlank()
+                && doctorEligibilityService != null && !doctorEligibilityService.isDoctorAllowed(session.getDoctorProfissionalId())) {
+            log.warn("[ELIGIBILITY] Disparo de template bloqueado para sessão: médico ID '{}' não está autorizado.", session.getDoctorProfissionalId());
+            return false;
         }
 
         AppointmentTemplateData templateData = appointmentTemplateDataBuilder.build(session);

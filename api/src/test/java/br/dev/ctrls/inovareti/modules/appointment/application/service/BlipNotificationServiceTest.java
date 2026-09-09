@@ -57,11 +57,11 @@ public class BlipNotificationServiceTest {
     }
 
     @Test
-    public void testEmptyBlocklistFailOpenDefault() {
+    public void testEmptyBlocklistFailClosedDefault() {
         service.setRawBlockedDoctorIds("");
 
-        assertTrue(service.isDoctorAllowed("99"), "Com lista de bloqueio e allowlist vazias, o comportamento padrão deve ser fail-open (true)");
-        assertTrue(service.isDoctorAllowed("46"), "Sem bloqueio configurado e sem allowlist, o médico 46 deve ser permitido");
+        assertFalse(service.isDoctorAllowed("99"), "Com lista de bloqueio e allowlist vazias, o comportamento deve ser fail-closed (false)");
+        assertFalse(service.isDoctorAllowed("46"), "Médico 46 sem allowlist deve ser negado");
     }
 
     @Test
@@ -82,6 +82,7 @@ public class BlipNotificationServiceTest {
         var activeDocConfig = br.dev.ctrls.inovareti.modules.appointment.domain.model.DoctorConfiguration.builder()
                 .feegowProfissionalId(32L)
                 .isActive(true)
+                .blipQueueId("queue-cardio")
                 .build();
 
         org.mockito.Mockito.when(docRepo.findById(32L)).thenReturn(java.util.Optional.of(activeDocConfig));
@@ -114,6 +115,9 @@ public class BlipNotificationServiceTest {
         var mapping = br.dev.ctrls.inovareti.modules.appointment.domain.model.AppointmentDoctorMapping.builder()
                 .profissionalId("15")
                 .profissionalNome("Dr. Teste")
+                .blipQueueId("queue-geral")
+                .isActive(true)
+                .ignoreAutoSchedule(false)
                 .build();
 
         org.mockito.Mockito.when(mappingRepo.findByProfissionalId("15")).thenReturn(java.util.Optional.of(mapping));
@@ -158,6 +162,8 @@ public class BlipNotificationServiceTest {
                 mock(BlipAppointmentFormatter.class),
                 mock(BlipReviewNotificationService.class)
         );
+
+        properties.setActiveDoctorIds(java.util.List.of("1"));
 
         var data = new br.dev.ctrls.inovareti.modules.appointment.application.dto.AppointmentTemplateData(
                 "1", "100", "João", "42999999999", "1", "Dr. A", "Geral", "Unidade", "2026-09-08", "08/09", "10:00", "2026-09-08"

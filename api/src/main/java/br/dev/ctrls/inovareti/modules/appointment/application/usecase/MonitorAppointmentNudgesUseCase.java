@@ -44,6 +44,7 @@ public class MonitorAppointmentNudgesUseCase {
     private final AppointmentExternalPort appointmentExternalPort;
     private final PatientExternalPort patientExternalPort;
     private final TransactionTemplate transactionTemplate;
+    private final br.dev.ctrls.inovareti.modules.appointment.application.service.DoctorEligibilityService doctorEligibilityService;
 
     public void execute() {
         java.time.LocalTime nowTime = java.time.LocalTime.now(SAO_PAULO_ZONE);
@@ -81,6 +82,13 @@ public class MonitorAppointmentNudgesUseCase {
 
         // --- 3. REENVIO RECORRENTE DE NUDGES A CADA 2h ---
         for (AppointmentSession session : candidateSessions) {
+            // Blindagem: valida se o médico da sessão é permitido para receber automações
+            if (!doctorEligibilityService.isDoctorAllowed(session.getDoctorProfissionalId())) {
+                log.info("[NUDGE-GUARD] Sessão ID={} (Feegow ID={}) ignorada pois o médico ID={} não está ativo/permitido para disparos automáticos.",
+                        session.getId(), session.getFeegowAppointmentId(), session.getDoctorProfissionalId());
+                continue;
+            }
+
             if (session.getCurrentGroupId() != null) {
                 // FLUXO DE GRUPO
                 UUID groupId = session.getCurrentGroupId();
@@ -123,6 +131,12 @@ public class MonitorAppointmentNudgesUseCase {
         boolean shouldSend = Boolean.TRUE.equals(transactionTemplate.execute(status -> {
             AppointmentSession lockedSession = appointmentSessionRepository.findByIdLocked(session.getId()).orElse(null);
             if (lockedSession != null && isStatusEligibleForNudge(lockedSession.getStatus())) {
+                if (!doctorEligibilityService.isDoctorAllowed(lockedSession.getDoctorProfissionalId())) {
+                    log.warn("[NUDGE-GUARD] Abortando envio de nudge individual para sessão ID={} pois o médico ID={} não é permitido.",
+                            lockedSession.getId(), lockedSession.getDoctorProfissionalId());
+                    return false;
+                }
+
                 if (blipContextService.hasActiveTicket(lockedSession.getPhoneNumber(), lockedSession.getLastNotificationSentAt())) {
                     log.info("[ATTENDANCE-GUARD] Abortando/pausando nudge recorrente para {} devido a ticket de live chat ativo no Blip.", lockedSession.getPhoneNumber());
                     lockedSession.setLastNotificationSentAt(LocalDateTime.now(SAO_PAULO_ZONE));
@@ -204,6 +218,13 @@ public class MonitorAppointmentNudgesUseCase {
             boolean allEligible = groupSessions.stream().allMatch(s -> isStatusEligibleForNudge(s.getStatus()));
             if (!allEligible) {
                 log.info("[GRUPO-NUDGE] Grupo {} possui sessões em status não elegível para nudge recorrente. Abortando.", groupId);
+                return false;
+            }
+
+            boolean allDoctorsAllowed = groupSessions.stream()
+                    .allMatch(s -> doctorEligibilityService.isDoctorAllowed(s.getDoctorProfissionalId()));
+            if (!allDoctorsAllowed) {
+                log.warn("[GRUPO-NUDGE-GUARD] Grupo {} possui consultas com médicos não autorizados para automação. Abortando envio.", groupId);
                 return false;
             }
 

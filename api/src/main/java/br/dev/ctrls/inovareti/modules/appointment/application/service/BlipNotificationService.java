@@ -30,8 +30,7 @@ public class BlipNotificationService {
     private final br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentSessionRepositoryPort appointmentSessionRepository;
     private final BlipAppointmentFormatter blipAppointmentFormatter;
     private final BlipReviewNotificationService blipReviewNotificationService;
-    private final br.dev.ctrls.inovareti.modules.appointment.domain.port.output.DoctorConfigurationRepository doctorConfigurationRepository;
-    private final br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentDoctorMappingRepositoryPort appointmentDoctorMappingRepository;
+    private final DoctorEligibilityService doctorEligibilityService;
 
     @org.springframework.beans.factory.annotation.Value("${notification.blocked-doctor-ids:46}")
     private String rawBlockedDoctorIds = "46";
@@ -46,6 +45,9 @@ public class BlipNotificationService {
     public void setRawBlockedDoctorIds(String rawBlockedDoctorIds) {
         this.rawBlockedDoctorIds = rawBlockedDoctorIds;
         parseBlockedDoctorIds(rawBlockedDoctorIds);
+        if (doctorEligibilityService != null) {
+            doctorEligibilityService.setBlockedDoctorIdsRaw(rawBlockedDoctorIds);
+        }
     }
 
     public java.util.Set<String> getBlockedDoctorIds() {
@@ -78,7 +80,22 @@ public class BlipNotificationService {
             BlipAppointmentFormatter blipAppointmentFormatter,
             BlipReviewNotificationService blipReviewNotificationService) {
         this(limeClient, blipTemplateParameterResolver, motorProperties, blipPayloadBuilder, blipContextService,
-             appointmentSessionRepository, blipAppointmentFormatter, blipReviewNotificationService, null, null);
+             appointmentSessionRepository, blipAppointmentFormatter, blipReviewNotificationService, null, null, null);
+    }
+
+    public BlipNotificationService(
+            BlipLIMEClient limeClient,
+            BlipTemplateParameterResolver blipTemplateParameterResolver,
+            AppointmentMotorProperties motorProperties,
+            BlipPayloadBuilder blipPayloadBuilder,
+            BlipContextService blipContextService,
+            br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentSessionRepositoryPort appointmentSessionRepository,
+            BlipAppointmentFormatter blipAppointmentFormatter,
+            BlipReviewNotificationService blipReviewNotificationService,
+            br.dev.ctrls.inovareti.modules.appointment.domain.port.output.DoctorConfigurationRepository doctorConfigurationRepository,
+            br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentDoctorMappingRepositoryPort appointmentDoctorMappingRepository) {
+        this(limeClient, blipTemplateParameterResolver, motorProperties, blipPayloadBuilder, blipContextService,
+             appointmentSessionRepository, blipAppointmentFormatter, blipReviewNotificationService, doctorConfigurationRepository, appointmentDoctorMappingRepository, null);
     }
 
     @org.springframework.beans.factory.annotation.Autowired
@@ -94,7 +111,9 @@ public class BlipNotificationService {
             @org.springframework.beans.factory.annotation.Autowired(required = false)
             br.dev.ctrls.inovareti.modules.appointment.domain.port.output.DoctorConfigurationRepository doctorConfigurationRepository,
             @org.springframework.beans.factory.annotation.Autowired(required = false)
-            br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentDoctorMappingRepositoryPort appointmentDoctorMappingRepository) {
+            br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentDoctorMappingRepositoryPort appointmentDoctorMappingRepository,
+            @org.springframework.beans.factory.annotation.Autowired(required = false)
+            DoctorEligibilityService doctorEligibilityService) {
         this.limeClient = limeClient;
         this.blipTemplateParameterResolver = blipTemplateParameterResolver;
         this.motorProperties = motorProperties;
@@ -103,8 +122,9 @@ public class BlipNotificationService {
         this.appointmentSessionRepository = appointmentSessionRepository;
         this.blipAppointmentFormatter = blipAppointmentFormatter;
         this.blipReviewNotificationService = blipReviewNotificationService;
-        this.doctorConfigurationRepository = doctorConfigurationRepository;
-        this.appointmentDoctorMappingRepository = appointmentDoctorMappingRepository;
+        this.doctorEligibilityService = doctorEligibilityService != null
+                ? doctorEligibilityService
+                : new DoctorEligibilityService(motorProperties, doctorConfigurationRepository, appointmentDoctorMappingRepository);
     }
 
     public List<BlipTemplateDto> fetchTemplatesFromBlip() {
@@ -281,6 +301,13 @@ public class BlipNotificationService {
             if (groupId != null && appointmentSessionRepository != null && blipAppointmentFormatter != null && blipContextService != null) {
                 var sessions = appointmentSessionRepository.findByCurrentGroupId(groupId);
                 if (sessions != null && !sessions.isEmpty()) {
+                    boolean anyDoctorAllowed = sessions.stream()
+                            .anyMatch(s -> isDoctorAllowed(s.getDoctorProfissionalId()));
+                    if (!anyDoctorAllowed) {
+                        log.warn("[SANDBOX-GRUPO] Disparo em grupo bloqueado. Nenhum médico do grupo {} está autorizado. destination={}",
+                                groupId, recipientE164);
+                        return;
+                    }
                     String listaDetalhada = blipAppointmentFormatter.buildListaDetalhada(sessions);
                     if (listaDetalhada != null && !listaDetalhada.isBlank()) {
                         blipContextService.setUserContext(recipientE164, "lista_detalhada", listaDetalhada);
@@ -640,59 +667,12 @@ public class BlipNotificationService {
 
     /**
      * Verifica se um médico tem permissão para receber disparos de lembretes/notificações.
-     * 
-     * CONCEITOS SEPARADOS:
-     * 1. Lista de Bloqueio por Médico (Blocklist): Defina por `notification.blocked-doctor-ids`
-     *    (default: "46"). Médicos nesta lista têm disparos sumariamente bloqueados (retorna false).
-     * 2. Modo Sandbox / Allowlist (`testDoctorIds` / `activeDoctorIds`): Define quais médicos estão
-     *    liberados para teste em ambiente de sandbox ou em produção.
+     * Delega integralmente ao serviço unificado {@link DoctorEligibilityService}.
      */
     public boolean isDoctorAllowed(String doctorId) {
-        if (doctorId == null || doctorId.isBlank()) {
-            return true;
+        if (doctorEligibilityService != null) {
+            return doctorEligibilityService.isDoctorAllowed(doctorId);
         }
-        String docId = doctorId.trim();
-
-        // 1. Bloqueio explícito por lista de bloqueio (Blocklist)
-        if (getBlockedDoctorIds().contains(docId)) {
-            return false;
-        }
-
-        // 2. Se o motor estiver configurado explicitamente em modo de teste, restringe a testDoctorIds
-        if (motorProperties.isTestMode()) {
-            return motorProperties.getTestDoctorIds().contains(docId);
-        }
-
-        // 3. Em modo de produção:
-        if (motorProperties.getTestDoctorIds().contains(docId)) {
-            return true;
-        }
-        if (motorProperties.getActiveDoctorIds().contains(docId)) {
-            return true;
-        }
-
-        try {
-            Long id = Long.parseLong(docId);
-            if (doctorConfigurationRepository != null) {
-                var configOpt = doctorConfigurationRepository.findById(id);
-                if (configOpt.isPresent() && configOpt.get().isConfigActive()) {
-                    return true;
-                }
-            }
-        } catch (Exception ignored) {}
-
-        if (appointmentDoctorMappingRepository != null) {
-            var mappingOpt = appointmentDoctorMappingRepository.findByProfissionalId(docId);
-            if (mappingOpt.isPresent()) {
-                return true;
-            }
-        }
-
-        // 4. Se nenhuma restrição manual de activeDoctorIds estiver ativa no properties, permite por padrão (fail-open)
-        if (motorProperties.getActiveDoctorIds().isEmpty()) {
-            return true;
-        }
-
         return false;
     }
 

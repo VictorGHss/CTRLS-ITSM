@@ -33,7 +33,6 @@ import br.dev.ctrls.inovareti.modules.appointment.domain.model.AppointmentSessio
 import br.dev.ctrls.inovareti.modules.appointment.domain.model.DoctorConfiguration;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentSessionRepositoryPort;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.DoctorConfigurationRepository;
-import br.dev.ctrls.inovareti.modules.appointment.infrastructure.config.AppointmentMotorProperties;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -41,9 +40,6 @@ class BlipPhysicalAccessHandlerTest {
 
     @Mock
     private AppointmentSessionRepositoryPort appointmentSessionRepository;
-
-    @Mock
-    private AppointmentMotorProperties appointmentMotorProperties;
 
     @Mock
     private DoctorConfigurationRepository doctorConfigurationRepository;
@@ -57,6 +53,9 @@ class BlipPhysicalAccessHandlerTest {
     @Mock
     private br.dev.ctrls.inovareti.modules.appointment.domain.port.output.PatientExternalPort patientExternalPort;
 
+    @Mock
+    private DoctorEligibilityService doctorEligibilityService;
+
     @Captor
     private ArgumentCaptor<List<CompanionAccessInfo>> companionsCaptor;
 
@@ -65,8 +64,11 @@ class BlipPhysicalAccessHandlerTest {
 
     @BeforeEach
     void setUp() {
-        when(appointmentMotorProperties.getTestDoctorIds()).thenReturn(List.of("10", "20"));
-        when(appointmentMotorProperties.getActiveDoctorIds()).thenReturn(List.of("30", "40"));
+        when(doctorEligibilityService.isDoctorAllowed("10")).thenReturn(true);
+        when(doctorEligibilityService.isDoctorAllowed("20")).thenReturn(true);
+        when(doctorEligibilityService.isDoctorAllowed("30")).thenReturn(true);
+        when(doctorEligibilityService.isDoctorAllowed("40")).thenReturn(true);
+        when(doctorEligibilityService.isDoctorAllowed("99")).thenReturn(false);
     }
 
     @Test

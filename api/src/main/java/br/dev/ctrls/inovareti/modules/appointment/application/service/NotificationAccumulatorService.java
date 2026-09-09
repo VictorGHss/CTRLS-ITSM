@@ -22,12 +22,10 @@ import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.PatientExte
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.FeegowPatient;
 import br.dev.ctrls.inovareti.modules.appointment.application.usecase.SendAppointmentTemplateUseCase;
 import br.dev.ctrls.inovareti.modules.appointment.infrastructure.config.AppointmentMotorProperties;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
 @Observed
 public class NotificationAccumulatorService {
 
@@ -39,6 +37,46 @@ public class NotificationAccumulatorService {
     private final BlipContextService blipContextService;
     private final AppointmentMotorProperties motorProperties;
     private final TransactionTemplate transactionTemplate;
+    private final DoctorEligibilityService doctorEligibilityService;
+
+    public NotificationAccumulatorService(
+            AppointmentSessionRepositoryPort appointmentSessionRepository,
+            NotificationGroupRepositoryPort notificationGroupRepository,
+            PatientExternalPort patientExternalPort,
+            SendAppointmentTemplateUseCase sendAppointmentTemplateUseCase,
+            BlipNotificationService blipNotificationService,
+            BlipContextService blipContextService,
+            AppointmentMotorProperties motorProperties,
+            TransactionTemplate transactionTemplate) {
+        this(appointmentSessionRepository, notificationGroupRepository, patientExternalPort,
+             sendAppointmentTemplateUseCase, blipNotificationService, blipContextService,
+             motorProperties, transactionTemplate, null);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public NotificationAccumulatorService(
+            AppointmentSessionRepositoryPort appointmentSessionRepository,
+            NotificationGroupRepositoryPort notificationGroupRepository,
+            PatientExternalPort patientExternalPort,
+            SendAppointmentTemplateUseCase sendAppointmentTemplateUseCase,
+            BlipNotificationService blipNotificationService,
+            BlipContextService blipContextService,
+            AppointmentMotorProperties motorProperties,
+            TransactionTemplate transactionTemplate,
+            @org.springframework.beans.factory.annotation.Autowired(required = false)
+            DoctorEligibilityService doctorEligibilityService) {
+        this.appointmentSessionRepository = appointmentSessionRepository;
+        this.notificationGroupRepository = notificationGroupRepository;
+        this.patientExternalPort = patientExternalPort;
+        this.sendAppointmentTemplateUseCase = sendAppointmentTemplateUseCase;
+        this.blipNotificationService = blipNotificationService;
+        this.blipContextService = blipContextService;
+        this.motorProperties = motorProperties;
+        this.transactionTemplate = transactionTemplate;
+        this.doctorEligibilityService = doctorEligibilityService != null
+                ? doctorEligibilityService
+                : new DoctorEligibilityService(motorProperties, null, null);
+    }
 
     @Scheduled(cron = "${app.appointment.motor.accumulator-cron:0 0/15 * * * ?}")
     public void accumulateAndSendNotifications() {
@@ -57,9 +95,17 @@ public class NotificationAccumulatorService {
 
         log.info("[ACÚMULO] Encontrados {} agendamentos pendentes", pendingSessions.size());
 
-        // 2. Agrupar essas entidades pelo telefone (contact_identity / patient_phone)
+        // 2. Agrupar essas entidades pelo telefone (contact_identity / patient_phone), filtrando médicos autorizados
         Map<String, List<AppointmentSession>> groupedByPhone = pendingSessions.stream()
                 .filter(s -> s.getPhoneNumber() != null && !s.getPhoneNumber().isBlank())
+                .filter(s -> {
+                    boolean allowed = doctorEligibilityService.isDoctorAllowed(s.getDoctorProfissionalId());
+                    if (!allowed) {
+                        log.warn("[ACÚMULO-FILTRO] Sessão Feegow ID {} descartada: médico ID '{}' não autorizado.",
+                                s.getFeegowAppointmentId(), s.getDoctorProfissionalId());
+                    }
+                    return allowed;
+                })
                 .collect(Collectors.groupingBy(s -> s.getPhoneNumber()));
 
         for (Map.Entry<String, List<AppointmentSession>> entry : groupedByPhone.entrySet()) {
@@ -85,6 +131,11 @@ public class NotificationAccumulatorService {
     }
 
     private void processIndividualNotification(AppointmentSession session) {
+        if (!doctorEligibilityService.isDoctorAllowed(session.getDoctorProfissionalId())) {
+            log.warn("[ACÚMULO] Disparo individual cancelado. Médico ID '{}' não está autorizado.", session.getDoctorProfissionalId());
+            return;
+        }
+
         log.info("[ACÚMULO] Processando notificação individual para o agendamento Feegow ID: {}", session.getFeegowAppointmentId());
 
         // Blindagem contra disparo solo de consultas que pertencem a um grupo de agendamentos
@@ -135,12 +186,20 @@ public class NotificationAccumulatorService {
     }
 
     private void processGroupNotification(String phoneNumber, List<AppointmentSession> sessions) {
+        List<AppointmentSession> allowedSessions = sessions.stream()
+                .filter(s -> doctorEligibilityService.isDoctorAllowed(s.getDoctorProfissionalId()))
+                .toList();
+        if (allowedSessions.isEmpty()) {
+            log.warn("[ACÚMULO-GRUPO] Todas as sessões do grupo pertencem a médicos não autorizados para o telefone {}. Disparo cancelado.", phoneNumber);
+            return;
+        }
+
         UUID groupId = UUID.randomUUID();
         log.info("[ACÚMULO] Processando notificação agrupada. group_id={}, telefone={}, total_consultas={}", 
-            groupId, phoneNumber, sessions.size());
+            groupId, phoneNumber, allowedSessions.size());
 
         if (phoneNumber != null && !phoneNumber.isBlank()) {
-            LocalDateTime lastSent = sessions.isEmpty() ? null : sessions.getFirst().getLastNotificationSentAt();
+            LocalDateTime lastSent = allowedSessions.isEmpty() ? null : allowedSessions.getFirst().getLastNotificationSentAt();
             if (blipContextService.hasActiveTicket(phoneNumber, lastSent)) {
                 log.info("[ATTENDANCE-GUARD] Contato {} possui ticket aberto no Desk. Ignorando disparo de notificação agrupada acumulada.", phoneNumber);
                 return;
@@ -149,7 +208,7 @@ public class NotificationAccumulatorService {
 
         // 4. Salvar na tabela 'notification_groups'
         List<NotificationGroup> groupEntities = new ArrayList<>();
-        for (AppointmentSession session : sessions) {
+        for (AppointmentSession session : allowedSessions) {
             NotificationGroup group = NotificationGroup.builder()
                     .groupId(groupId)
                     .sessionId(session.getId())
@@ -164,7 +223,7 @@ public class NotificationAccumulatorService {
                 
                 // Atualizar o currentGroupId, lastNotificationSentAt e lastInteractionAt para todas as sessões do grupo
                 LocalDateTime now = LocalDateTime.now();
-                for (AppointmentSession session : sessions) {
+                for (AppointmentSession session : allowedSessions) {
                     AppointmentSession lockedSession = appointmentSessionRepository.findByIdLocked(session.getId()).orElse(null);
                     if (lockedSession != null) {
                         lockedSession.setCurrentGroupId(groupId);
@@ -182,7 +241,7 @@ public class NotificationAccumulatorService {
         // Buscar nome do paciente para personalizar o template (usando o primeiro da lista)
         String patientName = "Paciente";
         try {
-            FeegowPatient patientInfo = patientExternalPort.patientInfo(sessions.getFirst().getPatientId());
+            FeegowPatient patientInfo = patientExternalPort.patientInfo(allowedSessions.getFirst().getPatientId());
             if (patientInfo != null && patientInfo.name() != null && !patientInfo.name().isBlank()) {
                 patientName = patientInfo.name().trim();
             }

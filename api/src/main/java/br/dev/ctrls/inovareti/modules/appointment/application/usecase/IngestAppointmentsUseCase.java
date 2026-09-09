@@ -48,6 +48,7 @@ public class IngestAppointmentsUseCase {
     private final br.dev.ctrls.inovareti.modules.appointment.application.service.AppointmentMetricsService appointmentMetricsService;
     private final br.dev.ctrls.inovareti.modules.appointment.infrastructure.adapter.output.discord.AppointmentDiscordNotifierService discordNotifierService;
     private final br.dev.ctrls.inovareti.modules.appointment.domain.port.output.DoctorConfigurationRepository doctorConfigurationRepository;
+    private final br.dev.ctrls.inovareti.modules.appointment.application.service.DoctorEligibilityService doctorEligibilityService;
 
     public record IngestionSummary(
         int totalReceived,
@@ -102,13 +103,20 @@ public class IngestAppointmentsUseCase {
             return new IngestionSummary(0, 0, 0, 0, "WEEKEND_SKIP");
         }
 
+        List<String> effectiveDoctorIds = doctorIds;
+        if (effectiveDoctorIds == null || effectiveDoctorIds.isEmpty()) {
+            effectiveDoctorIds = doctorEligibilityService.getActiveAllowedDoctorIds();
+            log.info("[MOTOR-INGESTÃO] doctorIds não especificado. Resolvidos {} médicos ativos via DoctorEligibilityService: {}",
+                    effectiveDoctorIds.size(), effectiveDoctorIds);
+        }
+
         // 1. Resolução de Datas-Alvo e Busca de Agendamentos no Feegow
         ResolvedDatesAndAppointments resolved;
         if (hasCustomDates) {
             log.info("[MOTOR-INGESTÃO] Modo de data customizada ativo para as datas: {}", customDates);
-            resolved = dateResolver.resolveCustomDatesAndFetchAppointments(customDates, doctorIds);
+            resolved = dateResolver.resolveCustomDatesAndFetchAppointments(customDates, effectiveDoctorIds);
         } else {
-            resolved = dateResolver.resolveDatesAndFetchAppointments(today, dayOfWeek, doctorIds);
+            resolved = dateResolver.resolveDatesAndFetchAppointments(today, dayOfWeek, effectiveDoctorIds);
         }
         List<LocalDate> targetDates = resolved.targetDates();
         List<FeegowAppointment> rawAppointments = resolved.appointments();
@@ -118,7 +126,7 @@ public class IngestAppointmentsUseCase {
         cancellationReconciler.reconcile(targetDates, rawAppointments);
 
         // 3. Pipeline de Filtros de Elegibilidade (Encaixes, Locks, Procedimentos, Status, Médicos Ativos)
-        List<FeegowAppointment> eligibleAppointments = filterPipeline.filterEligibleAppointments(rawAppointments, doctorIds);
+        List<FeegowAppointment> eligibleAppointments = filterPipeline.filterEligibleAppointments(rawAppointments, effectiveDoctorIds);
         int totalFiltered = eligibleAppointments.size();
 
         if (eligibleAppointments.isEmpty()) {

@@ -43,6 +43,9 @@ class AppointmentBatchFilterPipelineTest {
     @Mock
     private AppointmentMotorProperties appointmentMotorProperties;
 
+    @Mock
+    private DoctorEligibilityService doctorEligibilityService;
+
     @InjectMocks
     private AppointmentBatchFilterPipeline pipeline;
 
@@ -51,6 +54,7 @@ class AppointmentBatchFilterPipelineTest {
         when(appointmentMotorProperties.getTestDoctorIds()).thenReturn(List.of("10", "20"));
         when(appointmentMotorProperties.getActiveDoctorIds()).thenReturn(List.of("26", "12"));
         when(appointmentMotorProperties.getEligibleProcedureIds()).thenReturn("1,2,16,17,100");
+        when(doctorEligibilityService.isDoctorAllowed(any(), any())).thenReturn(true);
     }
 
     @Test

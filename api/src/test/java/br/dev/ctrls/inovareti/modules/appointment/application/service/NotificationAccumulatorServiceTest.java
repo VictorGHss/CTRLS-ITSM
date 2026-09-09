@@ -59,6 +59,9 @@ class NotificationAccumulatorServiceTest {
             return callback.doInTransaction(mock(TransactionStatus.class));
         });
 
+        DoctorEligibilityService doctorEligibilityService = mock(DoctorEligibilityService.class);
+        when(doctorEligibilityService.isDoctorAllowed(any())).thenReturn(true);
+
         service = new NotificationAccumulatorService(
                 appointmentSessionRepository,
                 notificationGroupRepository,
@@ -67,7 +70,8 @@ class NotificationAccumulatorServiceTest {
                 blipNotificationService,
                 blipContextService,
                 motorProperties,
-                transactionTemplate
+                transactionTemplate,
+                doctorEligibilityService
         );
     }
 
@@ -81,6 +85,7 @@ class NotificationAccumulatorServiceTest {
         AppointmentSession session1 = AppointmentSession.builder()
                 .id(session1Id)
                 .feegowAppointmentId("1001")
+                .doctorProfissionalId("10")
                 .phoneNumber("5542999999999")
                 .currentGroupId(groupId)
                 .status(AppointmentSessionStatus.PENDING)
@@ -89,6 +94,7 @@ class NotificationAccumulatorServiceTest {
         AppointmentSession session2 = AppointmentSession.builder()
                 .id(session2Id)
                 .feegowAppointmentId("1002")
+                .doctorProfissionalId("10")
                 .phoneNumber("5542999999999")
                 .currentGroupId(groupId)
                 .status(AppointmentSessionStatus.PENDING)
@@ -112,6 +118,7 @@ class NotificationAccumulatorServiceTest {
         AppointmentSession session = AppointmentSession.builder()
                 .id(sessionId)
                 .feegowAppointmentId("2001")
+                .doctorProfissionalId("10")
                 .phoneNumber("5542988888888")
                 .status(AppointmentSessionStatus.PENDING)
                 .build();

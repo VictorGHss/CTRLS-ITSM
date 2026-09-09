@@ -10,9 +10,7 @@ import org.springframework.stereotype.Service;
 
 import br.dev.ctrls.inovareti.modules.appointment.application.dto.FeegowLockDto;
 import br.dev.ctrls.inovareti.modules.appointment.domain.model.FeegowAppointmentStatus;
-import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentDoctorMappingRepositoryPort;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentExternalPort;
-import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.DoctorConfigurationRepository;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.FeegowAppointment;
 import br.dev.ctrls.inovareti.modules.appointment.infrastructure.config.AppointmentMotorProperties;
 import lombok.RequiredArgsConstructor;
@@ -33,9 +31,8 @@ public class AppointmentBatchFilterPipeline {
 
     private final AppointmentFilterService appointmentFilterService;
     private final AppointmentExternalPort appointmentExternalPort;
-    private final AppointmentDoctorMappingRepositoryPort appointmentDoctorMappingRepository;
-    private final DoctorConfigurationRepository doctorConfigurationRepository;
     private final AppointmentMotorProperties appointmentMotorProperties;
+    private final DoctorEligibilityService doctorEligibilityService;
 
     public List<FeegowAppointment> filterEligibleAppointments(List<FeegowAppointment> appointments, List<String> requestedDoctorIds) {
         if (appointments == null || appointments.isEmpty()) {
@@ -143,33 +140,6 @@ public class AppointmentBatchFilterPipeline {
     }
 
     public boolean isDoctorAllowed(String doctorId, List<String> requestedDoctorIds) {
-        if (doctorId == null || doctorId.isBlank()) {
-            return false;
-        }
-        String docId = doctorId.trim();
-
-        if (requestedDoctorIds != null && !requestedDoctorIds.isEmpty() && !requestedDoctorIds.contains(docId)) {
-            return false;
-        }
-
-        if (appointmentMotorProperties.getTestDoctorIds().contains(docId)) {
-            return true;
-        }
-
-        if (appointmentMotorProperties.getActiveDoctorIds().contains(docId)) {
-            return true;
-        }
-
-        try {
-            Long id = Long.parseLong(docId);
-            var configOpt = doctorConfigurationRepository.findById(id);
-            if (configOpt.isPresent() && configOpt.get().isConfigActive()) {
-                return true;
-            }
-        } catch (Exception ignored) {}
-
-        // Fallback: mapeamento no banco
-        var mappingOpt = appointmentDoctorMappingRepository.findByProfissionalId(docId);
-        return mappingOpt.isPresent();
+        return doctorEligibilityService.isDoctorAllowed(doctorId, requestedDoctorIds);
     }
 }

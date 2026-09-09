@@ -14,7 +14,6 @@ import br.dev.ctrls.inovareti.modules.appointment.domain.model.AppointmentSessio
 import br.dev.ctrls.inovareti.modules.appointment.domain.model.DoctorConfiguration;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentSessionRepositoryPort;
 import br.dev.ctrls.inovareti.modules.appointment.domain.port.output.DoctorConfigurationRepository;
-import br.dev.ctrls.inovareti.modules.appointment.infrastructure.config.AppointmentMotorProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -29,11 +28,11 @@ import lombok.extern.slf4j.Slf4j;
 public class BlipPhysicalAccessHandler {
 
     private final AppointmentSessionRepositoryPort appointmentSessionRepository;
-    private final AppointmentMotorProperties appointmentMotorProperties;
     private final DoctorConfigurationRepository doctorConfigurationRepository;
     private final AccessService accessService;
     private final BlipContextService blipContextService;
     private final br.dev.ctrls.inovareti.modules.appointment.domain.port.output.PatientExternalPort patientExternalPort;
+    private final DoctorEligibilityService doctorEligibilityService;
 
     private String resolveAppointmentIdFallback(String fromPhone, String currentAppId) {
         if (currentAppId != null && !currentAppId.isBlank() && !"null".equalsIgnoreCase(currentAppId.trim())) {
@@ -284,24 +283,9 @@ public class BlipPhysicalAccessHandler {
     }
 
     private boolean isDoctorAllowed(String doctorId) {
-        String docId = doctorId != null ? doctorId.trim() : "";
-        if (docId.isBlank()) {
-            return false;
+        if (doctorEligibilityService != null) {
+            return doctorEligibilityService.isDoctorAllowed(doctorId);
         }
-        if (appointmentMotorProperties.getTestDoctorIds().contains(docId)) {
-            return true;
-        }
-        if (appointmentMotorProperties.getActiveDoctorIds().contains(docId)) {
-            return true;
-        }
-        try {
-            Long id = Long.parseLong(docId);
-            var configOpt = doctorConfigurationRepository.findById(id);
-            if (configOpt.isPresent() && configOpt.get().isConfigActive()) {
-                return true;
-            }
-        } catch (Exception ignored) {}
-
         return false;
     }
 }
