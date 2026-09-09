@@ -36,6 +36,10 @@ export default function NotificationBell() {
   }, [isOpen]);
 
   async function fetchNotifications() {
+    const token = localStorage.getItem('@InovareTI:token') || sessionStorage.getItem('@InovareTI:token');
+    if (!token || token === 'null' || token === 'undefined') {
+      return;
+    }
     try {
       setIsLoading(true);
       const data = await getNotifications();

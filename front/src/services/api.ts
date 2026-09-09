@@ -25,11 +25,15 @@ export function buildApiUrl(path: string): string {
 const getHeaderValue = (headers: unknown, name: string): unknown => {
   if (!headers || typeof headers !== 'object') return undefined;
   const lowerName = name.toLowerCase();
-  const headersRecord = headers as Record<string, unknown>;
-  if (typeof (headers as { get?: (headerName: string) => unknown }).get === 'function') {
-    const getter = (headers as { get: (headerName: string) => unknown }).get;
-    return getter(name) || getter(lowerName);
+  const headersWithGet = headers as { get?: (headerName: string) => unknown };
+  if (typeof headersWithGet.get === 'function') {
+    try {
+      return headersWithGet.get(name) ?? headersWithGet.get(lowerName);
+    } catch {
+      // Continua para busca em chaves de objeto caso o método lance exceção
+    }
   }
+  const headersRecord = headers as Record<string, unknown>;
   for (const key of Object.keys(headersRecord)) {
     if (key.toLowerCase() === lowerName) {
       return headersRecord[key];
@@ -67,12 +71,15 @@ api.interceptors.response.use(
       return Promise.reject(error);
     }
 
-    if (error.response && (error.response.status === 401 || error.response.status === 403)) {
+    const isAuthEndpoint = error.config?.url?.includes('/auth/login') || error.config?.url?.includes('/auth/reset');
+    if (error.response && error.response.status === 401 && !isAuthEndpoint) {
       localStorage.removeItem('@InovareTI:token');
       localStorage.removeItem('@InovareTI:user');
       sessionStorage.removeItem('@InovareTI:token');
       sessionStorage.removeItem('@InovareTI:user');
-      window.location.href = '/login';
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login';
+      }
     }
 
     if (error.response) {
