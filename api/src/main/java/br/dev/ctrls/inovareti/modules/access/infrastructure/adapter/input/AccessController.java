@@ -283,7 +283,7 @@ public class AccessController {
                     .body(Map.of("message", "Muitas consultas realizadas em pouco tempo. Por favor, aguarde um minuto e tente novamente."));
         }
 
-        log.info("[AccessControl] Requisição de consulta prévia no Feegow para CPF: {} (IP: {})", request.cpf(), clientIp);
+        log.info("[AccessControl] Requisição de consulta prévia no Feegow para CPF: {} (IP: {})", maskCpf(request.cpf()), clientIp);
         FeegowPreRegistrationLookupResponse response = lookupFeegowPreRegistrationUseCase.execute(request.cpf(), request.clinic());
         return ResponseEntity.ok(response);
     }
@@ -300,7 +300,7 @@ public class AccessController {
                     .body(Map.of("message", "Muitas consultas realizadas em pouco tempo. Por favor, aguarde um minuto e tente novamente."));
         }
 
-        log.info("[AccessControl] Busca de credenciais ativas por CPF: {} (IP: {})", request.cpf(), clientIp);
+        log.info("[AccessControl] Busca de credenciais ativas por CPF: {} (IP: {})", maskCpf(request.cpf()), clientIp);
         try {
             List<AccessCredential> credentials = lookupCredentialsByCpfUseCase.lookupCredentialsByCpf(request.cpf(), request.clinic());
             if (credentials.isEmpty()) {
@@ -610,5 +610,16 @@ public class AccessController {
             } catch (Exception ignored) {}
         }
         return "Hoje";
+    }
+
+    private String maskCpf(String cpf) {
+        if (cpf == null || cpf.isBlank()) {
+            return "N/A";
+        }
+        String clean = cpf.replaceAll("\\D", "");
+        if (clean.length() == 11) {
+            return "***." + clean.substring(3, 6) + ".***-" + clean.substring(9, 11);
+        }
+        return "***";
     }
 }

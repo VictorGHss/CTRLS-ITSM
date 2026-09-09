@@ -124,7 +124,7 @@ public class DiscordAlertListener {
         JDA jda = jdaProvider.getIfAvailable();
         if (jda != null && operationalChannelId != null && !operationalChannelId.isBlank()) {
             try {
-                TextChannel canal = jda.getTextChannelById(operationalChannelId);
+                TextChannel canal = jda.getTextChannelById(java.util.Objects.requireNonNull(operationalChannelId));
                 if (canal != null) {
                     var embed = new EmbedBuilder()
                         .setColor(0xE74C3C) // Vermelho
@@ -134,6 +134,8 @@ public class DiscordAlertListener {
                         .build();
                     canal.sendMessageEmbeds(embed).queue();
                     log.info("[DISCORD-ALERT] Alerta de segurança despachado com sucesso via JDA bot.");
+                } else {
+                    log.warn("[DISCORD-ALERT] Canal operacional com ID '{}' não foi localizado no JDA.", operationalChannelId);
                 }
             } catch (Exception ex) {
                 log.error("[DISCORD-ALERT] Falha no fallback de notificação de segurança via JDA: {}", ex.getMessage(), ex);

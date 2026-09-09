@@ -56,7 +56,7 @@ public class RawBodyLoggingFilter extends OncePerRequestFilter {
             byte[] body = wrapped.getContentAsByteArray();
             String rawBody = body.length == 0
                     ? "<empty>"
-                    : new String(body, resolveCharset(wrapped.getCharacterEncoding()));
+                    : sanitizeLogBody(new String(body, resolveCharset(wrapped.getCharacterEncoding())));
 
             if ("GET".equalsIgnoreCase(request.getMethod())) {
                 log.debug("[RAW BODY] {} {} -> {}", request.getMethod(), request.getRequestURI(), rawBody);
@@ -78,11 +78,25 @@ public class RawBodyLoggingFilter extends OncePerRequestFilter {
             || lower.contains("/notifications")
             || lower.contains("/auth")
             || lower.contains("/vault")
+            || lower.contains("/access")
             || lower.contains("/self-registration")
             || lower.contains("/credentials")
             || lower.contains("/users")
             || lower.contains("/reset-initial-password")
             || lower.contains("/change-password");
+    }
+
+    private String sanitizeLogBody(String body) {
+        if (body == null || body.isBlank() || "<empty>".equals(body)) {
+            return body;
+        }
+        // Mascara CPF: "cpf":"12345678900" -> "cpf":"***.456.***-00"
+        String sanitized = body.replaceAll("(?i)(\"cpf\"\\s*:\\s*\")(\\d{3})(\\d{3})(\\d{3})(\\d{2})(\")", "$1***.$3.***-$5$6");
+        // Mascara outros CPFs sem formatação específica
+        sanitized = sanitized.replaceAll("(?i)(\"cpf\"\\s*:\\s*\")([^\"]+)(\")", "$1***$3");
+        // Mascara senhas e segredos
+        sanitized = sanitized.replaceAll("(?i)(\"(?:password|senha|secret|token|totp)\"\\s*:\\s*\")([^\"]+)(\")", "$1******$3");
+        return sanitized;
     }
 
     private Charset resolveCharset(String encoding) {
