@@ -152,8 +152,11 @@ public class GetCredentialsUseCase {
                     .filter(c -> c.getUserType() == UserType.PATIENT)
                     .anyMatch(c -> c.getCpf() == null || !CpfValidator.isValidCpf(c.getCpf()));
 
-            if (appCreds.isEmpty() || hasOnlyContingency || hasPatientWithInvalidCpf) {
-                log.info("[GetCredentials] Credenciais não encontradas, contingenciais ou com CPF inválido para o agendamento ID: {}. Tentando obter credencial real na GerAcesso...", id);
+            boolean isFromPastDay = !appCreds.isEmpty() && appCreds.stream()
+                    .anyMatch(c -> c.getCreatedAt() != null && c.getCreatedAt().toLocalDate().isBefore(today));
+
+            if (appCreds.isEmpty() || hasOnlyContingency || hasPatientWithInvalidCpf || isFromPastDay) {
+                log.info("[GetCredentials] Credenciais não encontradas, contingenciais, com CPF inválido ou de data anterior para o agendamento ID: {}. Tentando obter credencial real na GerAcesso...", id);
                 try {
                     AccessValidationResult result = processAccessRequestUseCase.execute(id, null, null);
                     if (result.authorized()) {

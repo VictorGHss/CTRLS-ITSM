@@ -405,8 +405,11 @@ public class AccessController {
                     .body(Map.of("message", "Nenhuma credencial encontrada para reativar. Verifique os dados ou procure a recepção."));
         } catch (Exception ex) {
             log.error("[AccessControl] Erro ao reativar acesso para {}: {}", appointmentId, ex.getMessage(), ex);
+            String errorMsg = (ex.getMessage() != null && !ex.getMessage().isBlank()) 
+                    ? ex.getMessage() 
+                    : "Erro ao reativar acesso na catraca. Tente novamente em instantes.";
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("message", "Erro ao reativar acesso. Tente novamente em instantes."));
+                    .body(Map.of("message", errorMsg));
         }
     }
 

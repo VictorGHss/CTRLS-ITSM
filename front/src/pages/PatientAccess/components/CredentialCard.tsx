@@ -130,6 +130,7 @@ export const CredentialCard: React.FC<CredentialCardProps> = ({
           ) : (
             <>
               <QRCodeCanvas
+                key={cred.credentialCode}
                 id={`qr-canvas-${idx}`}
                 value={cred.credentialCode}
                 size={168}

@@ -118,12 +118,13 @@ public class ReactivateAccessUseCase {
 
         LocalDateTime now = LocalDateTime.now(AccessWindowCalculator.CLINIC_ZONE);
         LocalDate today = now.toLocalDate();
-        // Início a partir das 06:00 da manhã do dia atual para evitar rejeição por relógio dessincronizado da catraca física
-        LocalDateTime startWindow = LocalDateTime.of(today, LocalTime.of(6, 0));
+        // Início a partir de 5 minutos antes do momento atual para gerar nova visita no GerAcesso
+        // e evitar rejeição por relógio dessincronizado da catraca física
+        LocalDateTime startWindow = now.minusMinutes(5);
         LocalDateTime endWindow = LocalDateTime.of(today, LocalTime.of(23, 59));
         String startVisit = startWindow.format(AccessWindowCalculator.GERACESSO_DATE_FORMATTER);
         String endVisit = endWindow.format(AccessWindowCalculator.GERACESSO_DATE_FORMATTER);
-        log.info("[ReactivateAccess] Renovando visita na GerAcesso com janela do dia: {} até {}", startVisit, endVisit);
+        log.info("[ReactivateAccess] Renovando visita na GerAcesso com janela imediata: {} até {}", startVisit, endVisit);
 
         List<AccessCredential> updatedList = new ArrayList<>();
 
@@ -151,7 +152,7 @@ public class ReactivateAccessUseCase {
                     .visitedCpf(doctorCpf)
                     .build();
 
-            String newCredentialValue = cred.getAccessCredential();
+            String newCredentialValue = null;
             String newLocator = cred.getLocator();
 
             try {
@@ -161,23 +162,20 @@ public class ReactivateAccessUseCase {
                         && !responseOpt.get().credential().isBlank()
                         && !"null".equalsIgnoreCase(responseOpt.get().credential().trim())) {
                     newCredentialValue = responseOpt.get().credential().trim();
-                    if (responseOpt.get().locator() != null) {
+                    if (responseOpt.get().locator() != null && !responseOpt.get().locator().isBlank()) {
                         newLocator = responseOpt.get().locator().trim();
                     }
                     log.info("[ReactivateAccess] Acesso reativado na GerAcesso para '{}' ({}) com nova credencial: {}", 
                             cred.getName(), cred.getUserType(), newCredentialValue);
                 } else {
-                    log.warn("[ReactivateAccess] GerAcesso não retornou credencial válida para '{}'. Mantendo credencial atual: {}", 
-                            cred.getName(), newCredentialValue);
-                    if (newCredentialValue == null || newCredentialValue.isBlank()) {
-                        newCredentialValue = "CRED-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
-                    }
+                    log.error("[ReactivateAccess] GerAcesso não retornou credencial válida para '{}'.", cred.getName());
                 }
             } catch (Exception ex) {
-                log.warn("[ReactivateAccess] Falha ao reativar no GerAcesso para '{}': {}", cred.getName(), ex.getMessage());
-                if (newCredentialValue == null || newCredentialValue.isBlank()) {
-                    newCredentialValue = "CRED-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
-                }
+                log.error("[ReactivateAccess] Falha ao reativar no GerAcesso para '{}': {}", cred.getName(), ex.getMessage());
+            }
+
+            if (newCredentialValue == null || newCredentialValue.isBlank()) {
+                throw new IllegalStateException("O servidor da catraca física (GerAcesso) não respondeu com uma nova credencial. Tente novamente em instantes.");
             }
 
             cred.setAccessCredential(newCredentialValue);

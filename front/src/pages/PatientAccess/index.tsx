@@ -150,6 +150,8 @@ export default function PatientAccess() {
         // Mescla as credenciais reativadas com a lista existente para preservar acompanhantes/titular
         const currentList = credentials.length > 0 ? credentials : [];
         const mergedList = [...currentList];
+        let hasChangedCode = false;
+
         for (const newCred of response.data) {
           const idx = mergedList.findIndex(c =>
             (newCred.id && c.id && newCred.id === c.id) ||
@@ -157,14 +159,21 @@ export default function PatientAccess() {
             (newCred.userType === c.userType && newCred.name.trim().toLowerCase() === c.name.trim().toLowerCase())
           );
           if (idx >= 0) {
+            if (mergedList[idx].credentialCode !== newCred.credentialCode) {
+              hasChangedCode = true;
+            }
             mergedList[idx] = { ...mergedList[idx], ...newCred };
           } else {
+            hasChangedCode = true;
             mergedList.push(newCred);
           }
         }
         const finalList = mergedList.length > 0 ? mergedList : response.data;
         saveCredentialsWithOfflineCache(finalList, { token: verifiedToken, phoneDigits: verifiedPhoneDigits });
-        setReactivateMessage({ type: 'success', text: 'Novo QR Code gerado e liberado com sucesso nas catracas!' });
+        const successMsg = hasChangedCode 
+          ? 'Novo QR Code gerado e liberado com sucesso nas catracas!' 
+          : 'Acesso reenviado e liberado com sucesso nas catracas!';
+        setReactivateMessage({ type: 'success', text: successMsg });
         setTimeout(() => setReactivateMessage(null), 6000);
       } else {
         setReactivateMessage({ type: 'error', text: 'Não foi possível gerar nova credencial. Procure a recepção.' });

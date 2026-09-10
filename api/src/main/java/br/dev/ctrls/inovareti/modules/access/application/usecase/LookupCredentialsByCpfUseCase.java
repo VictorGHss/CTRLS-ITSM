@@ -77,7 +77,7 @@ public class LookupCredentialsByCpfUseCase {
         LocalDate today = LocalDate.now(AccessWindowCalculator.CLINIC_ZONE);
         LocalDate maxAllowedDate = today.plusDays(7);
 
-        // 1) Auto-cadastro público recente (ex: INOV-20260903-CPF ou IMG-20260903-CPF)
+        // 1) Auto-cadastro público recente válido (ex: INOV-20260903-CPF ou IMG-20260903-CPF)
         List<AccessCredential> allByCpf = accessCredentialRepositoryPort.findByCpf(cleanCpf);
         if (allByCpf != null && !allByCpf.isEmpty()) {
             List<AccessCredential> validAutoRegistrations = allByCpf.stream()
@@ -97,7 +97,13 @@ public class LookupCredentialsByCpfUseCase {
                 .toList();
 
             if (!validAutoRegistrations.isEmpty()) {
-                return expandAndSortCredentials(validAutoRegistrations);
+                boolean hasOnlyContingency = validAutoRegistrations.stream()
+                        .allMatch(c -> c.getAccessCredential() != null && c.getAccessCredential().startsWith("CRED-"));
+                boolean isFromPastDay = validAutoRegistrations.stream()
+                        .anyMatch(c -> c.getCreatedAt() != null && c.getCreatedAt().toLocalDate().isBefore(today));
+                if (!hasOnlyContingency && !isFromPastDay) {
+                    return expandAndSortCredentials(validAutoRegistrations);
+                }
             }
         }
 
@@ -107,7 +113,13 @@ public class LookupCredentialsByCpfUseCase {
 
         List<AccessCredential> credentials = accessCredentialRepositoryPort.findByAppointmentId(appointmentId);
         if (credentials != null && !credentials.isEmpty()) {
-            return expandAndSortCredentials(credentials);
+            boolean hasOnlyContingency = credentials.stream()
+                    .allMatch(c -> c.getAccessCredential() != null && c.getAccessCredential().startsWith("CRED-"));
+            boolean isFromPastDay = credentials.stream()
+                    .anyMatch(c -> c.getCreatedAt() != null && c.getCreatedAt().toLocalDate().isBefore(today));
+            if (!hasOnlyContingency && !isFromPastDay) {
+                return expandAndSortCredentials(credentials);
+            }
         }
 
         // 2) Agendamentos Feegow futuros
@@ -122,7 +134,14 @@ public class LookupCredentialsByCpfUseCase {
                             LocalDate d = a.startAt().toLocalDate();
                             return !d.isBefore(today) && !d.isAfter(maxAllowedDate);
                         })
-                        .sorted((a1, a2) -> a1.startAt().compareTo(a2.startAt()))
+                        .sorted((a1, a2) -> {
+                            // Prioriza agendamentos de HOJE antes de agendamentos futuros
+                            boolean a1Today = a1.startAt().toLocalDate().isEqual(today);
+                            boolean a2Today = a2.startAt().toLocalDate().isEqual(today);
+                            if (a1Today && !a2Today) return -1;
+                            if (!a1Today && a2Today) return 1;
+                            return a1.startAt().compareTo(a2.startAt());
+                        })
                         .toList();
 
                     if (!validUpcoming.isEmpty()) {
@@ -130,15 +149,22 @@ public class LookupCredentialsByCpfUseCase {
                             String apptIdStr = String.valueOf(appt.id());
                             List<AccessCredential> existing = accessCredentialRepositoryPort.findByAppointmentId(apptIdStr);
                             if (existing != null && !existing.isEmpty()) {
-                                return expandAndSortCredentials(existing);
+                                boolean hasOnlyContingency = existing.stream()
+                                        .allMatch(c -> c.getAccessCredential() != null && c.getAccessCredential().startsWith("CRED-"));
+                                boolean isFromPastDay = existing.stream()
+                                        .anyMatch(c -> c.getCreatedAt() != null && c.getCreatedAt().toLocalDate().isBefore(today));
+                                if (!hasOnlyContingency && !isFromPastDay) {
+                                    return expandAndSortCredentials(existing);
+                                }
+                                log.info("[LookupCredentialsByCpf] Agendamento Feegow {} possui credencial em contingência ou de data anterior. Regenerando...", apptIdStr);
                             }
                         }
 
-                        FeegowAppointment closest = validUpcoming.getFirst();
-                        String closestIdStr = String.valueOf(closest.id());
-                        log.info("[LookupCredentialsByCpf] Agendamento Feegow {} encontrado para CPF {}. Gerando credencial automaticamente...", closestIdStr, cleanCpf);
-                        processAccessRequestUseCase.execute(closestIdStr, cleanCpf, null);
-                        List<AccessCredential> newlyCreated = accessCredentialRepositoryPort.findByAppointmentId(closestIdStr);
+                        FeegowAppointment targetAppt = validUpcoming.getFirst();
+                        String targetIdStr = String.valueOf(targetAppt.id());
+                        log.info("[LookupCredentialsByCpf] Agendamento Feegow {} encontrado para CPF {}. Gerando credencial ativa no GerAcesso...", targetIdStr, cleanCpf);
+                        processAccessRequestUseCase.execute(targetIdStr, cleanCpf, null);
+                        List<AccessCredential> newlyCreated = accessCredentialRepositoryPort.findByAppointmentId(targetIdStr);
                         if (newlyCreated != null && !newlyCreated.isEmpty()) {
                             return expandAndSortCredentials(newlyCreated);
                         }

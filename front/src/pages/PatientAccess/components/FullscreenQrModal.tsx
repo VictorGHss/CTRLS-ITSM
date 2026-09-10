@@ -231,6 +231,7 @@ export const FullscreenQrModal: React.FC<FullscreenQrModalProps> = ({
           }}
         >
           <QRCodeCanvas 
+            key={qrValue}
             id="fullscreen-qr-canvas"
             value={qrValue} 
             size={qrSize} 

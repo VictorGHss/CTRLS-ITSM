@@ -110,7 +110,7 @@ export const CredentialsCarousel: React.FC<CredentialsCarouselProps> = ({
       >
         {credentials.map((cred, idx) => (
           <CredentialCard
-            key={cred.id || `${cred.credentialCode}-${idx}`}
+            key={`${cred.id || idx}-${cred.credentialCode}`}
             cred={cred}
             idx={idx}
             clinicTheme={clinicTheme}

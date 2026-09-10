@@ -253,11 +253,14 @@ public class ProcessAccessRequestUseCase {
         log.info("[ACCESS-WINDOW] Janela GerAcesso calculada para a data {}. Acesso físico liberado das {} às {}. Menor consulta: {}.",
             appointmentDate, physicalOpeningTime, closingTime, earliestTime);
 
+        LocalDate today = LocalDate.now(AccessWindowCalculator.CLINIC_ZONE);
         List<AccessCredential> existingForThisApp = accessCredentialRepositoryPort.findByAppointmentId(accessInfo.appointmentId());
         Optional<AccessCredential> activeCredOpt = existingForThisApp.stream()
             .filter(c -> c.getUserType() == UserType.PATIENT
                       && c.getAccessCredential() != null
-                      && !c.getAccessCredential().startsWith("CRED-"))
+                      && !c.getAccessCredential().startsWith("CRED-")
+                      && c.getCreatedAt() != null
+                      && c.getCreatedAt().toLocalDate().isEqual(today))
             .findFirst();
 
         String token;
@@ -346,7 +349,13 @@ public class ProcessAccessRequestUseCase {
             if (finalCpf != null && !finalCpf.isBlank() && CpfValidator.isValidCpf(finalCpf)) {
                 existingCred.setCpf(finalCpf);
             }
-            if (existingCred.getAccessCredential() != null 
+            if (activeCredOpt.isEmpty() && !token.startsWith("CRED-")) {
+                existingCred.setAccessCredential(token);
+                existingCred.setLocator(locator);
+                existingCred.setCreatedAt(LocalDateTime.now());
+                accessCredentialRepositoryPort.save(existingCred);
+                log.info("[ProcessAccessRequest] Credencial renovada com novo código GerAcesso ({}) para o agendamento ID: {}", token, accessInfo.appointmentId());
+            } else if (existingCred.getAccessCredential() != null 
                     && existingCred.getAccessCredential().startsWith("CRED-") 
                     && !token.startsWith("CRED-")) {
                 existingCred.setAccessCredential(token);
