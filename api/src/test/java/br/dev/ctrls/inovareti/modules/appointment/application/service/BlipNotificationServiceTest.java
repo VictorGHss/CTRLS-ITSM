@@ -49,6 +49,7 @@ public class BlipNotificationServiceTest {
     @Test
     public void testDoctorOutsideBlocklistWithAllowlistReturnsTrue() {
         service.setRawBlockedDoctorIds("46");
+        properties.setTestMode(true);
         properties.setTestDoctorId("1,70");
 
         assertTrue(service.isDoctorAllowed("1"), "Médico 1 na allowlist de teste deve retornar true");
@@ -100,10 +101,11 @@ public class BlipNotificationServiceTest {
                 mappingRepo
         );
 
-        // Properties has only active doctor 8, but doctor 32 is in DB
+        // Properties has only active doctor 8, so doctor 32 is blocked by strict whitelist
         properties.setActiveDoctorIds(java.util.List.of("8"));
 
-        assertTrue(customService.isDoctorAllowed("32"), "Médico 32 ativo no banco deve ser permitido mesmo se activeDoctorIds contiver apenas outros médicos");
+        assertFalse(customService.isDoctorAllowed("32"), "Médico 32 não presente em activeDoctorIds deve ser negado");
+        assertTrue(customService.isDoctorAllowed("8"), "Médico 8 presente em activeDoctorIds deve ser permitido");
         assertFalse(customService.isDoctorAllowed("999"), "Médico 999 não existente no banco nem no properties deve ser negado quando activeDoctorIds estiver restrito");
     }
 
@@ -137,7 +139,7 @@ public class BlipNotificationServiceTest {
 
         properties.setActiveDoctorIds(java.util.List.of("8"));
 
-        assertTrue(customService.isDoctorAllowed("15"), "Médico 15 mapeado na tabela deve ser permitido");
+        assertFalse(customService.isDoctorAllowed("15"), "Médico 15 fora de activeDoctorIds deve ser negado");
     }
 
     @Test

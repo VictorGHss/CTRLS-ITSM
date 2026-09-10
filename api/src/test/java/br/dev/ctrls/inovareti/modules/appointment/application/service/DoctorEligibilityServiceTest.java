@@ -129,8 +129,8 @@ class DoctorEligibilityServiceTest {
     }
 
     @Test
-    @DisplayName("DoctorConfiguration ativa com fila válida: Permite médico mesmo sem estar no activeDoctorIds da .env")
-    void testDoctorConfigActiveWithValidQueueAllowed() {
+    @DisplayName("Strict Whitelist: Quando activeDoctorIds está configurado, médicos fora da lista são bloqueados mesmo se ativos no banco")
+    void testDoctorConfigActiveWithValidQueueBlockedWhenNotInActiveDoctorIds() {
         properties.setActiveDoctorIds(List.of("8"));
 
         DoctorConfiguration config = DoctorConfiguration.builder()
@@ -141,8 +141,25 @@ class DoctorEligibilityServiceTest {
                 .build();
         when(doctorConfigRepo.findById(32L)).thenReturn(Optional.of(config));
 
+        assertThat(service.isDoctorAllowed("32")).isFalse(); // Fora da whitelist da .env
+        assertThat(service.isDoctorAllowed("8")).isTrue();   // Presente na whitelist da .env
+        assertThat(service.isDoctorAllowed("999")).isFalse(); // fail-closed
+    }
+
+    @Test
+    @DisplayName("Fallback DB: Quando activeDoctorIds está vazio na .env, médicos ativos no banco são permitidos")
+    void testDoctorConfigActiveWithValidQueueAllowedWhenActiveDoctorIdsIsEmpty() {
+        properties.setActiveDoctorIds(List.of());
+
+        DoctorConfiguration config = DoctorConfiguration.builder()
+                .feegowProfissionalId(32L)
+                .doctorName("Dr. Silva")
+                .isActive(true)
+                .blipQueueId("queue-pediatria")
+                .build();
+        when(doctorConfigRepo.findById(32L)).thenReturn(Optional.of(config));
+
         assertThat(service.isDoctorAllowed("32")).isTrue();
-        assertThat(service.isDoctorAllowed("8")).isTrue();
         assertThat(service.isDoctorAllowed("999")).isFalse(); // fail-closed
     }
 
@@ -170,8 +187,8 @@ class DoctorEligibilityServiceTest {
     }
 
     @Test
-    @DisplayName("getActiveAllowedDoctorIds: Agrega médicos elegíveis e exclui inativos e bloqueados")
-    void testGetActiveAllowedDoctorIds() {
+    @DisplayName("getActiveAllowedDoctorIds: Em produção com activeDoctorIds restringe estritamente aos configurados na .env")
+    void testGetActiveAllowedDoctorIdsStrictWhitelist() {
         properties.setActiveDoctorIds(List.of("10", "20", "46")); // 46 é bloqueado
 
         DoctorConfiguration activeConfig = DoctorConfiguration.builder()
@@ -193,7 +210,35 @@ class DoctorEligibilityServiceTest {
 
         List<String> result = service.getActiveAllowedDoctorIds();
 
-        assertThat(result).contains("10", "20", "30", "40");
-        assertThat(result).doesNotContain("46"); // blocked
+        // 10 e 20 estão na allowlist; 46 é bloqueado; 30 e 40 NÃO entram porque activeDoctorIds é estrito
+        assertThat(result).containsExactly("10", "20");
+        assertThat(result).doesNotContain("46", "30", "40");
+    }
+
+    @Test
+    @DisplayName("getActiveAllowedDoctorIds: Fallback para banco quando activeDoctorIds não está configurado")
+    void testGetActiveAllowedDoctorIdsFallbackToDb() {
+        properties.setActiveDoctorIds(List.of());
+
+        DoctorConfiguration activeConfig = DoctorConfiguration.builder()
+                .feegowProfissionalId(30L)
+                .isActive(true)
+                .blipQueueId("queue-derma")
+                .build();
+        when(doctorConfigRepo.findByIsActiveTrue()).thenReturn(List.of(activeConfig));
+        when(doctorConfigRepo.findById(30L)).thenReturn(Optional.of(activeConfig));
+
+        AppointmentDoctorMapping activeMapping = AppointmentDoctorMapping.builder()
+                .profissionalId("40")
+                .isActive(true)
+                .ignoreAutoSchedule(false)
+                .blipQueueId("queue-orto")
+                .build();
+        when(mappingRepo.findAll()).thenReturn(List.of(activeMapping));
+        when(mappingRepo.findByProfissionalId("40")).thenReturn(Optional.of(activeMapping));
+
+        List<String> result = service.getActiveAllowedDoctorIds();
+
+        assertThat(result).contains("30", "40");
     }
 }

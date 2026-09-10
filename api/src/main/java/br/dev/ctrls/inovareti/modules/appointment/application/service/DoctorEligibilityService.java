@@ -142,35 +142,19 @@ public class DoctorEligibilityService {
             } catch (NumberFormatException ignored) {}
         }
 
-        // 5. Validação em modo de produção
-        // Em modo de produção, se o médico estiver na lista de teste configurada, também é permitido (homologação paralela)
-        if (appointmentMotorProperties.getTestDoctorIds().contains(docId)) {
+        List<String> activeDoctorIds = appointmentMotorProperties.getActiveDoctorIds();
+        if (activeDoctorIds != null && !activeDoctorIds.isEmpty()) {
+            // STRICT WHITELIST: Quando activeDoctorIds está configurado na .env,
+            // médicos fora dessa lista são sumariamente bloqueados.
+            // Configurações do banco NÃO sobrepõem a whitelist da .env.
+            if (!activeDoctorIds.contains(docId)) {
+                log.debug("[DOCTOR-ELIGIBILITY] Médico ID={} bloqueado: fora da allowlist ativa configurada na .env (activeDoctorIds).", docId);
+                return false;
+            }
             return true;
         }
 
-        List<String> activeDoctorIds = appointmentMotorProperties.getActiveDoctorIds();
-        if (activeDoctorIds != null && !activeDoctorIds.isEmpty()) {
-            if (activeDoctorIds.contains(docId)) {
-                return true;
-            }
-            // Se activeDoctorIds foi definido na .env, médicos fora dessa lista só entram se tiverem DoctorConfiguration explicitamente ativa com fila válida
-            if (configOpt.isPresent() && configOpt.get().isConfigActive()) {
-                String qId = configOpt.get().getBlipQueueId();
-                if (qId != null && !qId.isBlank() && !qId.equalsIgnoreCase("inactive")) {
-                    return true;
-                }
-            }
-            if (mappingOpt.isPresent()) {
-                var mapping = mappingOpt.get();
-                String qId = mapping.getBlipQueueId();
-                if (qId != null && !qId.isBlank() && !qId.equalsIgnoreCase("inactive") && mapping.isActive() && !mapping.isIgnoreAutoSchedule()) {
-                    return true;
-                }
-            }
-            return false;
-        }
-
-        // Se activeDoctorIds da .env estiver vazio, exige configuração explícita ativa com fila válida
+        // Fallback: Se activeDoctorIds da .env estiver vazio/nulo, exige configuração explícita ativa com fila válida no banco
         if (configOpt.isPresent() && configOpt.get().isConfigActive()) {
             String qId = configOpt.get().getBlipQueueId();
             if (qId != null && !qId.isBlank() && !qId.equalsIgnoreCase("inactive")) {
@@ -202,27 +186,33 @@ public class DoctorEligibilityService {
         }
 
         Set<String> candidates = new LinkedHashSet<>();
-        if (appointmentMotorProperties.getActiveDoctorIds() != null) {
-            candidates.addAll(appointmentMotorProperties.getActiveDoctorIds());
-        }
+        List<String> activeDoctorIds = appointmentMotorProperties.getActiveDoctorIds();
 
-        if (doctorConfigurationRepository != null) {
-            doctorConfigurationRepository.findByIsActiveTrue().forEach(c -> {
-                if (c.getFeegowProfissionalId() != null) {
-                    candidates.add(String.valueOf(c.getFeegowProfissionalId()));
-                }
-            });
-        }
-
-        if (appointmentDoctorMappingRepository != null) {
-            appointmentDoctorMappingRepository.findAll().forEach(m -> {
-                if (m.getProfissionalId() != null && !m.getProfissionalId().isBlank()) {
-                    String qId = m.getBlipQueueId();
-                    if (qId != null && !qId.isBlank() && !qId.equalsIgnoreCase("inactive") && !m.isIgnoreAutoSchedule()) {
-                        candidates.add(m.getProfissionalId().trim());
+        if (activeDoctorIds != null && !activeDoctorIds.isEmpty()) {
+            // STRICT WHITELIST: Quando activeDoctorIds está configurado na .env,
+            // SOMENTE esses médicos são candidatos à ingestão matinal.
+            // O banco de dados NÃO pode expandir a lista de candidatos com outros médicos.
+            candidates.addAll(activeDoctorIds);
+        } else {
+            // Fallback: Se activeDoctorIds não foi informado na .env, busca médicos ativos no banco
+            if (doctorConfigurationRepository != null) {
+                doctorConfigurationRepository.findByIsActiveTrue().forEach(c -> {
+                    if (c.getFeegowProfissionalId() != null) {
+                        candidates.add(String.valueOf(c.getFeegowProfissionalId()));
                     }
-                }
-            });
+                });
+            }
+
+            if (appointmentDoctorMappingRepository != null) {
+                appointmentDoctorMappingRepository.findAll().forEach(m -> {
+                    if (m.getProfissionalId() != null && !m.getProfissionalId().isBlank()) {
+                        String qId = m.getBlipQueueId();
+                        if (qId != null && !qId.isBlank() && !qId.equalsIgnoreCase("inactive") && !m.isIgnoreAutoSchedule()) {
+                            candidates.add(m.getProfissionalId().trim());
+                        }
+                    }
+                });
+            }
         }
 
         return candidates.stream()

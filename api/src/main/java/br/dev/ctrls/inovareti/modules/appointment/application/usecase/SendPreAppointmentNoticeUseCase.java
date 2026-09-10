@@ -39,6 +39,7 @@ public class SendPreAppointmentNoticeUseCase {
     private final br.dev.ctrls.inovareti.modules.appointment.domain.port.output.PatientExternalPort patientExternalPort;
     private final SendAppointmentReminderUseCase sendAppointmentReminderUseCase;
     private final br.dev.ctrls.inovareti.modules.appointment.application.service.AppointmentFilterService appointmentFilterService;
+    private final br.dev.ctrls.inovareti.modules.appointment.application.service.DoctorEligibilityService doctorEligibilityService;
 
     public void execute() {
         if (!appointmentMotorProperties.isEnabled()) {
@@ -81,6 +82,13 @@ public class SendPreAppointmentNoticeUseCase {
         for (AppointmentSession session : candidateSessions) {
             try {
                 if (session.getPhoneNumber() == null || session.getPhoneNumber().isBlank()) {
+                    continue;
+                }
+
+                // VALIDAÇÃO DE ELEGIBILIDADE DO MÉDICO
+                if (!doctorEligibilityService.isDoctorAllowed(session.getDoctorProfissionalId())) {
+                    log.info("[LEMBRETE-ANTECEDENCIA] Médico ID={} não é elegível/ativo. Ignorando sessão ID={}.",
+                            session.getDoctorProfissionalId(), session.getId());
                     continue;
                 }
 
