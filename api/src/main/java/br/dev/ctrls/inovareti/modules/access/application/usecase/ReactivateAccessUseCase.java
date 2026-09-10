@@ -118,12 +118,12 @@ public class ReactivateAccessUseCase {
 
         LocalDateTime now = LocalDateTime.now(AccessWindowCalculator.CLINIC_ZONE);
         LocalDate today = now.toLocalDate();
-        // Margem de 2 minutos no passado para evitar rejeição por relógio dessincronizado da catraca
-        LocalDateTime startWindow = now.minusMinutes(2);
+        // Início a partir das 06:00 da manhã do dia atual para evitar rejeição por relógio dessincronizado da catraca física
+        LocalDateTime startWindow = LocalDateTime.of(today, LocalTime.of(6, 0));
         LocalDateTime endWindow = LocalDateTime.of(today, LocalTime.of(23, 59));
         String startVisit = startWindow.format(AccessWindowCalculator.GERACESSO_DATE_FORMATTER);
         String endVisit = endWindow.format(AccessWindowCalculator.GERACESSO_DATE_FORMATTER);
-        log.info("[ReactivateAccess] Renovando visita na GerAcesso com janela imediata: {} até {}", startVisit, endVisit);
+        log.info("[ReactivateAccess] Renovando visita na GerAcesso com janela do dia: {} até {}", startVisit, endVisit);
 
         List<AccessCredential> updatedList = new ArrayList<>();
 
