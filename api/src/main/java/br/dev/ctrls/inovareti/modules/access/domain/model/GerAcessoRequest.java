@@ -21,4 +21,10 @@ public record GerAcessoRequest(
     @JsonProperty("cpf_visitado") String visitedCpf,
     @JsonProperty("inicio_visita") String startVisit,
     @JsonProperty("fim_visita") String endVisit
-) {}
+) {
+    public GerAcessoRequest {
+        if (visitType == null || visitType != 1) {
+            visitType = 1;
+        }
+    }
+}

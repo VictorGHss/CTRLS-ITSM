@@ -6,7 +6,6 @@ import br.dev.ctrls.inovareti.modules.access.domain.model.CpfValidator;
 import br.dev.ctrls.inovareti.modules.access.domain.model.DoctorAccessData;
 import br.dev.ctrls.inovareti.modules.access.domain.model.GerAcessoRequest;
 import br.dev.ctrls.inovareti.modules.access.domain.model.GerAcessoResponse;
-import br.dev.ctrls.inovareti.modules.access.domain.model.UserType;
 import br.dev.ctrls.inovareti.modules.access.domain.port.output.AccessCredentialRepositoryPort;
 import br.dev.ctrls.inovareti.modules.access.domain.port.output.FeegowClientPort;
 import br.dev.ctrls.inovareti.modules.access.domain.port.output.GerAcessoClientPort;
@@ -147,7 +146,7 @@ public class ReactivateAccessUseCase {
                     .startVisit(startVisit)
                     .endVisit(endVisit)
                     .phone(cred.getPhone() != null ? cred.getPhone().replaceAll("\\D", "") : "")
-                    .visitType(cred.getUserType() == UserType.COMPANION ? 2 : 1)
+                    .visitType(1)
                     .visitedRegistration(matricula)
                     .visitedCpf(doctorCpf)
                     .build();

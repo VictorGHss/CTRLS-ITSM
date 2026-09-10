@@ -94,6 +94,47 @@ class ReactivateAccessUseCaseTest {
         assertThat(sentRequest.cpf()).isEqualTo(cpf);
         assertThat(sentRequest.visitedRegistration()).isEqualTo("10");
         assertThat(sentRequest.visitedCpf()).isEqualTo("12345678900");
+        assertThat(sentRequest.visitType()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("Deveria reativar acompanhante garantindo visitType = 1 para compatibilidade de catraca")
+    void shouldReactivateCompanionWithVisitType1() {
+        String appointmentId = "3470310";
+        String companionCpf = "07689589979";
+
+        AccessCredential companionCred = AccessCredential.builder()
+                .id(UUID.randomUUID())
+                .appointmentId(appointmentId)
+                .name("THIAGO DA ROCHA")
+                .cpf(companionCpf)
+                .userType(UserType.COMPANION)
+                .accessCredential("000099835728")
+                .locator("RERD8P")
+                .doctorName("Anestesistas")
+                .createdAt(LocalDateTime.now().minusMinutes(10))
+                .build();
+
+        when(accessCredentialRepositoryPort.findByAppointmentId(appointmentId)).thenReturn(List.of(companionCred));
+        when(doctorAccessResolver.resolveDoctorAccessDataByName("Anestesistas"))
+                .thenReturn(new DoctorAccessData("", ""));
+        when(gerAcessoClientPort.registerAccess(any(GerAcessoRequest.class)))
+                .thenReturn(Optional.of(new GerAcessoResponse("1", "OK", null, "1", null, "BDMXPW", "000099342589")));
+        when(accessCredentialRepositoryPort.save(any(AccessCredential.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        List<AccessCredential> result = useCase.reactivateAccess(appointmentId);
+
+        assertThat(result).hasSize(1);
+        AccessCredential updated = result.getFirst();
+        assertThat(updated.getAccessCredential()).isEqualTo("000099342589");
+        assertThat(updated.getLocator()).isEqualTo("BDMXPW");
+
+        ArgumentCaptor<GerAcessoRequest> captor = ArgumentCaptor.forClass(GerAcessoRequest.class);
+        verify(gerAcessoClientPort).registerAccess(captor.capture());
+        GerAcessoRequest sent = captor.getValue();
+        assertThat(sent.cpf()).isEqualTo(companionCpf);
+        assertThat(sent.visitType()).isEqualTo(1);
     }
 
     @Test

@@ -136,7 +136,7 @@ public class RegisterCompanionUseCase {
             .endVisit(endVisit)
             .name(companion.name())
             .phone(companion.phone() != null ? companion.phone().replaceAll("\\D", "") : "")
-            .visitType(2)
+            .visitType(1)
             .visitedRegistration(matricula)
             .visitedCpf(doctorCpf)
             .build();
@@ -341,7 +341,7 @@ public class RegisterCompanionUseCase {
                     .endVisit(endVisit)
                     .name(targetCred.getName())
                     .phone(targetCred.getPhone() != null ? targetCred.getPhone() : "")
-                    .visitType(2)
+                    .visitType(1)
                     .visitedRegistration(docData.matricula())
                     .visitedCpf(docData.cpf())
                     .build();
