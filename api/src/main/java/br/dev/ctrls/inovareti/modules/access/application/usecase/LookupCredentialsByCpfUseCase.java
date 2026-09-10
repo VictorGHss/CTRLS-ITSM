@@ -272,7 +272,8 @@ public class LookupCredentialsByCpfUseCase {
                 doctorName,
                 appointmentDateDisplay,
                 opensAt,
-                closesAt
+                closesAt,
+                cred.getId()
             ));
         }
 

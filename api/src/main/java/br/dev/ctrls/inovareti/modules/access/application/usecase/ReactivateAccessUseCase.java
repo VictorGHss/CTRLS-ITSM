@@ -6,6 +6,7 @@ import br.dev.ctrls.inovareti.modules.access.domain.model.CpfValidator;
 import br.dev.ctrls.inovareti.modules.access.domain.model.DoctorAccessData;
 import br.dev.ctrls.inovareti.modules.access.domain.model.GerAcessoRequest;
 import br.dev.ctrls.inovareti.modules.access.domain.model.GerAcessoResponse;
+import br.dev.ctrls.inovareti.modules.access.domain.model.UserType;
 import br.dev.ctrls.inovareti.modules.access.domain.port.output.AccessCredentialRepositoryPort;
 import br.dev.ctrls.inovareti.modules.access.domain.port.output.FeegowClientPort;
 import br.dev.ctrls.inovareti.modules.access.domain.port.output.GerAcessoClientPort;
@@ -146,26 +147,38 @@ public class ReactivateAccessUseCase {
                     .startVisit(startVisit)
                     .endVisit(endVisit)
                     .phone(cred.getPhone() != null ? cred.getPhone().replaceAll("\\D", "") : "")
-                    .visitType(1)
+                    .visitType(cred.getUserType() == UserType.COMPANION ? 2 : 1)
                     .visitedRegistration(matricula)
                     .visitedCpf(doctorCpf)
                     .build();
 
-            String newCredentialValue = "CRED-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+            String newCredentialValue = cred.getAccessCredential();
             String newLocator = cred.getLocator();
 
             try {
                 Optional<GerAcessoResponse> responseOpt = gerAcessoClientPort.registerAccess(gerAcessoRequest);
-                if (responseOpt.isPresent() && responseOpt.get().credential() != null && !responseOpt.get().credential().isBlank()) {
+                if (responseOpt.isPresent() 
+                        && responseOpt.get().credential() != null 
+                        && !responseOpt.get().credential().isBlank()
+                        && !"null".equalsIgnoreCase(responseOpt.get().credential().trim())) {
                     newCredentialValue = responseOpt.get().credential().trim();
                     if (responseOpt.get().locator() != null) {
                         newLocator = responseOpt.get().locator().trim();
                     }
                     log.info("[ReactivateAccess] Acesso reativado na GerAcesso para '{}' ({}) com nova credencial: {}", 
                             cred.getName(), cred.getUserType(), newCredentialValue);
+                } else {
+                    log.warn("[ReactivateAccess] GerAcesso não retornou credencial válida para '{}'. Mantendo credencial atual: {}", 
+                            cred.getName(), newCredentialValue);
+                    if (newCredentialValue == null || newCredentialValue.isBlank()) {
+                        newCredentialValue = "CRED-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+                    }
                 }
             } catch (Exception ex) {
-                log.warn("[ReactivateAccess] Falha ao reativar no GerAcesso para '{}' (usando contingência): {}", cred.getName(), ex.getMessage());
+                log.warn("[ReactivateAccess] Falha ao reativar no GerAcesso para '{}': {}", cred.getName(), ex.getMessage());
+                if (newCredentialValue == null || newCredentialValue.isBlank()) {
+                    newCredentialValue = "CRED-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+                }
             }
 
             cred.setAccessCredential(newCredentialValue);

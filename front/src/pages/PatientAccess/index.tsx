@@ -147,7 +147,23 @@ export default function PatientAccess() {
       );
 
       if (response.data && response.data.length > 0) {
-        saveCredentialsWithOfflineCache(response.data, { token: verifiedToken, phoneDigits: verifiedPhoneDigits });
+        // Mescla as credenciais reativadas com a lista existente para preservar acompanhantes/titular
+        const currentList = credentials.length > 0 ? credentials : [];
+        const mergedList = [...currentList];
+        for (const newCred of response.data) {
+          const idx = mergedList.findIndex(c =>
+            (newCred.id && c.id && newCred.id === c.id) ||
+            (newCred.cpf && c.cpf && newCred.cpf.replace(/\D/g, '') === c.cpf.replace(/\D/g, '')) ||
+            (newCred.userType === c.userType && newCred.name.trim().toLowerCase() === c.name.trim().toLowerCase())
+          );
+          if (idx >= 0) {
+            mergedList[idx] = { ...mergedList[idx], ...newCred };
+          } else {
+            mergedList.push(newCred);
+          }
+        }
+        const finalList = mergedList.length > 0 ? mergedList : response.data;
+        saveCredentialsWithOfflineCache(finalList, { token: verifiedToken, phoneDigits: verifiedPhoneDigits });
         setReactivateMessage({ type: 'success', text: 'Novo QR Code gerado e liberado com sucesso nas catracas!' });
         setTimeout(() => setReactivateMessage(null), 6000);
       } else {

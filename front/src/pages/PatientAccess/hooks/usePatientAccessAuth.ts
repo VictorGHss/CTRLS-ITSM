@@ -212,8 +212,13 @@ export function usePatientAccessAuth({ appointmentId, clinicTheme }: UsePatientA
     }
   }, [appointmentId, refreshCredentials]);
 
-  // Recupera credenciais em cache local (PWA Offline-First) com Revalidação em Background
+  // Recupera credenciais em cache local (PWA Offline-First) com Revalidação em Background na inicialização
+  const lastHydratedKeyRef = useRef<string | null>(null);
   useEffect(() => {
+    const currentKey = appointmentId || clinicTheme.id;
+    if (lastHydratedKeyRef.current === currentKey) return;
+    lastHydratedKeyRef.current = currentKey;
+
     try {
       const todayStr = new Date().toLocaleDateString('sv-SE');
 

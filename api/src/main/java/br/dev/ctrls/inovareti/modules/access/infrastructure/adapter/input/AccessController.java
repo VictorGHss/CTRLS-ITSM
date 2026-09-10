@@ -42,11 +42,14 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import br.dev.ctrls.inovareti.modules.access.domain.model.CpfValidator;
+
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -157,16 +160,7 @@ public class AccessController {
                 request.name(), request.cpf(), request.clinic());
         try {
             List<CompanionAccessInfo> domainCompanions = new ArrayList<>();
-            if (request.companion() != null && request.companion().name() != null && !request.companion().name().isBlank()) {
-                domainCompanions.add(new CompanionAccessInfo(
-                    request.companion().name(),
-                    request.companion().cpf(),
-                    request.companion().phone(),
-                    null,
-                    request.companion().birthDate()
-                ));
-            }
-            if (request.companions() != null) {
+            if (request.companions() != null && !request.companions().isEmpty()) {
                 for (var c : request.companions()) {
                     if (c != null && c.name() != null && !c.name().isBlank()) {
                         domainCompanions.add(new CompanionAccessInfo(
@@ -178,7 +172,24 @@ public class AccessController {
                         ));
                     }
                 }
+            } else if (request.companion() != null && request.companion().name() != null && !request.companion().name().isBlank()) {
+                domainCompanions.add(new CompanionAccessInfo(
+                    request.companion().name(),
+                    request.companion().cpf(),
+                    request.companion().phone(),
+                    null,
+                    request.companion().birthDate()
+                ));
             }
+
+            // Deduplica acompanhantes para proteção absoluta contra envio duplo
+            Map<String, CompanionAccessInfo> dedupMap = new LinkedHashMap<>();
+            for (CompanionAccessInfo comp : domainCompanions) {
+                String cleanCpf = CpfValidator.cleanCpf(comp.cpf());
+                String key = !cleanCpf.isBlank() ? cleanCpf : comp.name().trim().toLowerCase();
+                dedupMap.putIfAbsent(key, comp);
+            }
+            domainCompanions = new ArrayList<>(dedupMap.values());
 
             if (request.appointmentId() != null && !request.appointmentId().isBlank()
                     && !request.appointmentId().startsWith("INOV-")
@@ -208,7 +219,8 @@ public class AccessController {
                                     docName,
                                     apptDateDisplay,
                                     "06:00",
-                                    "23:59"
+                                    "23:59",
+                                    cred.getId()
                                 ))
                                 .toList();
                             return ResponseEntity.ok(feegowResponseList);
@@ -256,7 +268,8 @@ public class AccessController {
                     resolvedDoctorName,
                     appointmentDateDisplay,
                     "06:00",
-                    "23:59"
+                    "23:59",
+                    cred.getId()
                 ))
                 .toList();
 
@@ -379,7 +392,8 @@ public class AccessController {
                         docName,
                         finalAppointmentDateTime,
                         finalOpensAt,
-                        finalClosesAt
+                        finalClosesAt,
+                        cred.getId()
                     );
                 })
                 .toList();

@@ -218,7 +218,7 @@ export const RegistrationTab: React.FC<RegistrationTabProps> = ({
         visitDate: finalVisitDate,
         doctorName: finalDoctorName,
         appointmentId: !manualDoctorMode && selectedFeegowApptId ? selectedFeegowApptId : undefined,
-        companion: companionsPayload.length > 0 ? companionsPayload[0] : undefined,
+        companion: companionsPayload.length === 1 ? companionsPayload[0] : undefined,
         companions: companionsPayload.length > 0 ? companionsPayload : undefined
       };
 

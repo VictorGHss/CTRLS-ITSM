@@ -22,7 +22,10 @@ import org.springframework.stereotype.Component;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.Executors;
@@ -143,13 +146,16 @@ public class RegisterCompanionUseCase {
 
         try {
             Optional<GerAcessoResponse> responseOpt = gerAcessoClientPort.registerAccess(request);
-            if (responseOpt.isPresent()) {
-                token = responseOpt.get().credential();
-                locator = responseOpt.get().locator();
+            if (responseOpt.isPresent() 
+                    && responseOpt.get().credential() != null 
+                    && !responseOpt.get().credential().isBlank()
+                    && !"null".equalsIgnoreCase(responseOpt.get().credential().trim())) {
+                token = responseOpt.get().credential().trim();
+                locator = responseOpt.get().locator() != null ? responseOpt.get().locator().trim() : "";
                 log.info("[RegisterCompanion] Acompanhante cadastrado na GerAcesso: Nome={}, Credencial={}, Locator={}", 
                         companion.name(), token, locator);
             } else {
-                log.warn("[RegisterCompanion] GerAcesso indisponível para acompanhante {}. Ativando credencial contingencial.", companion.name());
+                log.warn("[RegisterCompanion] GerAcesso retornou resposta sem credencial válida para acompanhante {}. Ativando credencial contingencial.", companion.name());
             }
         } catch (Exception ex) {
             log.error("[RegisterCompanion] Erro ao cadastrar acompanhante na GerAcesso. Causa: {}", ex.getMessage(), ex);
@@ -218,9 +224,19 @@ public class RegisterCompanionUseCase {
             return;
         }
 
-        log.info("[RegisterCompanion] Iniciando cadastro paralelo de {} acompanhante(s) via Virtual Threads...", companions.size());
+        // Deduplica acompanhantes para garantir que duas threads nunca processem o mesmo acompanhante em paralelo
+        Map<String, CompanionAccessInfo> uniqueCompanions = new LinkedHashMap<>();
+        for (var comp : companions) {
+            if (comp == null || comp.name() == null || comp.name().isBlank()) continue;
+            String cleanCpf = CpfValidator.cleanCpf(comp.cpf());
+            String key = !cleanCpf.isBlank() ? cleanCpf : comp.name().trim().toLowerCase();
+            uniqueCompanions.putIfAbsent(key, comp);
+        }
+        List<CompanionAccessInfo> sanitizedCompanions = new ArrayList<>(uniqueCompanions.values());
+
+        log.info("[RegisterCompanion] Iniciando cadastro paralelo de {} acompanhante(s) via Virtual Threads...", sanitizedCompanions.size());
         try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
-            List<Future<Void>> futures = companions.stream()
+            List<Future<Void>> futures = sanitizedCompanions.stream()
                 .map(companion -> executor.submit(() -> {
                     try {
                         String compCleanCpf = CpfValidator.cleanCpf(companion.cpf());
