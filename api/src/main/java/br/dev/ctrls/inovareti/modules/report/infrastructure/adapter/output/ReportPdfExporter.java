@@ -43,12 +43,16 @@ public class ReportPdfExporter implements ReportPdfExporterPort {
     @Override
     public byte[] exportInventoryExitsToPdf(List<OutflowReportRowDTO> rows) {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
-        Document document = new Document(PageSize.A4, 50, 50, 50, 50);
+        // Orientação em paisagem (Landscape) para acomodar as 8 colunas sem quebras indevidas
+        Document document = new Document(PageSize.A4.rotate(), 30, 30, 30, 30);
         try {
             PdfWriter.getInstance(document, out);
             document.open();
 
             java.awt.Color inovareColor = new java.awt.Color(254, 181, 108);
+            java.awt.Color borderColor = new java.awt.Color(226, 232, 240);
+            java.awt.Color alternateRowColor = new java.awt.Color(249, 250, 251);
+
             addLogo(document);
             addTitle(document, inovareColor);
 
@@ -56,34 +60,38 @@ public class ReportPdfExporter implements ReportPdfExporterPort {
 
             com.lowagie.text.Font subFont = FontFactory.getFont(
                     FontFactory.HELVETICA,
-                    10,
+                    9.5f,
                     com.lowagie.text.Font.NORMAL,
-                    java.awt.Color.BLACK);
+                    new java.awt.Color(71, 85, 105));
 
             Paragraph subtitle = new Paragraph(
                     "Relatório de Saídas - Período: " + safe(periodStr)
-                            + "    Gerado em: " + DATE_FORMATTER.format(LocalDateTime.now()),
+                            + "    |    Gerado em: " + DATE_FORMATTER.format(LocalDateTime.now()),
                     subFont);
-            subtitle.setSpacingAfter(8f);
+            subtitle.setSpacingAfter(10f);
             document.add(subtitle);
 
             PdfPTable table = createTableWithHeader(inovareColor);
 
             com.lowagie.text.Font cellFont = FontFactory.getFont(
                     FontFactory.HELVETICA,
-                    10,
+                    8.5f,
                     com.lowagie.text.Font.NORMAL,
                     java.awt.Color.BLACK);
             com.lowagie.text.Font cellFontBold = FontFactory.getFont(
                     FontFactory.HELVETICA_BOLD,
-                    10,
+                    8.5f,
                     com.lowagie.text.Font.BOLD,
                     java.awt.Color.BLACK);
 
             BigDecimal tableTotalValue = BigDecimal.ZERO;
             int totalItems = 0;
+            int rowIndex = 0;
 
             for (OutflowReportRowDTO row : rows) {
+                java.awt.Color rowBg = (rowIndex % 2 == 1) ? alternateRowColor : java.awt.Color.WHITE;
+                rowIndex++;
+
                 String requester = sanitizeForPdf(row.requester());
                 String sector = sanitizeForPdf(row.userSector());
                 String location = sanitizeForPdf(row.userLocation());
@@ -101,77 +109,56 @@ public class ReportPdfExporter implements ReportPdfExporterPort {
                 String priceStr = sanitizeForPdf(CURRENCY_FORMATTER.format(totalPrice));
                 String date = sanitizeForPdf(row.deliveryDate() != null ? row.deliveryDate().format(DATE_FORMATTER) : null);
 
-                PdfPCell c1 = new PdfPCell(new Phrase(tipo, cellFont));
-                c1.setPadding(6f);
-                c1.setHorizontalAlignment(Element.ALIGN_LEFT);
-                table.addCell(c1);
+                table.addCell(createCell(tipo, cellFont, Element.ALIGN_LEFT, rowBg, borderColor));
+                table.addCell(createCell(item, cellFont, Element.ALIGN_LEFT, rowBg, borderColor));
+                table.addCell(createCell(qtd, cellFont, Element.ALIGN_CENTER, rowBg, borderColor));
+                table.addCell(createCell(requester, cellFont, Element.ALIGN_LEFT, rowBg, borderColor));
+                table.addCell(createCell(location, cellFont, Element.ALIGN_LEFT, rowBg, borderColor));
+                table.addCell(createCell(sector, cellFont, Element.ALIGN_LEFT, rowBg, borderColor));
+                table.addCell(createCell(priceStr, cellFont, Element.ALIGN_RIGHT, rowBg, borderColor));
 
-                PdfPCell c2 = new PdfPCell(new Phrase(item, cellFont));
-                c2.setPadding(6f);
-                c2.setHorizontalAlignment(Element.ALIGN_LEFT);
-                table.addCell(c2);
-
-                PdfPCell c3 = new PdfPCell(new Phrase(qtd, cellFont));
-                c3.setPadding(6f);
-                c3.setHorizontalAlignment(Element.ALIGN_RIGHT);
-                table.addCell(c3);
-
-                PdfPCell c4 = new PdfPCell(new Phrase(requester, cellFont));
-                c4.setPadding(6f);
-                c4.setHorizontalAlignment(Element.ALIGN_LEFT);
-                table.addCell(c4);
-
-                PdfPCell c5 = new PdfPCell(new Phrase(location, cellFont));
-                c5.setPadding(6f);
-                c5.setHorizontalAlignment(Element.ALIGN_LEFT);
-                table.addCell(c5);
-
-                PdfPCell c6 = new PdfPCell(new Phrase(sector, cellFont));
-                c6.setPadding(6f);
-                c6.setHorizontalAlignment(Element.ALIGN_LEFT);
-                table.addCell(c6);
-
-                PdfPCell c7 = new PdfPCell(new Phrase(priceStr, cellFont));
-                c7.setPadding(6f);
-                c7.setHorizontalAlignment(Element.ALIGN_RIGHT);
-                table.addCell(c7);
-
-                PdfPCell c8 = new PdfPCell(new Phrase(date, cellFont));
-                c8.setPadding(6f);
-                c8.setHorizontalAlignment(Element.ALIGN_LEFT);
+                PdfPCell c8 = createCell(date, cellFont, Element.ALIGN_CENTER, rowBg, borderColor);
                 c8.setNoWrap(true);
                 table.addCell(c8);
             }
 
             if (!rows.isEmpty()) {
+                java.awt.Color totalBg = new java.awt.Color(243, 244, 246);
+
                 PdfPCell totalLabel = new PdfPCell(new Phrase("TOTAL", cellFontBold));
                 totalLabel.setColspan(6);
                 totalLabel.setHorizontalAlignment(Element.ALIGN_RIGHT);
-                totalLabel.setPadding(6f);
-                totalLabel.setBorderWidthTop(1f);
+                totalLabel.setPadding(5f);
+                totalLabel.setBackgroundColor(totalBg);
+                totalLabel.setBorderColor(borderColor);
+                totalLabel.setBorderWidthTop(1.5f);
                 table.addCell(totalLabel);
 
                 PdfPCell totalValueCell = new PdfPCell(new Phrase(CURRENCY_FORMATTER.format(tableTotalValue), cellFontBold));
                 totalValueCell.setHorizontalAlignment(Element.ALIGN_RIGHT);
-                totalValueCell.setPadding(6f);
-                totalValueCell.setBorderWidthTop(1f);
+                totalValueCell.setPadding(5f);
+                totalValueCell.setBackgroundColor(totalBg);
+                totalValueCell.setBorderColor(borderColor);
+                totalValueCell.setBorderWidthTop(1.5f);
                 table.addCell(totalValueCell);
 
                 PdfPCell empty = new PdfPCell(new Phrase(""));
-                empty.setPadding(6f);
-                empty.setBorderWidthTop(1f);
+                empty.setPadding(5f);
+                empty.setBackgroundColor(totalBg);
+                empty.setBorderColor(borderColor);
+                empty.setBorderWidthTop(1.5f);
                 table.addCell(empty);
             }
 
             document.add(table);
 
             Paragraph resumoTitle = new Paragraph("Resumo do Período", cellFontBold);
-            resumoTitle.setSpacingBefore(8f);
+            resumoTitle.setSpacingBefore(10f);
             document.add(resumoTitle);
 
             Paragraph resumo = new Paragraph(
                     "Total de Itens Baixados: " + totalItems
-                            + "    Valor Total do Consumo: " + CURRENCY_FORMATTER.format(tableTotalValue),
+                            + "    |    Valor Total do Consumo: " + CURRENCY_FORMATTER.format(tableTotalValue),
                     cellFont);
             document.add(resumo);
 
@@ -256,26 +243,56 @@ public class ReportPdfExporter implements ReportPdfExporterPort {
     private PdfPTable createTableWithHeader(java.awt.Color inovareColor) throws DocumentException {
         PdfPTable table = new PdfPTable(8);
         table.setWidthPercentage(100f);
-        table.setWidths(new float[] { 12f, 22f, 5f, 15f, 12f, 12f, 10f, 12f });
+        // Distribuição otimizada das 8 colunas para orientação paisagem (A4 Landscape = 782pt imprimíveis)
+        table.setWidths(new float[] { 9f, 22f, 7f, 16f, 12f, 12f, 10f, 12f });
         table.setSpacingBefore(6f);
+        table.setHeaderRows(1);
 
         com.lowagie.text.Font headerFont = FontFactory.getFont(
                 FontFactory.HELVETICA_BOLD,
-                11,
+                9f,
                 com.lowagie.text.Font.BOLD,
                 java.awt.Color.WHITE);
 
         String[] headers = { "Tipo de Item", "Item", "Qtd Entregue", "Quem Solicitou", "Local do Usuário", "Setor do Usuário", "Preço Total", "Data da Entrega" };
-        for (String header : headers) {
-            PdfPCell hd = new PdfPCell(new Phrase(header, headerFont));
+        int[] headerAligns = {
+            Element.ALIGN_LEFT,
+            Element.ALIGN_LEFT,
+            Element.ALIGN_CENTER,
+            Element.ALIGN_LEFT,
+            Element.ALIGN_LEFT,
+            Element.ALIGN_LEFT,
+            Element.ALIGN_RIGHT,
+            Element.ALIGN_CENTER
+        };
+
+        for (int i = 0; i < headers.length; i++) {
+            PdfPCell hd = new PdfPCell(new Phrase(headers[i], headerFont));
             hd.setBackgroundColor(inovareColor);
+            hd.setBorderColor(new java.awt.Color(230, 150, 70));
             hd.setBorderWidth(0.5f);
-            hd.setPadding(6f);
-            hd.setHorizontalAlignment(Element.ALIGN_LEFT);
+            hd.setPaddingTop(5f);
+            hd.setPaddingBottom(5f);
+            hd.setPaddingLeft(4f);
+            hd.setPaddingRight(4f);
+            hd.setHorizontalAlignment(headerAligns[i]);
             table.addCell(hd);
         }
 
         return table;
+    }
+
+    private PdfPCell createCell(String text, com.lowagie.text.Font font, int alignment, java.awt.Color bg, java.awt.Color borderColor) {
+        PdfPCell cell = new PdfPCell(new Phrase(text, font));
+        cell.setPaddingTop(4.5f);
+        cell.setPaddingBottom(4.5f);
+        cell.setPaddingLeft(4f);
+        cell.setPaddingRight(4f);
+        cell.setHorizontalAlignment(alignment);
+        cell.setBackgroundColor(bg);
+        cell.setBorderColor(borderColor);
+        cell.setBorderWidth(0.5f);
+        return cell;
     }
 
     private String sanitizeForPdf(String value) {
