@@ -241,4 +241,33 @@ class DoctorEligibilityServiceTest {
 
         assertThat(result).contains("30", "40");
     }
+
+    @Test
+    @DisplayName("Modo DB: Quando activeDoctorIds='DB', busca médicos ativos dinamicamente no banco e bloqueia inativos")
+    void testDbDrivenModeWithExplicitDbSetting() {
+        properties.setActiveDoctorIds(List.of("DB"));
+        assertThat(service.isDbDrivenMode()).isTrue();
+
+        // Médico 15 ativo no banco
+        DoctorConfiguration activeConfig = DoctorConfiguration.builder()
+                .feegowProfissionalId(15L)
+                .isActive(true)
+                .build();
+        when(doctorConfigRepo.findById(15L)).thenReturn(Optional.of(activeConfig));
+        when(doctorConfigRepo.findByIsActiveTrue()).thenReturn(List.of(activeConfig));
+
+        // Médico 75 inativo no banco
+        DoctorConfiguration inactiveConfig = DoctorConfiguration.builder()
+                .feegowProfissionalId(75L)
+                .isActive(false)
+                .build();
+        when(doctorConfigRepo.findById(75L)).thenReturn(Optional.of(inactiveConfig));
+
+        assertThat(service.isDoctorAllowed("15")).isTrue();
+        assertThat(service.isDoctorAllowed("75")).isFalse();
+
+        List<String> activeIds = service.getActiveAllowedDoctorIds();
+        assertThat(activeIds).contains("15");
+        assertThat(activeIds).doesNotContain("75");
+    }
 }

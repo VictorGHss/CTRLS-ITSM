@@ -28,6 +28,8 @@ import lombok.extern.slf4j.Slf4j;
 public class DoctorConfigurationController {
 
     private final DoctorConfigurationRepository doctorConfigurationRepository;
+    private final br.dev.ctrls.inovareti.modules.appointment.domain.port.output.AppointmentDoctorMappingRepositoryPort appointmentDoctorMappingRepository;
+    private final br.dev.ctrls.inovareti.modules.appointment.application.service.DoctorEligibilityService doctorEligibilityService;
     private final br.dev.ctrls.inovareti.modules.appointment.application.service.BlipReviewNotificationService blipReviewNotificationService;
 
     @org.springframework.beans.factory.annotation.Value("${app.appointment.motor.active-doctor-ids:}")
@@ -35,20 +37,6 @@ public class DoctorConfigurationController {
 
     @org.springframework.beans.factory.annotation.Value("${app.appointment.motor.test-doctor-ids:}")
     private String testDoctorIds;
-
-    private java.util.Set<Long> getAllowedDoctorIds() {
-        java.util.Set<Long> set = new java.util.HashSet<>();
-        String combined = (activeDoctorIds != null ? activeDoctorIds : "") + "," + (testDoctorIds != null ? testDoctorIds : "");
-        for (String s : combined.split(",")) {
-            String trimmed = s.trim();
-            if (!trimmed.isEmpty()) {
-                try {
-                    set.add(Long.parseLong(trimmed));
-                } catch (NumberFormatException ignored) {}
-            }
-        }
-        return set;
-    }
 
     /**
      * Endpoint de teste para disparo manual da avaliação Google Review.
@@ -66,21 +54,15 @@ public class DoctorConfigurationController {
                 ? doctorId.trim()
                 : ((googleReviewHash != null && !googleReviewHash.isBlank()) ? googleReviewHash.trim().replaceAll("\\s+", "") : "default");
 
-        java.util.Set<Long> allowedDoctorIds = getAllowedDoctorIds();
-        Long parsedDoctorId = null;
-        if (doctorId != null && !doctorId.isBlank()) {
-            try {
-                parsedDoctorId = Long.parseLong(doctorId.trim());
-            } catch (NumberFormatException ignored) {}
-        }
-
-        if (!allowedDoctorIds.isEmpty() && (parsedDoctorId == null || !allowedDoctorIds.contains(parsedDoctorId))) {
-            log.warn("[GOOGLE-REVIEW] Teste de avaliação bloqueado. Médico ID={} não está habilitado nas listas de médicos ativos (.env).", doctorId);
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(java.util.Map.of(
-                "status", "blocked",
-                "message", "Médico ID=" + doctorId + " não está habilitado na lista de médicos ativos (.env). Disparo ignorado.",
-                "doctorId", doctorId != null ? doctorId : "null"
-            ));
+        if (doctorId != null && !doctorId.isBlank() && doctorEligibilityService != null) {
+            if (!doctorEligibilityService.isDoctorAllowed(doctorId.trim())) {
+                log.warn("[GOOGLE-REVIEW] Teste de avaliação bloqueado. Médico ID={} não está habilitado.", doctorId);
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body(java.util.Map.of(
+                    "status", "blocked",
+                    "message", "Médico ID=" + doctorId + " não está habilitado para envios. Disparo ignorado.",
+                    "doctorId", doctorId
+                ));
+            }
         }
 
         log.info("[REST] Teste manual de disparo de avaliação Google para o telefone={}, paciente={}, medico={}, reviewParam={}",
@@ -99,6 +81,44 @@ public class DoctorConfigurationController {
     }
 
     /**
+     * Alterna o status ativo/inativo de confirmações automáticas de um médico com 1 clique.
+     * Sincroniza tanto a tabela doctor_configurations quanto appointment_doctor_mapping.
+     *
+     * @param id ID do profissional Feegow.
+     * @param payload Mapa contendo o booleano 'active'.
+     * @return A configuração salva com status 200 OK.
+     */
+    @PreAuthorize("hasRole('ADMIN')")
+    @org.springframework.web.bind.annotation.PatchMapping("/{id}/active")
+    public ResponseEntity<DoctorConfiguration> updateActiveStatus(
+            @PathVariable Long id,
+            @RequestBody java.util.Map<String, Boolean> payload) {
+        boolean active = Boolean.TRUE.equals(payload.get("active"));
+        log.info("[REST] Atualizando status ativo de confirmações para o profissional ID: {} -> active={}", id, active);
+
+        DoctorConfiguration config = doctorConfigurationRepository.findById(id).orElseGet(() -> {
+            return DoctorConfiguration.builder()
+                    .feegowProfissionalId(id)
+                    .isActive(active)
+                    .build();
+        });
+        config.setIsActive(active);
+        DoctorConfiguration saved = doctorConfigurationRepository.save(config);
+
+        if (appointmentDoctorMappingRepository != null) {
+            appointmentDoctorMappingRepository.findByProfissionalId(String.valueOf(id)).ifPresent(mapping -> {
+                mapping.setActive(active);
+                mapping.setIgnoreAutoSchedule(!active);
+                appointmentDoctorMappingRepository.save(mapping);
+                log.info("[REST] Sincronizado appointment_doctor_mapping para médico ID: {} -> active={}, ignoreAutoSchedule={}",
+                        id, active, !active);
+            });
+        }
+
+        return ResponseEntity.ok(saved);
+    }
+
+    /**
      * Salva ou atualiza a configuração de um médico.
      *
      * @param config Dados da configuração a ser persistida.
@@ -110,6 +130,14 @@ public class DoctorConfigurationController {
         log.info("[REST] Salvando configuração do profissional ID: {}. Nome: {}", 
                 config.getFeegowProfissionalId(), config.getDoctorName());
         DoctorConfiguration saved = doctorConfigurationRepository.save(config);
+        if (config.getFeegowProfissionalId() != null && appointmentDoctorMappingRepository != null) {
+            boolean active = config.isConfigActive();
+            appointmentDoctorMappingRepository.findByProfissionalId(String.valueOf(config.getFeegowProfissionalId())).ifPresent(mapping -> {
+                mapping.setActive(active);
+                mapping.setIgnoreAutoSchedule(!active);
+                appointmentDoctorMappingRepository.save(mapping);
+            });
+        }
         return ResponseEntity.status(HttpStatus.CREATED).body(saved);
     }
 
@@ -153,7 +181,18 @@ public class DoctorConfigurationController {
             return ResponseEntity.ok(List.of());
         }
         List<DoctorConfiguration> savedList = configs.stream()
-                .map(doctorConfigurationRepository::save)
+                .map(cfg -> {
+                    DoctorConfiguration saved = doctorConfigurationRepository.save(cfg);
+                    if (cfg.getFeegowProfissionalId() != null && appointmentDoctorMappingRepository != null) {
+                        boolean active = cfg.isConfigActive();
+                        appointmentDoctorMappingRepository.findByProfissionalId(String.valueOf(cfg.getFeegowProfissionalId())).ifPresent(mapping -> {
+                            mapping.setActive(active);
+                            mapping.setIgnoreAutoSchedule(!active);
+                            appointmentDoctorMappingRepository.save(mapping);
+                        });
+                    }
+                    return saved;
+                })
                 .toList();
         return ResponseEntity.ok(savedList);
     }

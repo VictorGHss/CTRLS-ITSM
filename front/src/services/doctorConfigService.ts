@@ -42,6 +42,17 @@ export async function save(config: DoctorConfiguration): Promise<DoctorConfigura
 }
 
 /**
+ * Alterna o status de confirmação automática do médico com um clique.
+ *
+ * @param feegowProfissionalId - O ID numérico do médico na Feegow.
+ * @param active - Se o médico deve receber mensagens de confirmação automática.
+ */
+export async function updateDoctorActive(feegowProfissionalId: number, active: boolean): Promise<DoctorConfiguration> {
+  const { data } = await api.patch<DoctorConfiguration>(`${BASE_URL}/${feegowProfissionalId}/active`, { active });
+  return data;
+}
+
+/**
  * Deletes a doctor configuration by the Feegow professional ID.
  *
  * @param feegowProfissionalId - The numeric ID of the Feegow professional.

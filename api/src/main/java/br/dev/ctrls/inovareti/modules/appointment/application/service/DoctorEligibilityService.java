@@ -143,10 +143,9 @@ public class DoctorEligibilityService {
         }
 
         List<String> activeDoctorIds = appointmentMotorProperties.getActiveDoctorIds();
-        if (activeDoctorIds != null && !activeDoctorIds.isEmpty()) {
-            // STRICT WHITELIST: Quando activeDoctorIds está configurado na .env,
+        if (!isDbDrivenMode()) {
+            // STRICT WHITELIST: Quando activeDoctorIds está configurado na .env com IDs numéricos específicos,
             // médicos fora dessa lista são sumariamente bloqueados.
-            // Configurações do banco NÃO sobrepõem a whitelist da .env.
             if (!activeDoctorIds.contains(docId)) {
                 log.debug("[DOCTOR-ELIGIBILITY] Médico ID={} bloqueado: fora da allowlist ativa configurada na .env (activeDoctorIds).", docId);
                 return false;
@@ -154,10 +153,12 @@ public class DoctorEligibilityService {
             return true;
         }
 
-        // Fallback: Se activeDoctorIds da .env estiver vazio/nulo, exige configuração explícita ativa com fila válida no banco
+        // MODO BANCO DE DADOS (DB-DRIVEN):
+        // Se activeDoctorIds da .env estiver vazio/nulo ou definido como 'DB',
+        // decide com base no banco de dados (tabelas doctor_configurations e appointment_doctor_mapping):
         if (configOpt.isPresent() && configOpt.get().isConfigActive()) {
             String qId = configOpt.get().getBlipQueueId();
-            if (qId != null && !qId.isBlank() && !qId.equalsIgnoreCase("inactive")) {
+            if (qId == null || !qId.trim().equalsIgnoreCase("inactive")) {
                 return true;
             }
         }
@@ -165,13 +166,32 @@ public class DoctorEligibilityService {
         if (mappingOpt.isPresent()) {
             var mapping = mappingOpt.get();
             String qId = mapping.getBlipQueueId();
-            if (qId != null && !qId.isBlank() && !qId.equalsIgnoreCase("inactive") && mapping.isActive() && !mapping.isIgnoreAutoSchedule()) {
+            if ((qId == null || !qId.trim().equalsIgnoreCase("inactive")) && mapping.isActive() && !mapping.isIgnoreAutoSchedule()) {
                 return true;
             }
         }
 
         // NUNCA executar fail-open para médicos não configurados
         return false;
+    }
+
+    /**
+     * Identifica se o motor está operando em modo orientado a banco de dados (DB-Driven).
+     * Retorna true quando activeDoctorIds não está definido ou contém o valor especial "DB".
+     */
+    public boolean isDbDrivenMode() {
+        List<String> activeDoctorIds = appointmentMotorProperties.getActiveDoctorIds();
+        if (activeDoctorIds == null || activeDoctorIds.isEmpty()) {
+            return true;
+        }
+        List<String> nonBlank = activeDoctorIds.stream()
+                .map(s -> s != null ? s.trim() : "")
+                .filter(s -> !s.isEmpty())
+                .toList();
+        if (nonBlank.isEmpty()) {
+            return true;
+        }
+        return nonBlank.stream().anyMatch(s -> "DB".equalsIgnoreCase(s));
     }
 
     /**
@@ -188,17 +208,19 @@ public class DoctorEligibilityService {
         Set<String> candidates = new LinkedHashSet<>();
         List<String> activeDoctorIds = appointmentMotorProperties.getActiveDoctorIds();
 
-        if (activeDoctorIds != null && !activeDoctorIds.isEmpty()) {
-            // STRICT WHITELIST: Quando activeDoctorIds está configurado na .env,
+        if (!isDbDrivenMode()) {
+            // STRICT WHITELIST: Quando activeDoctorIds está configurado na .env com IDs numéricos específicos,
             // SOMENTE esses médicos são candidatos à ingestão matinal.
-            // O banco de dados NÃO pode expandir a lista de candidatos com outros médicos.
             candidates.addAll(activeDoctorIds);
         } else {
-            // Fallback: Se activeDoctorIds não foi informado na .env, busca médicos ativos no banco
+            // MODO BANCO DE DADOS: Busca médicos ativos no banco (doctor_configurations e appointment_doctor_mapping)
             if (doctorConfigurationRepository != null) {
                 doctorConfigurationRepository.findByIsActiveTrue().forEach(c -> {
                     if (c.getFeegowProfissionalId() != null) {
-                        candidates.add(String.valueOf(c.getFeegowProfissionalId()));
+                        String qId = c.getBlipQueueId();
+                        if (qId == null || !qId.trim().equalsIgnoreCase("inactive")) {
+                            candidates.add(String.valueOf(c.getFeegowProfissionalId()));
+                        }
                     }
                 });
             }
@@ -207,7 +229,7 @@ public class DoctorEligibilityService {
                 appointmentDoctorMappingRepository.findAll().forEach(m -> {
                     if (m.getProfissionalId() != null && !m.getProfissionalId().isBlank()) {
                         String qId = m.getBlipQueueId();
-                        if (qId != null && !qId.isBlank() && !qId.equalsIgnoreCase("inactive") && !m.isIgnoreAutoSchedule()) {
+                        if ((qId == null || !qId.trim().equalsIgnoreCase("inactive")) && m.isActive() && !m.isIgnoreAutoSchedule()) {
                             candidates.add(m.getProfissionalId().trim());
                         }
                     }
