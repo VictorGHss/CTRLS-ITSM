@@ -111,7 +111,7 @@ export function useCompanionManagement({
             locator: obj.locator || '',
             credentialCode: obj.accessCredential || obj.credentialCode || '',
             cpf: cleanCpf,
-            doctorName: credentials[0]?.doctorName || 'Clínica Inovare',
+            doctorName: credentials[0]?.doctorName || 'Recepção Central',
             appointmentDateTime: credentials[0]?.appointmentDateTime || 'Hoje',
             opensAt: '06:00',
             closesAt: '23:00'

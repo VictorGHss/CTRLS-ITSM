@@ -42,7 +42,7 @@ export async function downloadQrCodeImage(
   // 4. Subtítulo / Clínica
   ctx.fillStyle = '#00875F';
   ctx.font = '600 16px system-ui, -apple-system, sans-serif';
-  const clinicTitle = doctorOrClinicName ? doctorOrClinicName.toUpperCase() : 'CLÍNICA INOVARE';
+  const clinicTitle = doctorOrClinicName ? doctorOrClinicName.toUpperCase() : 'PORTAL DE ACESSO';
   ctx.fillText(clinicTitle.substring(0, 36), width / 2, 85);
 
   // 5. Nome do Paciente / Tipo

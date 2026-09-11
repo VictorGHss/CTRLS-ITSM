@@ -71,7 +71,7 @@ public class BlipPayloadBuilder {
                 .name(campaignName != null && !campaignName.isBlank() ? campaignName : "Notificacao - " + UUID.randomUUID())
                 .campaignType("Individual")
                 .channelType("WhatsApp")
-                .sourceApplication("Inovare-ITSM")
+                .sourceApplication("CTRLS-ITSM")
                 .masterState(finalMasterState)
                 .stateId(finalStateId)
                 .flowId(finalFlowId)

@@ -18,5 +18,5 @@ public class AccessProperties {
     /**
      * Chave secreta HMAC para geração e validação dos Magic Tokens dos pacientes.
      */
-    private String magicTokenSecret = "inovare_magic_access_token_secret_key_2026";
+    private String magicTokenSecret = "itsm_magic_access_token_secret_key_2026";
 }

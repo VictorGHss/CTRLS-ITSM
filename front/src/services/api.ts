@@ -45,7 +45,9 @@ const getHeaderValue = (headers: unknown, name: string): unknown => {
 const api = axios.create({ baseURL: apiBaseUrl });
 
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('@InovareTI:token') || sessionStorage.getItem('@InovareTI:token');
+  const token =
+    localStorage.getItem('@Itsm:token') ||
+    sessionStorage.getItem('@Itsm:token');
   if (token && token !== 'null' && token !== 'undefined') {
     if (config.headers && typeof config.headers.set === 'function') {
       config.headers.set('Authorization', `Bearer ${token}`);
@@ -73,10 +75,10 @@ api.interceptors.response.use(
 
     const isAuthEndpoint = error.config?.url?.includes('/auth/login') || error.config?.url?.includes('/auth/reset');
     if (error.response && error.response.status === 401 && !isAuthEndpoint) {
-      localStorage.removeItem('@InovareTI:token');
-      localStorage.removeItem('@InovareTI:user');
-      sessionStorage.removeItem('@InovareTI:token');
-      sessionStorage.removeItem('@InovareTI:user');
+      localStorage.removeItem('@Itsm:token');
+      localStorage.removeItem('@Itsm:user');
+      sessionStorage.removeItem('@Itsm:token');
+      sessionStorage.removeItem('@Itsm:user');
       if (window.location.pathname !== '/login') {
         window.location.href = '/login';
       }
@@ -97,7 +99,7 @@ api.interceptors.response.use(
 
       // Adiciona logs de depuração e alertas amigáveis caso o traceId de auditoria esteja presente
       if (data?.traceId) {
-        console.warn(`[Auditoria Inovare-TI] Erro na requisição. Trace ID: ${data.traceId}`);
+        console.warn(`[Auditoria ITSM] Erro na requisição. Trace ID: ${data.traceId}`);
         
         // Em caso de falha inesperada (como erros de servidor 5xx), notifica o utilizador visualmente com o traceId
         if (status >= 500) {

@@ -43,12 +43,15 @@ interface AuthProviderProps {
 
 const AuthContext = createContext<AuthContextData>({} as AuthContextData);
 
+const TOKEN_KEY = '@Itsm:token';
+const USER_KEY = '@Itsm:user';
+
 export function AuthProvider({ children }: AuthProviderProps) {
   const [token, setToken] = useState<string | null>(
-    () => localStorage.getItem('@InovareTI:token'),
+    () => localStorage.getItem(TOKEN_KEY),
   );
   const [user, setUser] = useState<User | null>(() => {
-    const stored = localStorage.getItem('@InovareTI:user');
+    const stored = localStorage.getItem(USER_KEY);
     return stored ? (JSON.parse(stored) as User) : null;
   });
   const [forceTwoFactorUnverified, setForceTwoFactorUnverified] = useState(false);
@@ -81,8 +84,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
       throw new Error('Resposta de autenticação inválida.');
     }
 
-    localStorage.setItem('@InovareTI:token', data.token);
-    localStorage.setItem('@InovareTI:user', JSON.stringify(data.user));
+    localStorage.setItem(TOKEN_KEY, data.token);
+    localStorage.setItem(USER_KEY, JSON.stringify(data.user));
     setToken(data.token);
     setUser(data.user);
     setForceTwoFactorUnverified(false);
@@ -101,28 +104,28 @@ export function AuthProvider({ children }: AuthProviderProps) {
       throw new Error('Falha ao concluir redefinição de senha.');
     }
 
-    localStorage.setItem('@InovareTI:token', response.token);
-    localStorage.setItem('@InovareTI:user', JSON.stringify(response.user));
+    localStorage.setItem(TOKEN_KEY, response.token);
+    localStorage.setItem(USER_KEY, JSON.stringify(response.user));
     setToken(response.token);
     setUser(response.user);
     setForceTwoFactorUnverified(false);
   }, []);
 
   const updateAuthToken = useCallback((nextToken: string, nextUser?: User | null) => {
-    localStorage.setItem('@InovareTI:token', nextToken);
+    localStorage.setItem(TOKEN_KEY, nextToken);
     setToken(nextToken);
     setForceTwoFactorUnverified(false);
 
     if (nextUser) {
-      localStorage.setItem('@InovareTI:user', JSON.stringify(nextUser));
+      localStorage.setItem(USER_KEY, JSON.stringify(nextUser));
       setUser(nextUser);
     }
   }, []);
 
   // Remove as credenciais e desconecta o usuário
   const signOut = useCallback(() => {
-    localStorage.removeItem('@InovareTI:token');
-    localStorage.removeItem('@InovareTI:user');
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(USER_KEY);
     setToken(null);
     setUser(null);
     setForceTwoFactorUnverified(false);

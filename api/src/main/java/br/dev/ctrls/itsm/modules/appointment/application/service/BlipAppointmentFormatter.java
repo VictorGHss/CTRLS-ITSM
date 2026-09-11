@@ -145,7 +145,7 @@ public class BlipAppointmentFormatter {
                 cleanDoctorName = "Profissional não identificado";
             }
 
-            if (!"Profissional não identificado".equals(cleanDoctorName) && !"Clínica Inovare".equals(cleanDoctorName)) {
+            if (!"Profissional não identificado".equals(cleanDoctorName) && !"Clínica Médica".equals(cleanDoctorName) && !"Recepção Central".equals(cleanDoctorName)) {
                 cleanDoctorName = "Dr(a). " + cleanDoctorName;
             }
 

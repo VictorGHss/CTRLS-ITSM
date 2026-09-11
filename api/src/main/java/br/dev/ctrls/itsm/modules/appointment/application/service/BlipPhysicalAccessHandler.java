@@ -116,7 +116,7 @@ public class BlipPhysicalAccessHandler {
         if (catracaAppId != null && !catracaAppId.isBlank()) {
             try {
                 String token = accessService.generateAccessToken(catracaAppId, fromPhone);
-                String accessUrl = "https://itsm-inovare.ctrls.dev.br/" + catracaAppId + "?t=" + token;
+                String accessUrl = "https://itsm.ctrls.dev.br/" + catracaAppId + "?t=" + token;
                 blipContextService.setUserContextForUser(fromPhone, "idAgendamentoFeegow", catracaAppId);
                 blipContextService.setUserContextForUser(fromPhone, "tokenAcesso", token);
                 blipContextService.setUserContextForUser(fromPhone, "urlAcesso", accessUrl);
@@ -258,7 +258,7 @@ public class BlipPhysicalAccessHandler {
         if (targetAppId != null && !targetAppId.isBlank()) {
             try {
                 String token = accessService.generateAccessToken(targetAppId, fromPhone);
-                String accessUrl = "https://itsm-inovare.ctrls.dev.br/" + targetAppId + "?t=" + token;
+                String accessUrl = "https://itsm.ctrls.dev.br/" + targetAppId + "?t=" + token;
                 blipContextService.setUserContextForUser(fromPhone, "idAgendamentoFeegow", targetAppId);
                 blipContextService.setUserContextForUser(fromPhone, "tokenAcesso", token);
                 blipContextService.setUserContextForUser(fromPhone, "urlAcesso", accessUrl);

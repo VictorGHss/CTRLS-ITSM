@@ -1,5 +1,6 @@
 import { X, Printer } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
+import { useBranding } from '../contexts/BrandingContext';
 import type { Asset } from '../types/models';
 
 interface PrintLabelModalProps {
@@ -9,6 +10,7 @@ interface PrintLabelModalProps {
 }
 
 export default function PrintLabelModal({ isOpen, onClose, asset }: PrintLabelModalProps) {
+  const { branding } = useBranding();
   if (!isOpen) return null;
 
   const qrCodeValue = `${window.location.origin}/assets/${asset.id}`;
@@ -42,7 +44,7 @@ export default function PrintLabelModal({ isOpen, onClose, asset }: PrintLabelMo
             {/* Cabeçalho */}
             <div className="text-center">
               <h3 className="text-lg font-bold text-slate-900 uppercase tracking-wide">
-                Inovare TI
+                {branding.companyName || branding.appName || 'CTRLS ITSM'}
               </h3>
               <p className="text-xs text-slate-600 font-medium mt-0.5">Patrimônio</p>
             </div>

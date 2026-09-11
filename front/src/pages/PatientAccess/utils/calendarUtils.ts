@@ -90,12 +90,12 @@ export function buildIcsContent(event: CalendarEventDetails): string {
   const dtStamp = formatDateToUtcString(now);
   const dtStart = dates ? formatDateToUtcString(dates.start) : dtStamp;
   const dtEnd = dates ? formatDateToUtcString(dates.end) : dtStamp;
-  const uid = `inovare-app-${Date.now()}@itsm-inovare.ctrls.dev.br`;
+  const uid = `itsm-app-${Date.now()}@itsm.ctrls.dev.br`;
 
   return [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
-    'PRODID:-//Inovare Servicos de Saude//ITSM Acesso//PT',
+    'PRODID:-//CTRLS ITSM//ITSM Acesso//PT',
     'CALSCALE:GREGORIAN',
     'METHOD:PUBLISH',
     'BEGIN:VEVENT',
@@ -174,7 +174,7 @@ export function downloadIcsFile(event: CalendarEventDetails): void {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.setAttribute('download', 'consulta-inovare.ics');
+  link.setAttribute('download', 'consulta-agendamento.ics');
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);

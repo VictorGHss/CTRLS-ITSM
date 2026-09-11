@@ -261,13 +261,13 @@ public class DiscordDirectMessageService {
 
         var embed = new EmbedBuilder()
             .setColor(CLINIC_BRAND_COLOR)
-            .setTitle("í°Å¸â€Â RecuperaíÂ§íÂ£o de AutenticaíÂ§íÂ£o 2FA ââ‚¬â€ Inovare TI")
+            .setTitle("🔑 Recuperação de Autenticação 2FA — CTRLS ITSM")
             .setDescription(
-                "OlíÂ¡, **" + userName + "**!\n\n"
-                + "Seu cíÂ³digo de recuperaíÂ§íÂ£o para redefinir o 2FA íÂ©:\n\n"
+                "Olá, **" + userName + "**!\n\n"
+                + "Seu código de recuperação para redefinir o 2FA é:\n\n"
                 + "```\n" + code + "\n```\n"
-                + "âÅ¡Â í¯Â¸Â O cíÂ³digo expira em **15 minutos** e íÂ© de uso íÂºnico.\n"
-                + "Se vocíÂª níÂ£o solicitou esta recuperaíÂ§íÂ£o, ignore esta mensagem.")
+                + "⚠️ O código expira em **15 minutos** e é de uso único.\n"
+                + "Se você não solicitou esta recuperação, ignore esta mensagem.")
             .build();
 
         try {

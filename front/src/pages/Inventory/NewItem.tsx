@@ -48,7 +48,7 @@ export default function NewItem() {
 
 
   useEffect(() => {
-    const stored = localStorage.getItem('inovareti_dynamic_suppliers');
+    const stored = localStorage.getItem('itsm_dynamic_suppliers');
     if (stored) {
       try {
         setSuppliers(JSON.parse(stored));
@@ -57,7 +57,7 @@ export default function NewItem() {
       }
     } else {
       setSuppliers(DEFAULT_SUPPLIERS);
-      localStorage.setItem('inovareti_dynamic_suppliers', JSON.stringify(DEFAULT_SUPPLIERS));
+      localStorage.setItem('itsm_dynamic_suppliers', JSON.stringify(DEFAULT_SUPPLIERS));
     }
   }, []);
 
@@ -76,7 +76,7 @@ export default function NewItem() {
     }
     const updatedSuppliers = [...suppliers, nameTrimmed];
     setSuppliers(updatedSuppliers);
-    localStorage.setItem('inovareti_dynamic_suppliers', JSON.stringify(updatedSuppliers));
+    localStorage.setItem('itsm_dynamic_suppliers', JSON.stringify(updatedSuppliers));
     setBatchSupplier(nameTrimmed);
     setIsAddingSupplier(false);
     setNewSupplierName('');

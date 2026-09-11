@@ -106,7 +106,7 @@ public class SelfRegistrationUseCase {
         }
 
         String dateIdSuffix = visitDate.format(DateTimeFormatter.ofPattern("yyyyMMdd"));
-        String prefix = (clinic != null && clinic.toLowerCase().contains("inovare")) ? "INOV-" : "IMG-" ;
+        String prefix = (clinic != null && clinic.toLowerCase().contains("img")) ? "IMG-" : "PORT-";
         String appointmentId = prefix + dateIdSuffix + "-" + cleanCpf;
 
         List<AccessCredential> existing = accessCredentialRepositoryPort.findByAppointmentId(appointmentId);

@@ -240,7 +240,7 @@ public class DiscordCommandService {
 
         User afetado = userRepository.findByDiscordUserId(cleanDiscordId).orElse(null);
         if (afetado == null) {
-            return "⚠️ Usuário <@" + cleanDiscordId + "> não está vinculado ao sistema Inovare TI. "
+            return "⚠️ Usuário <@" + cleanDiscordId + "> não está vinculado ao sistema CTRLS ITSM. "
                     + "Peça para ele usar o comando `/vincular` primeiro.";
         }
 

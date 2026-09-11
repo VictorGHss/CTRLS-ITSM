@@ -79,7 +79,7 @@ public class BlipWebhookController {
     )
     @PostMapping(value = {"/v1/webhook/blip", "/webhooks/blip"})
     public ResponseEntity<?> blipWebhook(
-            @RequestHeader(value = "X-Inovare-Token", required = false) String inovareToken,
+            @RequestHeader(value = "X-ITSM-Token", required = false) String itsmToken,
             @RequestHeader(value = "X-Blip-Signature", required = false) String blipSignature,
             HttpServletRequest request,
             @RequestBody(required = false) String rawJson) {
@@ -102,12 +102,14 @@ public class BlipWebhookController {
             ? blipWebhookToken
             : System.getenv("APP_BLIP_SECURITY_WEBHOOK_TOKEN");
 
-        boolean hasTokenMatch = StringUtils.hasText(inovareToken)
+        String effectiveToken = itsmToken;
+
+        boolean hasTokenMatch = StringUtils.hasText(effectiveToken)
             && StringUtils.hasText(expectedToken)
-            && secureCompare(expectedToken, inovareToken);
+            && secureCompare(expectedToken, effectiveToken);
 
         boolean isBypassProfile = env.acceptsProfiles(Profiles.of("local", "default"));
-        boolean isBypassEnabled = hasTokenMatch || (isBypassProfile && StringUtils.hasText(inovareToken));
+        boolean isBypassEnabled = hasTokenMatch || (isBypassProfile && StringUtils.hasText(effectiveToken));
 
         if (!isSignatureValid && !isBypassEnabled) {
             log.warn("[ACESSO NEGADO] Assinatura do webhook inválida ou ausente. Bypass por token inativo no perfil de produção.");
@@ -234,7 +236,7 @@ public class BlipWebhookController {
                     appointmentId,
                     action,
                     from,
-                    inovareToken,
+                    effectiveToken,
                     content,
                     metadata,
                     parsed.bsuid(),
@@ -286,7 +288,7 @@ public class BlipWebhookController {
                 }
             }
             String token = accessService.generateAccessToken(resolvedId, from);
-            String accessUrl = "https://itsm-inovare.ctrls.dev.br/" + resolvedId + "?t=" + token;
+            String accessUrl = "https://itsm.ctrls.dev.br/" + resolvedId + "?t=" + token;
             return ResponseEntity.ok(Map.of(
                 "status", "ok",
                 "action", result.action(),
@@ -316,7 +318,7 @@ public class BlipWebhookController {
     @PreAuthorize("hasRole('ADMIN')")
     @PostMapping(value = "/webhooks/blip/manual-trigger", consumes = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> manualTrigger(
-            @RequestHeader(value = "X-Inovare-Token", required = false) String inovareToken,
+            @RequestHeader(value = "X-ITSM-Token", required = false) String itsmToken,
             @RequestBody ManualTriggerRequest body) {
         if (body == null
                 || !StringUtils.hasText(body.identity())
@@ -351,7 +353,7 @@ public class BlipWebhookController {
                 appointmentId,
                 action,
                 body.identity().trim(),
-                inovareToken,
+                itsmToken,
                 null,
                 Map.of()), true);
 

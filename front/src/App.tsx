@@ -6,6 +6,7 @@ import { motion } from 'framer-motion';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { BrandingProvider } from './contexts/BrandingContext';
 import DefaultLayout from './layouts/DefaultLayout';
 
 // Login e PrimeiroAcesso carregados de forma imediata — são rotas de entrada leves
@@ -161,7 +162,7 @@ function AppRoutes() {
           <Route path="/login" element={<PageTransition><Login /></PageTransition>} />
           <Route path="/primeiro-acesso" element={<PageTransition><PrimeiroAcesso /></PageTransition>} />
           <Route path="/imagem" element={<PageTransition><PatientAccess /></PageTransition>} />
-          <Route path="/inovare" element={<PageTransition><PatientAccess /></PageTransition>} />
+          <Route path="/portal" element={<PageTransition><PatientAccess /></PageTransition>} />
           <Route path="/:appointmentId" element={<PageTransition><PatientAccess /></PageTransition>} />
           {/* Rotas protegidas compartilham o DefaultLayout */}
           <Route element={<PrivateLayoutRoute />}>
@@ -224,21 +225,22 @@ function AppRoutes() {
 export default function App() {
   return (
     <BrowserRouter>
-      <AuthProvider>
-        <AppRoutes />
-        {/* Container global de notificações toast */}
-        <ToastContainer
-          position="top-right"
-          autoClose={3000}
-          hideProgressBar={false}
-          closeOnClick
-          pauseOnHover={false}
-          pauseOnFocusLoss={false}
-          draggable
-          theme="light"
-        />
-      </AuthProvider>
+      <BrandingProvider>
+        <AuthProvider>
+          <AppRoutes />
+          {/* Container global de notificações toast */}
+          <ToastContainer
+            position="top-right"
+            autoClose={3000}
+            hideProgressBar={false}
+            closeOnClick
+            pauseOnHover={false}
+            pauseOnFocusLoss={false}
+            draggable
+            theme="light"
+          />
+        </AuthProvider>
+      </BrandingProvider>
     </BrowserRouter>
   );
 }
-

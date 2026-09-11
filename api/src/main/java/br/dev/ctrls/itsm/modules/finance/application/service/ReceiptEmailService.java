@@ -42,7 +42,7 @@ import lombok.extern.slf4j.Slf4j;
 public class ReceiptEmailService {
 
     private static final Pattern SALE_NUMBER_PATTERN = Pattern.compile("(?i)(?:numero_venda|numero|venda)\\s*[:#-]?\\s*(\\d{3,})");
-    private static final String FINANCEIRO_FIXED_FROM = "administrativo@inovare.med.br";
+    private static final String FINANCEIRO_FIXED_FROM = "administrativo@ctrls.dev.br";
 
     private final JavaMailSender mailSender;
     private final RestTemplate restTemplate;
@@ -162,7 +162,7 @@ public class ReceiptEmailService {
 
     private String buildEmailSubject(String doctorName, String saleNumber) {
         String resolvedDoctorName = StringUtils.hasText(doctorName) ? doctorName.trim() : "Cliente";
-        return "Recibo de Quitação - Inovare TI - " + resolvedDoctorName + " - Venda " + saleNumber;
+        return "Recibo de Quitação - " + resolvedDoctorName + " - Venda " + saleNumber;
     }
 
     private String buildEmailBodyHtml(String doctorName, String saleIdentifier) {
@@ -176,7 +176,7 @@ public class ReceiptEmailService {
                 + "<p>Prezado(a) " + safeDoctorName + ",</p>"
                 + "<p>Confirmamos o recebimento do valor referente à Venda " + safeSaleIdentifier
                 + ". O seu recibo de quitação já está disponível e segue em anexo a este e-mail.</p>"
-            + "<p>Atenciosamente,<br/>Administrativo Inovare</p>"
+            + "<p>Atenciosamente,<br/>Administrativo Financeiro</p>"
                 + "</body></html>";
     }
 

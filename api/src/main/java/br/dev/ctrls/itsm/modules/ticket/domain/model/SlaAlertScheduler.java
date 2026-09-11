@@ -150,7 +150,7 @@ public class SlaAlertScheduler {
                         + "📅 **Prazo SLA:** " + formattedSla + "\n"
                         + "⏱️ **Tempo Restante:** " + minutesRemaining + " minuto(s)\n\n"
                         + "⚡ Por favor, resolva ou atualize o status do chamado!")
-                .setFooter("Inovare TI • Sistema de Monitoramento de SLA")
+                .setFooter("CTRLS ITSM • Sistema de Monitoramento de SLA")
                 .setTimestamp(java.time.Instant.now())
                 .build();
 

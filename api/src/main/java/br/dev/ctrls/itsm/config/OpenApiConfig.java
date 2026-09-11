@@ -10,7 +10,7 @@ import io.swagger.v3.oas.models.security.SecurityRequirement;
 import io.swagger.v3.oas.models.security.SecurityScheme;
 
 /**
- * Configuração do OpenAPI (Swagger) para documentação interativa da API Inovare-TI.
+ * Configuração do OpenAPI (Swagger) para documentação interativa da API CTRLS ITSM.
  * Configura suporte nativo para autenticação Bearer JWT nos endpoints protegidos por RBAC.
  */
 @Configuration
@@ -22,9 +22,9 @@ public class OpenApiConfig {
     public OpenAPI customOpenAPI() {
         return new OpenAPI()
                 .info(new Info()
-                        .title("Inovare-TI API")
+                        .title("CTRLS ITSM API")
                         .version("2.0 - Hexagonal")
-                        .description("Documentação interativa das rotas do motor de agendamentos e faturamento financeiro da Inovare-TI."))
+                        .description("Documentação interativa das rotas do motor de agendamentos e faturamento financeiro do CTRLS ITSM."))
                 // Adiciona a exigência de segurança global para todos os endpoints no Swagger UI
                 .addSecurityItem(new SecurityRequirement().addList(SECURITY_SCHEME_NAME))
                 .components(new Components()

@@ -166,7 +166,7 @@ public class TemporaryFilesCleanupScheduler {
 
     private boolean isApplicationTempFile(Path file) {
         String name = file.getFileName().toString().toLowerCase();
-        return name.startsWith("inovare_")
+        return name.startsWith("itsm_")
                 || name.startsWith("backup_")
                 || name.startsWith("report_")
                 || name.endsWith(".part")

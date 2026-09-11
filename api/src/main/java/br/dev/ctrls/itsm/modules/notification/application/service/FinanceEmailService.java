@@ -103,7 +103,7 @@ public class FinanceEmailService {
 
     private EmailDispatch resolveDispatch(String medicoNome, String destinationEmail, String saleNumber) {
         String resolvedName = StringUtils.hasText(medicoNome) ? medicoNome.trim() : "Cliente";
-        String subject = "Recibo de Quitação - Inovare TI - " + resolvedName + " - Venda " + saleNumber;
+        String subject = "Recibo de Quitação - " + resolvedName + " - Venda " + saleNumber;
         boolean testMode = isTestModeEnabled();
         String originalEmail = StringUtils.hasText(destinationEmail) ? destinationEmail.trim() : "";
         String devEmail = StringUtils.hasText(properties.getDevEmail()) ? properties.getDevEmail().trim() : "";
@@ -143,7 +143,7 @@ public class FinanceEmailService {
                 + "<p>Prezado(a) " + safeName + ",</p>"
                 + "<p>Confirmamos o recebimento do valor referente à Venda " + safeSaleNumber
                 + ". O seu recibo de quitação já está disponível e segue em anexo a este e-mail.</p>"
-            + "<p>Atenciosamente,<br/>Administrativo Inovare</p>"
+            + "<p>Atenciosamente,<br/>Administrativo Financeiro</p>"
                 + "</body></html>";
     }
 

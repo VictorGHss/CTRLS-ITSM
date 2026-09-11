@@ -36,7 +36,7 @@ import lombok.extern.slf4j.Slf4j;
 @Observed
 public class TicketAttachmentController {
 
-    private static final String DEFAULT_SERVER_HOST = "itsm-inovare.ctrls.dev.br";
+    private static final String DEFAULT_SERVER_HOST = "itsm.ctrls.dev.br";
     
     private static final Set<String> ALLOWED_EXTENSIONS = Set.of(
             ".png", ".jpg", ".jpeg", ".gif", ".webp", ".pdf"
@@ -51,7 +51,7 @@ public class TicketAttachmentController {
      *
      * @param file arquivo multipart enviado
      * @param request HttpServletRequest para resolução da URL pública
-     * @return JSON { "url": "https://itsm-inovare.ctrls.dev.br/uploads/tickets/uuid.ext" }
+     * @return JSON { "url": "https://itsm.ctrls.dev.br/uploads/tickets/uuid.ext" }
      */
     @PreAuthorize("isAuthenticated()")
     @PostMapping("/upload")

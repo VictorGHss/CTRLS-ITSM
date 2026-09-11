@@ -63,14 +63,14 @@ public class DiscordInfraStatusService {
 
         EmbedBuilder embed = new EmbedBuilder()
                 .setColor(COR_VERDE_TI)
-                .setTitle("🖥️ Painel de Status — Inovare TI")
-                .setDescription("Métricas em tempo real do servidor de aplicação e do banco de dados.")
+                .setTitle("🖥️ Painel de Status — CTRLS ITSM")
+                .setDescription("Status de integridade da infraestrutura e integrações.")
                 .addField("💾 Memória Usada (JVM)", memoriaUsadaLabel, false)
                 .addField("🟢 Memória Livre (heap JVM)", memoriaLivreLabel, true)
                 .addField("📦 Memória Total Alocada (JVM)", memoriaTotalLabel, true)
                 .addField("⚙️ Processadores Disponíveis", processadoresLabel, true)
                 .addField("🗄️ Tamanho do Banco de Dados (PostgreSQL)", tamanhoBanco, false)
-                .setFooter("Inovare TI • Infraestrutura em Saúde | /ti status");
+                .setFooter("CTRLS ITSM • Infraestrutura e Monitoramento | /ti status");
 
         return embed.build();
     }

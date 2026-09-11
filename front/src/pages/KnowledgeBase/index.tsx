@@ -87,8 +87,8 @@ export default function KnowledgeBase() {
 
   return (
     <main className="w-full max-w-full px-4 py-8 sm:px-6 lg:px-8">
-      <title>Base de Conhecimento — Inovare TI</title>
-      <meta name="description" content="Artigos, tutoriais e procedimentos de TI da Clínica Inovare" />
+      <title>Base de Conhecimento — CTRLS ITSM</title>
+      <meta name="description" content="Artigos, tutoriais e procedimentos de suporte técnico" />
       <PageHero
         eyebrow="Knowledge Hub"
         icon={<BookOpenText size={14} />}

@@ -59,8 +59,8 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       manifest: {
-        name: 'Inovare TI',
-        short_name: 'Inovare TI',
+        name: 'CTRLS ITSM',
+        short_name: 'CTRLS ITSM',
         description: 'Sistema de gestão de chamados, ativos e inventário de TI',
         theme_color: '#feb56c',
         background_color: '#ffffff',

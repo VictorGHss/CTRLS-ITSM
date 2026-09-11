@@ -93,7 +93,7 @@ public class ReportAutomationService {
                 if (schedule.isSendEmail() && schedule.getTargetUserId() != null) {
                     userRepository.findById(schedule.getTargetUserId()).ifPresentOrElse(user -> {
                         String subject = "Relatório Mensal de Saídas de Estoque";
-                        String body = String.format("Olá %s,\n\nEm anexo o relatório automático de saídas de estoque referente ao período %s até %s.\n\nAtt,\nInovare TI",
+                        String body = String.format("Olá %s,\n\nEm anexo o relatório automático de saídas de estoque referente ao período %s até %s.\n\nAtt,\nEquipe ITSM",
                                 user.getName(), startDate.toString(), endDate.toString());
 
                         try {
@@ -175,7 +175,7 @@ public class ReportAutomationService {
 
                         if (schedule.isSendEmail()) {
                             String subject = "Relatório de Teste - Saídas de Estoque";
-                            String body = String.format("Olá %s,\n\nSegue o relatório de teste de saídas de estoque referente ao período %s até %s.\n\nAtt,\nInovare TI",
+                            String body = String.format("Olá %s,\n\nSegue o relatório de teste de saídas de estoque referente ao período %s até %s.\n\nAtt,\nEquipe ITSM",
                                     user.getName(), startDate.toString(), endDate.toString());
 
                             try {

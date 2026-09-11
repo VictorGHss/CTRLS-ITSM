@@ -69,11 +69,11 @@ class LookupCredentialsByCpfUseCaseTest {
                 feegowClientPort
         );
 
-        List<AccessCredentialResponse> responses = useCase.execute(cpf, "inovare");
+        List<AccessCredentialResponse> responses = useCase.execute(cpf, "portal");
 
         assertThat(responses).hasSize(1);
         assertThat(responses.getFirst().appointmentId()).isEqualTo(autoApptId);
         assertThat(responses.getFirst().name()).isEqualTo("VICTOR HASS");
-        assertThat(responses.getFirst().doctorName()).isEqualTo("Inovare – Serviços de Saúde");
+        assertThat(responses.getFirst().doctorName()).isEqualTo("Portal de Atendimento");
     }
 }

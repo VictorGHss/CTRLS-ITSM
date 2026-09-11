@@ -39,11 +39,11 @@ export function useCpfFallback({
   const [editingCredential, setEditingCredential] = useState<AccessCredential | null>(null);
 
   const getActiveAppointmentId = (): string | undefined => {
-    if (appointmentId && appointmentId !== 'imagem' && appointmentId !== 'inovare') {
+    if (appointmentId && appointmentId !== 'imagem' && appointmentId !== 'portal') {
       return appointmentId;
     }
     const fromCred = credentials.find(
-      c => c.appointmentId && c.appointmentId !== 'imagem' && c.appointmentId !== 'inovare'
+      c => c.appointmentId && c.appointmentId !== 'imagem' && c.appointmentId !== 'portal'
     )?.appointmentId;
     if (fromCred) return fromCred;
     const patientCred =
@@ -51,7 +51,7 @@ export function useCpfFallback({
     if (
       patientCred?.appointmentId &&
       patientCred.appointmentId !== 'imagem' &&
-      patientCred.appointmentId !== 'inovare'
+      patientCred.appointmentId !== 'portal'
     ) {
       return patientCred.appointmentId;
     }
@@ -140,7 +140,7 @@ export function useCpfFallback({
       }
 
       const rootId =
-        appointmentId && appointmentId !== 'inovare' && appointmentId !== 'imagem'
+        appointmentId && appointmentId !== 'portal' && appointmentId !== 'imagem'
           ? appointmentId
           : targetId;
       const query = token

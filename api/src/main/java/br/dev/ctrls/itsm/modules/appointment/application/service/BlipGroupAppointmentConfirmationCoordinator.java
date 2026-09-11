@@ -232,7 +232,7 @@ public class BlipGroupAppointmentConfirmationCoordinator {
             String accessUrl = "";
             try {
                 tokenAcesso = accessService.generateAccessToken(firstFeegowId, userPhone);
-                accessUrl = "https://itsm-inovare.ctrls.dev.br/" + firstFeegowId + "?t=" + tokenAcesso;
+                accessUrl = "https://itsm.ctrls.dev.br/" + firstFeegowId + "?t=" + tokenAcesso;
             } catch (Exception e) {
                 log.warn("[CONFIRM-BATCH] Falha ao gerar Magic Token para agendamento {}: {}", firstFeegowId, e.getMessage());
             }
@@ -359,7 +359,7 @@ public class BlipGroupAppointmentConfirmationCoordinator {
                             String accessUrl = "";
                             try {
                                 tokenAcesso = accessService.generateAccessToken(firstFeegowId, userPhone);
-                                accessUrl = "https://itsm-inovare.ctrls.dev.br/" + firstFeegowId + "?t=" + tokenAcesso;
+                                accessUrl = "https://itsm.ctrls.dev.br/" + firstFeegowId + "?t=" + tokenAcesso;
                             } catch (Exception ignored) {}
 
                             blipContextService.setUserContextForUser(tunnelId, "idAgendamentoFeegow", firstFeegowId);
@@ -387,7 +387,7 @@ public class BlipGroupAppointmentConfirmationCoordinator {
             String patientName = (patient.name() == null || patient.name().isBlank()) ? "Paciente" : patient.name();
             String formattedBirthdate = formatBirthdate(patient.birthdate());
 
-            String resolvedDoctorName = "Clínica Inovare";
+            String resolvedDoctorName = "Recepção Central";
             var mappingOpt = appointmentDoctorMappingRepository.findByProfissionalId(firstSession.getDoctorProfissionalId());
             if (mappingOpt.isPresent()) {
                 String mappingName = mappingOpt.get().getProfissionalNome();

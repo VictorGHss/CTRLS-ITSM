@@ -49,12 +49,12 @@ public class ReportPdfExporter implements ReportPdfExporterPort {
             PdfWriter.getInstance(document, out);
             document.open();
 
-            java.awt.Color inovareColor = new java.awt.Color(254, 181, 108);
+            java.awt.Color brandColor = new java.awt.Color(254, 181, 108);
             java.awt.Color borderColor = new java.awt.Color(226, 232, 240);
             java.awt.Color alternateRowColor = new java.awt.Color(249, 250, 251);
 
             addLogo(document);
-            addTitle(document, inovareColor);
+            addTitle(document, brandColor);
 
             String periodStr = resolvePeriodText(rows);
 
@@ -71,7 +71,7 @@ public class ReportPdfExporter implements ReportPdfExporterPort {
             subtitle.setSpacingAfter(10f);
             document.add(subtitle);
 
-            PdfPTable table = createTableWithHeader(inovareColor);
+            PdfPTable table = createTableWithHeader(brandColor);
 
             com.lowagie.text.Font cellFont = FontFactory.getFont(
                     FontFactory.HELVETICA,
@@ -180,18 +180,6 @@ public class ReportPdfExporter implements ReportPdfExporterPort {
                 if (logoStream != null) {
                     byte[] bytes = logoStream.readAllBytes();
                     logo = Image.getInstance(bytes);
-                } else {
-                    try {
-                        java.net.URL url = java.net.URI
-                                .create("https://inovare.med.br/wp-content/uploads/2023/01/Logo.png")
-                                .toURL();
-                        try (java.io.InputStream is = url.openStream()) {
-                            byte[] bytes = is.readAllBytes();
-                            logo = Image.getInstance(bytes);
-                        }
-                    } catch (IOException | com.lowagie.text.BadElementException ex) {
-                        log.warn("Logo não encontrada em resources e falha ao buscar URL pública: {}", ex.getMessage());
-                    }
                 }
             }
 
@@ -205,13 +193,13 @@ public class ReportPdfExporter implements ReportPdfExporterPort {
         }
     }
 
-    private void addTitle(Document document, java.awt.Color inovareColor) throws DocumentException {
+    private void addTitle(Document document, java.awt.Color brandColor) throws DocumentException {
         com.lowagie.text.Font titleFont = FontFactory.getFont(
                 FontFactory.HELVETICA_BOLD,
                 16,
                 com.lowagie.text.Font.BOLD,
-                inovareColor);
-        Paragraph title = new Paragraph("Inovare Serviços de Saúde", titleFont);
+                brandColor);
+        Paragraph title = new Paragraph("Relatório Operacional de Saídas", titleFont);
         title.setAlignment(Element.ALIGN_LEFT);
         document.add(title);
     }
@@ -220,27 +208,32 @@ public class ReportPdfExporter implements ReportPdfExporterPort {
         LocalDate periodStart = null;
         LocalDate periodEnd = null;
 
-        for (OutflowReportRowDTO row : rows) {
-            if (row.deliveryDate() != null) {
-                LocalDate date = row.deliveryDate().toLocalDate();
-                if (periodStart == null || date.isBefore(periodStart)) {
-                    periodStart = date;
-                }
-                if (periodEnd == null || date.isAfter(periodEnd)) {
-                    periodEnd = date;
+        if (rows != null) {
+            for (OutflowReportRowDTO row : rows) {
+                if (row.deliveryDate() != null) {
+                    LocalDate d = row.deliveryDate().toLocalDate();
+                    if (periodStart == null || d.isBefore(periodStart)) {
+                        periodStart = d;
+                    }
+                    if (periodEnd == null || d.isAfter(periodEnd)) {
+                        periodEnd = d;
+                    }
                 }
             }
         }
 
         if (periodStart != null && periodEnd != null) {
             DateTimeFormatter dateOnly = DateTimeFormatter.ofPattern("dd/MM/yyyy");
-            return dateOnly.format(periodStart) + " - " + dateOnly.format(periodEnd);
+            return dateOnly.format(periodStart) + " até " + dateOnly.format(periodEnd);
+        } else if (periodStart != null) {
+            DateTimeFormatter dateOnly = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+            return "A partir de " + dateOnly.format(periodStart);
         }
 
         return "-";
     }
 
-    private PdfPTable createTableWithHeader(java.awt.Color inovareColor) throws DocumentException {
+    private PdfPTable createTableWithHeader(java.awt.Color brandColor) throws DocumentException {
         PdfPTable table = new PdfPTable(8);
         table.setWidthPercentage(100f);
         // Distribuição otimizada das 8 colunas para orientação paisagem (A4 Landscape = 782pt imprimíveis)
@@ -268,7 +261,7 @@ public class ReportPdfExporter implements ReportPdfExporterPort {
 
         for (int i = 0; i < headers.length; i++) {
             PdfPCell hd = new PdfPCell(new Phrase(headers[i], headerFont));
-            hd.setBackgroundColor(inovareColor);
+            hd.setBackgroundColor(brandColor);
             hd.setBorderColor(new java.awt.Color(230, 150, 70));
             hd.setBorderWidth(0.5f);
             hd.setPaddingTop(5f);

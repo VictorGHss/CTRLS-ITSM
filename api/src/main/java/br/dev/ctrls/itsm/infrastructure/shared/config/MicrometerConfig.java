@@ -11,7 +11,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * Configuracao central de observabilidade para o Inovare-TI.
+ * Configuracao central de observabilidade para o CTRLS ITSM.
  * Adiciona o tag global module em todas as observacoes originadas por @Observed.
  */
 @Configuration

@@ -42,7 +42,7 @@ import lombok.extern.slf4j.Slf4j;
 public class SendAppointmentTemplateUseCase {
 
     private static final String DEFAULT_TEMPLATE_VALUE = "Recepção";
-    private static final String DEFAULT_PROVIDER_VALUE = "Clínica Inovare";
+    private static final String DEFAULT_PROVIDER_VALUE = "Clínica Médica";
     private static final String LAST_PENDING_APPOINTMENT_ID_CONTEXT_KEY = "last_pending_appointment_id";
 
     private final AppointmentConfigRepositoryPort appointmentConfigRepository;

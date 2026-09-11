@@ -125,7 +125,7 @@ public class ConfirmBlipWebhookActionHandler implements BlipWebhookActionHandler
             String accessUrl = "";
             try {
                 tokenAcesso = accessService.generateAccessToken(appointmentId, userPhone);
-                accessUrl = "https://itsm-inovare.ctrls.dev.br/" + appointmentId + "?t=" + tokenAcesso;
+                accessUrl = "https://itsm.ctrls.dev.br/" + appointmentId + "?t=" + tokenAcesso;
             } catch (Exception e) {
                 log.warn("[CONFIRM] Falha ao gerar Magic Token para agendamento {}: {}", appointmentId, e.getMessage());
             }
@@ -304,7 +304,7 @@ public class ConfirmBlipWebhookActionHandler implements BlipWebhookActionHandler
                             String accessUrl = "";
                             try {
                                 tokenAcesso = accessService.generateAccessToken(feegowAppointmentId, userPhone);
-                                accessUrl = "https://itsm-inovare.ctrls.dev.br/" + feegowAppointmentId + "?t=" + tokenAcesso;
+                                accessUrl = "https://itsm.ctrls.dev.br/" + feegowAppointmentId + "?t=" + tokenAcesso;
                             } catch (Exception ignored) {}
 
                             java.util.Map<String, String> tunnelCtx = new java.util.LinkedHashMap<>();
@@ -340,7 +340,7 @@ public class ConfirmBlipWebhookActionHandler implements BlipWebhookActionHandler
             String patientName = (patient.name() == null || patient.name().isBlank()) ? "Paciente" : patient.name();
             String formattedBirthdate = groupCoordinator.formatBirthdate(patient.birthdate());
 
-            String resolvedDoctorName = "Clínica Inovare";
+            String resolvedDoctorName = "Recepção Central";
             var pushMappingOpt = appointmentDoctorMappingRepository.findByProfissionalId(session.getDoctorProfissionalId());
             if (pushMappingOpt.isPresent()) {
                 String mappingName = pushMappingOpt.get().getProfissionalNome();

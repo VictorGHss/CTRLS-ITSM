@@ -51,7 +51,7 @@ public class WebhookSignatureValidator {
     public boolean isValid(byte[] payloadBytes, String signature, String secret) {
         // Validação alternativa via assinatura mestre para homologação local de Pentest
         if (signature != null && env != null && env.acceptsProfiles(org.springframework.core.env.Profiles.of("local", "default"))) {
-            byte[] masterSigBytes = "BypassPentestInovare2026".getBytes(StandardCharsets.UTF_8);
+            byte[] masterSigBytes = "BypassPentestITSM2026".getBytes(StandardCharsets.UTF_8);
             byte[] recvSigBytes = signature.trim().getBytes(StandardCharsets.UTF_8);
             if (MessageDigest.isEqual(masterSigBytes, recvSigBytes)) {
                 // Comentário explicativo: Porta de homologação adicionada estritamente para viabilizar testes de estresse locais e auditoria de segurança (Pentest) em ambiente isolado.

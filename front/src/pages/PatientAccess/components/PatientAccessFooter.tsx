@@ -8,7 +8,7 @@ interface PatientAccessFooterProps {
 }
 
 export const PatientAccessFooter: React.FC<PatientAccessFooterProps> = ({ clinicTheme }) => {
-  const theme = clinicTheme || CLINIC_THEMES.inovare;
+  const theme = clinicTheme || CLINIC_THEMES.portal;
   const isImagem = theme.id === 'imagem';
 
   return (
@@ -22,7 +22,7 @@ export const PatientAccessFooter: React.FC<PatientAccessFooterProps> = ({ clinic
             onError={(e) => {
               e.currentTarget.src = isImagem 
                 ? 'https://placehold.co/180x60/b8004b/ffffff?text=Cl%C3%ADnica+da+Imagem'
-                : 'https://placehold.co/120x120/feb56c/ffffff?text=Inovare';
+                : 'https://placehold.co/120x120/feb56c/ffffff?text=Portal';
             }}
           />
         </div>
@@ -101,7 +101,7 @@ export const PatientAccessFooter: React.FC<PatientAccessFooterProps> = ({ clinic
 
       <div className="border-t border-slate-100 pt-4 flex flex-col items-center gap-2">
         <p className="text-xs text-slate-500 font-semibold text-center">
-          {isImagem ? 'Clínica da Imagem © Todos os direitos reservados' : 'Clínica Inovare © Todos os direitos reservados'}
+          {isImagem ? 'Clínica da Imagem © Todos os direitos reservados' : `${theme.name} © Todos os direitos reservados`}
         </p>
       </div>
     </footer>

@@ -16,6 +16,7 @@ import TagsSection from './TagsSection';
 import FaqManagement from '../FaqManagement';
 import IntegrationsSection from './IntegrationsSection';
 import SystemParamsSection from './SystemParamsSection';
+import BrandingSection from './BrandingSection';
 import SlaSection from './SlaSection';
 import ProfileTab from './ProfileTab';
 
@@ -89,10 +90,10 @@ export default function Settings() {
 
   return (
     <main className="w-full max-w-full px-4 sm:px-6 lg:px-8 py-8">
-      <title>Configurações do Sistema — Inovare TI</title>
+      <title>Configurações do Sistema — CTRLS ITSM</title>
       <meta
         name="description"
-        content="Configurações globais, integrações e parâmetros da plataforma Inovare TI"
+        content="Configurações globais, integrações e parâmetros da plataforma CTRLS ITSM"
       />
       <PageHero
         eyebrow="Sistema"
@@ -137,6 +138,19 @@ export default function Settings() {
                   subSections={subSections}
                   onSelectSubSection={setActiveSubSection}
                 />
+              )}
+
+              {activeSubSection === 'branding' && (
+                <motion.div
+                  key="branding"
+                  initial={{ opacity: 0, scale: 0.98 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.98 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  {renderBackHeader()}
+                  <BrandingSection />
+                </motion.div>
               )}
 
               {activeSubSection === 'integrations' && !isTwoFactorVerified && (

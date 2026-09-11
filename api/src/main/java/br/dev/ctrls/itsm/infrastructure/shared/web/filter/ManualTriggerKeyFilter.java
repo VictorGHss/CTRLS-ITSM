@@ -20,7 +20,7 @@ import lombok.extern.slf4j.Slf4j;
  * que acionam ações administrativas manuais (como trigger de confirmação de consultas).
  * 
  * Este filtro intercepta chamadas na rota "/webhooks/blip/manual-trigger" e valida
- * a presença de uma chave estática secreta no cabeçalho "X-Inovare-Token" contra
+ * a presença de uma chave estática secreta no cabeçalho "X-ITSM-Token" contra
  * a variável de ambiente de produção "APP_BLIP_SECURITY_WEBHOOK_TOKEN".
  * 
  * Se o token coincidir, o filtro autentica a requisição com o papel "ROLE_ADMIN", 
@@ -30,7 +30,7 @@ import lombok.extern.slf4j.Slf4j;
 public class ManualTriggerKeyFilter extends OncePerRequestFilter {
 
     private static final String MANUAL_TRIGGER_PATH = "/webhooks/blip/manual-trigger";
-    private static final String HEADER_NAME = "X-Inovare-Token";
+    private static final String HEADER_NAME = "X-ITSM-Token";
 
     private final String expectedKey = System.getenv("APP_BLIP_SECURITY_WEBHOOK_TOKEN");
     private final String manualTriggerKey = System.getenv("MANUAL_TRIGGER_KEY");

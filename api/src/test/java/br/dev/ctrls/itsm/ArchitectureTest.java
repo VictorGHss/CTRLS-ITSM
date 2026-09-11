@@ -10,7 +10,7 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 
 /**
  * Ficheiro de teste unitário responsável por validar as regras de governação e o isolamento 
- * das camadas da Arquitetura Hexagonal do sistema Inovare-TI.
+ * das camadas da Arquitetura Hexagonal do sistema CTRLS ITSM.
  */
 @AnalyzeClasses(packages = "br.dev.ctrls.itsm")
 public class ArchitectureTest {

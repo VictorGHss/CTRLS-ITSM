@@ -1,5 +1,5 @@
-﻿-- =============================================================================
--- V1__init.sql - Schema inicial do Inovare TI (Versão Consolidada)
+-- =============================================================================
+-- V1__init.sql - Schema inicial do CTRLS ITSM (Versão Consolidada)
 -- PostgreSQL 16 | Gerenciado pelo Flyway
 -- =============================================================================
 

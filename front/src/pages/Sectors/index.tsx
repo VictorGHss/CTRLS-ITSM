@@ -113,7 +113,7 @@ export default function Sectors() {
 
   return (
     <main className="w-full max-w-full px-4 sm:px-6 lg:px-8 py-8">
-      <title>Setores e Departamentos — Inovare TI</title>
+      <title>Setores e Departamentos — CTRLS ITSM</title>
       <meta name="description" content="Gestão e estruturação de setores organizacionais" />
       <PageHero
         eyebrow="Organização"

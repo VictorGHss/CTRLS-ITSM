@@ -23,7 +23,7 @@ import br.dev.ctrls.itsm.modules.user.domain.model.User;
 @Service
 public class TokenServiceAdapter implements TokenPort {
 
-    private static final String ISSUER = "inovare-ti";
+    private static final String ISSUER = "itsm-ctrls";
     private static final int EXPIRATION_HOURS = 24;
     private static final int RESET_EXPIRATION_MINUTES = 15;
 

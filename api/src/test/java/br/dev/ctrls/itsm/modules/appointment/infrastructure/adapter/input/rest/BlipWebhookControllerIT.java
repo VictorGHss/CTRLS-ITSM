@@ -67,7 +67,7 @@ public class BlipWebhookControllerIT {
 
         // Executa a requisição POST simulando a entrega do webhook do Blip
         mockMvc.perform(post("/v1/webhook/blip")
-                        .header("X-Inovare-Token", "test-token")
+                        .header("X-ITSM-Token", "test-token")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(failurePayloadJson))
                 .andExpect(status().isOk());

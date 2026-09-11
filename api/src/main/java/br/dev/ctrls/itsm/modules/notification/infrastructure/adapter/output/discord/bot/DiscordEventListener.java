@@ -142,7 +142,7 @@ public class DiscordEventListener extends ListenerAdapter {
                     Commands.slash("status", "Verifica o status de um chamado")
                         .addOption(OptionType.STRING, "id_chamado", "ID do chamado (UUID)", true),
 
-                    Commands.slash("meuschamados", "Lista os seus chamados em andamento na Inovare TI"),
+                    Commands.slash("meuschamados", "Lista os seus chamados em andamento no CTRLS ITSM"),
 
                     Commands.slash("ajuda", "Busca dúvidas e ajuda no FAQ local da TI")
                         .addOption(OptionType.STRING, "busca", "Palavra-chave ou dúvida para busca no FAQ", true),
@@ -327,7 +327,7 @@ public class DiscordEventListener extends ListenerAdapter {
                 List<FaqTi> resultados = discordCommandService.buscarFaq(busca);
 
                 EmbedBuilder embedBuilder = new EmbedBuilder();
-                embedBuilder.setTitle("🔍 Ajuda e FAQ - Inovare TI");
+                embedBuilder.setTitle("🔍 Ajuda e FAQ - CTRLS ITSM");
                 embedBuilder.setColor(0x00A2FF);
                 embedBuilder.setDescription("Resultados da busca para: *" + busca + "*\n\n");
 
@@ -348,13 +348,13 @@ public class DiscordEventListener extends ListenerAdapter {
                             String link = baseLink + "/articles/" + artigo.getId();
                             embedBuilder.appendDescription(java.util.Objects.requireNonNull(String.format("• **[%s](%s)** (ID: `%s`)\n", artigo.getTitle(), link, artigo.getId())));
                         }
-                        embedBuilder.setFooter("Inovare TI • Base de Conhecimento", event.getJDA().getSelfUser().getAvatarUrl());
+                        embedBuilder.setFooter("CTRLS ITSM • Base de Conhecimento", event.getJDA().getSelfUser().getAvatarUrl());
                     }
                 } else {
                     for (FaqTi faq : resultados) {
                         embedBuilder.addField("❓ " + faq.getPergunta(), "💡 " + faq.getResposta(), false);
                     }
-                    embedBuilder.setFooter("Inovare TI • Sistema de Automação de Suporte", event.getJDA().getSelfUser().getAvatarUrl());
+                    embedBuilder.setFooter("CTRLS ITSM • Sistema de Automação de Suporte", event.getJDA().getSelfUser().getAvatarUrl());
                 }
 
                 event.getHook().sendMessageEmbeds(embedBuilder.build()).queue();

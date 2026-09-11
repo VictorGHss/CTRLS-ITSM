@@ -248,12 +248,12 @@ public class AccessController {
             }
 
             String firstAppId = credentials.getFirst().getAppointmentId();
-            boolean isInovare = (request.clinic() != null && request.clinic().toLowerCase().contains("inovare"))
-                    || (firstAppId != null && firstAppId.startsWith("INOV-"));
+            boolean isImagem = (request.clinic() != null && request.clinic().toLowerCase().contains("img"))
+                    || (firstAppId != null && firstAppId.startsWith("IMG-"));
 
             String resolvedDoctorName = (request.doctorName() != null && !request.doctorName().isBlank())
                 ? request.doctorName().trim()
-                : (isInovare ? "Inovare – Serviços de Saúde" : "Clínica Da Imagem - Unidade Inovare");
+                : (isImagem ? "Clínica Da Imagem" : "Portal de Atendimento");
 
             final String appointmentDateDisplay = resolveDisplayDate(firstAppId);
 
@@ -337,12 +337,12 @@ public class AccessController {
                         .body(Map.of("message", "Nenhuma credencial encontrada para reativar."));
             }
 
-            String doctorName = "Clínica Inovare";
+            String doctorName = "Portal de Atendimento";
             String appointmentDateTime = "Hoje";
             String opensAt = "07:00";
             String closesAt = "23:00";
 
-            if (appointmentId != null && !appointmentId.startsWith("IMG-") && !appointmentId.startsWith("INOV-")) {
+            if (appointmentId != null && !appointmentId.startsWith("IMG-") && !appointmentId.startsWith("INOV-") && !appointmentId.startsWith("PORT-")) {
                 try {
                     var accessInfoOpt = feegowClientPort.fetchPatientAccessInfo(appointmentId);
                     if (accessInfoOpt.isPresent()) {
@@ -366,7 +366,7 @@ public class AccessController {
                     log.warn("[AccessControl] Não foi possível resolver dados do Feegow na reativação: {}", ex.getMessage());
                 }
             } else if (appointmentId != null && appointmentId.startsWith("IMG-")) {
-                doctorName = "Clínica Da Imagem - Unidade Inovare";
+                doctorName = "Clínica Da Imagem";
                 opensAt = "06:00";
                 closesAt = "23:59";
             }
@@ -433,12 +433,10 @@ public class AccessController {
 
             List<AccessCredential> allCreds = accessCredentialRepositoryPort.findByAppointmentId(appointmentId);
             if (allCreds != null && !allCreds.isEmpty()) {
-                String doctorName = "Clínica Inovare";
+                String doctorName = "Portal de Atendimento";
                 String appDateStr = "Hoje";
                 if (appointmentId.startsWith("IMG-")) {
-                    doctorName = "Clínica Da Imagem - Unidade Inovare";
-                } else if (appointmentId.startsWith("INOV-")) {
-                    doctorName = "Inovare – Serviços de Saúde";
+                    doctorName = "Clínica Da Imagem";
                 }
                 final String finalDoctorName = doctorName;
                 final String finalAppDateStr = appDateStr;
@@ -495,7 +493,7 @@ public class AccessController {
         }
         FeegowPatientAccessInfo accessInfo = accessInfoOpt.get();
         String token = validateAccessChallengeUseCase.generateAccessToken(idAgendamento, accessInfo.phone());
-        String accessUrl = "https://itsm-inovare.ctrls.dev.br/" + idAgendamento + "?t=" + token;
+        String accessUrl = "https://itsm.ctrls.dev.br/" + idAgendamento + "?t=" + token;
         return ResponseEntity.ok(Map.of(
             "appointmentId", idAgendamento,
             "token", token,
@@ -508,22 +506,22 @@ public class AccessController {
      */
     @GetMapping(value = "/calendar/event.ics", produces = "text/calendar;charset=UTF-8")
     public ResponseEntity<String> getCalendarEventIcs(
-            @RequestParam(value = "title", defaultValue = "Consulta Médica - Inovare") String title,
+            @RequestParam(value = "title", defaultValue = "Consulta Médica") String title,
             @RequestParam(value = "start", required = false) String start,
             @RequestParam(value = "end", required = false) String end,
-            @RequestParam(value = "location", defaultValue = "Edifício Inovare, Ponta Grossa - PR") String location,
-            @RequestParam(value = "description", defaultValue = "Consulta médica agendada no Edifício Inovare.") String description) {
+            @RequestParam(value = "location", defaultValue = "Edifício Corporativo, Ponta Grossa - PR") String location,
+            @RequestParam(value = "description", defaultValue = "Consulta médica agendada.") String description) {
 
         String ics = generateCalendarIcsUseCase.execute(title, start, end, location, description);
 
         return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"consulta-inovare.ics\"")
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"consulta-agendamento.ics\"")
                 .header(HttpHeaders.CONTENT_TYPE, "text/calendar; charset=UTF-8")
                 .body(ics);
     }
 
     private String resolveDisplayDate(String appointmentId) {
-        if (appointmentId != null && appointmentId.length() >= 13 && (appointmentId.startsWith("INOV-") || appointmentId.startsWith("IMG-"))) {
+        if (appointmentId != null && appointmentId.length() >= 13 && (appointmentId.startsWith("PORT-") || appointmentId.startsWith("INOV-") || appointmentId.startsWith("IMG-"))) {
             try {
                 String datePart = appointmentId.substring(5, 13);
                 LocalDate parsedDate = LocalDate.parse(datePart, DateTimeFormatter.ofPattern("yyyyMMdd"));

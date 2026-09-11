@@ -108,7 +108,7 @@ public class LookupCredentialsByCpfUseCase {
         }
 
         String todayIdSuffix = today.format(DateTimeFormatter.ofPattern("yyyyMMdd"));
-        String prefix = (clinic != null && clinic.toLowerCase().contains("inovare")) ? "INOV-" : "IMG-";
+        String prefix = (clinic != null && clinic.toLowerCase().contains("img")) ? "IMG-" : "PORT-";
         String appointmentId = prefix + todayIdSuffix + "-" + cleanCpf;
 
         List<AccessCredential> credentials = accessCredentialRepositoryPort.findByAppointmentId(appointmentId);
@@ -283,9 +283,9 @@ public class LookupCredentialsByCpfUseCase {
             }
 
             if (doctorName == null || doctorName.isBlank()) {
-                boolean isInovare = (clinic != null && clinic.toLowerCase().contains("inovare"))
-                        || (appointmentId != null && appointmentId.startsWith("INOV-"));
-                doctorName = isInovare ? "Inovare – Serviços de Saúde" : "Clínica Da Imagem - Unidade Inovare";
+                boolean isImagem = (clinic != null && clinic.toLowerCase().contains("img"))
+                        || (appointmentId != null && appointmentId.startsWith("IMG-"));
+                doctorName = isImagem ? "Clínica Da Imagem" : "Portal de Atendimento";
             }
 
             responseList.add(new AccessCredentialResponse(

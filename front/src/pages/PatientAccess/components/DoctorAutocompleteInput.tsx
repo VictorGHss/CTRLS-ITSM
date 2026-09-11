@@ -28,7 +28,7 @@ export const DoctorAutocompleteInput: React.FC<DoctorAutocompleteInputProps> = (
   filteredDoctors,
   handleSelectDoctor
 }) => {
-  if (clinicTheme.id !== 'inovare') return null;
+  if (clinicTheme.id !== 'portal') return null;
 
   return (
     <div className="relative" ref={doctorDropdownRef}>

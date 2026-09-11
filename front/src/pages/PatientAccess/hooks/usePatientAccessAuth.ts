@@ -27,10 +27,10 @@ export function usePatientAccessAuth({ appointmentId, clinicTheme }: UsePatientA
 
   const isPublicRoute =
     clinicTheme.id === 'imagem' ||
-    clinicTheme.id === 'inovare' ||
+    clinicTheme.id === 'portal' ||
     appointmentId === 'imagem' ||
-    appointmentId === 'inovare';
-  const defaultPrefix = clinicTheme.id === 'inovare' ? 'INOV-' : 'IMG-';
+    appointmentId === 'portal';
+  const defaultPrefix = clinicTheme.id === 'imagem' ? 'IMG-' : 'PORT-';
 
   // Salva no cache offline (localStorage)
   const saveCredentialsWithOfflineCache = useCallback(
@@ -41,9 +41,9 @@ export function usePatientAccessAuth({ appointmentId, clinicTheme }: UsePatientA
         return {
           ...c,
           appointmentId:
-            c.appointmentId && c.appointmentId !== 'imagem' && c.appointmentId !== 'inovare'
+            c.appointmentId && c.appointmentId !== 'imagem' && c.appointmentId !== 'portal'
               ? c.appointmentId
-              : appointmentId && appointmentId !== 'imagem' && appointmentId !== 'inovare'
+              : appointmentId && appointmentId !== 'imagem' && appointmentId !== 'portal'
                 ? appointmentId
                 : fallbackAppId
         };
@@ -53,7 +53,7 @@ export function usePatientAccessAuth({ appointmentId, clinicTheme }: UsePatientA
       setIsVerified(true);
       if (normalizedData.length > 0) {
         try {
-          if (appointmentId && appointmentId !== 'imagem' && appointmentId !== 'inovare') {
+          if (appointmentId && appointmentId !== 'imagem' && appointmentId !== 'portal') {
             localStorage.setItem(
               `patient_access_credentials_${appointmentId}`,
               JSON.stringify(normalizedData)
@@ -112,8 +112,8 @@ export function usePatientAccessAuth({ appointmentId, clinicTheme }: UsePatientA
     try {
       localStorage.removeItem(`patient_access_${clinicTheme.id}_last_credentials`);
       localStorage.removeItem('patient_access_imagem_last_credentials');
-      localStorage.removeItem('patient_access_inovare_last_credentials');
-      if (appointmentId && appointmentId !== 'imagem' && appointmentId !== 'inovare') {
+      localStorage.removeItem('patient_access_portal_last_credentials');
+      if (appointmentId && appointmentId !== 'imagem' && appointmentId !== 'portal') {
         localStorage.removeItem(`patient_access_credentials_${appointmentId}`);
         localStorage.removeItem(`patient_access_token_${appointmentId}`);
         localStorage.removeItem(`patient_access_phone_${appointmentId}`);
@@ -127,7 +127,7 @@ export function usePatientAccessAuth({ appointmentId, clinicTheme }: UsePatientA
 
   const refreshCredentials = useCallback(
     async (silent = false) => {
-      if (!appointmentId || appointmentId === 'imagem' || appointmentId === 'inovare') return;
+      if (!appointmentId || appointmentId === 'imagem' || appointmentId === 'portal') return;
       const params = new URLSearchParams(window.location.search);
       const token = (
         params.get('t') ||
@@ -202,7 +202,7 @@ export function usePatientAccessAuth({ appointmentId, clinicTheme }: UsePatientA
 
   // Desbloqueio automático via Magic Link (?t=...) ou parâmetro de telefone (?p=...)
   useEffect(() => {
-    if (!appointmentId || appointmentId === 'imagem' || appointmentId === 'inovare') return;
+    if (!appointmentId || appointmentId === 'imagem' || appointmentId === 'portal') return;
     const params = new URLSearchParams(window.location.search);
     const tokenParam = (params.get('t') || params.get('token') || '').trim();
     const phoneDigitsParam = (params.get('p') || params.get('auth') || '').trim();
@@ -291,7 +291,7 @@ export function usePatientAccessAuth({ appointmentId, clinicTheme }: UsePatientA
         return;
       }
 
-      if (appointmentId && appointmentId !== 'imagem' && appointmentId !== 'inovare') {
+      if (appointmentId && appointmentId !== 'imagem' && appointmentId !== 'portal') {
         const key = `patient_access_credentials_${appointmentId}`;
         const cached = localStorage.getItem(key);
         if (cached) {

@@ -29,7 +29,7 @@ import net.dv8tion.jda.api.interactions.components.buttons.Button;
 @SuppressWarnings("null")
 public class DiscordTicketEmbedBuilder {
 
-    public static final int CLINIC_BRAND_COLOR = 0xF97316; // Cor Laranja de Destaque Inovare TI (#F97316)
+    public static final int CLINIC_BRAND_COLOR = 0xF97316; // Cor Laranja de Destaque ITSM (#F97316)
     private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
     private static final DateTimeFormatter WEEK_DAY_FORMATTER = DateTimeFormatter.ofPattern("dd/MM");
 
@@ -81,7 +81,7 @@ public class DiscordTicketEmbedBuilder {
         String openedAt = ticket.getCreatedAt() != null
                 ? ticket.getCreatedAt().format(DATE_TIME_FORMATTER)
                 : "-";
-        eb.setFooter("Inovare TI • Chamado aberto em: " + openedAt);
+        eb.setFooter("CTRLS ITSM • Chamado aberto em: " + openedAt);
         eb.setTimestamp(Instant.now());
 
         return eb.build();
@@ -124,10 +124,10 @@ public class DiscordTicketEmbedBuilder {
 
         User assignedUser = dbTicket.getAssignedTo() != null ? dbTicket.getAssignedTo() : ticketParam.getAssignedTo();
         String assignedName = Objects.requireNonNullElse(
-                assignedUser != null ? DiscordLgpdSanitizer.sanitize(assignedUser.getName()) : "Equipe Inovare TI",
-                "Equipe Inovare TI"
+                assignedUser != null ? DiscordLgpdSanitizer.sanitize(assignedUser.getName()) : "Equipe ITSM",
+                "Equipe ITSM"
         );
-        eb.addField("Atendido por", Objects.requireNonNullElse(assignedName, "Equipe Inovare TI"), true);
+        eb.addField("Atendido por", Objects.requireNonNullElse(assignedName, "Equipe ITSM"), true);
 
         var assetObj = dbTicket.getAsset() != null ? dbTicket.getAsset() : ticketParam.getAsset();
         if (assetObj != null) {
@@ -138,7 +138,7 @@ public class DiscordTicketEmbedBuilder {
         String closedAtStr = closedAt != null
                 ? closedAt.format(DATE_TIME_FORMATTER)
                 : LocalDateTime.now().format(DATE_TIME_FORMATTER);
-        eb.setFooter("Inovare TI • Chamado resolvido em: " + closedAtStr);
+        eb.setFooter("CTRLS ITSM • Chamado resolvido em: " + closedAtStr);
         eb.setTimestamp(Instant.now());
 
         return eb.build();
@@ -161,7 +161,7 @@ public class DiscordTicketEmbedBuilder {
         eb.setDescription("Este chamado foi **unificado** ao atendimento principal em " + parentMention + ".\n\n"
                 + "📋 **Chamado Mestre:** #" + parentTicket.getNumber() + " - " + parentTicket.getTitle() + "\n"
                 + "🔒 *Este canal está sendo arquivado. O atendimento continuará no canal principal.*");
-        eb.setFooter("Inovare TI • Unificação de Chamados");
+        eb.setFooter("CTRLS ITSM • Unificação de Chamados");
         eb.setTimestamp(Instant.now());
         return eb.build();
     }
@@ -178,7 +178,7 @@ public class DiscordTicketEmbedBuilder {
                 "O chamado **#" + childTicket.getNumber() + "** (*" + childTicket.getTitle() + "*), "
                         + "solicitado por **" + childRequester + "**, foi unificado a este chamado mestre.\n\n"
                         + "👥 *Os envolvidos agora têm acesso a este canal e receberão as atualizações por aqui.*");
-        parentEb.setFooter("Inovare TI • Central de Atendimento");
+        parentEb.setFooter("CTRLS ITSM • Central de Atendimento");
         parentEb.setTimestamp(Instant.now());
         return parentEb.build();
     }

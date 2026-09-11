@@ -23,7 +23,7 @@ public class AppointmentMetricsService {
     public void incrementDispatched(String doctorName, String specialtyName) {
         String doc = doctorName != null ? doctorName : "Desconhecido";
         String spec = specialtyName != null ? specialtyName : "Geral";
-        Counter.builder("inovareti_appointment_dispatches_total")
+        Counter.builder("itsm_appointment_dispatches_total")
                 .description("Total de mensagens ativas de confirmação disparadas via WhatsApp")
                 .tag("doctor", doc)
                 .tag("specialty", spec)
@@ -38,7 +38,7 @@ public class AppointmentMetricsService {
         String doc = doctorName != null ? doctorName : "Desconhecido";
         String spec = specialtyName != null ? specialtyName : "Geral";
         String src = source != null ? source : "bot";
-        Counter.builder("inovareti_appointment_confirmations_total")
+        Counter.builder("itsm_appointment_confirmations_total")
                 .description("Total de consultas confirmadas pelos pacientes via WhatsApp ou Desk")
                 .tag("doctor", doc)
                 .tag("specialty", spec)
@@ -54,7 +54,7 @@ public class AppointmentMetricsService {
         String doc = doctorName != null ? doctorName : "Desconhecido";
         String spec = specialtyName != null ? specialtyName : "Geral";
         String src = source != null ? source : "bot";
-        Counter.builder("inovareti_appointment_cancellations_total")
+        Counter.builder("itsm_appointment_cancellations_total")
                 .description("Total de consultas canceladas ou com solicitação de remarcação")
                 .tag("doctor", doc)
                 .tag("specialty", spec)
@@ -68,7 +68,7 @@ public class AppointmentMetricsService {
      */
     public void incrementPhoneMissing(String doctorName) {
         String doc = doctorName != null ? doctorName : "Desconhecido";
-        Counter.builder("inovareti_appointment_phone_missing_total")
+        Counter.builder("itsm_appointment_phone_missing_total")
                 .description("Total de agendamentos sem telefone cadastrado na Feegow")
                 .tag("doctor", doc)
                 .register(meterRegistry)
@@ -79,7 +79,7 @@ public class AppointmentMetricsService {
      * Registra o tempo de execução da rotina de ingestão matinal.
      */
     public void recordIngestionDuration(long durationMs) {
-        Timer.builder("inovareti_appointment_ingestion_duration_seconds")
+        Timer.builder("itsm_appointment_ingestion_duration_seconds")
                 .description("Tempo de execução da rotina de ingestão e processamento matinal")
                 .register(meterRegistry)
                 .record(java.time.Duration.ofMillis(durationMs));

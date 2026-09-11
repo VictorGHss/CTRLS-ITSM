@@ -83,7 +83,7 @@ public class DiscordWebhookService {
     @Value("${discord.thumbnail.url:}")
     private String discordThumbnailUrl;
 
-    @Value("${discord.operational.ticket-url-base:https://itsm-inovare.ctrls.dev.br/tickets/}")
+    @Value("${discord.operational.ticket-url-base:https://itsm.ctrls.dev.br/tickets/}")
     private String operationalTicketUrlBase;
 
     /**
@@ -430,7 +430,7 @@ public class DiscordWebhookService {
                     .addField("Solicitante", solicitante, true)
                     .addField("Setor", setor, true)
                     .addField("Prioridade", prioridade, true)
-                    .setFooter("Inovare TI • Clique em Assumir para atribuir o chamado a você")
+                    .setFooter("CTRLS ITSM • Clique em Assumir para atribuir o chamado a você")
                     .build();
 
             String traceId = getTraceId();

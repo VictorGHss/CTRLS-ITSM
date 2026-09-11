@@ -289,7 +289,7 @@ public class AppointmentMotorController {
 
     @PostMapping(value = "/blip/webhook")
     public ResponseEntity<Map<String, Object>> blipWebhook(
-            @org.springframework.web.bind.annotation.RequestHeader(value = "X-Inovare-Token", required = false) String inovareToken,
+            @org.springframework.web.bind.annotation.RequestHeader(value = "X-ITSM-Token", required = false) String itsmToken,
             @org.springframework.web.bind.annotation.RequestHeader(value = "X-Blip-Signature", required = false) String blipSignature,
             jakarta.servlet.http.HttpServletRequest request,
             @RequestBody(required = false) String rawJson) {
@@ -310,13 +310,14 @@ public class AppointmentMotorController {
             ? blipWebhookToken
             : System.getenv("APP_BLIP_SECURITY_WEBHOOK_TOKEN");
 
-        boolean hasTokenMatch = StringUtils.hasText(inovareToken)
+        String effectiveToken = itsmToken;
+        boolean hasTokenMatch = StringUtils.hasText(effectiveToken)
             && StringUtils.hasText(expectedToken)
-            && secureCompare(expectedToken, inovareToken);
+            && secureCompare(expectedToken, effectiveToken);
 
         boolean isBypassProfile = env.acceptsProfiles(Profiles.of("local", "default"));
         boolean isBypassEnabled = hasTokenMatch
-            || (isBypassProfile && StringUtils.hasText(inovareToken));
+            || (isBypassProfile && StringUtils.hasText(effectiveToken));
 
         if (!isSignatureValid && !isBypassEnabled) {
             log.warn("[ACESSO NEGADO] Assinatura do webhook inválida ou ausente em /v1/appointments/blip/webhook. Bypass inativo.");
@@ -359,7 +360,7 @@ public class AppointmentMotorController {
                 parsed.appointmentId(),
                 parsed.action(),
                 parsed.from(),
-                inovareToken,
+                effectiveToken,
                 parsed.content(),
                 metadata,
                 parsed.bsuid(),

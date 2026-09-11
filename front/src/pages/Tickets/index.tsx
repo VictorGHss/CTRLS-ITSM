@@ -113,7 +113,7 @@ export default function Tickets() {
 
   return (
     <main className="w-full max-w-full px-4 sm:px-6 lg:px-8 py-8">
-      <title>{isAdmin ? 'Todos os Chamados — Inovare TI' : 'Meus Chamados — Inovare TI'}</title>
+      <title>{isAdmin ? 'Todos os Chamados — CTRLS ITSM' : 'Meus Chamados — CTRLS ITSM'}</title>
       <meta name="description" content="Central de gerenciamento de chamados e suporte de TI" />
       <PageHero
         eyebrow="Atendimento"

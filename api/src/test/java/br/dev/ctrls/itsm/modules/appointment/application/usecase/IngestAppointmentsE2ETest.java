@@ -99,7 +99,7 @@ public class IngestAppointmentsE2ETest {
         if (doctorMappingRepository.findByProfissionalId("123").isEmpty()) {
             AppointmentDoctorMapping doctorMapping = AppointmentDoctorMapping.builder()
                     .profissionalId("123")
-                    .profissionalNome("Dr. Teste Inovare")
+                    .profissionalNome("Dr. Teste Especialista")
                     .blipQueueId("fila-teste")
                     .ignoreAutoSchedule(false)
                     .createdAt(LocalDateTime.now())
@@ -163,7 +163,7 @@ public class IngestAppointmentsE2ETest {
             String phone = "55119999900" + (i < 10 ? "0" + i : i);
 
             appointments.add(new FeegowAppointment(
-                apptId, patientId, "123", "Dr. Teste Inovare", "Unidade Central",
+                apptId, patientId, "123", "Dr. Teste Especialista", "Unidade Central",
                 LocalDateTime.now().plusDays(1).withHour(8).withMinute(0), "1", "Consulta", "1", false
             ));
 

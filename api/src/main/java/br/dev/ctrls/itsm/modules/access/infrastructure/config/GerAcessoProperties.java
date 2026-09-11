@@ -7,7 +7,7 @@ import lombok.Setter;
 
 /**
  * Propriedades de configuração da integração com a GerAcesso.
- * Registra o prefixo "inovare.geracesso" para sanar os avisos de propriedade desconhecida da IDE.
+ * Registra o prefixo "app.geracesso" para sanar os avisos de propriedade desconhecida da IDE.
  * Comentários em PT-BR conforme as Regras de Ouro.
  */
 @Getter

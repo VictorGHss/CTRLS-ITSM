@@ -182,7 +182,7 @@ public class SendPostAppointmentReviewUseCase {
                     continue;
                 }
 
-                String doctorName = "Clínica Inovare";
+                String doctorName = "Recepção Central";
 
                 if (appt.doctorId() != null && !appt.doctorId().isBlank()) {
                     try {
@@ -199,7 +199,7 @@ public class SendPostAppointmentReviewUseCase {
                     }
                 }
 
-                if ("Clínica Inovare".equalsIgnoreCase(doctorName) && appt.doctorName() != null && !appt.doctorName().isBlank()) {
+                if ("Recepção Central".equalsIgnoreCase(doctorName) && appt.doctorName() != null && !appt.doctorName().isBlank()) {
                     doctorName = appt.doctorName().trim();
                 }
 

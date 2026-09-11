@@ -65,7 +65,7 @@ public class GetCredentialsUseCase {
                     c.getLocator(),
                     c.getAccessCredential(),
                     c.getCpf(),
-                    idAgendamento.startsWith("INOV-") ? "Inovare – Serviços de Saúde" : "Clínica Da Imagem - Unidade Inovare",
+                    idAgendamento.startsWith("IMG-") ? "Clínica Da Imagem" : "Portal de Atendimento",
                     resolveDisplayDate(idAgendamento),
                     "06:00",
                     "23:59",
@@ -268,11 +268,11 @@ public class GetCredentialsUseCase {
                 }
             }
 
-            if (c.getAppointmentId() != null && (c.getAppointmentId().startsWith("INOV-") || c.getAppointmentId().startsWith("IMG-"))) {
+            if (c.getAppointmentId() != null && (c.getAppointmentId().startsWith("PORT-") || c.getAppointmentId().startsWith("INOV-") || c.getAppointmentId().startsWith("IMG-"))) {
                 if (c.getDoctorName() != null && !c.getDoctorName().isBlank()) {
                     itemDoctorName = c.getDoctorName();
                 } else if (itemDoctorName == null || itemDoctorName.isBlank()) {
-                    itemDoctorName = c.getAppointmentId().startsWith("INOV-") ? "Inovare – Serviços de Saúde" : "Clínica Da Imagem - Unidade Inovare";
+                    itemDoctorName = c.getAppointmentId().startsWith("IMG-") ? "Clínica Da Imagem" : "Portal de Atendimento";
                 }
                 itemAppointmentDateTime = resolveDisplayDate(c.getAppointmentId());
             }

@@ -8,9 +8,9 @@ import ContaAzulStatusCard from './components/ContaAzulStatusCard';
 import { useFinancialDashboard } from './hooks/useFinancialDashboard';
 import { useFinancialActions } from './hooks/useFinancialActions';
 
-const CONTA_AZUL_AUTHORIZE_URL = 'https://itsm-inovare.ctrls.dev.br/api/financeiro/contaazul/authorize';
+const CONTA_AZUL_AUTHORIZE_URL = '/api/financeiro/contaazul/authorize';
 const ISO_DATETIME_PREFIX_REGEX = /^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})/;
-const PRIVACY_STORAGE_KEY = '@InovareTI:financeiro:is-private';
+const PRIVACY_STORAGE_KEY = '@Itsm:financeiro:is-private';
 
 function formatDate(value?: string | null): string {
   if (!value) {
@@ -95,13 +95,13 @@ export default function FinancialDashboard() {
 
   return (
     <main className="min-h-screen w-full max-w-full bg-slate-50/40 px-4 py-8 sm:px-6 lg:px-8">
-      <title>Dashboard Financeiro — Inovare TI</title>
+      <title>Dashboard Financeiro — CTRLS ITSM</title>
       <meta name="description" content="Gestão e controle financeiro de consumo interno e faturamento" />
       {/* ── Page Header ── */}
       <section className="mb-8 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <span className="inline-flex items-center gap-1.5 rounded-full border border-brand-primary/30 bg-brand-secondary/60 px-3 py-1 text-xs font-bold uppercase tracking-[0.2em] text-brand-primary-dark">
-            Inovare · Financeiro
+            Painel · Financeiro
           </span>
           <h1 className="mt-3 text-3xl font-extrabold tracking-tight text-slate-900">Dashboard Financeiro</h1>
           <p className="mt-1.5 max-w-2xl text-sm leading-6 text-slate-500">

@@ -30,8 +30,8 @@ export default function SystemLogs() {
 
   return (
     <div className="p-4 sm:p-6 w-full max-w-full">
-      <title>Logs do Sistema — Inovare TI</title>
-      <meta name="description" content="Trilha de auditoria e governança de segurança do Inovare TI" />
+      <title>Logs do Sistema — CTRLS ITSM</title>
+      <meta name="description" content="Trilha de auditoria e governança de segurança operacional" />
       <PageHero
         eyebrow="Auditoria"
         icon={<Shield size={14} />}

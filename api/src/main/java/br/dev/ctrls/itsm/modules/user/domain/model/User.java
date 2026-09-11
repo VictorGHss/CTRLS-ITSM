@@ -32,7 +32,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 /**
- * Usuário do sistema Inovare TI.
+ * Usuário do sistema CTRLS ITSM.
  * Cada usuário pertence a um setor e possui um papel (role) que
  * determina suas permissões de acesso.
  * Implementa {@link UserDetails} para integração com o Spring Security.

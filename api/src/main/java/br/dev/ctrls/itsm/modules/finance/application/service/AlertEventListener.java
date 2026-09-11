@@ -57,7 +57,7 @@ public class AlertEventListener {
         if (doctorName != null && !doctorName.isBlank()) {
             message.append("Médico: ").append(doctorName).append("\n");
         }
-        message.append("\nPor favor, verifique o painel financeiro do Inovare TI e confirme se o recibo foi gerado/anexado.");
+        message.append("\nPor favor, verifique o painel financeiro do CTRLS ITSM e confirme se o recibo foi gerado/anexado.");
 
         try {
             discordWebhookService.sendOperationalAlert(title, message.toString());

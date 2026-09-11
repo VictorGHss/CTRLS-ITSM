@@ -601,7 +601,7 @@ public class HandleBlipWebhookUseCase {
             }
         }
         if (doctorName == null || doctorName.isBlank()) {
-            doctorName = "Clínica Inovare";
+            doctorName = "Recepção Central";
         }
         return blipTextSanitizer.cleanDoctorName(doctorName);
     }

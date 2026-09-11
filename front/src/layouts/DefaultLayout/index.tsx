@@ -18,15 +18,15 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { useBranding } from '../../contexts/BrandingContext';
 import NotificationBell from '@/components/common/NotificationBell';
 import UserDropdown from '@/components/common/UserDropdown';
 import { connectAppointmentEvents } from '../../services/appointmentRealtimeService';
 import type { AppointmentRealtimeEvent } from '../../types/models';
 
-const LOGO_URL = 'https://inovare.med.br/wp-content/uploads/2023/01/Logo.png';
-
 export default function DefaultLayout() {
   const { user } = useAuth();
+  const { branding } = useBranding();
   const navigate = useNavigate();
   const location = useLocation();
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
@@ -113,15 +113,27 @@ export default function DefaultLayout() {
           >
             <Menu size={20} />
           </button>
-          <img
-            src={LOGO_URL}
-            alt="Inovare TI"
-            className="h-10 object-contain cursor-pointer"
-            onClick={() => {
-              setIsMobileSidebarOpen(false);
-              navigate('/dashboard');
-            }}
-          />
+          {branding.logoUrl ? (
+            <img
+              src={branding.logoUrl}
+              alt={branding.appName || 'CTRLS ITSM'}
+              className="h-10 object-contain cursor-pointer"
+              onClick={() => {
+                setIsMobileSidebarOpen(false);
+                navigate('/dashboard');
+              }}
+            />
+          ) : (
+            <div
+              className="h-9 px-3.5 rounded-xl bg-brand-primary text-slate-900 font-extrabold flex items-center justify-center text-sm cursor-pointer shadow-xs tracking-tight select-none"
+              onClick={() => {
+                setIsMobileSidebarOpen(false);
+                navigate('/dashboard');
+              }}
+            >
+              {branding.appName || 'CTRLS ITSM'}
+            </div>
+          )}
 
           <nav className="hidden md:flex items-center gap-1 overflow-x-auto pl-2">
             {navItems.filter((item) => item.visible).map((item) => {

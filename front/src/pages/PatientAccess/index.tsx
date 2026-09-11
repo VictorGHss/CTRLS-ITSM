@@ -125,7 +125,7 @@ export default function PatientAccess() {
     const targetAppointmentId =
       activeCardCred?.appointmentId &&
       activeCardCred.appointmentId !== 'imagem' &&
-      activeCardCred.appointmentId !== 'inovare'
+      activeCardCred.appointmentId !== 'portal'
         ? activeCardCred.appointmentId
         : activeCardCred?.cpf
           ? activeCardCred.cpf.replace(/\D/g, '')
@@ -253,7 +253,7 @@ export default function PatientAccess() {
                 onError={e => {
                   e.currentTarget.src = clinicTheme.id === 'imagem'
                     ? 'https://placehold.co/180x60/b8004b/ffffff?text=Cl%C3%ADnica+da+Imagem'
-                    : 'https://placehold.co/180x60/00875f/ffffff?text=Inovare';
+                    : 'https://placehold.co/180x60/00875f/ffffff?text=Portal';
                 }}
               />
             </header>
@@ -305,7 +305,7 @@ export default function PatientAccess() {
             onError={e => {
               e.currentTarget.src = clinicTheme.id === 'imagem'
                 ? 'https://placehold.co/180x60/b8004b/ffffff?text=Cl%C3%ADnica+da+Imagem'
-                : 'https://placehold.co/120x40/feb56c/ffffff?text=Inovare+TI';
+                : 'https://placehold.co/120x40/feb56c/ffffff?text=Portal';
             }}
           />
         </header>

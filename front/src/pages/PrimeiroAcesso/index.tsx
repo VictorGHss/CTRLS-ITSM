@@ -3,22 +3,22 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { Lock, ShieldCheck, Loader2 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { useAuth } from '../../contexts/AuthContext';
+import { useBranding } from '../../contexts/BrandingContext';
 
 interface FirstAccessState {
   tempToken?: string;
   userId?: string;
 }
 
-const LOGO_URL = 'https://inovare.med.br/wp-content/uploads/2023/01/Logo.png';
-
 export default function PrimeiroAcesso() {
   const navigate = useNavigate();
   const location = useLocation();
   const { completeInitialPasswordReset } = useAuth();
+  const { branding } = useBranding();
 
   const state = (location.state as FirstAccessState | null) ?? null;
   const pending = (() => {
-    const raw = sessionStorage.getItem('@InovareTI:firstAccess');
+    const raw = sessionStorage.getItem('@Itsm:firstAccess');
     if (!raw) return null;
     try {
       return JSON.parse(raw) as FirstAccessState;
@@ -68,11 +68,11 @@ export default function PrimeiroAcesso() {
         userId,
         newPassword,
       });
-      sessionStorage.removeItem('@InovareTI:firstAccess');
+      sessionStorage.removeItem('@Itsm:firstAccess');
       toast.success('Senha atualizada com sucesso!');
       navigate('/dashboard', { replace: true });
     } catch {
-      sessionStorage.removeItem('@InovareTI:firstAccess');
+      sessionStorage.removeItem('@Itsm:firstAccess');
       toast.error('Não foi possível redefinir a senha. Faça login novamente.');
       navigate('/login', { replace: true });
     } finally {
@@ -82,11 +82,17 @@ export default function PrimeiroAcesso() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-white to-brand-secondary/20 flex items-center justify-center px-4">
-      <title>Primeiro Acesso — Inovare TI</title>
+      <title>Primeiro Acesso — {branding.appName || 'CTRLS ITSM'}</title>
       <meta name="description" content="Definição de nova senha no primeiro acesso à plataforma" />
       <div className="w-full max-w-md">
         <div className="flex justify-center mb-8">
-          <img src={LOGO_URL} alt="Inovare TI" className="h-16 object-contain" />
+          {branding.logoUrl ? (
+            <img src={branding.logoUrl} alt={branding.appName || 'CTRLS ITSM'} className="h-16 object-contain" />
+          ) : (
+            <div className="h-14 px-5 rounded-2xl bg-brand-primary text-slate-900 font-extrabold flex items-center justify-center text-lg shadow-sm tracking-tight select-none">
+              {branding.appName || 'CTRLS ITSM'}
+            </div>
+          )}
         </div>
 
         <form

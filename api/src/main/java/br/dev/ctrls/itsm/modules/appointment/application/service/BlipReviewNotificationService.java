@@ -60,7 +60,7 @@ public class BlipReviewNotificationService {
             }
         }
 
-        String safeDoctorName = "Clínica Inovare";
+        String safeDoctorName = "Recepção Central";
         if (doctorName != null && !doctorName.isBlank() && !"null".equalsIgnoreCase(doctorName.trim())) {
             String trimmedD = doctorName.trim();
             if (!BlipContactClientAdapter.isInvalidName(trimmedD)) {
@@ -126,7 +126,7 @@ public class BlipReviewNotificationService {
     }
 
     public void sendReviewTemplateMessage(String destination, String templateName, String doctorIdOrParam) {
-        sendReviewTemplateMessage(destination, templateName, "Paciente", "Clínica Inovare", doctorIdOrParam);
+        sendReviewTemplateMessage(destination, templateName, "Paciente", "Recepção Central", doctorIdOrParam);
     }
 
     private String ensureWabaIdentity(String destination) {

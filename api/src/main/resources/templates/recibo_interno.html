@@ -2,7 +2,7 @@
 <html lang="pt-BR" xmlns:th="http://www.thymeleaf.org">
 <head>
     <meta charset="UTF-8" />
-    <title>Recibo Interno Inovare</title>
+    <title>Recibo Interno</title>
     <style>
         @page {
             size: A4;
@@ -152,14 +152,12 @@
     <div class="header">
         <div class="header-top">
             <div class="logo-box">
-                <img class="logo-image" th:if="${logoBase64 != null}" th:src="|data:image/png;base64,${logoBase64}|" alt="Logo Inovare" />
-                <div class="logo-fallback" th:if="${logoBase64 == null}">INOVARE</div>
+                <img class="logo-image" th:if="${logoBase64 != null}" th:src="|data:image/png;base64,${logoBase64}|" alt="Logo" />
+                <div class="logo-fallback" th:if="${logoBase64 == null}">RECIBO</div>
             </div>
             <div class="company">
-                <h1>Condomínio Edifício Inovare</h1>
-                <p>CNPJ: 13.481.879/0001-82 - IE: ISENTO</p>
-                <p>Rua Carlos Osternack, 111, Ponta Grossa - PR</p>
-                <p>CEP: 84040-120</p>
+                <h1>Administração Central</h1>
+                <p>Comprovante e Prestação de Contas</p>
             </div>
         </div>
         <div class="title">RECIBO</div>
@@ -181,7 +179,7 @@
 
     <div class="footer">
         <div class="line"></div>
-        <div class="sign">Administração - Condomínio Edifício Inovare</div>
+        <div class="sign">Administração Financeira</div>
     </div>
 
     <div class="date" th:text="${city} + ', ' + ${issueDate}">Ponta Grossa(PR), 01 de janeiro de 2026</div>

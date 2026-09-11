@@ -52,11 +52,11 @@ public class BlipTemplateParameterResolver {
         if (mappings.isEmpty()) {
             log.info("[TEMPLATE MAPPING] Nenhum mapeamento no banco para '{}'. Aplicando fallback automático (paciente, médico, horário).", templateName);
             String pName = appointmentData != null ? appointmentData.patientName() : "Paciente";
-            String dName = appointmentData != null ? appointmentData.doctorName() : "Clínica Inovare";
+            String dName = appointmentData != null ? appointmentData.doctorName() : "Clínica Médica";
             String aTime = appointmentData != null ? appointmentData.appointmentTime() : "horário agendado";
 
             pName = StringSanitizer.sanitize(pName != null && !pName.isBlank() ? pName : "Paciente");
-            dName = StringSanitizer.sanitize(dName != null && !dName.isBlank() ? dName : "Clínica Inovare");
+            dName = StringSanitizer.sanitize(dName != null && !dName.isBlank() ? dName : "Clínica Médica");
             aTime = StringSanitizer.sanitize(aTime != null && !aTime.isBlank() ? aTime : "horário agendado");
 
             List<Map<String, String>> fallbackParams = new ArrayList<>();
@@ -78,7 +78,7 @@ public class BlipTemplateParameterResolver {
                     if (fieldName != null) {
                         String lowerField = fieldName.toLowerCase();
                         if (lowerField.contains("profissional") || lowerField.contains("doctor") || lowerField.contains("medico")) {
-                            safeValue = "Clínica Inovare";
+                            safeValue = "Clínica Médica";
                         } else if (lowerField.contains("patient") || lowerField.contains("paciente")) {
                             safeValue = "Paciente";
                         }

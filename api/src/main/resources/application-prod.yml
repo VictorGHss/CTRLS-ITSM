@@ -1,8 +1,8 @@
 # ==============================================================================
-# INOVARE-TI: TEMPLATE DE CONFIGURAÇÃO PARA PRODUÇÃO (application-prod.yml)
+# CTRLS ITSM: TEMPLATE DE CONFIGURAÇÃO PARA PRODUÇÃO (application-prod.yml)
 # ==============================================================================
 # Este arquivo serve como modelo (template) para as configurações do ambiente de
-# produção do ecossistema Inovare-TI.
+# produção do sistema CTRLS ITSM.
 #
 # Para segurança e conformidade com as melhores práticas de DevOps, nenhuma chave
 # secreta, token, senha ou credencial deve ser armazenada fisicamente neste arquivo.
@@ -78,7 +78,7 @@ spring:
     virtual:
       enabled: true
 
-# Configurações Específicas do Ecossistema Inovare-TI
+# Configurações Específicas do Sistema CTRLS ITSM
 app:
   # Chaves de Segurança e Criptografia
   security:
@@ -87,7 +87,7 @@ app:
   vault:
     encryption-key: ${VAULT_ENCRYPTION_KEY} # Chave de encriptação auxiliar
   access:
-    magic-token-secret: ${APP_ACCESS_MAGIC_TOKEN_SECRET:inovare_magic_access_token_secret_key_2026}
+    magic-token-secret: ${APP_ACCESS_MAGIC_TOKEN_SECRET:itsm_magic_access_token_secret_key_2026}
 
   # Acesso ao Painel Frontend
   frontend:
@@ -98,8 +98,8 @@ app:
     test-mode: ${APP_FINANCEIRO_TEST_MODE:false}
     dev-email: ${APP_FINANCEIRO_DEV_EMAIL}
     smtp:
-      from-email: ${APP_FINANCEIRO_SMTP_FROM_EMAIL:administrativo@inovare.med.br}
-      from-name: ${APP_FINANCEIRO_SMTP_FROM_NAME:Administrativo Inovare}
+      from-email: ${APP_FINANCEIRO_SMTP_FROM_EMAIL:administrativo@ctrls.dev.br}
+      from-name: ${APP_FINANCEIRO_SMTP_FROM_NAME:Administrativo ITSM}
 
   # Configurações da Integração Conta Azul (OAuth2 e API v2)
   contaazul:
@@ -222,13 +222,6 @@ discord:
 # Configurações de Log
 logging:
   level:
-    "[br.dev.ctrls.inovareti.infrastructure.shared.web.filter.RawBodyLoggingFilter]": WARN
-
-# Segregação do Motor de Agendamentos (Controle de Acesso)
-inovare:
-  motor:
-    test-mode: ${INOVARE_MOTOR_TEST_MODE:false}
-    prod-doctor-ids: ${INOVARE_MOTOR_PROD_DOCTOR_IDS:8,6,7,13,14,12,10,39,40,42,43,83,44,45,18,61,74,21,19,20,17,64,58}
-    test-doctor-ids: ${INOVARE_MOTOR_TEST_DOCTOR_IDS:1,70}
+    "[br.dev.ctrls.itsm.infrastructure.shared.web.filter.RawBodyLoggingFilter]": WARN
 
 

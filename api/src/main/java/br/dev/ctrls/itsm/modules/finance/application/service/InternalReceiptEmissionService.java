@@ -32,7 +32,7 @@ public class InternalReceiptEmissionService {
     private final DoctorEmailMappingRepository doctorEmailMappingRepository;
 
     /**
-     * Gera o PDF de recibo interno Inovare (fallback) para a baixa informada.
+     * Gera o PDF de recibo interno (fallback) para a baixa informada.
      *
      * @param baixaId Identificador da baixa de pagamento.
      * @param doctorName Nome do médico/profissional.

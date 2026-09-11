@@ -234,7 +234,7 @@ public class DatabaseBackupScheduler {
         }
         File testFile = new File(tempFolder, "teste_backup_" + timestamp + ".txt");
         try {
-            java.nio.file.Files.writeString(testFile.toPath(), "Teste de envio de e-mail de backup Inovare-TI em " + LocalDateTime.now());
+            java.nio.file.Files.writeString(testFile.toPath(), "Teste de envio de e-mail de backup CTRLS-ITSM em " + LocalDateTime.now());
             sendBackupEmail(testFile, timestamp);
         } finally {
             if (testFile.exists()) {
@@ -252,20 +252,20 @@ public class DatabaseBackupScheduler {
             throw new IllegalArgumentException("Destinatário de e-mail de backup não configurado (app.backup.destination-email).");
         }
 
-        String fromEmail = (smtpUsername != null && !smtpUsername.isBlank()) ? smtpUsername.trim() : "administrativo@inovare.med.br";
+        String fromEmail = (smtpUsername != null && !smtpUsername.isBlank()) ? smtpUsername.trim() : "backup@itsm.ctrls.dev.br";
         String targetDest = destinationEmail.trim();
 
         MimeMessage message = mailSender.createMimeMessage();
         MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
 
         try {
-            helper.setFrom(fromEmail, "Inovare TI - Backup");
+            helper.setFrom(fromEmail, "CTRLS ITSM - Backup");
         } catch (Exception e) {
             helper.setFrom(fromEmail);
         }
 
         helper.setTo(targetDest);
-        helper.setSubject("Backup Diário Automático (PostgreSQL) - Clínica Inovare - " + timestamp);
+        helper.setSubject("Backup Diário Automático (PostgreSQL) - CTRLS ITSM - " + timestamp);
         
         long fileSizeBytes = attachmentFile.length();
         double fileSizeMb = fileSizeBytes / (1024.0 * 1024.0);
@@ -275,7 +275,7 @@ public class DatabaseBackupScheduler {
                 + "<div style='max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;'>"
                 + "<div style='background-color: #1e3a8a; padding: 20px; text-align: center; color: white;'>"
                 + "<h2 style='margin: 0;'>Relatório de Backup do Sistema</h2>"
-                + "<p style='margin: 5px 0 0 0; opacity: 0.8;'>Clínica Inovare • PostgreSQL</p>"
+                + "<p style='margin: 5px 0 0 0; opacity: 0.8;'>CTRLS ITSM • PostgreSQL</p>"
                 + "</div>"
                 + "<div style='padding: 24px;'>"
                 + "<p>Olá Administrador,</p>"
@@ -287,7 +287,7 @@ public class DatabaseBackupScheduler {
                 + "</table>"
                 + "<p>O arquivo com o snapshot do banco de dados segue anexado a esta mensagem.</p>"
                 + "<hr style='border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;'/>"
-                + "<p style='font-size: 12px; color: #6b7280; text-align: center;'>Inovare TI • Esta é uma notificação automática gerada pelo sistema.</p>"
+                + "<p style='font-size: 12px; color: #6b7280; text-align: center;'>CTRLS ITSM • Esta é uma notificação automática gerada pelo sistema.</p>"
                 + "</div>"
                 + "</div>"
                 + "</body>"

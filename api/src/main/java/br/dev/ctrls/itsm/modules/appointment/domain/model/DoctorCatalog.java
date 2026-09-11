@@ -5,7 +5,7 @@ import java.util.Collections;
 import java.util.Set;
 
 /**
- * Catálogo estático abrangente dos médicos, especialidades e exames da Clínica Inovare.
+ * Catálogo estático abrangente dos médicos, especialidades e exames do sistema.
  * Utilizado para pontuação, busca fatiada por tokens e roteamento de intenções.
  */
 @Getter

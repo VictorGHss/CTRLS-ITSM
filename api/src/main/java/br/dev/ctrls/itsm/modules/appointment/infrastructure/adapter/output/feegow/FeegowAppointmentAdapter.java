@@ -477,7 +477,7 @@ public class FeegowAppointmentAdapter implements AppointmentExternalPort {
             procedureName = "Sem Procedimento";
         }
 
-        String unitName = item.unitName() != null && !item.unitName().isBlank() ? item.unitName().trim() : "Clínica Inovare";
+        String unitName = item.unitName() != null && !item.unitName().isBlank() ? item.unitName().trim() : "Unidade Central";
         String statusId = item.statusId() != null ? String.valueOf(item.statusId()) : "";
         String procedureId = item.procedureId() != null ? item.procedureId().trim() : "";
 

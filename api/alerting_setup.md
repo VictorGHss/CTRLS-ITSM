@@ -1,6 +1,6 @@
 # Guia de Configuração de Alertas do Monitoramento (Prometheus & Discord)
 
-Este documento descreve passo a passo como configurar o ecossistema de monitoramento e alertas para o Inovare-TI, permitindo que o time de TI seja notificado em tempo real no **Discord** sempre que o Circuit Breaker da Feegow entrar no estado **OPEN** (Aberto).
+Este documento descreve passo a passo como configurar o ecossistema de monitoramento e alertas para o CTRLS ITSM, permitindo que o time de TI seja notificado em tempo real no **Discord** sempre que o Circuit Breaker da Feegow entrar no estado **OPEN** (Aberto).
 
 ---
 
@@ -56,14 +56,14 @@ Para subir o Alertmanager usando Docker Compose, você pode adicionar a seguinte
 ```yaml
   alertmanager:
     image: prom/alertmanager:latest
-    container_name: inovareti_alertmanager
+    container_name: itsm_alertmanager
     restart: always
     ports:
       - "9093:9093"
     volumes:
       - ./api/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
     networks:
-      - inovare_network
+      - itsm_network
 ```
 
 No arquivo `api/alertmanager.yml` gerado na raiz da API, substitua a string `https://discord.com/api/webhooks/YOUR_DISCORD_WEBHOOK_ID/YOUR_DISCORD_WEBHOOK_TOKEN/slack` pela URL real do seu Webhook do Discord copiada no **Passo 1** (mantendo o sufixo `/slack`).
@@ -77,7 +77,7 @@ Para garantir que o fluxo de ponta a ponta está funcionando (Actuator ➔ Prome
 ### Passo 4.1: Induzir Erros na Comunicação com a Feegow
 O disjuntor da Feegow (`feegowApiCircuit`) é acionado se a taxa de falhas ultrapassar o limite configurado. Podemos simular isso alterando a chave da API para invalidar as requisições:
 
-1. Localize o arquivo `.env` na raiz do projeto `Inovare-TI`.
+1. Localize o arquivo `.env` na raiz do projeto.
 2. Altere o valor de `APP_FEEGOW_API_KEY` para uma chave inválida (ex: `CHAVE_INVALIDA_TESTE_ALERTAS`).
 3. Reinicie a API (`docker compose restart api` ou reinicie sua aplicação local).
 
@@ -108,11 +108,11 @@ Para forçar a mudança de estado do disjuntor para `OPEN`, precisamos realizar 
 2. O estado do alerta mudará para **FIRING** (Disparando) na cor vermelha.
 3. Verifique o seu canal do Discord. O bot do Alertmanager terá enviado um card formatado e amigável em **PORTUGUÊS**:
    
-   > 🚨 **[Inovare-TI Monitoramento] Alerta Operacional: Disjuntor Feegow Aberto (Chamadas Interrompidas)**
+   > 🚨 **[CTRLS ITSM Monitoramento] Alerta Operacional: Disjuntor Feegow Aberto (Chamadas Interrompidas)**
    > 
    > **Status do Alerta:** `FIRING`
    > **Gravidade:** `CRITICAL`
-   > **Serviço:** `inovareti-api`
+   > **Serviço:** `itsm-api`
    > 
    > **Detalhes:**
    > O disjuntor da API Feegow ('feegowApiCircuit') entrou no estado 'OPEN' (aberto). As chamadas de integração externa estão temporariamente suspensas para evitar sobrecarga e falhas cascata.
@@ -120,7 +120,7 @@ Para forçar a mudança de estado do disjuntor para `OPEN`, precisamos realizar 
    > **Horário do Disparo:** `19/05/2026 15:30:00`
    > 
    > ---
-   > ⚠️ **Ação Recomendada:** Verificar a estabilidade da API Feegow ou os logs de conexão de rede da API do Inovare-TI para restabelecer a integração.
+   > ⚠️ **Ação Recomendada:** Verificar a estabilidade da API Feegow ou os logs de conexão de rede da API do CTRLS ITSM para restabelecer a integração.
 
 ### Passo 4.5: Testar a Resolução do Alerta (Auto-Healing)
 1. Restaure a API Key real no seu arquivo `.env`.

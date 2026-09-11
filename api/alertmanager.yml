@@ -20,7 +20,7 @@ receivers:
       - api_url: 'https://discord.com/api/webhooks/YOUR_DISCORD_WEBHOOK_ID/YOUR_DISCORD_WEBHOOK_TOKEN/slack'
         channel: '#ti-channel'
         send_resolved: true
-        title: '🚨 [Inovare-TI Monitoramento] Alerta Operacional: {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
+        title: '🚨 [CTRLS ITSM Monitoramento] Alerta Operacional: {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
         text: >-
           {{ range .Alerts }}
           *Status do Alerta:* `{{ .Status | toUpper }}`
@@ -34,5 +34,5 @@ receivers:
           {{ if ne .Status "firing" }}*Horario de Resolucao:* {{ .EndsAt.Local.Format "02/01/2006 15:04:05" }}{{ end }}
           
           ---
-          ⚠️ *Acao Recomendada:* Verificar a estabilidade da API Feegow ou os logs de conexao de rede da API do Inovare-TI para restabelecer a integracao.
+          ⚠️ *Acao Recomendada:* Verificar a estabilidade da API Feegow ou os logs de conexao de rede da API do CTRLS ITSM para restabelecer a integracao.
           {{ end }}

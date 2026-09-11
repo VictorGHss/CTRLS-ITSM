@@ -43,7 +43,7 @@ public class InternalReceiptService {
     private static final Locale PT_BR = Locale.forLanguageTag("pt-BR");
     private static final DateTimeFormatter DATE_DISPLAY = DateTimeFormatter.ofPattern("dd/MM/yyyy");
     private static final DateTimeFormatter DATE_FULL = DateTimeFormatter.ofPattern("dd 'de' MMMM 'de' yyyy", PT_BR);
-    private static final String LOGO_RESOURCE_PATH = "static/inovare-logo.png";
+    private static final String LOGO_RESOURCE_PATH = "static/logo.png";
 
     private final ITemplateEngine templateEngine;
     private final JsonSafeReader jsonSafeReader;

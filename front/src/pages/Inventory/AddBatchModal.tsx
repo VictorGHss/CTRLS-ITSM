@@ -60,7 +60,7 @@ export default function AddBatchModal({
   }, [isOpen, items]);
 
   useEffect(() => {
-    const stored = localStorage.getItem('inovareti_dynamic_suppliers');
+    const stored = localStorage.getItem('itsm_dynamic_suppliers');
     if (stored) {
       try {
         setSuppliers(JSON.parse(stored));
@@ -69,7 +69,7 @@ export default function AddBatchModal({
       }
     } else {
       setSuppliers(DEFAULT_SUPPLIERS);
-      localStorage.setItem('inovareti_dynamic_suppliers', JSON.stringify(DEFAULT_SUPPLIERS));
+      localStorage.setItem('itsm_dynamic_suppliers', JSON.stringify(DEFAULT_SUPPLIERS));
     }
   }, []);
 
@@ -88,7 +88,7 @@ export default function AddBatchModal({
     }
     const updatedSuppliers = [...suppliers, nameTrimmed];
     setSuppliers(updatedSuppliers);
-    localStorage.setItem('inovareti_dynamic_suppliers', JSON.stringify(updatedSuppliers));
+    localStorage.setItem('itsm_dynamic_suppliers', JSON.stringify(updatedSuppliers));
     setSupplier(nameTrimmed);
     setIsAddingSupplier(false);
     setNewSupplierName('');

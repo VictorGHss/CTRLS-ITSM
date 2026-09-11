@@ -10,7 +10,7 @@ import java.time.format.DateTimeFormatter;
 
 /**
  * Serviço de domínio puro responsável pelo cálculo de janelas de tempo e fusos horários
- * para liberação de catracas físicas na Clínica Inovare.
+ * para liberação de catracas físicas do edifício.
  */
 @Component
 public class AccessWindowCalculator {

@@ -164,11 +164,11 @@ public class FeegowProfessionalAdapter extends AbstractFeegowAdapter implements 
 
     /**
      * Fallback para a busca de nome do profissional na Feegow.
-     * Retorna fallback seguro ("Clínica Inovare") e registra intenção de sincronização offline.
+     * Retorna fallback seguro ("Profissional Especialista") e registra intenção de sincronização offline.
      */
     public String fallbackGetProfessionalName(String professionalId, Throwable t) {
-        log.warn("[OFFLINE-SYNC-INTENT] [FEEGOW] Falha ao obter nome do profissional ID: {}. Circuito aberto ou erro de rede: {}. Retornando nome padrão Clínica Inovare.", professionalId, t.getMessage());
-        return "Clínica Inovare";
+        log.warn("[OFFLINE-SYNC-INTENT] [FEEGOW] Falha ao obter nome do profissional ID: {}. Circuito aberto ou erro de rede: {}. Retornando fallback seguro.", professionalId, t.getMessage());
+        return "Profissional Especialista";
     }
 
     @Override
@@ -453,7 +453,7 @@ public class FeegowProfessionalAdapter extends AbstractFeegowAdapter implements 
     public String recoverGetProfessionalName(RestClientException ex, String professionalId) {
         log.error("[RECOVERY-FEEGOW] Falha definitiva após 3 tentativas de busca de nome do profissional {} no Feegow ERP. Erro: {}", 
             professionalId, ex.getMessage(), ex);
-        return "Clínica Inovare";
+        return "Profissional Especialista";
     }
 
     /**

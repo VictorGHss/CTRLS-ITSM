@@ -5,6 +5,7 @@ import {
   FileText,
   HelpCircle,
   MessageCircle,
+  Palette,
   Settings2,
   Share2,
   Tag,
@@ -14,6 +15,7 @@ export type TabType = 'system' | 'profile';
 
 export type SubSectionType =
   | 'menu'
+  | 'branding'
   | 'integrations'
   | 'system-params'
   | 'sla'
@@ -36,6 +38,13 @@ export function getAvailableSubSections(isAdmin: boolean, isSystemVisible: boole
   return [
     ...(isAdmin
       ? [
+          {
+            id: 'branding' as SubSectionType,
+            title: 'Marca & White-Label',
+            desc: 'Personalize o logotipo, cores destaque e o nome da sua empresa.',
+            icon: Palette,
+            color: 'bg-brand-primary/10 text-brand-primary-dark',
+          },
           {
             id: 'integrations' as SubSectionType,
             title: 'Integrações',
@@ -110,6 +119,7 @@ export function getAvailableSubSections(isAdmin: boolean, isSystemVisible: boole
 
 export const SUBSECTION_TITLES: Record<SubSectionType, string> = {
   menu: 'Painel do Sistema',
+  branding: 'Identidade Visual & White-Label',
   integrations: 'Integrações do Ecossistema',
   'system-params': 'Parâmetros Globais',
   sla: 'Configurações de SLA',
@@ -123,6 +133,7 @@ export const SUBSECTION_TITLES: Record<SubSectionType, string> = {
 
 export const SUBSECTION_DESCRIPTIONS: Record<SubSectionType, string> = {
   menu: 'Gerencie todas as facetas administrativas e integrativas da plataforma.',
+  branding: 'Ajuste as cores primárias, secundárias, logotipo e dados da sua organização.',
   integrations: 'Configure integrações com Discord, Conta Azul, Feegow e Blip.',
   'system-params': 'Ajuste limites de tamanho de anexo, e-mails e chaves globais.',
   sla: 'Defina os prazos de atendimento (horas) para chamados com base no nível de prioridade.',

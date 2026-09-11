@@ -16,7 +16,7 @@ public class GenerateCalendarIcsUseCase {
     private static final DateTimeFormatter UTC_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'").withZone(ZoneOffset.UTC);
 
     public String execute(String title, String start, String end, String location, String description) {
-        String uid = "inovare-" + System.currentTimeMillis() + "@itsm-inovare.ctrls.dev.br";
+        String uid = "itsm-" + System.currentTimeMillis() + "@itsm.ctrls.dev.br";
         String nowUtc = UTC_FORMATTER.format(Instant.now());
 
         String dtStart = (start != null && !start.isBlank()) ? start : nowUtc;
@@ -29,7 +29,7 @@ public class GenerateCalendarIcsUseCase {
         return """
 BEGIN:VCALENDAR\r
 VERSION:2.0\r
-PRODID:-//Inovare Servicos de Saude//ITSM Acesso//PT\r
+PRODID:-//CTRLS ITSM//ITSM Acesso//PT\r
 CALSCALE:GREGORIAN\r
 METHOD:PUBLISH\r
 BEGIN:VEVENT\r

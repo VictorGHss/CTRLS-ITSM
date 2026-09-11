@@ -30,7 +30,7 @@ public class PublicReviewController {
     /**
      * Endpoint GET público de redirecionamento dinâmico.
      * Busca a googleReviewUrl do médico pelo ID no PostgreSQL e redireciona o paciente.
-     * Se não localizada, redireciona para a URL padrão da Clínica Inovare.
+     * Se não localizada, redireciona para a URL padrão cadastrada.
      *
      * @param doctorId ID do profissional Feegow ou identificador do médico.
      * @return 302 Found redirecionando para a URL final do Google Review.

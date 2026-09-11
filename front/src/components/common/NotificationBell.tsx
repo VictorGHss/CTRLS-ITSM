@@ -36,7 +36,9 @@ export default function NotificationBell() {
   }, [isOpen]);
 
   async function fetchNotifications() {
-    const token = localStorage.getItem('@InovareTI:token') || sessionStorage.getItem('@InovareTI:token');
+    const token =
+      localStorage.getItem('@Itsm:token') ||
+      sessionStorage.getItem('@Itsm:token');
     if (!token || token === 'null' || token === 'undefined') {
       return;
     }

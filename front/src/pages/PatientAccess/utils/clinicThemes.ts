@@ -1,5 +1,5 @@
 /**
- * Configuração de temas e identidade visual dinâmica para multi-clínicas (Inovare e Clínica Imagem).
+ * Configuração de temas e identidade visual dinâmica para portais e clínicas.
  */
 
 export interface ClinicTheme {
@@ -27,12 +27,12 @@ export interface ClinicTheme {
 }
 
 export const CLINIC_THEMES: Record<string, ClinicTheme> = {
-  inovare: {
-    id: 'inovare',
-    name: 'Inovare – Serviços de Saúde',
-    shortName: 'Inovare',
+  portal: {
+    id: 'portal',
+    name: 'Portal de Atendimento e Acesso',
+    shortName: 'Portal de Acesso',
     subtitle: 'Pré-Cadastro & Cartão de Acesso',
-    logoText: 'INOVARE',
+    logoText: 'PORTAL DE ACESSO',
     logoUrl: '/Logo.png',
     primaryColor: '#FFA145',
     primaryDarkColor: '#E08328',
@@ -41,18 +41,18 @@ export const CLINIC_THEMES: Record<string, ClinicTheme> = {
     badgeBgColor: 'bg-[#FFD2A5]/50',
     badgeTextColor: 'text-amber-950',
     buttonGradient: 'from-[#FFA145] to-[#E08328]',
-    address: 'R. Carlos Osternack, 111, Estrela, Ponta Grossa - PR, 84040-120',
-    mapsUrl: 'https://maps.app.goo.gl/S2BaxmJFgr4YAjRT7',
-    floorInfo: '1º Andar - Lado Direito',
-    phone: '(42) 3026-2600',
-    openingHours: 'Segunda a sexta, 08h – 12h e 13h – 18h30',
-    instagramUrl: 'https://www.instagram.com/inovaress/',
-    facebookUrl: 'https://www.facebook.com/inovarepg',
-    whatsappUrl: 'https://wa.me/554230262601',
+    address: 'Edifício Corporativo — Ponta Grossa - PR',
+    mapsUrl: '',
+    floorInfo: 'Recepção Central',
+    phone: '',
+    openingHours: 'Segunda a sexta, 08h – 18h30',
+    instagramUrl: '',
+    facebookUrl: '',
+    whatsappUrl: '',
   },
   imagem: {
     id: 'imagem',
-    name: 'Clínica Da Imagem - Unidade Inovare',
+    name: 'Clínica Da Imagem',
     shortName: 'Clínica Da Imagem',
     subtitle: 'Pré-Cadastro & Cartão de Acesso',
     logoText: 'CLÍNICA DA IMAGEM',
@@ -76,7 +76,7 @@ export const CLINIC_THEMES: Record<string, ClinicTheme> = {
 };
 
 /**
- * Resolve o tema ativo da clínica com base nos query parameters, rota atual ou valor padrão (Inovare).
+ * Resolve o tema ativo da clínica com base nos query parameters, rota atual ou valor padrão (portal).
  */
 export function resolveClinicTheme(urlSearchParams?: URLSearchParams, pathname?: string): ClinicTheme {
   const path = (pathname || window.location.pathname || '').toLowerCase();
@@ -91,11 +91,11 @@ export function resolveClinicTheme(urlSearchParams?: URLSearchParams, pathname?:
     }
   }
 
-  return CLINIC_THEMES.inovare;
+  return CLINIC_THEMES.portal;
 }
 
 /**
- * Mapeamento oficial e refinado de localização por médico/especialista na Clínica Inovare.
+ * Mapeamento oficial e refinado de localização por médico/especialista no edifício.
  */
 export const DOCTOR_LOCATIONS_MAP: Record<string, string> = {
   // === 1º ANDAR — LADO DIREITO ===
@@ -227,9 +227,8 @@ export const DOCTOR_LOCATIONS_MAP: Record<string, string> = {
   "Clínica da Imagem": "Térreo — Clínica da Imagem",
   "Clinipon": "Térreo — Clinipon",
 
-  // === FALLBACK INOVARE ===
-  "Inovare – Serviços de Saúde": "1º Andar - Lado Direito",
-  "Inovare": "1º Andar - Lado Direito"
+  // === FALLBACK CENTRAL ===
+  "Recepção Geral / Central": "1º Andar - Lado Direito"
 };
 
 function normalizeName(str: string): string {
@@ -249,7 +248,7 @@ export function resolveDoctorLocation(doctorName?: string, defaultFloor = '1º A
   if (!doctorName || !doctorName.trim()) return defaultFloor;
 
   const normalizedInput = normalizeName(doctorName);
-  if (!normalizedInput || normalizedInput === 'inovare' || normalizedInput === 'inovare servicos de saude') {
+  if (!normalizedInput || normalizedInput === 'portal' || normalizedInput === 'central') {
     return defaultFloor;
   }
 

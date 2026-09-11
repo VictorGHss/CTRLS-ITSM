@@ -21,7 +21,7 @@ public class BlipTextSanitizer {
      */
     public String sanitizeDoctorName(String doctorName) {
         if (doctorName == null || doctorName.isBlank()) {
-            return "Clínica Inovare";
+            return "Recepção Central";
         }
         String clean = doctorName.trim();
         // Separar de hifens (ex: "Dr. João - Cardiologia")
@@ -51,7 +51,7 @@ public class BlipTextSanitizer {
      */
     public String cleanDoctorName(String doctorName) {
         if (doctorName == null || doctorName.isBlank()) {
-            return "Clínica Inovare";
+            return "Recepção Central";
         }
         String clean = doctorName.trim();
         clean = clean.replaceAll("(?i)^(Dr\\.|Dra\\.|Dr|Dra)\\s+", "");

@@ -103,7 +103,7 @@ export default function TicketDetails() {
 
   return (
     <main className="w-full max-w-full px-4 sm:px-6 lg:px-8 py-8">
-      <title>{`Chamado #${ticket.id.slice(0, 8).toUpperCase()} — Inovare TI`}</title>
+      <title>{`Chamado #${ticket.id.slice(0, 8).toUpperCase()} — CTRLS ITSM`}</title>
       <meta name="description" content={`Detalhes do chamado: ${ticket.title}`} />
       <PageHero
         eyebrow="Atendimento"

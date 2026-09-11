@@ -163,7 +163,7 @@ class BlipActiveCampaignMigrationTest {
         assertEquals("Campanha Teste", campaign.get("name"));
         assertEquals("Individual", campaign.get("campaignType"));
         assertEquals("WhatsApp", campaign.get("channelType"));
-        assertEquals("Inovare-ITSM", campaign.get("sourceApplication"));
+        assertEquals("CTRLS-ITSM", campaign.get("sourceApplication"));
 
         assertEquals("+5542999998888", audience.get("recipient"));
         @SuppressWarnings("unchecked")

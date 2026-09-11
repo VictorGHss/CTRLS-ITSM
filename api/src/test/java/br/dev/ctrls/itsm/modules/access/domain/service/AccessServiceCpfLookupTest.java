@@ -90,7 +90,7 @@ class AccessServiceCpfLookupTest {
         when(accessCredentialRepositoryPort.findByCpf(cpf)).thenReturn(List.of(cred));
         when(accessCredentialRepositoryPort.findByAppointmentId(autoApptId)).thenReturn(List.of(cred));
 
-        List<AccessCredential> result = accessService.lookupCredentialsByCpf(cpf, "inovare");
+        List<AccessCredential> result = accessService.lookupCredentialsByCpf(cpf, "portal");
 
         assertThat(result).hasSize(1);
         assertThat(result.getFirst().getAppointmentId()).isEqualTo(autoApptId);

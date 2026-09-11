@@ -34,7 +34,7 @@ INSERT INTO asset_categories (id, name) VALUES
     (gen_random_uuid(), 'Telefonia')
 ON CONFLICT (name) DO NOTHING;
 
--- 4. SETORES (Lista Inovare Completa)
+-- 4. SETORES (Lista Padrão de Setores)
 INSERT INTO sectors (id, name) VALUES
     (gen_random_uuid(), 'TI'),
     (gen_random_uuid(), 'Financeiro'),

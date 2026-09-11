@@ -30,7 +30,7 @@ public class AppointmentTemplateDataBuilder {
     private static final DateTimeFormatter SHORT_BRAZILIAN_DATE = DateTimeFormatter.ofPattern("dd/MM");
     private static final DateTimeFormatter BRAZILIAN_TIME = DateTimeFormatter.ofPattern("HH:mm");
     private static final String DEFAULT_TEMPLATE_VALUE = "Recepção";
-    private static final String DEFAULT_PROVIDER_VALUE = "Clínica Inovare";
+    private static final String DEFAULT_PROVIDER_VALUE = "Clínica Médica";
 
     private final PatientExternalPort patientExternalPort;
     private final AppointmentExternalPort appointmentExternalPort;
@@ -157,7 +157,7 @@ public class AppointmentTemplateDataBuilder {
 
     private String fallbackProviderValue(String value) {
         if (value == null || value.isBlank() || "null".equalsIgnoreCase(value.trim()) || "Informação não disponível".equalsIgnoreCase(value.trim())) {
-            return "Clínica Inovare";
+            return "Clínica Médica";
         }
         return value.trim();
     }

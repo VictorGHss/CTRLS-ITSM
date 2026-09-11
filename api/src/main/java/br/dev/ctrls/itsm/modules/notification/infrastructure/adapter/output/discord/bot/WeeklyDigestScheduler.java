@@ -102,7 +102,7 @@ public class WeeklyDigestScheduler {
             // Monta o Embed do JDA
             var embed = new EmbedBuilder()
                     .setColor(0x1F85DE) // Azul sóbrio executivo
-                    .setTitle("📊 INOVARE TI — RELATÓRIO EXECUTIVO SEMANAL")
+                    .setTitle("📊 CTRLS ITSM — RELATÓRIO EXECUTIVO SEMANAL")
                     .setDescription("Consolidado semanal de métricas de chamados e performance operacional da clínica.")
                     .addField("✅ Concluídos na Semana", closedCount + " chamado(s)", true)
                     .addField("⏱️ Conformidade de SLA", String.format("%.1f%%", slaCompliance), true)

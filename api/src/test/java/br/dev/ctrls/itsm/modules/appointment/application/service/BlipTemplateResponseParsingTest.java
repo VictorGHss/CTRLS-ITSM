@@ -35,7 +35,7 @@ class BlipTemplateResponseParsingTest {
                 aviso_confirmacao_pendente_v2
                 Olá, LETICIA SOUZA DE PAULA.
 
-                Identificamos que a confirmação do seu horário na Clínica Inovare está pendente.
+                Identificamos que a confirmação do seu horário na Clínica Médica está pendente.
 
                 Para garantir a finalização do seu agendamento e evitar cancelamentos automáticos, precisamos de uma resposta sua.
 
@@ -69,7 +69,7 @@ class BlipTemplateResponseParsingTest {
                 aviso_confirmacao_pendente_v2
                 Olá, LETICIA SOUZA DE PAULA.
 
-                Identificamos que a confirmação do seu horário na Clínica Inovare está pendente.
+                Identificamos que a confirmação do seu horário na Clínica Médica está pendente.
 
                 Para garantir a finalização do seu agendamento e evitar cancelamentos automáticos, precisamos de uma resposta sua.
 
@@ -101,7 +101,7 @@ class BlipTemplateResponseParsingTest {
     void shouldExtractConfirmarPresencaWithTrailingTimestamp() {
         String incidentPayload = """
                 confirmacao_consulta_v6_itsm
-                Olá, SARA KREPEL MANN DE SOUZA. Aqui é a Clínica Inovare. Seguem os dados do seu atendimento:
+                Olá, SARA KREPEL MANN DE SOUZA. Aqui é a Clínica Médica. Seguem os dados do seu atendimento:
                 Profissional: Dr. Eduardo Mattos
                 Data: 10/09/2026
                 Horário: 09:40
@@ -117,7 +117,7 @@ class BlipTemplateResponseParsingTest {
 
                 Olá, SARA KREPEL MANN DE SOUZA.
 
-                Identificamos que a confirmação do seu horário na Clínica Inovare está pendente.
+                Identificamos que a confirmação do seu horário na Clínica Médica está pendente.
 
                 Para garantir a finalização do seu agendamento e evitar cancelamentos automáticos, precisamos de uma resposta sua.
 
@@ -130,7 +130,7 @@ class BlipTemplateResponseParsingTest {
 
 
                 confirmacao_consulta_v6_itsm
-                Olá, SARA KREPEL MANN DE SOUZA. Aqui é a Clínica Inovare. Seguem os dados do seu atendimento:
+                Olá, SARA KREPEL MANN DE SOUZA. Aqui é a Clínica Médica. Seguem os dados do seu atendimento:
                 Profissional: Dr. Eduardo Mattos
                 Data: 10/09/2026
                 Horário: 09:40

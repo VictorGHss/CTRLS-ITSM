@@ -114,7 +114,7 @@ public class ProcessAccessRequestUseCase {
                 .filter(c -> c.getUserType() == UserType.PATIENT)
                 .findFirst();
             String token = validateAccessChallengeUseCase.generateAccessToken(appointmentId, null);
-            String accessUrl = "https://itsm-inovare.ctrls.dev.br/" + appointmentId + "?t=" + token;
+            String accessUrl = "https://itsm.ctrls.dev.br/" + appointmentId + "?t=" + token;
             if (patientCredOpt.isPresent()) {
                 AccessCredential patientCred = patientCredOpt.get();
                 return new AccessValidationResult(true, patientCred.getName(), patientCred.getAccessCredential(), false, "Credencial resolvida com sucesso (recuperada do banco).", token, accessUrl);
@@ -124,7 +124,7 @@ public class ProcessAccessRequestUseCase {
             }
         }
 
-        if (appointmentId != null && (appointmentId.startsWith("INOV-") || appointmentId.startsWith("IMG-"))) {
+        if (appointmentId != null && (appointmentId.startsWith("PORT-") || appointmentId.startsWith("INOV-") || appointmentId.startsWith("IMG-"))) {
             return selfRegistrationUseCase.processSelfRegistrationCpfUpdate(appointmentId, requestCpf);
         }
 
@@ -134,7 +134,7 @@ public class ProcessAccessRequestUseCase {
         } catch (Exception ex) {
             log.warn("[ProcessAccessRequest] ERP Feegow indisponível ao buscar agendamento {}. Ativando Fallback Seguro.", appointmentId, ex);
             String token = validateAccessChallengeUseCase.generateAccessToken(appointmentId, null);
-            String accessUrl = "https://itsm-inovare.ctrls.dev.br/" + appointmentId + "?t=" + token;
+            String accessUrl = "https://itsm.ctrls.dev.br/" + appointmentId + "?t=" + token;
             return new AccessValidationResult(false, null, null, true, "ERP Feegow temporária e indisponível. Solicite o CPF ao paciente.", token, accessUrl);
         }
         if (accessInfoOpt.isEmpty()) {
@@ -181,7 +181,7 @@ public class ProcessAccessRequestUseCase {
             log.warn("[ProcessAccessRequest] Prontuário Feegow sem CPF válido pela Receita Federal (Feegow: '{}', request: '{}') para o paciente ID: {}. Ativando flag 'requiresCpfFallback'.",
                     cleanFeegowCpf, cleanRequestCpf, accessInfo.patientId());
             String token = validateAccessChallengeUseCase.generateAccessToken(appointmentId, targetPhone);
-            String accessUrl = "https://itsm-inovare.ctrls.dev.br/" + appointmentId + "?t=" + token;
+            String accessUrl = "https://itsm.ctrls.dev.br/" + appointmentId + "?t=" + token;
             return new AccessValidationResult(false, null, null, true, "Por favor, confirme seu CPF para liberação da catraca.", token, accessUrl);
         }
 
@@ -384,7 +384,7 @@ public class ProcessAccessRequestUseCase {
         }
 
         String magicToken = validateAccessChallengeUseCase.generateAccessToken(appointmentId, targetPhone);
-        String accessUrl = "https://itsm-inovare.ctrls.dev.br/" + appointmentId + "?t=" + magicToken;
+        String accessUrl = "https://itsm.ctrls.dev.br/" + appointmentId + "?t=" + magicToken;
         return new AccessValidationResult(true, accessInfo.name(), token, false, "Credencial resolvida com sucesso.", magicToken, accessUrl);
     }
 }

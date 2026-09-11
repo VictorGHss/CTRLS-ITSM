@@ -172,7 +172,7 @@ public class PatientWebhookService {
                         if (matches) {
                             String dataStr = app.startAt() != null ? app.startAt().format(DATE_FORMATTER) : dateToSearch.format(DATE_FORMATTER);
                             String horaStr = app.startAt() != null ? app.startAt().format(TIME_FORMATTER) : "00:00";
-                            String medicoStr = app.doctorName() != null ? app.doctorName() : "Médico Inovare";
+                            String medicoStr = app.doctorName() != null ? app.doctorName() : "Médico Especialista";
 
                             appointmentItems.add(PatientAppointmentsResponse.AppointmentItem.builder()
                                     .agendamentoId(app.id())
@@ -180,7 +180,7 @@ public class PatientWebhookService {
                                     .hora(horaStr)
                                     .medico(medicoStr)
                                     .especialidade("Consulta Médica")
-                                    .unidade("Clínica Inovare")
+                                    .unidade("Unidade Central")
                                     .build());
                         }
                     }

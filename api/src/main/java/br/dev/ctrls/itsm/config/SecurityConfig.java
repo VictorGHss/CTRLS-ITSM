@@ -77,7 +77,7 @@ public class SecurityConfig {
                 // Preflight OPTIONS liberado para CORS antes de qualquer outra regra
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
-                // Webhooks e endpoints de integração do Blip estritamente autorizados com validação de token X-Inovare-Token no BlipTokenSecurityFilter
+                // Webhooks e endpoints de integração do Blip estritamente autorizados com validação de token de segurança no BlipTokenSecurityFilter
                 .requestMatchers("/v1/nlp/**", "/api/v1/nlp/**").permitAll()
                 .requestMatchers("/v1/feegow/**", "/api/v1/feegow/**").permitAll()
                 .requestMatchers("/v1/atendimento/**", "/api/v1/atendimento/**").permitAll()
@@ -94,7 +94,7 @@ public class SecurityConfig {
                 // Proteção de segurança: endpoint de geração/recuperação de token de acesso restrito a administradores
                 .requestMatchers("/v1/access/token/**", "/api/v1/access/token/**").hasRole("ADMIN")
                 .requestMatchers("/v1/access/**", "/api/v1/access/**").permitAll()
-                .requestMatchers("/review/**", "/api/review/**", "/v1/doctors/configurations/review/**", "/api/v1/doctors/configurations/review/**").permitAll()
+                .requestMatchers(HttpMethod.GET, "/v1/branding", "/api/v1/branding").permitAll()
                 .requestMatchers("/uploads/**", "/api/uploads/**").permitAll()
 
                 // Demais rotas administrativas/autenticação

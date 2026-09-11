@@ -110,7 +110,7 @@ public class AppointmentDiscordNotifierService {
                 eb.addField("✨ Status", "Todos os pacientes elegíveis receberam a notificação com sucesso!", false);
             }
 
-            eb.setFooter("Inovare-TI • Confirmação Inteligente de Agendamentos", null);
+            eb.setFooter("CTRLS ITSM • Confirmação Inteligente de Agendamentos", null);
             eb.setTimestamp(java.time.Instant.now());
 
             channel.sendMessageEmbeds(eb.build()).queue(

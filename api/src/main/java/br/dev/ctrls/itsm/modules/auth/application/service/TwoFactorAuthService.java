@@ -46,7 +46,7 @@ public class TwoFactorAuthService {
     private final AuditLogService auditLogService;
     private final GoogleAuthenticator googleAuthenticator = new GoogleAuthenticator();
 
-    @Value("${spring.application.name:inovare-ti}")
+    @Value("${spring.application.name:itsm-ctrls}")
     private String issuer;
 
     public TwoFactorGenerateResponseDTO generateForUser(UUID userId) {

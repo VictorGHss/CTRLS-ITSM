@@ -22,7 +22,7 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * Serviço responsável por gerar os relatórios de rateio financeiro de TI por Setor (Centro de Custo).
- * Aplica a regra de negócio da Clínica Inovare: divisão igualitária dos custos operacionais (manutenções e consumíveis)
+ * Aplica a regra de rateio por centro de custo: divisão igualitária dos custos operacionais (manutenções e consumíveis)
  * entre a quantidade de médicos ativos associados ao setor correspondente.
  */
 @Slf4j

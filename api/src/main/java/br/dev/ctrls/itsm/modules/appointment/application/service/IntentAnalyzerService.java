@@ -291,7 +291,7 @@ public class IntentAnalyzerService {
                             "type", "list",
                             "header", Map.of("type", "text", "text", "Especialistas Encontrados"),
                             "body", Map.of("text", "Encontramos mais de um especialista para sua busca. Selecione o médico desejado abaixo:"),
-                            "footer", Map.of("text", "Clínica Inovare"),
+                            "footer", Map.of("text", "CTRLS ITSM"),
                             "action", Map.of(
                                     "button", "Ver Médicos",
                                     "sections", List.of(

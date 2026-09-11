@@ -19,14 +19,14 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Filtro de Segurança HTTP para validação do cabeçalho X-Inovare-Token
+ * Filtro de Segurança HTTP para validação do cabeçalho X-ITSM-Token
  * em todos os endpoints consumidos pelo Take Blip (/v1/nlp/**, /v1/feegow/**, /v1/atendimento/**).
  */
 @Slf4j
 @Component
 public class BlipTokenSecurityFilter extends OncePerRequestFilter {
 
-    public static final String HEADER_NAME = "X-Inovare-Token";
+    public static final String HEADER_NAME = "X-ITSM-Token";
 
     @Value("${blip.integration.token:${BLIP_INTEGRATION_TOKEN:}}")
     private String expectedToken;
@@ -79,7 +79,7 @@ public class BlipTokenSecurityFilter extends OncePerRequestFilter {
         authentication.setDetails(Map.of("blipIntegration", true));
         SecurityContextHolder.getContext().setAuthentication(authentication);
 
-        log.info("[BLIP-INBOUND] Recebida chamada no endpoint {} com método: {} (Token X-Inovare-Token validado)", path, method);
+        log.info("[BLIP-INBOUND] Recebida chamada no endpoint {} com método: {} (Token X-ITSM-Token validado)", path, method);
         filterChain.doFilter(request, response);
     }
 

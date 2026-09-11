@@ -39,7 +39,7 @@ class AuthSecurityGuardTest {
 
     @Test
     void loginLockoutTriggersAfterMaxAttempts() {
-        String email = "admin@inovareti.com";
+        String email = "admin@itsm.dev.br";
         String ip = "192.168.1.100";
 
         assertFalse(guard.isLoginBlocked(email, ip));
@@ -60,7 +60,7 @@ class AuthSecurityGuardTest {
 
     @Test
     void loginSuccessResetsLockoutAndAttempts() {
-        String email = "tecnico@inovareti.com";
+        String email = "tecnico@itsm.dev.br";
         String ip = "10.0.0.25";
 
         for (int i = 1; i <= 5; i++) {

@@ -78,7 +78,7 @@ public class BlipContactClientAdapter implements BlipContactClientPort {
     public void init() {
         String baseUrl = properties.getBlipBaseUrl();
         if (baseUrl == null || baseUrl.isBlank()) {
-            baseUrl = "https://inovaremed.http.msging.net";
+            baseUrl = "https://http.msging.net";
         }
         log.info("[BlipContact-Adapter] Inicializando RestClient para Blip. BaseURL: {}", baseUrl);
 

@@ -35,8 +35,8 @@ import java.util.concurrent.ConcurrentMap;
 @Component
 public class ValidateAccessChallengeUseCase {
 
-    @Value("${app.access.magic-token-secret:inovare_magic_access_token_secret_key_2026}")
-    private String magicTokenSecret = "inovare_magic_access_token_secret_key_2026";
+    @Value("${app.access.magic-token-secret:itsm_magic_access_token_secret_key_2026}")
+    private String magicTokenSecret = "itsm_magic_access_token_secret_key_2026";
 
     private final FeegowClientPort feegowClientPort;
     private final PatientExternalPort patientExternalPort;
@@ -100,7 +100,7 @@ public class ValidateAccessChallengeUseCase {
             Mac mac = Mac.getInstance("HmacSHA256");
             byte[] secretBytes = (magicTokenSecret != null && !magicTokenSecret.isBlank())
                     ? magicTokenSecret.getBytes(StandardCharsets.UTF_8)
-                    : "inovare_magic_access_token_secret_key_2026".getBytes(StandardCharsets.UTF_8);
+                    : "itsm_magic_access_token_secret_key_2026".getBytes(StandardCharsets.UTF_8);
             mac.init(new SecretKeySpec(secretBytes, "HmacSHA256"));
             byte[] hash = mac.doFinal(raw.getBytes(StandardCharsets.UTF_8));
             StringBuilder sb = new StringBuilder();
@@ -126,8 +126,8 @@ public class ValidateAccessChallengeUseCase {
             throw new InvalidChallengeException("Muitas tentativas incorretas. Por motivos de segurança, o acesso para este agendamento foi bloqueado por 15 minutos. Tente novamente mais tarde ou solicite suporte na recepção.");
         }
 
-        // Tratamento para auto-check-in da Clínica da Imagem ou Inovare
-        if (appointmentId != null && (appointmentId.startsWith("IMG-") || appointmentId.startsWith("INOV-"))) {
+        // Tratamento para auto-check-in da Clínica da Imagem ou Portal
+        if (appointmentId != null && (appointmentId.startsWith("IMG-") || appointmentId.startsWith("PORT-") || appointmentId.startsWith("INOV-"))) {
             List<AccessCredential> creds = accessCredentialRepositoryPort.findByAppointmentId(appointmentId);
             if (creds == null || creds.isEmpty()) {
                 throw new NotFoundException("Credencial de acesso não encontrada.");
@@ -147,7 +147,7 @@ public class ValidateAccessChallengeUseCase {
 
             String docName = (patient.getDoctorName() != null && !patient.getDoctorName().isBlank())
                     ? patient.getDoctorName()
-                    : (appointmentId.startsWith("INOV-") ? "Inovare – Serviços de Saúde" : "Clínica Da Imagem - Unidade Inovare");
+                    : (appointmentId.startsWith("IMG-") ? "Clínica Da Imagem" : "Portal de Atendimento");
 
             return new FeegowPatientAccessInfo(
                 patient.getAppointmentId(),

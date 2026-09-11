@@ -1,14 +1,14 @@
-// Tela de login do sistema Inovare TI
+// Tela de login do sistema CTRLS ITSM
 import { useState, type FormEvent } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Mail, Lock, LogIn, Loader2 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { useBranding } from '../../contexts/BrandingContext';
 import LoginField from './LoginField';
-
-const LOGO_URL = 'https://inovare.med.br/wp-content/uploads/2023/01/Logo.png';
 
 export default function Login() {
   const { signIn } = useAuth();
+  const { branding } = useBranding();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -27,7 +27,7 @@ export default function Login() {
 
       if (result.status === 'PASSWORD_RESET_REQUIRED' && result.tempToken && result.userId) {
         sessionStorage.setItem(
-          '@InovareTI:firstAccess',
+          '@Itsm:firstAccess',
           JSON.stringify({ tempToken: result.tempToken, userId: result.userId }),
         );
         navigate('/primeiro-acesso', {
@@ -52,16 +52,22 @@ export default function Login() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-white to-brand-secondary/20 flex items-center justify-center px-4">
-      <title>Entrar — Inovare TI</title>
-      <meta name="description" content="Acesse o portal de TI e suporte da Clínica Inovare" />
+      <title>Entrar — {branding.appName || 'CTRLS ITSM'}</title>
+      <meta name="description" content="Acesse o portal de atendimento e suporte" />
       <div className="w-full max-w-sm">
-        {/* Logo da clínica */}
+        {/* Logo dinâmico da empresa */}
         <div className="flex justify-center mb-8">
-          <img
-            src={LOGO_URL}
-            alt="Inovare TI"
-            className="h-16 object-contain"
-          />
+          {branding.logoUrl ? (
+            <img
+              src={branding.logoUrl}
+              alt={branding.appName || 'CTRLS ITSM'}
+              className="h-16 object-contain"
+            />
+          ) : (
+            <div className="h-14 px-5 rounded-2xl bg-brand-primary text-slate-900 font-extrabold flex items-center justify-center text-lg shadow-sm tracking-tight select-none">
+              {branding.appName || 'CTRLS ITSM'}
+            </div>
+          )}
         </div>
 
         {/* Card de login */}

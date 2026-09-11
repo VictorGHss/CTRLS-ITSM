@@ -7,7 +7,7 @@ CREATE TABLE itsm_categories (
     sla_hours INT          NOT NULL
 );
 
--- Sementes: categorias padrão da TI Inovare
+-- Sementes: categorias padrão de suporte ITSM
 INSERT INTO itsm_categories (name, sla_hours) VALUES
     ('Internet e Links',        2),
     ('Impressoras e Etiquetas', 4),

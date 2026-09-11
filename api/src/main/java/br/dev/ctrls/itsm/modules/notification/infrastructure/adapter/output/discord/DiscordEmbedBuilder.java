@@ -129,7 +129,7 @@ public class DiscordEmbedBuilder {
         if (StringUtils.hasText(thumbnailUrl)) {
             embed.put("thumbnail", Map.of("url", thumbnailUrl));
         }
-        embed.put("footer", Map.of("text", "Suporte Financeiro Inovare • " + BR_DATE_TIME.format(OffsetDateTime.now())));
+        embed.put("footer", Map.of("text", "Suporte Financeiro CTRLS ITSM • " + BR_DATE_TIME.format(OffsetDateTime.now())));
 
         return embed;
     }
