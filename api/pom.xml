@@ -8,11 +8,11 @@
         <version>4.1.1</version>
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
-    <groupId>br.dev.ctrls.inovareti</groupId>
-    <artifactId>inovare-ti</artifactId>
+    <groupId>br.dev.ctrls.itsm</groupId>
+    <artifactId>itsm-api</artifactId>
     <version>0.0.1-SNAPSHOT</version>
-    <name>inovare-ti</name>
-    <description>inovare-ti</description>
+    <name>itsm-api</name>
+    <description>ITSM Core API - CTRLS</description>
     <url/>
     <licenses>
         <license/>

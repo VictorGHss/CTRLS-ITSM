@@ -1,0 +1,728 @@
+package br.dev.ctrls.itsm.modules.appointment.infrastructure.adapter.output.feegow;
+
+import java.net.URI;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.Semaphore;
+import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Component;
+import org.springframework.web.client.RestClientResponseException;
+import org.springframework.web.util.UriComponentsBuilder;
+import org.springframework.beans.factory.ObjectProvider;
+import br.dev.ctrls.itsm.modules.appointment.domain.port.output.AppointmentDoctorMappingRepositoryPort;
+import br.dev.ctrls.itsm.modules.appointment.domain.port.output.ProfessionalExternalPort;
+import br.dev.ctrls.itsm.modules.appointment.application.dto.FeegowSearchResponseDto;
+import br.dev.ctrls.itsm.modules.appointment.domain.port.output.AppointmentExternalPort;
+import br.dev.ctrls.itsm.modules.appointment.domain.port.output.FeegowAppointment;
+import br.dev.ctrls.itsm.modules.appointment.infrastructure.adapter.output.client.FeegowAppointmentClient;
+import br.dev.ctrls.itsm.modules.appointment.infrastructure.adapter.output.client.FeegowStatusUpdatePayload;
+import br.dev.ctrls.itsm.modules.appointment.infrastructure.adapter.output.client.FeegowCancelPayload;
+import br.dev.ctrls.itsm.modules.appointment.infrastructure.config.AppointmentMotorProperties;
+import br.dev.ctrls.itsm.modules.appointment.infrastructure.config.FeegowProperties;
+import br.dev.ctrls.itsm.modules.appointment.domain.model.FeegowAppointmentStatus;
+import br.dev.ctrls.itsm.modules.appointment.infrastructure.utils.AppointmentIdNormalizer;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import org.springframework.retry.annotation.Retryable;
+import org.springframework.retry.annotation.Backoff;
+import org.springframework.retry.annotation.Recover;
+import org.springframework.web.client.RestClientException;
+import org.springframework.cache.annotation.Cacheable;
+import br.dev.ctrls.itsm.modules.appointment.application.dto.FeegowLockDto;
+import lombok.extern.slf4j.Slf4j;
+
+/**
+ * Adaptador de Infraestrutura: FeegowAppointmentAdapter.
+ *
+ * COMENTÁRIO OBRIGATÓRIO:
+ * Este componente de infraestrutura faz a ponte de comunicação física com a API Feegow
+ * para ações de Agendamentos (Appointment). Ele implementa a Porta de Saída do Domínio 'AppointmentExternalPort'
+ * (Inversão de Dependência) e gerencia de forma isolada a resiliência (Circuit Breaker),
+ * os fallbacks estruturados de gravação offline para evitar indisponibilidades e a comunicação
+ * física usando o cliente declarativo HTTP 'FeegowAppointmentClient'.
+ */
+@Slf4j
+@Component
+@lombok.RequiredArgsConstructor
+public class FeegowAppointmentAdapter implements AppointmentExternalPort {
+
+    private static final DateTimeFormatter FEEGOW_RESPONSE_DATE_FORMAT = DateTimeFormatter.ofPattern("dd-MM-yyyy");
+    private static final DateTimeFormatter FEEGOW_RESPONSE_TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm");
+    private static final DateTimeFormatter FEEGOW_RESPONSE_TIME_WITH_SECONDS_FORMAT = DateTimeFormatter.ofPattern("HH:mm:ss");
+    private static final int DEFAULT_CANCELLATION_REASON_ID = 1;
+
+    private final AppointmentMotorProperties properties;
+    private final FeegowProperties feegowProperties;
+    private final ObjectMapper objectMapper;
+    private final FeegowAppointmentClient appointmentClient;
+    private final ObjectProvider<AppointmentDoctorMappingRepositoryPort> doctorMappingRepositoryProvider;
+    private final ObjectProvider<ProfessionalExternalPort> professionalExternalPortProvider;
+
+    /**
+     * Limits the number of concurrent outbound HTTP/2 streams to the Feegow API.
+     * Without this guard, Virtual Threads would saturate the HTTP/2 stream limit
+     * (typically 100 per connection) within the same millisecond during batch ingestion,
+     * causing "too many concurrent streams" errors.
+     */
+    private final Semaphore feegowConcurrencySemaphore = new Semaphore(4);
+
+    @Override
+    public List<FeegowAppointment> searchAppointments(LocalDate date, int statusId) {
+        return searchAppointments(date, statusId, null);
+    }
+
+    @Override
+    @CircuitBreaker(name = "feegowApiCircuit", fallbackMethod = "fallbackSearchAppointments")
+    @Retryable(
+        retryFor = { RestClientException.class, org.springframework.web.client.ResourceAccessException.class, org.springframework.dao.DataAccessException.class },
+        maxAttempts = 3,
+        backoff = @Backoff(delay = 1000, multiplier = 2.0)
+    )
+    public List<FeegowAppointment> searchAppointments(LocalDate date, int statusId, String profissionalId) {
+        LocalDate effectiveDate = date != null ? date : LocalDate.now();
+        if (effectiveDate.isBefore(LocalDate.now())) {
+            effectiveDate = LocalDate.now();
+        }
+        String formattedDate = effectiveDate.format(DateTimeFormatter.ofPattern("dd-MM-yyyy"));
+
+        UriComponentsBuilder uriBuilder = UriComponentsBuilder.fromUriString(properties.getFeegowBaseUrl())
+                .path(properties.getFeegowSearchPath())
+                .queryParam("data_start", formattedDate)
+                .queryParam("data_end", formattedDate);
+
+        if (statusId > 0) {
+            uriBuilder.queryParam("status", statusId);
+        }
+
+        if (profissionalId != null && !profissionalId.isBlank()) {
+            uriBuilder.queryParam("profissional_id", profissionalId.trim());
+        }
+
+        URI uri = uriBuilder.build().toUri();
+
+        log.info("[FEEGOW] [APPOINTMENT-ADAPTER] Buscando agendamentos na URL: {}", uri);
+
+        try {
+            log.debug("[FEEGOW] [SEMÁFORO] Aguardando permissão para buscar agendamentos. Permissões disponíveis: {}", feegowConcurrencySemaphore.availablePermits());
+            feegowConcurrencySemaphore.acquire();
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            log.warn("[FEEGOW] [APPOINTMENT-ADAPTER] Thread interrompida enquanto aguardava o semáforo de concorrência. Abortando busca para URL: {}", uri);
+            return List.of();
+        }
+
+        try {
+            ResponseEntity<String> response = appointmentClient.searchAppointments(uri, getAccessToken());
+            List<FeegowSearchResponseDto.FeegowSearchAppointmentDto> searchItems = extractSearchItems(response.getBody());
+            if (searchItems.isEmpty()) {
+                return List.of();
+            }
+
+            List<FeegowAppointment> appointments = new ArrayList<>();
+            for (FeegowSearchResponseDto.FeegowSearchAppointmentDto item : searchItems) {
+                FeegowAppointment parsedAppointment = parseAppointment(item);
+                if (parsedAppointment == null) {
+                    continue;
+                }
+                // Filtro por status para ignorar agendamentos cancelados, desmarcados ou faltas
+                FeegowAppointmentStatus apptStatus = FeegowAppointmentStatus.fromId(parsedAppointment.statusId());
+                if (apptStatus.isCancelledOrMissed()) {
+                    continue;
+                }
+                // Filtro para buscar apenas agendamentos com data maior ou igual a LocalDate.now()
+                if (parsedAppointment.startAt() != null && parsedAppointment.startAt().toLocalDate().isBefore(LocalDate.now())) {
+                    continue;
+                }
+                appointments.add(parsedAppointment);
+            }
+            return appointments;
+        } catch (Exception ex) {
+            log.warn("Falha ao buscar agendamentos na Feegow: {}", ex.getMessage());
+            throw ex;
+        } finally {
+            feegowConcurrencySemaphore.release();
+            log.debug("[FEEGOW] [SEMÁFORO] Permissão liberada após busca de agendamentos. Permissões disponíveis: {}", feegowConcurrencySemaphore.availablePermits());
+        }
+    }
+
+    /**
+     * Fallback para a busca de agendamentos da Feegow em caso de falha de rede ou circuito aberto.
+     * Retorna fallback seguro (lista vazia) para evitar o estouro de erro 500 no fluxo.
+     */
+    public List<FeegowAppointment> fallbackSearchAppointments(LocalDate date, int statusId, String profissionalId, Throwable t) {
+        log.warn("[OFFLINE-SYNC-INTENT] [FEEGOW] Falha ao buscar agendamentos na Feegow. Circuito aberto ou erro de rede: {}. Retornando lista vazia para posterior processamento offline.", t.getMessage());
+        return List.of();
+    }
+
+    @Override
+    @CircuitBreaker(name = "feegowApiCircuit", fallbackMethod = "fallbackSearchPatientAppointments")
+    @Retryable(
+        retryFor = { RestClientException.class, org.springframework.web.client.ResourceAccessException.class, org.springframework.dao.DataAccessException.class },
+        maxAttempts = 3,
+        backoff = @Backoff(delay = 1000, multiplier = 2.0)
+    )
+    public List<FeegowAppointment> searchPatientAppointments(String patientId) {
+        if (patientId == null || patientId.isBlank()) {
+            return List.of();
+        }
+
+        URI uri = UriComponentsBuilder.fromUriString(properties.getFeegowBaseUrl())
+                .path(properties.getFeegowSearchPath())
+                .queryParam("paciente_id", patientId.trim())
+                .queryParam("data_start", LocalDate.now().format(DateTimeFormatter.ofPattern("dd-MM-yyyy")))
+                .queryParam("data_end", LocalDate.now().plusMonths(5).format(DateTimeFormatter.ofPattern("dd-MM-yyyy")))
+                .build().toUri();
+
+        log.info("[FEEGOW] [APPOINTMENT-ADAPTER] Buscando agendamentos futuros do paciente ID {} na URL: {}", patientId, uri);
+
+        try {
+            feegowConcurrencySemaphore.acquire();
+            ResponseEntity<String> response = appointmentClient.searchAppointments(uri, getAccessToken());
+            List<FeegowSearchResponseDto.FeegowSearchAppointmentDto> searchItems = extractSearchItems(response.getBody());
+            if (searchItems.isEmpty()) {
+                return List.of();
+            }
+
+            List<FeegowAppointment> appointments = new ArrayList<>();
+            for (FeegowSearchResponseDto.FeegowSearchAppointmentDto item : searchItems) {
+                FeegowAppointment parsedAppointment = parseAppointment(item);
+                if (parsedAppointment == null) {
+                    continue;
+                }
+                String status = parsedAppointment.statusId();
+                if ("11".equals(status) || "12".equals(status)) {
+                    continue;
+                }
+                if (parsedAppointment.startAt() != null && parsedAppointment.startAt().toLocalDate().isBefore(LocalDate.now())) {
+                    continue;
+                }
+                appointments.add(parsedAppointment);
+            }
+            return appointments;
+        } catch (Exception ex) {
+            log.warn("Falha ao buscar agendamentos do paciente {} na Feegow: {}", patientId, ex.getMessage());
+            return List.of();
+        } finally {
+            feegowConcurrencySemaphore.release();
+        }
+    }
+
+    public List<FeegowAppointment> fallbackSearchPatientAppointments(String patientId, Throwable t) {
+        log.warn("[FEEGOW] Fallback ativado ao buscar agendamentos do paciente {}: {}", patientId, t.getMessage());
+        return List.of();
+    }
+
+    @Override
+    @CircuitBreaker(name = "feegowApiCircuit", fallbackMethod = "fallbackFindById")
+    @Retryable(
+        retryFor = { RestClientException.class, org.springframework.web.client.ResourceAccessException.class, org.springframework.dao.DataAccessException.class },
+        maxAttempts = 3,
+        backoff = @Backoff(delay = 1000, multiplier = 2.0)
+    )
+    public FeegowAppointment findById(String appointmentId) {
+        if (appointmentId == null || appointmentId.isBlank()) {
+            return null;
+        }
+
+        URI uri = UriComponentsBuilder.fromUriString(properties.getFeegowBaseUrl())
+                .path(properties.getFeegowSearchPath())
+                .queryParam("agendamento_id", appointmentId.trim())
+                .build().toUri();
+
+        log.info("[FEEGOW] [APPOINTMENT-ADAPTER] Buscando agendamento específico por ID {} na URL: {}", appointmentId, uri);
+
+        try {
+            feegowConcurrencySemaphore.acquire();
+            ResponseEntity<String> response = appointmentClient.searchAppointments(uri, getAccessToken());
+            List<FeegowSearchResponseDto.FeegowSearchAppointmentDto> searchItems = extractSearchItems(response.getBody());
+            if (!searchItems.isEmpty()) {
+                return parseAppointment(searchItems.getFirst());
+            }
+        } catch (Exception ex) {
+            log.warn("[FEEGOW] Falha ao consultar agendamento ID {}: {}", appointmentId, ex.getMessage());
+        } finally {
+            feegowConcurrencySemaphore.release();
+        }
+        return null;
+    }
+
+    public FeegowAppointment fallbackFindById(String appointmentId, Throwable t) {
+        log.warn("[FEEGOW] Fallback ativado ao consultar agendamento ID {}: {}", appointmentId, t.getMessage());
+        return null;
+    }
+
+    @Override
+    @CircuitBreaker(name = "feegowApiCircuit", fallbackMethod = "fallbackUpdateAppointmentStatus")
+    @Retryable(
+        retryFor = { RestClientException.class, org.springframework.web.client.ResourceAccessException.class, org.springframework.dao.DataAccessException.class },
+        maxAttempts = 3,
+        backoff = @Backoff(delay = 1000, multiplier = 2.0)
+    )
+    public void updateAppointmentStatus(String appointmentId, String statusId) {
+        String normalizedAppointmentId = appointmentId == null ? "" : appointmentId.trim();
+        if (normalizedAppointmentId.isBlank()) {
+            throw new IllegalArgumentException("appointmentId não pode ser vazio");
+        }
+
+        String normalizedStatusId = statusId == null ? "" : statusId.trim();
+        if (normalizedStatusId.isBlank()) {
+            normalizedStatusId = resolveConfirmedStatusId();
+        }
+
+        String statusUpdateUrl = feegowProperties.getStatusUpdateUrl();
+        URI uri = URI.create(statusUpdateUrl);
+
+        int confirmedStatusId = FeegowAppointmentStatus.MARCADO_CONFIRMADO.getId();
+        int statusIdInt = confirmedStatusId;
+        try {
+            statusIdInt = Integer.parseInt(normalizedStatusId);
+        } catch (NumberFormatException ignored) {}
+
+        // FEEGOW-STATUS-GUARD: Impede regressão de status para CONFIRMED se o agendamento já estiver em estado avançado no Feegow ou na clínica
+        if (statusIdInt == confirmedStatusId) {
+            try {
+                FeegowAppointment currentAppt = findById(normalizedAppointmentId);
+                if (currentAppt != null && currentAppt.statusId() != null) {
+                    String currentStatus = currentAppt.statusId().trim();
+                    FeegowAppointmentStatus currentFeegowStatus = FeegowAppointmentStatus.fromId(currentStatus);
+                    if (currentFeegowStatus.isConfirmedOrPresent() || currentFeegowStatus.isCancelledOrMissed()) {
+                        log.info("[FEEGOW-STATUS-GUARD] Ignorando envio redundante/regressivo de status 7 (CONFIRMED) no agendamento {} pois o status atual no Feegow já é {} ({}) (não regredir).",
+                                normalizedAppointmentId, currentStatus, currentFeegowStatus.getDescription());
+                        return;
+                    }
+                }
+            } catch (Exception ex) {
+                log.warn("[FEEGOW-STATUS-GUARD] Não foi possível verificar o status atual do agendamento {}: {}", normalizedAppointmentId, ex.getMessage());
+            }
+        }
+
+        Object payloadApptId = AppointmentIdNormalizer.toLongOrNull(normalizedAppointmentId);
+        if (payloadApptId == null) {
+            payloadApptId = normalizedAppointmentId;
+        }
+
+        FeegowStatusUpdatePayload payload = new FeegowStatusUpdatePayload(
+                payloadApptId,
+                statusIdInt,
+                ""
+        );
+
+        try {
+            String jsonPayload = objectMapper.writeValueAsString(payload);
+            log.info("[FEEGOW] [APPOINTMENT-ADAPTER] Enviando atualização de status. URL: {}, Payload: {}", uri, jsonPayload);
+
+            ResponseEntity<String> response = appointmentClient.updateStatus(uri, getAccessToken(), payload);
+            int statusCode = response.getStatusCode().value();
+            String responseBody = response.getBody();
+
+            log.info("[FEEGOW] Resposta bruta do statusUpdate: {} - {}", statusCode, responseBody);
+
+            if (statusCode >= 200 && statusCode < 300) {
+                if (responseBody != null && !responseBody.isBlank()) {
+                    try {
+                        com.fasterxml.jackson.databind.JsonNode rootNode = objectMapper.readTree(responseBody);
+                        if (rootNode.has("success") && !rootNode.get("success").asBoolean(true)) {
+                            String errorMsg = rootNode.has("message") ? rootNode.get("message").asText() : "Erro retornado pelo Feegow";
+                            log.error("[FEEGOW] Falha lógica ao atualizar status (success=false). appointmentId={}, statusId={}, msg={}",
+                                    normalizedAppointmentId, normalizedStatusId, errorMsg);
+                            throw new RuntimeException("Feegow retornou erro na atualização de status: " + errorMsg);
+                        }
+                    } catch (JsonProcessingException ex) {
+                        log.debug("[FEEGOW] Não foi possível deserializar resposta como JSON. Mantendo status HTTP {}", statusCode);
+                    }
+                }
+                log.info("Status do agendamento {} atualizado para {} na Feegow", appointmentId, statusId);
+            } else {
+                log.error("Não foi possível atualizar status do agendamento na Feegow. appointmentId={}, statusId={}, statusCode={}, responseBody={}",
+                        normalizedAppointmentId, normalizedStatusId, statusCode, abbreviateResponseBody(responseBody));
+                throw new RuntimeException("Erro HTTP Feegow (" + statusCode + "): " + abbreviateResponseBody(responseBody));
+            }
+        } catch (RestClientResponseException ex) {
+            log.error("Falha HTTP ao atualizar status na Feegow. appointmentId={}, statusId={}, statusCode={}, responseBody={}",
+                    normalizedAppointmentId, normalizedStatusId, ex.getStatusCode().value(), abbreviateResponseBody(ex.getResponseBodyAsString()));
+            throw ex;
+        } catch (JsonProcessingException ex) {
+            log.error("Erro ao serializar payload para Feegow. appointmentId={}, statusId={}", normalizedAppointmentId, normalizedStatusId, ex);
+            throw new RuntimeException("Erro de serialização JSON", ex);
+        } catch (RuntimeException ex) {
+            log.error("Erro inesperado ao atualizar status na Feegow. appointmentId={}, statusId={}",
+                    normalizedAppointmentId, normalizedStatusId, ex);
+            throw ex;
+        }
+    }
+
+    /**
+     * Fallback para a atualização de status do agendamento na Feegow.
+     * Registra o log estruturado [OFFLINE-SYNC-INTENT] para que a alteração não seja perdida e o fluxo siga offline.
+     */
+    public void fallbackUpdateAppointmentStatus(String appointmentId, String statusId, Throwable t) {
+        log.warn("[OFFLINE-SYNC-INTENT] [FEEGOW] Falha ao atualizar status do agendamento na Feegow. Circuito aberto ou erro de rede: {}. Gravando intenção de sincronização offline para appointmentId={}, statusId={}", 
+            t.getMessage(), appointmentId, statusId);
+    }
+
+    @Override
+    public void updateStatus(String appointmentId, int statusId) {
+        updateAppointmentStatus(appointmentId, String.valueOf(statusId));
+    }
+
+    private List<FeegowSearchResponseDto.FeegowSearchAppointmentDto> extractSearchItems(String responseBody) {
+        if (responseBody == null || responseBody.isBlank()) {
+            return List.of();
+        }
+
+        try {
+            Object root = objectMapper.readValue(responseBody, Object.class);
+            if (root == null) {
+                log.warn("Formato raiz JSON da busca Feegow inesperado: null");
+                return List.of();
+            }
+
+            if (root instanceof List<?> listRoot) {
+                List<FeegowSearchResponseDto.FeegowSearchAppointmentDto> converted = objectMapper.convertValue(
+                        listRoot,
+                        new TypeReference<List<FeegowSearchResponseDto.FeegowSearchAppointmentDto>>() {
+                        });
+                return converted != null ? converted : List.of();
+            }
+
+            if (root instanceof Map<?, ?> mapObj) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> rootMap = (Map<String, Object>) mapObj;
+                FeegowSearchResponseDto mappedResponse = objectMapper.convertValue(rootMap, FeegowSearchResponseDto.class);
+                List<FeegowSearchResponseDto.FeegowSearchAppointmentDto> appointments = mappedResponse != null
+                        ? mappedResponse.appointments()
+                        : List.of();
+
+                if (appointments.isEmpty()) {
+                    log.warn("Resposta da busca Feegow sem itens.");
+                }
+
+                return appointments;
+            }
+
+            log.warn("Formato raiz JSON da busca Feegow inesperado: {}", root.getClass().getName());
+            return List.of();
+        } catch (JsonProcessingException ex) {
+            log.error("[FEEGOW] [APPOINTMENT-ADAPTER] Falha ao ler/analisar JSON da busca de agendamentos. Body: {}", abbreviateResponseBody(responseBody), ex);
+            return List.of();
+        } catch (RuntimeException ex) {
+            log.error("[FEEGOW] [APPOINTMENT-ADAPTER] Falha na conversão ou estrutura indevida dos dados de busca de agendamentos. Body: {}", abbreviateResponseBody(responseBody), ex);
+            return List.of();
+        }
+    }
+
+    private FeegowAppointment parseAppointment(FeegowSearchResponseDto.FeegowSearchAppointmentDto item) {
+        if (item == null) {
+            return null;
+        }
+
+        String id = item.appointmentId() == null ? null : String.valueOf(item.appointmentId());
+        String pacienteId = item.patientId() == null ? null : String.valueOf(item.patientId());
+        String profissionalId = item.doctorId() == null ? null : String.valueOf(item.doctorId());
+
+        if (id == null || id.isBlank() || pacienteId == null || pacienteId.isBlank() || profissionalId == null || profissionalId.isBlank()) {
+            return null;
+        }
+
+        LocalDateTime parsedStartAt = parseLocalDateTime(item.appointmentDate(), item.appointmentTime());
+        if (parsedStartAt == null) {
+            return null;
+        }
+
+        String rawDoctor = item.doctorName();
+        String doctorName = (rawDoctor != null && !rawDoctor.trim().isBlank() && !"Profissional".equalsIgnoreCase(rawDoctor.trim())) ? rawDoctor.trim() : null;
+
+        String rawProcedure = item.procedureName();
+        String procedureName = (rawProcedure != null && !rawProcedure.trim().isBlank()) ? rawProcedure.trim() : null;
+
+        if (doctorName == null && profissionalId != null && !profissionalId.isBlank()) {
+            AppointmentDoctorMappingRepositoryPort mappingRepo = doctorMappingRepositoryProvider.getIfAvailable();
+            if (mappingRepo != null) {
+                try {
+                    var mappingOpt = mappingRepo.findByProfissionalId(profissionalId);
+                    if (mappingOpt.isPresent()) {
+                        var mapping = mappingOpt.get();
+                        if (mapping.getProfissionalNome() != null && !mapping.getProfissionalNome().isBlank()) {
+                            doctorName = mapping.getProfissionalNome().trim();
+                        }
+                    }
+                } catch (Exception ignored) {}
+            }
+
+            if (doctorName == null) {
+                ProfessionalExternalPort profPort = professionalExternalPortProvider.getIfAvailable();
+                if (profPort != null) {
+                    try {
+                        String name = profPort.getProfessionalName(profissionalId);
+                        if (name != null && !name.isBlank() && !"Profissional".equalsIgnoreCase(name.trim())) {
+                            doctorName = name.trim();
+                        }
+                    } catch (Exception ignored) {}
+                }
+            }
+        }
+
+        if (doctorName == null || doctorName.isBlank()) {
+            doctorName = "Profissional";
+        }
+        if (procedureName == null || procedureName.isBlank()) {
+            procedureName = "Sem Procedimento";
+        }
+
+        String unitName = item.unitName() != null && !item.unitName().isBlank() ? item.unitName().trim() : "Clínica Inovare";
+        String statusId = item.statusId() != null ? String.valueOf(item.statusId()) : "";
+        String procedureId = item.procedureId() != null ? item.procedureId().trim() : "";
+
+        Boolean encaixe = false;
+        if (item.encaixe() != null) {
+            if (item.encaixe() instanceof Boolean b) {
+                encaixe = b;
+            } else if (item.encaixe() instanceof String s) {
+                encaixe = "true".equalsIgnoreCase(s.trim()) || "1".equals(s.trim());
+            } else if (item.encaixe() instanceof Number n) {
+                encaixe = n.intValue() == 1;
+            }
+        }
+
+        return new FeegowAppointment(id, pacienteId, profissionalId, doctorName, unitName, parsedStartAt, statusId, procedureName, procedureId, encaixe);
+    }
+
+    private LocalDateTime parseLocalDateTime(String data, String hora) {
+        if (data == null || data.isBlank() || hora == null || hora.isBlank()) {
+            return null;
+        }
+
+        LocalDate parsedDate;
+        try {
+            parsedDate = LocalDate.parse(data.trim(), FEEGOW_RESPONSE_DATE_FORMAT);
+        } catch (DateTimeParseException ex) {
+            log.warn("Falha ao analisar data da Feegow '{}': {}", data, ex.getMessage());
+            return null;
+        }
+
+        LocalTime parsedTime = null;
+        String cleanTime = hora.trim();
+        try {
+            parsedTime = LocalTime.parse(cleanTime, FEEGOW_RESPONSE_TIME_WITH_SECONDS_FORMAT);
+        } catch (DateTimeParseException ex) {
+            try {
+                parsedTime = LocalTime.parse(cleanTime, FEEGOW_RESPONSE_TIME_FORMAT);
+            } catch (DateTimeParseException innerEx) {
+                log.warn("Falha ao analisar hora da Feegow '{}' com formatos hh:mm:ss ou hh:mm: {}", hora, innerEx.getMessage());
+            }
+        }
+
+        if (parsedTime == null) {
+            return null;
+        }
+
+        return LocalDateTime.of(parsedDate, parsedTime);
+    }
+
+    private String resolveConfirmedStatusId() {
+        return String.valueOf(FeegowAppointmentStatus.MARCADO_CONFIRMADO.getId());
+    }
+
+    private Object normalizeAppointmentIdForPayload(String value) {
+        if (value == null) {
+            return "";
+        }
+        try {
+            return Integer.valueOf(value.trim());
+        } catch (NumberFormatException ignored) {
+            return value.trim();
+        }
+    }
+
+    /**
+     * Captura graciosamente a falha definitiva após 3 tentativas de busca de agendamentos.
+     */
+    @Recover
+    public List<FeegowAppointment> recoverSearchAppointments(RestClientException ex, LocalDate date, int statusId, String profissionalId) {
+        log.error("[RECOVERY-FEEGOW] Falha definitiva após 3 tentativas de busca de agendamentos na Feegow ERP. Erro: {}", 
+            ex.getMessage(), ex);
+        return List.of();
+    }
+
+    /**
+     * Captura graciosamente a falha definitiva após 3 tentativas de atualização de status.
+     */
+    @Recover
+    public void recoverUpdateAppointmentStatus(RestClientException ex, String appointmentId, String statusId) {
+        log.error("[RECOVERY-FEEGOW] Falha definitiva após 3 tentativas de atualização de status do agendamento {} na Feegow ERP. Erro: {}", 
+            appointmentId, ex.getMessage(), ex);
+    }
+
+    @Override
+    @CircuitBreaker(name = "feegowApiCircuit", fallbackMethod = "fallbackCancelAppointment")
+    @Retryable(
+        retryFor = { RestClientException.class, org.springframework.web.client.ResourceAccessException.class, org.springframework.dao.DataAccessException.class },
+        maxAttempts = 3,
+        backoff = @Backoff(delay = 1000, multiplier = 2.0)
+    )
+    public void cancelAppointment(String appointmentId, String obs) {
+        String normalizedAppointmentId = appointmentId == null ? "" : appointmentId.trim();
+        if (normalizedAppointmentId.isBlank()) {
+            throw new IllegalArgumentException("appointmentId não pode ser vazio");
+        }
+
+        String cancelUrl = feegowProperties.getCancelUrl();
+        URI uri = URI.create(cancelUrl);
+
+        int motivoId = DEFAULT_CANCELLATION_REASON_ID;
+
+        FeegowCancelPayload payload = new FeegowCancelPayload(
+                normalizeAppointmentIdForPayload(normalizedAppointmentId),
+                motivoId,
+                obs != null ? obs.trim() : ""
+        );
+
+        try {
+            String jsonPayload = objectMapper.writeValueAsString(payload);
+            log.info("[FEEGOW] [APPOINTMENT-ADAPTER] Enviando cancelamento de consulta. URL: {}, Payload: {}", uri, jsonPayload);
+
+            ResponseEntity<String> response = appointmentClient.cancelAppointment(uri, getAccessToken(), payload);
+            int statusCode = response.getStatusCode().value();
+            String responseBody = response.getBody();
+
+            log.info("[FEEGOW] Resposta bruta do cancelAppointment: {} - {}", statusCode, responseBody);
+
+            if (statusCode >= 200 && statusCode < 300) {
+                log.info("Agendamento {} cancelado com sucesso na Feegow. Obs: {}", appointmentId, obs);
+            } else {
+                log.error("Não foi possível cancelar agendamento na Feegow. appointmentId={}, statusCode={}, responseBody={}",
+                        normalizedAppointmentId, statusCode, abbreviateResponseBody(responseBody));
+            }
+        } catch (RestClientResponseException ex) {
+            log.error("Falha HTTP ao cancelar agendamento na Feegow. appointmentId={}, statusCode={}, responseBody={}",
+                    normalizedAppointmentId, ex.getStatusCode().value(), abbreviateResponseBody(ex.getResponseBodyAsString()));
+        } catch (JsonProcessingException | RuntimeException ex) {
+            log.error("Erro inesperado ao cancelar agendamento na Feegow. appointmentId={}",
+                    normalizedAppointmentId, ex);
+        }
+    }
+
+    public void fallbackCancelAppointment(String appointmentId, String obs, Throwable t) {
+        log.warn("[OFFLINE-SYNC-INTENT] [FEEGOW] Falha ao cancelar agendamento na Feegow. Circuito aberto ou erro de rede: {}. Gravando intenção de sincronização offline para appointmentId={}, obs={}", 
+            t.getMessage(), appointmentId, obs);
+    }
+
+    @Recover
+    public void recoverCancelAppointment(RestClientException ex, String appointmentId, String obs) {
+        log.error("[RECOVERY-FEEGOW] Falha definitiva após 3 tentativas de cancelamento do agendamento {} na Feegow ERP. Erro: {}", 
+            appointmentId, ex.getMessage(), ex);
+    }
+
+    @Override
+    @Cacheable(value = "feegow-locks", key = "(#startDate != null ? #startDate.toString() : '') + '-' + (#endDate != null ? #endDate.toString() : '') + '-' + (#unitId != null ? #unitId.toString() : 'all')")
+    public List<FeegowLockDto> listLocks(LocalDate startDate, LocalDate endDate, Long unitId) {
+        LocalDate start = startDate != null ? startDate : LocalDate.now();
+        LocalDate end = endDate != null ? endDate : start;
+
+        String formattedStart = start.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+        String formattedEnd = end.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+
+        UriComponentsBuilder uriBuilder = UriComponentsBuilder.fromUriString(properties.getFeegowBaseUrl())
+                .path("/v1/api/lock/list")
+                .queryParam("date_start", formattedStart)
+                .queryParam("date_end", formattedEnd);
+
+        if (unitId != null && unitId > 0) {
+            uriBuilder.queryParam("unidade_id", unitId);
+        }
+
+        URI uri = uriBuilder.build().toUri();
+        log.info("[FEEGOW] [LOCK-LIST] Buscando bloqueios de agenda na URL: {}", uri);
+
+        try {
+            feegowConcurrencySemaphore.acquire();
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            log.warn("[FEEGOW] [LOCK-LIST] Thread interrompida ao aguardar semáforo.");
+            return List.of();
+        }
+
+        try {
+            ResponseEntity<String> response = appointmentClient.getLocks(uri, getAccessToken());
+            if (response == null || response.getBody() == null || response.getBody().isBlank()) {
+                return List.of();
+            }
+            return extractLocks(response.getBody());
+        } catch (org.springframework.web.client.HttpStatusCodeException httpEx) {
+            log.warn("[FEEGOW] [LOCK-LIST] Feegow recusou busca de bloqueios de agenda (HTTP Status {} em {}). Aplicando fallback gracioso de lista vazia de bloqueios. Resposta: {}",
+                    httpEx.getStatusCode(), uri, httpEx.getResponseBodyAsString());
+            return List.of();
+        } catch (Exception ex) {
+            log.warn("[FEEGOW] [LOCK-LIST] Falha ao buscar bloqueios de agenda na Feegow: {}", ex.getMessage());
+            return List.of();
+        } finally {
+            feegowConcurrencySemaphore.release();
+        }
+    }
+
+    private List<FeegowLockDto> extractLocks(String jsonResponse) {
+        if (jsonResponse == null || jsonResponse.isBlank()) {
+            return List.of();
+        }
+        try {
+            com.fasterxml.jackson.databind.JsonNode rootNode = objectMapper.readTree(jsonResponse);
+            com.fasterxml.jackson.databind.JsonNode contentNode = null;
+
+            if (rootNode.has("content")) {
+                contentNode = rootNode.get("content");
+            } else if (rootNode.isArray()) {
+                contentNode = rootNode;
+            }
+
+            if (contentNode == null || !contentNode.isArray()) {
+                return List.of();
+            }
+
+            return objectMapper.readValue(
+                    contentNode.traverse(),
+                    new TypeReference<List<FeegowLockDto>>() {}
+            );
+        } catch (Exception ex) {
+            log.warn("[FEEGOW] [LOCK-LIST] Erro ao deserializar resposta de bloqueios: {}", ex.getMessage());
+            return List.of();
+        }
+    }
+
+    /**
+     * Retorna a chave de acesso (API Key) normalizada da Feegow.
+     */
+    private String getAccessToken() {
+        String apiKey = feegowProperties.getApiKey();
+        if (apiKey == null) {
+            return "";
+        }
+        String normalized = apiKey.trim();
+        if (normalized.regionMatches(true, 0, "Bearer ", 0, 7)) {
+            normalized = normalized.substring(7).trim();
+        }
+        return normalized;
+    }
+
+    /**
+     * Abrevia a resposta da requisição Feegow para evitar logs extremamente grandes.
+     */
+    private String abbreviateResponseBody(String responseBody) {
+        if (responseBody == null) {
+            return "";
+        }
+        String normalized = responseBody.trim();
+        int maxLength = 500;
+        if (normalized.length() <= maxLength) {
+            return normalized;
+        }
+        return normalized.substring(0, maxLength) + "...";
+    }
+}

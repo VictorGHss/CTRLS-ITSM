@@ -1,0 +1,20 @@
+package br.dev.ctrls.itsm.modules.appointment.domain.port.output;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import br.dev.ctrls.itsm.modules.appointment.domain.model.AppointmentCategory;
+import br.dev.ctrls.itsm.modules.appointment.domain.model.AppointmentConfig;
+
+
+
+
+public interface AppointmentConfigRepositoryPort {
+
+    Optional<AppointmentConfig> findByCategory(AppointmentCategory category);
+
+    Optional<AppointmentConfig> findById(UUID id);
+
+    List<AppointmentConfig> findAll();
+
+    AppointmentConfig save(AppointmentConfig config);
+}

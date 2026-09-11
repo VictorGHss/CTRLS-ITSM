@@ -1,0 +1,62 @@
+package br.dev.ctrls.itsm.modules.ticket.application.usecase;
+
+import java.util.UUID;
+
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
+
+import br.dev.ctrls.itsm.core.shared.domain.model.exception.NotFoundException;
+import br.dev.ctrls.itsm.modules.audit.domain.model.AuditAction;
+import br.dev.ctrls.itsm.modules.audit.domain.model.AuditEvent;
+import br.dev.ctrls.itsm.modules.audit.application.service.AuditLogService;
+import br.dev.ctrls.itsm.modules.ticket.domain.model.Ticket;
+import br.dev.ctrls.itsm.modules.ticket.domain.port.output.TicketRepositoryPort;
+import br.dev.ctrls.itsm.modules.ticket.domain.model.TicketStatus;
+import br.dev.ctrls.itsm.modules.ticket.application.dto.TicketResponseDTO;
+import br.dev.ctrls.itsm.modules.user.domain.model.User;
+import br.dev.ctrls.itsm.modules.user.domain.port.output.UserRepositoryPort;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
+@Component
+@RequiredArgsConstructor
+public class ClaimTicketUseCase {
+
+    private final TicketRepositoryPort ticketRepository;
+    private final UserRepositoryPort userRepository;
+    private final AuditLogService auditLogService;
+    private final org.springframework.context.ApplicationEventPublisher eventPublisher;
+
+    @Transactional
+    public TicketResponseDTO execute(UUID ticketId) {
+        String userIdStr = SecurityContextHolder.getContext().getAuthentication().getPrincipal().toString();
+        UUID userId = UUID.fromString(userIdStr);
+        User currentUser = userRepository.findById(userId)
+            .orElseThrow(() -> new NotFoundException("Usuário autenticado não encontrado com id: " + userId));
+
+        Ticket ticket = ticketRepository.findById(ticketId)
+            .orElseThrow(() -> new NotFoundException("Chamado não encontrado com id: " + ticketId));
+
+        ticket.setAssignedTo(currentUser);
+        ticket.setStatus(TicketStatus.IN_PROGRESS);
+
+        Ticket savedTicket = ticketRepository.save(ticket);
+        auditLogService.publish(AuditEvent.of(AuditAction.TICKET_ASSIGN)
+            .userId(currentUser.getId())
+            .resourceType("Ticket")
+            .resourceId(savedTicket.getId())
+            .details("{\"assignedTo\": \"" + currentUser.getName() + "\"}")
+            .build());
+
+        // Acompanhamento ocorre exclusivamente dentro do canal dedicado do chamado no Discord
+        // discordDirectMessageService.sendTicketUpdateDM(savedTicket, dmTitle, dmDescription);
+
+        eventPublisher.publishEvent(new br.dev.ctrls.itsm.modules.ticket.domain.event.TicketPermissionsChangedEvent(savedTicket));
+
+        log.info("Chamado {} assumido pelo usuário {} ({})", savedTicket.getId(), currentUser.getName(), currentUser.getEmail());
+
+        return TicketResponseDTO.from(savedTicket);
+    }
+}

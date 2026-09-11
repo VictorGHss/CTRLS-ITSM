@@ -1,0 +1,406 @@
+package br.dev.ctrls.itsm.modules.appointment.infrastructure.adapter.output.feegow;
+
+import java.net.URI;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.Semaphore;
+import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Component;
+import org.springframework.web.util.UriComponentsBuilder;
+import br.dev.ctrls.itsm.modules.appointment.application.dto.FeegowPatientDetailsDto;
+import br.dev.ctrls.itsm.modules.appointment.domain.port.output.FeegowPatient;
+import br.dev.ctrls.itsm.modules.appointment.domain.port.output.PatientExternalPort;
+import br.dev.ctrls.itsm.modules.appointment.infrastructure.adapter.output.client.FeegowPatientClient;
+import br.dev.ctrls.itsm.modules.appointment.infrastructure.config.AppointmentMotorProperties;
+import br.dev.ctrls.itsm.modules.appointment.infrastructure.config.FeegowProperties;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import org.springframework.retry.annotation.Retryable;
+import org.springframework.retry.annotation.Backoff;
+import org.springframework.retry.annotation.Recover;
+import org.springframework.web.client.RestClientException;
+import lombok.extern.slf4j.Slf4j;
+
+/**
+ * Adaptador de Infraestrutura: FeegowPatientAdapter.
+ *
+ * COMENTÁRIO OBRIGATÓRIO:
+ * Este componente de infraestrutura faz a ponte de comunicação física com a API Feegow
+ * para ações de Pacientes. Ele implementa a Porta de Saída do Domínio 'PatientExternalPort'
+ * (Inversão de Dependência) e gerencia de forma isolada a resiliência (Circuit Breaker)
+ * e o consumo do cliente declarativo HTTP 'FeegowPatientClient'.
+ */
+@Slf4j
+@Component
+@lombok.RequiredArgsConstructor
+public class FeegowPatientAdapter implements PatientExternalPort {
+
+    private final AppointmentMotorProperties properties;
+    private final FeegowProperties feegowProperties;
+    private final ObjectMapper objectMapper;
+    private final FeegowPatientClient patientClient;
+
+    /**
+     * Limits the number of concurrent outbound HTTP/2 streams to the Feegow API.
+     * Without this guard, Virtual Threads would saturate the HTTP/2 stream limit
+     * (typically 100 per connection) within the same millisecond during batch patient lookups,
+     * causing "too many concurrent streams" errors.
+     */
+    private final Semaphore feegowConcurrencySemaphore = new Semaphore(4);
+
+    @Override
+    public FeegowPatient patientInfo(String patientId) {
+        try {
+            FeegowPatientDetailsDto.PatientItem patientDetails = getPatientDetails(patientId);
+            if (patientDetails == null) {
+                return new FeegowPatient(patientId, null, null, null, null);
+            }
+
+            String resolvedPatientId = patientDetails.getId() == null || patientDetails.getId().isBlank()
+                    ? patientId
+                    : patientDetails.getId();
+
+            return new FeegowPatient(
+                    resolvedPatientId,
+                    patientDetails.getNome(),
+                    resolvePreferredPhone(patientDetails),
+                    sanitizeCpf(patientDetails.getCpf()),
+                    patientDetails.getNascimento());
+        } catch (Exception ex) {
+            log.warn("[FEEGOW] Falha ao obter informações do paciente ID {}: {}. Retornando fallback seguro.", patientId, ex.getMessage());
+            return new FeegowPatient(patientId, null, null, null, null);
+        }
+    }
+
+    @CircuitBreaker(name = "feegowApiCircuit", fallbackMethod = "fallbackGetPatientDetails")
+    @Retryable(
+        retryFor = { RestClientException.class, org.springframework.web.client.ResourceAccessException.class, org.springframework.dao.DataAccessException.class },
+        maxAttempts = 3,
+        backoff = @Backoff(delay = 1000, multiplier = 2.0)
+    )
+    public FeegowPatientDetailsDto.PatientItem getPatientDetails(String patientId) {
+        String path = resolvePatientDetailsPath();
+        String cleanInput = patientId != null ? patientId.replaceAll("\\D", "") : "";
+        boolean isCpfSearch = cleanInput.length() == 11;
+        String paramName = isCpfSearch ? "paciente_cpf" : "paciente_id";
+        String paramValue = isCpfSearch ? cleanInput : patientId;
+
+        URI uri = UriComponentsBuilder.fromUriString(properties.getFeegowBaseUrl())
+                .path(path)
+                .queryParam(paramName, paramValue)
+                .build()
+                .toUri();
+
+        log.info("[FEEGOW] [PATIENT-ADAPTER] Buscando detalhes do paciente ({}: {}) na URL: {}", paramName, paramValue, uri);
+
+        try {
+            log.debug("[FEEGOW] [SEMÁFORO] Aguardando permissão para buscar detalhes do paciente {}. Permissões disponíveis: {}", patientId, feegowConcurrencySemaphore.availablePermits());
+            feegowConcurrencySemaphore.acquire();
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            log.warn("[FEEGOW] [PATIENT-ADAPTER] Thread interrompida enquanto aguardava o semáforo de concorrência para o paciente {}. Abortando busca.", patientId);
+            return null;
+        }
+
+        try {
+            ResponseEntity<String> response = patientClient.getPatientDetails(uri, getAccessToken());
+            return extractPatientDetails(response.getBody());
+        } catch (org.springframework.web.client.HttpStatusCodeException ex) {
+            int statusCode = ex.getStatusCode().value();
+            if (statusCode == 404 || statusCode == 409) {
+                log.warn("[FEEGOW] Paciente não encontrado ou conflito (HTTP {}): {}. Retornando null.", statusCode, ex.getMessage());
+                return null;
+            }
+            if (statusCode >= 500) {
+                log.warn("[FEEGOW] Servidor Feegow indisponível ou erro 5xx (HTTP {}): {}. Retornando fallback null para não quebrar o fluxo Blip.", statusCode, ex.getMessage());
+                return null;
+            }
+            log.warn("Erro HTTP ao buscar detalhes do paciente id={} na Feegow: {}", patientId, ex.getMessage());
+            throw ex;
+        } catch (org.springframework.web.client.RestClientResponseException ex) {
+            int statusCode = ex.getStatusCode().value();
+            if (statusCode == 404 || statusCode == 409) {
+                log.warn("[FEEGOW] Paciente não encontrado ou conflito (HTTP {}): {}. Retornando null.", statusCode, ex.getMessage());
+                return null;
+            }
+            if (statusCode >= 500) {
+                log.warn("[FEEGOW] Servidor Feegow indisponível ou erro 5xx (HTTP {}): {}. Retornando fallback null para não quebrar o fluxo Blip.", statusCode, ex.getMessage());
+                return null;
+            }
+            log.warn("Erro ao buscar detalhes do paciente id={} na Feegow: {}", patientId, ex.getMessage());
+            throw ex;
+        } catch (Exception ex) {
+            log.warn("Erro ao buscar detalhes do paciente id={} na Feegow: {}", patientId, ex.getMessage());
+            throw ex;
+        } finally {
+            feegowConcurrencySemaphore.release();
+            log.debug("[FEEGOW] [SEMÁFORO] Permissão liberada após busca do paciente {}. Permissões disponíveis: {}", patientId, feegowConcurrencySemaphore.availablePermits());
+        }
+    }
+
+    /**
+     * Fallback para a busca de detalhes do paciente da Feegow em caso de erro ou circuito aberto.
+     * Retorna fallback seguro (null) e registra intenção estruturada de sincronização offline.
+     */
+    public FeegowPatientDetailsDto.PatientItem fallbackGetPatientDetails(String patientId, Throwable t) {
+        log.warn("[OFFLINE-SYNC-INTENT] [FEEGOW] Falha ao obter detalhes do paciente ID: {}. Circuito aberto ou erro de rede: {}. Retornando null.", patientId, t.getMessage());
+        return null;
+    }
+
+    private String resolvePatientDetailsPath() {
+        String configuredPatientPath = properties.getFeegowPatientPath();
+        if (configuredPatientPath == null || configuredPatientPath.isBlank()) {
+            return "/v1/api/patient/search";
+        }
+        return configuredPatientPath.replace("/{id}", "").replace("{id}", "");
+    }
+
+    private FeegowPatientDetailsDto.PatientItem extractPatientDetails(String responseBody) {
+        if (responseBody == null || responseBody.isBlank()) {
+            return null;
+        }
+
+        try {
+            Object root = objectMapper.readValue(responseBody, Object.class);
+            if (root == null) {
+                log.warn("[FEEGOW] Resposta de detalhes do paciente vazia apos parse.");
+                return null;
+            }
+
+            Object contentObj = null;
+            switch (root) {
+                case Map<?, ?> map -> {
+                    contentObj = map.get("content");
+                    if (contentObj == null) {
+                        contentObj = map.get("data");
+                    }
+                    if (contentObj == null && map.containsKey("id") && (map.containsKey("nome") || map.containsKey("cpf"))) {
+                        contentObj = map;
+                    }
+                }
+                case List<?> list -> contentObj = list;
+                default -> {
+                    // Sem conversao possivel
+                }
+            }
+
+            if (contentObj == null) {
+                log.warn("[FEEGOW] Resposta de detalhes do paciente sem 'content' ou 'data'. Body: {}", abbreviateResponseBody(responseBody));
+                return null;
+            }
+
+            Object firstItemNode;
+            if (contentObj instanceof List<?> list) {
+                if (list.isEmpty()) {
+                    return null;
+                }
+                firstItemNode = list.getFirst();
+            } else {
+                firstItemNode = contentObj;
+            }
+
+            if (firstItemNode == null) {
+                return null;
+            }
+
+            return objectMapper.convertValue(firstItemNode, FeegowPatientDetailsDto.PatientItem.class);
+        } catch (JsonProcessingException ex) {
+            log.error("[FEEGOW] Falha ao ler/analisar JSON de detalhes do paciente. Body: {}", abbreviateResponseBody(responseBody), ex);
+            return null;
+        } catch (RuntimeException ex) {
+            log.error("[FEEGOW] Falha na coerção de tipos ou estrutura inesperada na conversão dos detalhes do paciente. Body: {}", abbreviateResponseBody(responseBody), ex);
+            return null;
+        }
+    }
+
+    private String resolvePreferredPhone(FeegowPatientDetailsDto.PatientItem patientDetails) {
+        if (patientDetails == null) {
+            return null;
+        }
+
+        // 1. Inversão de prioridade: SEMPRE valida o campo 'celulares' primeiro
+        if (patientDetails.getCelulares() != null) {
+            for (String cel : patientDetails.getCelulares()) {
+                String e164 = br.dev.ctrls.itsm.modules.appointment.infrastructure.utils.StringSanitizer.formatE164(cel);
+                if (e164 != null) {
+                    log.debug("[FEEGOW-PATIENT] Celular móvel válido selecionado para o paciente ID {}: {}", patientDetails.getId(), e164);
+                    return e164;
+                }
+            }
+        }
+
+        // 2. Fallback: Se o campo 'celulares' for ausente ou inválido, utiliza o campo 'telefones'
+        if (patientDetails.getTelefones() != null) {
+            for (String tel : patientDetails.getTelefones()) {
+                String e164 = br.dev.ctrls.itsm.modules.appointment.infrastructure.utils.StringSanitizer.formatE164(tel);
+                if (e164 != null) {
+                    log.info("[FEEGOW-PATIENT] Telefone móvel válido selecionado via fallback para o paciente ID {}: {}", patientDetails.getId(), e164);
+                    return e164;
+                }
+            }
+        }
+
+        log.warn("[TELEFONE-INVÁLIDO] Paciente ID {} não possui número móvel válido com DDD (Celular: {}, Telefone: {}). Abortando disparo.",
+                patientDetails.getId(), patientDetails.getCelulares(), patientDetails.getTelefones());
+        return null;
+    }
+
+    private String sanitizeCpf(String cpf) {
+        if (cpf == null || cpf.isBlank()) {
+            return "";
+        }
+        return cpf.replaceAll("\\D", "");
+    }
+
+    /**
+     * Captura graciosamente a falha definitiva após 3 tentativas de busca de detalhes do paciente.
+     */
+    @Recover
+    public FeegowPatientDetailsDto.PatientItem recoverGetPatientDetails(RestClientException ex, String patientId) {
+        log.error("[RECOVERY-FEEGOW] Falha definitiva após 3 tentativas de busca de detalhes do paciente {} no Feegow ERP. Erro: {}", 
+            patientId, ex.getMessage(), ex);
+        return null;
+    }
+
+    /**
+     * Retorna a chave de acesso (API Key) normalizada da Feegow.
+     */
+    private String getAccessToken() {
+        String apiKey = feegowProperties.getApiKey();
+        if (apiKey == null) {
+            return "";
+        }
+        String normalized = apiKey.trim();
+        if (normalized.regionMatches(true, 0, "Bearer ", 0, 7)) {
+            normalized = normalized.substring(7).trim();
+        }
+        return normalized;
+    }
+
+    /**
+     * Abrevia a resposta da requisição Feegow para evitar logs extremamente grandes.
+     */
+    private String abbreviateResponseBody(String responseBody) {
+        if (responseBody == null) {
+            return "";
+        }
+        String normalized = responseBody.trim();
+        int maxLength = 500;
+        if (normalized.length() <= maxLength) {
+            return normalized;
+        }
+        return normalized.substring(0, maxLength) + "...";
+    }
+
+    private String formatBirthdateToIso(String birthdate) {
+        if (birthdate == null || birthdate.isBlank()) {
+            return null;
+        }
+        String clean = birthdate.trim();
+        if (clean.matches("\\d{4}-\\d{2}-\\d{2}")) {
+            return clean;
+        }
+        if (clean.matches("\\d{2}/\\d{2}/\\d{4}")) {
+            String[] parts = clean.split("/");
+            return parts[2] + "-" + parts[1] + "-" + parts[0];
+        }
+        if (clean.matches("\\d{2}-\\d{2}-\\d{4}")) {
+            String[] parts = clean.split("-");
+            return parts[2] + "-" + parts[1] + "-" + parts[0];
+        }
+        return null;
+    }
+
+    @Override
+    public FeegowPatient createPatient(String name, String cpf, String birthdate, String phone) {
+        String cleanCpf = sanitizeCpf(cpf);
+        String cleanPhone = phone != null ? phone.replaceAll("\\D", "") : "";
+        String isoBirthdate = formatBirthdateToIso(birthdate);
+        if (isoBirthdate == null) {
+            isoBirthdate = birthdate;
+        }
+
+        URI uri = UriComponentsBuilder.fromUriString(properties.getFeegowBaseUrl())
+                .path("/v1/api/patient/create")
+                .build()
+                .toUri();
+
+        java.util.Map<String, Object> payload = new java.util.HashMap<>();
+        payload.put("nome_completo", name);
+        payload.put("cpf", cleanCpf);
+        payload.put("data_nascimento", isoBirthdate);
+        if (!cleanPhone.isBlank()) {
+            payload.put("celular", cleanPhone);
+        }
+
+        log.info("[FEEGOW] [PATIENT-ADAPTER] Cadastrando novo paciente (nome: {}, cpf: {}) na URL: {}", name, cleanCpf, uri);
+
+        try {
+            ResponseEntity<String> response = patientClient.savePatient(uri, payload, getAccessToken());
+            log.info("[FEEGOW] Resposta do patient/create: status={}, body={}", response.getStatusCode(), response.getBody());
+
+            FeegowPatientDetailsDto.PatientItem details = extractPatientDetails(response.getBody());
+            if (details != null && details.getId() != null) {
+                return new FeegowPatient(details.getId(), details.getNome(), resolvePreferredPhone(details), cleanCpf, isoBirthdate);
+            }
+
+            FeegowPatientDetailsDto.PatientItem searched = getPatientDetails(cleanCpf);
+            if (searched != null) {
+                return new FeegowPatient(searched.getId(), searched.getNome(), resolvePreferredPhone(searched), cleanCpf, isoBirthdate);
+            }
+
+            return new FeegowPatient(null, name, cleanPhone, cleanCpf, isoBirthdate);
+        } catch (org.springframework.web.client.RestClientResponseException ex) {
+            log.error("[FEEGOW-ERROR] Falha HTTP ao cadastrar paciente (nome: '{}', cpf: '{}'). Status Code: {}, Status Text: {}, Response Body: {}",
+                    name, cleanCpf, ex.getStatusCode(), ex.getStatusText(), ex.getResponseBodyAsString());
+            throw new RuntimeException("Falha na API Feegow ERP (HTTP " + ex.getStatusCode() + "): " + ex.getResponseBodyAsString(), ex);
+        } catch (Exception ex) {
+            log.error("[FEEGOW-ERROR] Erro inesperado ao cadastrar paciente (nome: '{}', cpf: '{}'): {}", name, cleanCpf, ex.getMessage(), ex);
+            throw new RuntimeException("Falha ao cadastrar paciente no Feegow: " + ex.getMessage(), ex);
+        }
+    }
+
+    @Override
+    public void updatePatientCpf(String patientId, String cpf, String name, String birthdate) {
+        if (patientId == null || patientId.isBlank() || cpf == null || cpf.isBlank()) {
+            return;
+        }
+
+        URI uri = UriComponentsBuilder.fromUriString(properties.getFeegowBaseUrl())
+                .path("/v1/api/patient/edit")
+                .build()
+                .toUri();
+
+        java.util.Map<String, Object> payload = new java.util.HashMap<>();
+        try {
+            payload.put("paciente_id", Integer.valueOf(patientId.trim()));
+        } catch (NumberFormatException e) {
+            payload.put("paciente_id", patientId);
+        }
+        
+        payload.put("cpf", cpf.replaceAll("\\D", ""));
+        
+        if (name != null && !name.isBlank()) {
+            payload.put("nome_completo", name);
+        }
+        if (birthdate != null && !birthdate.isBlank()) {
+            String isoDate = formatBirthdateToIso(birthdate);
+            if (isoDate != null) {
+                payload.put("data_nascimento", isoDate);
+            }
+        }
+
+        log.info("[FEEGOW] [PATIENT-ADAPTER] Sincronizando CPF do paciente ID: {} para: {} na URL: {}. Payload: {}", patientId, cpf, uri, payload);
+
+        try {
+            ResponseEntity<String> response = patientClient.savePatient(uri, payload, getAccessToken());
+            log.info("[FEEGOW] Resposta do patient/edit: status={}, body={}", response.getStatusCode(), response.getBody());
+        } catch (org.springframework.web.client.RestClientResponseException ex) {
+            log.error("Erro ao atualizar CPF do paciente ID {} na Feegow (Status {}): {}. Response body: {}", 
+                    patientId, ex.getStatusCode(), ex.getMessage(), ex.getResponseBodyAsString());
+        } catch (Exception ex) {
+            log.error("Erro ao atualizar CPF do paciente ID {} na Feegow: {}", patientId, ex.getMessage());
+        }
+    }
+}

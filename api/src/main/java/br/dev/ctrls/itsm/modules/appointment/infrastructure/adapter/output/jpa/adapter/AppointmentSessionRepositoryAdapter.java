@@ -1,0 +1,220 @@
+package br.dev.ctrls.itsm.modules.appointment.infrastructure.adapter.output.jpa.adapter;
+
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.stream.Collectors;
+
+import org.springframework.stereotype.Component;
+
+import br.dev.ctrls.itsm.modules.appointment.domain.model.AppointmentSession;
+import br.dev.ctrls.itsm.modules.appointment.domain.model.AppointmentSessionStatus;
+import br.dev.ctrls.itsm.modules.appointment.domain.port.output.AppointmentSessionRepositoryPort;
+import br.dev.ctrls.itsm.modules.appointment.infrastructure.adapter.output.jpa.entity.AppointmentSessionEntity;
+import br.dev.ctrls.itsm.modules.appointment.infrastructure.adapter.output.jpa.repository.SpringDataAppointmentSessionRepository;
+import lombok.RequiredArgsConstructor;
+
+/**
+ * Este é um Adaptador de Saída que implementa a Porta de Repositório do Domínio 
+ * para fazer a ponte com o Spring Data JPA para as sessões de agendamento.
+ */
+@Component
+@RequiredArgsConstructor
+public class AppointmentSessionRepositoryAdapter implements AppointmentSessionRepositoryPort {
+
+    private final SpringDataAppointmentSessionRepository springDataRepository;
+
+    @Override
+    public Optional<AppointmentSession> findById(UUID id) {
+        return springDataRepository.findById(id).map(entity -> entity.toDomain());
+    }
+
+    @Override
+    public Optional<AppointmentSession> findByIdLocked(UUID id) {
+        return springDataRepository.findByIdLocked(id).map(entity -> entity.toDomain());
+    }
+
+    @Override
+    public Optional<AppointmentSession> findByFeegowAppointmentId(String feegowAppointmentId) {
+        return springDataRepository.findByFeegowAppointmentId(feegowAppointmentId).map(entity -> entity.toDomain());
+    }
+
+    @Override
+    public Optional<AppointmentSession> findByFeegowAppointmentIdAndPhoneNumber(String feegowAppointmentId, String phoneNumber) {
+        if (phoneNumber == null) {
+            return Optional.empty();
+        }
+        String clean = phoneNumber.trim().replaceAll("\\D", "");
+        String with55 = clean.startsWith("55") ? clean : "55" + clean;
+        String without55 = clean.startsWith("55") ? clean.substring(2) : clean;
+
+        Optional<AppointmentSessionEntity> opt = springDataRepository.findByFeegowAppointmentIdAndPhoneNumber(feegowAppointmentId, clean);
+        if (opt.isEmpty()) {
+            opt = springDataRepository.findByFeegowAppointmentIdAndPhoneNumber(feegowAppointmentId, with55);
+        }
+        if (opt.isEmpty()) {
+            opt = springDataRepository.findByFeegowAppointmentIdAndPhoneNumber(feegowAppointmentId, without55);
+        }
+        return opt.map(entity -> entity.toDomain());
+    }
+
+    @Override
+    public Optional<AppointmentSession> findByIdAndPhoneNumber(UUID id, String phoneNumber) {
+        if (phoneNumber == null) {
+            return Optional.empty();
+        }
+        String clean = phoneNumber.trim().replaceAll("\\D", "");
+        String with55 = clean.startsWith("55") ? clean : "55" + clean;
+        String without55 = clean.startsWith("55") ? clean.substring(2) : clean;
+
+        Optional<AppointmentSessionEntity> opt = springDataRepository.findByIdAndPhoneNumber(id, clean);
+        if (opt.isEmpty()) {
+            opt = springDataRepository.findByIdAndPhoneNumber(id, with55);
+        }
+        if (opt.isEmpty()) {
+            opt = springDataRepository.findByIdAndPhoneNumber(id, without55);
+        }
+        return opt.map(entity -> entity.toDomain());
+    }
+
+    @Override
+    public List<AppointmentSession> findByFeegowAppointmentIdIn(java.util.Collection<String> feegowAppointmentIds) {
+        return springDataRepository.findByFeegowAppointmentIdIn(feegowAppointmentIds).stream()
+                .map(entity -> entity.toDomain())
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<AppointmentSession> findByCurrentGroupId(UUID currentGroupId) {
+        return springDataRepository.findByCurrentGroupId(currentGroupId).stream()
+                .map(entity -> entity.toDomain())
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public List<AppointmentSession> findByStatusAndLastInteractionAtBefore(AppointmentSessionStatus status, LocalDateTime threshold) {
+        return springDataRepository.findByStatusAndLastInteractionAtBefore(status, threshold).stream()
+                .map(entity -> entity.toDomain())
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public List<AppointmentSession> findByStatusAndLastNotificationSentAtBefore(AppointmentSessionStatus status, LocalDateTime threshold, LocalDateTime minAppointmentAt) {
+        return springDataRepository.findByStatusAndLastNotificationSentAtBefore(status, threshold, minAppointmentAt).stream()
+                .map(entity -> entity.toDomain())
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public List<AppointmentSession> findActiveByPhoneNumber(String phone) {
+        if (phone == null) {
+            return List.of();
+        }
+        String clean = phone.trim().replaceAll("\\D", "");
+        String with55 = clean.startsWith("55") ? clean : "55" + clean;
+        String without55 = clean.startsWith("55") ? clean.substring(2) : clean;
+
+        List<AppointmentSessionEntity> list = springDataRepository.findActiveByPhoneNumber(clean);
+        if (list.isEmpty()) {
+            list = springDataRepository.findActiveByPhoneNumber(with55);
+        }
+        if (list.isEmpty()) {
+            list = springDataRepository.findActiveByPhoneNumber(without55);
+        }
+        return list.stream()
+                .map(entity -> entity.toDomain())
+                .sorted((s1, s2) -> {
+                    LocalDateTime t1 = s1.getCreatedAt() != null ? s1.getCreatedAt() : LocalDateTime.MIN;
+                    LocalDateTime t2 = s2.getCreatedAt() != null ? s2.getCreatedAt() : LocalDateTime.MIN;
+                    return t2.compareTo(t1);
+                })
+                .findFirst()
+                .map(List::of)
+                .orElse(java.util.Collections.emptyList());
+    }
+
+    @Override
+    public List<AppointmentSession> findActiveByBlipGuid(String blipGuid) {
+        if (blipGuid == null || blipGuid.isBlank()) {
+            return List.of();
+        }
+        return springDataRepository.findActiveByBlipGuid(blipGuid.trim()).stream()
+                .map(entity -> entity.toDomain())
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<AppointmentSession> findActiveByBsuid(String bsuid) {
+        if (bsuid == null || bsuid.isBlank()) {
+            return List.of();
+        }
+        return springDataRepository.findActiveByBsuid(bsuid.trim()).stream()
+                .map(entity -> entity.toDomain())
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<AppointmentSession> findPendingNotifications() {
+        return springDataRepository.findPendingNotifications().stream()
+                .map(entity -> entity.toDomain())
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public AppointmentSession save(AppointmentSession session) {
+        AppointmentSessionEntity entity = AppointmentSessionEntity.fromDomain(session);
+        AppointmentSessionEntity saved = springDataRepository.save(entity);
+        return saved.toDomain();
+    }
+
+    @Override
+    public long deleteByStatusInAndCreatedAtBefore(java.util.Collection<AppointmentSessionStatus> statuses, LocalDateTime threshold) {
+        return springDataRepository.deleteByStatusInAndCreatedAtBefore(statuses, threshold);
+    }
+
+    @Override
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public boolean existsByPhoneNumber(String phoneNumber) {
+        if (phoneNumber == null || phoneNumber.isBlank()) {
+            return false;
+        }
+        return springDataRepository.existsByPhoneNumber(phoneNumber.trim());
+    }
+
+    @Override
+    public List<AppointmentSession> findByPatientId(String patientId) {
+        if (patientId == null || patientId.isBlank()) {
+            return List.of();
+        }
+        return springDataRepository.findByPatientId(patientId.trim()).stream()
+                .filter(entity -> entity != null)
+                .map(entity -> entity.toDomain())
+                .toList();
+    }
+
+    @Override
+    public List<AppointmentSession> findConfirmedSessionsInWindow(LocalDateTime startWindow, LocalDateTime endWindow) {
+        if (startWindow == null || endWindow == null) {
+            return List.of();
+        }
+        return springDataRepository.findConfirmedSessionsInWindow(startWindow, endWindow).stream()
+                .filter(entity -> entity != null)
+                .map(entity -> entity.toDomain())
+                .toList();
+    }
+
+    @Override
+    public List<AppointmentSession> findByAppointmentAtBetween(LocalDateTime startWindow, LocalDateTime endWindow) {
+        if (startWindow == null || endWindow == null) {
+            return List.of();
+        }
+        return springDataRepository.findByAppointmentAtBetween(startWindow, endWindow).stream()
+                .filter(entity -> entity != null)
+                .map(entity -> entity.toDomain())
+                .toList();
+    }
+}

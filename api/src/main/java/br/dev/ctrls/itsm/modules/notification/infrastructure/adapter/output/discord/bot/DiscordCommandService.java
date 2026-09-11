@@ -1,0 +1,344 @@
+package br.dev.ctrls.itsm.modules.notification.infrastructure.adapter.output.discord.bot;
+
+import java.time.Duration;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.UUID;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import br.dev.ctrls.itsm.modules.ticket.domain.model.Ticket;
+import br.dev.ctrls.itsm.modules.ticket.domain.port.output.TicketRepositoryPort;
+import br.dev.ctrls.itsm.modules.ticket.domain.model.TicketStatus;
+import br.dev.ctrls.itsm.modules.ticket.application.usecase.AddAdditionalUserUseCase;
+import br.dev.ctrls.itsm.modules.user.domain.model.User;
+import br.dev.ctrls.itsm.modules.user.domain.port.output.UserRepositoryPort;
+import br.dev.ctrls.itsm.modules.user.domain.model.UserRole;
+import br.dev.ctrls.itsm.modules.notification.domain.model.FaqTi;
+import br.dev.ctrls.itsm.modules.notification.domain.port.output.FaqTiRepositoryPort;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import br.dev.ctrls.itsm.modules.knowledge.domain.model.Article;
+import br.dev.ctrls.itsm.modules.knowledge.domain.port.output.ArticleRepositoryPort;
+
+import br.dev.ctrls.itsm.modules.ticket.application.usecase.ResolveTicketUseCase;
+import br.dev.ctrls.itsm.modules.ticket.application.dto.ResolveTicketDTO;
+
+/**
+ * Serviço de comando do Discord responsável pela lógica de negócios e transações
+ * de banco de dados para interações e slash commands do bot.
+ */
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class DiscordCommandService {
+
+    private final UserRepositoryPort userRepository;
+    private final TicketRepositoryPort ticketRepository;
+    private final FaqTiRepositoryPort faqTiRepository;
+    private final AddAdditionalUserUseCase addAdditionalUserUseCase;
+    private final ArticleRepositoryPort articleRepository;
+    private final ResolveTicketUseCase resolveTicketUseCase;
+
+    @Value("${app.frontend.url:http://localhost:5173}")
+    private String frontendUrl;
+
+    public String getFrontendUrl() {
+        return this.frontendUrl;
+    }
+
+    /**
+     * Valida que o usuário Discord é um técnico ou admin vinculado.
+     */
+    @Transactional(readOnly = true)
+    public User resolverTecnico(String discordUserId) {
+        User usuario = userRepository.findByDiscordUserId(discordUserId).orElse(null);
+        if (usuario == null) {
+            log.warn("[DISCORD] Acesso negado para Discord ID={}: utilizador não encontrado no sistema.", discordUserId);
+            return null;
+        }
+        if (usuario.getRole() != UserRole.ADMIN && usuario.getRole() != UserRole.TECHNICIAN) {
+            log.warn("[DISCORD] Acesso negado para Discord ID={} (User ID: {}) — perfil '{}' não é técnico/admin vinculado.",
+                    discordUserId, usuario.getId(), usuario.getRole());
+            return null;
+        }
+        return usuario;
+    }
+
+    /**
+     * Busca um ticket pelo ID String.
+     */
+    @Transactional(readOnly = true)
+    public Ticket resolverTicket(String ticketIdStr) {
+        try {
+            UUID ticketId = UUID.fromString(ticketIdStr.trim());
+            return ticketRepository.findById(ticketId).orElse(null);
+        } catch (IllegalArgumentException ex) {
+            log.warn("[DISCORD] UUID de chamado inválido fornecido: '{}'. Detalhe: {}", ticketIdStr, ex.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Executa a atribuição do chamado para um técnico (ação Assumir chamado).
+     */
+    @Transactional
+    public String assumirChamado(String discordUserId, String ticketIdStr) {
+        User tecnico = resolverTecnico(discordUserId);
+        if (tecnico == null) {
+            return "🔒 Apenas técnicos e administradores de TI podem assumir chamados.";
+        }
+
+        Ticket ticket = resolverTicket(ticketIdStr);
+        if (ticket == null) {
+            return "❌ Chamado não encontrado ou ID inválido.";
+        }
+
+        if (ticket.getAssignedTo() != null && !ticket.getAssignedTo().getId().equals(tecnico.getId())) {
+            return "⚠️ Este chamado já foi assumido por **" + ticket.getAssignedTo().getName() + "**.";
+        }
+
+        ticket.setAssignedTo(tecnico);
+        ticket.setStatus(TicketStatus.IN_PROGRESS);
+        ticketRepository.save(ticket);
+
+        String shortId = ticket.getId().toString().substring(0, 8).toUpperCase();
+        log.info("[DISCORD] Chamado #{} (ID: {}) assumido pelo técnico {} (ID: {}, Discord ID: {})",
+                shortId, ticket.getId(), tecnico.getName(), tecnico.getId(), discordUserId);
+
+        return "✅ Chamado #" + shortId + " assumido por **" + tecnico.getName() + "**";
+    }
+
+    /**
+     * Executa a recusa de chamado por um técnico.
+     */
+    @Transactional(readOnly = true)
+    public String recusarChamado(String discordUserId, String ticketIdStr) {
+        User tecnico = resolverTecnico(discordUserId);
+        if (tecnico == null) {
+            return "🔒 Apenas técnicos e administradores de TI podem recusar chamados.";
+        }
+
+        Ticket ticket = resolverTicket(ticketIdStr);
+        if (ticket == null) {
+            return "❌ Chamado não encontrado ou ID inválido.";
+        }
+
+        String shortId = ticket.getId().toString().substring(0, 8).toUpperCase();
+        log.info("[DISCORD] Chamado #{} (ID: {}) recusado pelo técnico {} (ID: {}, Discord ID: {})",
+                shortId, ticket.getId(), tecnico.getName(), tecnico.getId(), discordUserId);
+
+        return "❌ Chamado #" + shortId + " recusado por **" + tecnico.getName() + "**. Aguardando outro técnico.";
+    }
+
+    /**
+     * Executa a resolução do chamado com nota de resolução informada pelo técnico via Discord/Modal.
+     */
+    @Transactional
+    public String resolverChamadoComNota(String discordUserId, String ticketIdStr, String solutionText) {
+        User tecnico = resolverTecnico(discordUserId);
+        if (tecnico == null) {
+            return "🔒 Apenas técnicos e administradores de TI podem resolver chamados.";
+        }
+
+        Ticket ticket = resolverTicket(ticketIdStr);
+        if (ticket == null) {
+            return "❌ Chamado não encontrado ou ID inválido.";
+        }
+
+        String notes = (solutionText != null && !solutionText.isBlank())
+                ? solutionText.trim()
+                : "Solução registrada via Discord.";
+
+        try {
+            resolveTicketUseCase.execute(
+                    ticket.getId(),
+                    new ResolveTicketDTO(notes, null, null, null, null, null, null),
+                    tecnico.getId()
+            );
+
+            // O arquivamento do canal será disparado automaticamente pelo DiscordTicketEventListener via TicketResolvedEvent
+
+
+            String shortId = ticket.getId().toString().substring(0, 8).toUpperCase();
+            return "✅ Chamado #" + shortId + " resolvido com sucesso por **" + tecnico.getName() + "**!";
+        } catch (Exception ex) {
+            log.error("[DISCORD] Erro ao resolver chamado #{} via Discord", ticket.getId(), ex);
+            return "❌ Erro ao resolver o chamado: " + ex.getMessage();
+        }
+    }
+
+    /**
+     * Reabre um chamado resolvido, alterando seu status de volta para IN_PROGRESS no banco.
+     */
+    @Transactional
+    public String reabrirChamado(String discordUserId, String ticketIdStr) {
+        Ticket ticket = resolverTicket(ticketIdStr);
+        if (ticket == null) {
+            return "❌ Chamado não encontrado ou ID inválido.";
+        }
+
+        User usuario = userRepository.findByDiscordUserId(discordUserId).orElse(null);
+        String nomeUsuario = (usuario != null) ? usuario.getName() : "Usuário Discord";
+
+        ticket.setStatus(br.dev.ctrls.itsm.modules.ticket.domain.model.TicketStatus.IN_PROGRESS);
+        ticket.setClosedAt(null);
+        ticketRepository.save(ticket);
+
+        log.info("[DISCORD] Chamado #{} reaberto pelo usuário Discord ID '{}' ({})", ticket.getNumber(), discordUserId, nomeUsuario);
+        return "🔄 **Chamado #" + ticket.getNumber() + " reaberto por <@" + discordUserId + ">!**";
+    }
+
+    /**
+     * Realiza busca na tabela de FAQ local da TI baseada em cláusula LIKE.
+     */
+    @Transactional(readOnly = true)
+    public List<FaqTi> buscarFaq(String busca) {
+        if (busca == null) return List.of();
+        return faqTiRepository.searchFaq(busca.trim());
+    }
+
+    /**
+     * Realiza busca textual na Base de Conhecimento (artigos publicados).
+     */
+    @Transactional(readOnly = true)
+    public List<Article> buscarArtigos(String busca) {
+        if (busca == null || busca.trim().isEmpty()) {
+            return List.of();
+        }
+        return articleRepository.findPublishedByTitleOrContentContainingIgnoreCase(busca.trim());
+    }
+
+    /**
+     * Vincula um usuário adicional afetado a um chamado.
+     * Restrito a técnicos e administradores.
+     *
+     * @param discordIdTecnico  Discord ID do técnico que executa a ação
+     * @param ticketIdStr       ID (completo ou curto) do chamado
+     * @param discordIdAfetado  Discord ID do usuário afetado a ser vinculado
+     */
+    @Transactional
+    public String vincularAfetado(String discordIdTecnico, String ticketIdStr, String discordIdAfetado) {
+        User tecnico = resolverTecnico(discordIdTecnico);
+        if (tecnico == null) {
+            return "🔒 Apenas técnicos e administradores de TI podem vincular usuários afetados.";
+        }
+
+        Ticket ticket = resolverTicket(ticketIdStr);
+        if (ticket == null) {
+            return "❌ Chamado não encontrado ou ID inválido: `" + ticketIdStr + "`";
+        }
+
+        // Limpa menção do Discord (<@123456789> → 123456789)
+        String cleanDiscordId = discordIdAfetado
+                .replace("<@", "")
+                .replace("!", "")
+                .replace(">", "")
+                .trim();
+
+        User afetado = userRepository.findByDiscordUserId(cleanDiscordId).orElse(null);
+        if (afetado == null) {
+            return "⚠️ Usuário <@" + cleanDiscordId + "> não está vinculado ao sistema Inovare TI. "
+                    + "Peça para ele usar o comando `/vincular` primeiro.";
+        }
+
+        String shortId = ticket.getId().toString().substring(0, 8).toUpperCase();
+
+        // Verifica se já está vinculado
+        if (ticket.getAdditionalUsers() != null
+                && ticket.getAdditionalUsers().stream().anyMatch(u -> u.getId().equals(afetado.getId()))) {
+            return "ℹ️ **" + afetado.getName() + "** já está vinculado como afetado no chamado #" + shortId + ".";
+        }
+
+        addAdditionalUserUseCase.execute(ticket.getId(), afetado.getId());
+
+        log.info("[DISCORD] Utilizador '{}' (ID: {}, Discord ID: {}) vinculado como afetado no chamado #{} (ID: {}) por técnico '{}' (ID: {})",
+                afetado.getName(), afetado.getId(), cleanDiscordId, shortId, ticket.getId(), tecnico.getName(), tecnico.getId());
+
+        return "✅ **" + afetado.getName() + "** foi vinculado como afetado no chamado #" + shortId
+                + ". Ele receberá uma notificação quando o chamado for resolvido.";
+    }
+
+    /**
+     * Lista os chamados ativos (OPEN/IN_PROGRESS) do técnico autenticado.
+     * Exibe ID, categoria, SLA restante e localização do solicitante.
+     *
+     * @param discordIdTecnico  Discord ID do técnico que executa o comando
+     */
+    @Transactional(readOnly = true)
+    public String listarMeusAtendimentos(String discordIdTecnico) {
+        User tecnico = resolverTecnico(discordIdTecnico);
+        if (tecnico == null) {
+            return "🔒 Este comando é restrito a técnicos e administradores de TI.";
+        }
+
+        List<Ticket> ativos = ticketRepository.findByRequesterIdAndStatusInOrderByCreatedAtDesc(
+                tecnico.getId(),
+                List.of(TicketStatus.OPEN, TicketStatus.IN_PROGRESS)
+        );
+
+        // Também busca os chamados atribuídos ao técnico
+        List<Ticket> atribuidos = ticketRepository.findAllByStatus(TicketStatus.OPEN)
+                .stream()
+                .filter(t -> t.getAssignedTo() != null && t.getAssignedTo().getId().equals(tecnico.getId()))
+                .toList();
+
+        List<Ticket> atribuidosInProgress = ticketRepository.findAllByStatus(TicketStatus.IN_PROGRESS)
+                .stream()
+                .filter(t -> t.getAssignedTo() != null && t.getAssignedTo().getId().equals(tecnico.getId()))
+                .toList();
+
+        java.util.Set<UUID> seen = new java.util.HashSet<>();
+        java.util.List<Ticket> todos = new java.util.ArrayList<>();
+        for (Ticket t : ativos) {
+            if (seen.add(t.getId())) todos.add(t);
+        }
+        for (Ticket t : atribuidos) {
+            if (seen.add(t.getId())) todos.add(t);
+        }
+        for (Ticket t : atribuidosInProgress) {
+            if (seen.add(t.getId())) todos.add(t);
+        }
+
+        if (todos.isEmpty()) {
+            return "📭 Você não possui chamados em andamento no momento!";
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        StringBuilder sb = new StringBuilder();
+        sb.append("📋 **Seus atendimentos em andamento (").append(todos.size()).append("):**\n\n");
+
+        for (Ticket t : todos) {
+            String shortId = t.getId().toString().substring(0, 8).toUpperCase();
+            String categoria = t.getCategory() != null ? t.getCategory().getName() : "N/A";
+            String localizacao = t.getRequester() != null && t.getRequester().getLocation() != null
+                    ? t.getRequester().getLocation()
+                    : "N/A";
+
+            String slaInfo;
+            if (t.getSlaDeadline() != null) {
+                Duration restante = Duration.between(now, t.getSlaDeadline());
+                if (restante.isNegative()) {
+                    slaInfo = "🔴 **EXPIRADO** há " + Math.abs(restante.toMinutes()) + "min";
+                } else if (restante.toMinutes() < 30) {
+                    slaInfo = "🚨 " + restante.toMinutes() + "min restantes";
+                } else if (restante.toHours() < 2) {
+                    slaInfo = "⚠️ " + restante.toMinutes() + "min restantes";
+                } else {
+                    slaInfo = "✅ " + restante.toHours() + "h restantes";
+                }
+            } else {
+                slaInfo = "⚪ Sem SLA definido";
+            }
+
+            sb.append("▸ **#").append(shortId).append("** — ").append(t.getTitle()).append("\n")
+              .append("  🏷️ Categoria: ").append(categoria).append("\n")
+              .append("  ⏱️ SLA: ").append(slaInfo).append("\n")
+              .append("  📍 Local: ").append(localizacao).append("\n\n");
+        }
+
+        return sb.toString().trim();
+    }
+}

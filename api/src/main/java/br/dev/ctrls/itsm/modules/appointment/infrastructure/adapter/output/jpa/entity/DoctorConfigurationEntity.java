@@ -1,0 +1,107 @@
+package br.dev.ctrls.itsm.modules.appointment.infrastructure.adapter.output.jpa.entity;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import br.dev.ctrls.itsm.modules.appointment.domain.model.DoctorConfiguration;
+
+/**
+ * Entidade JPA DoctorConfigurationEntity. Mapeia a tabela doctor_configurations.
+ */
+@Entity
+@Table(name = "doctor_configurations")
+@Getter
+@Setter
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class DoctorConfigurationEntity {
+
+    @Id
+    @Column(name = "feegow_profissional_id")
+    private Long feegowProfissionalId;
+
+    @Column(name = "doctor_name")
+    private String doctorName;
+
+    @Column(name = "ger_acesso_matricula")
+    private String gerAcessoMatricula;
+
+    @Column(name = "ger_acesso_cpf")
+    private String gerAcessoCpf;
+
+    @Column(name = "blip_queue_id")
+    private String blipQueueId;
+
+    @Column(name = "blip_queue_name")
+    private String blipQueueName;
+
+    @Column(name = "display_time_offset_minutes")
+    private Integer displayTimeOffsetMinutes;
+
+    @Column(name = "advance_notice_days")
+    private Integer advanceNoticeDays;
+
+    @Column(name = "is_active")
+    private Boolean isActive;
+
+    @Column(name = "google_review_url", length = 500)
+    private String googleReviewUrl;
+
+    @Column(name = "discord_channel_id", length = 50)
+    private String discordChannelId;
+
+    @Column(name = "contaazul_customer_uuid", length = 64, unique = true)
+    private String contaazulCustomerUuid;
+
+    @Column(name = "doctor_email", length = 255)
+    private String doctorEmail;
+
+    @Column(name = "doctor_cpf_cnpj", length = 20)
+    private String doctorCpfCnpj;
+
+    public DoctorConfiguration toDomain() {
+        return DoctorConfiguration.builder()
+                .feegowProfissionalId(this.feegowProfissionalId)
+                .doctorName(this.doctorName)
+                .gerAcessoMatricula(this.gerAcessoMatricula)
+                .gerAcessoCpf(this.gerAcessoCpf)
+                .blipQueueId(this.blipQueueId)
+                .blipQueueName(this.blipQueueName)
+                .displayTimeOffsetMinutes(this.displayTimeOffsetMinutes != null ? this.displayTimeOffsetMinutes : 0)
+                .advanceNoticeDays(this.advanceNoticeDays != null ? this.advanceNoticeDays : 1)
+                .isActive(this.isActive != null ? this.isActive : true)
+                .googleReviewUrl(this.googleReviewUrl)
+                .discordChannelId(this.discordChannelId)
+                .contaazulCustomerUuid(this.contaazulCustomerUuid)
+                .doctorEmail(this.doctorEmail)
+                .doctorCpfCnpj(this.doctorCpfCnpj)
+                .build();
+    }
+
+    public static DoctorConfigurationEntity fromDomain(DoctorConfiguration domain) {
+        if (domain == null) return null;
+        return DoctorConfigurationEntity.builder()
+                .feegowProfissionalId(domain.getFeegowProfissionalId())
+                .doctorName(domain.getDoctorName())
+                .gerAcessoMatricula(domain.getGerAcessoMatricula())
+                .gerAcessoCpf(domain.getGerAcessoCpf())
+                .blipQueueId(domain.getBlipQueueId())
+                .blipQueueName(domain.getBlipQueueName())
+                .displayTimeOffsetMinutes(domain.getDisplayTimeOffsetMinutes())
+                .advanceNoticeDays(domain.getAdvanceNoticeDays())
+                .isActive(domain.getIsActive() != null ? domain.getIsActive() : true)
+                .googleReviewUrl(domain.getGoogleReviewUrl())
+                .discordChannelId(domain.getDiscordChannelId())
+                .contaazulCustomerUuid(domain.getContaazulCustomerUuid())
+                .doctorEmail(domain.getDoctorEmail())
+                .doctorCpfCnpj(domain.getDoctorCpfCnpj())
+                .build();
+    }
+}

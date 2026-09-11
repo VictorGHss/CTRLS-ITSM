@@ -1,0 +1,228 @@
+package br.dev.ctrls.itsm.modules.report.infrastructure.adapter.input;
+
+import io.micrometer.observation.annotation.Observed;
+
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+import org.springframework.core.io.InputStreamResource;
+import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+import br.dev.ctrls.itsm.modules.inventory.domain.model.StockBatch;
+import br.dev.ctrls.itsm.modules.inventory.domain.port.output.StockBatchRepositoryPort;
+import br.dev.ctrls.itsm.modules.report.application.service.ReportService;
+import br.dev.ctrls.itsm.modules.report.application.service.TicketReportUseCase;
+import br.dev.ctrls.itsm.modules.ticket.domain.model.Ticket;
+import br.dev.ctrls.itsm.modules.ticket.domain.port.output.TicketRepositoryPort;
+import br.dev.ctrls.itsm.modules.user.domain.port.output.UserRepositoryPort;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
+/**
+ * Controlador REST para geração e exportação de relatórios gerenciais e operacionais.
+ */
+@Slf4j
+@RestController
+@RequestMapping("/reports")
+@RequiredArgsConstructor
+@Observed
+public class ReportController {
+
+    private static final String EXCEL_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+    private final ReportService reportService;
+    private final TicketRepositoryPort ticketRepository;
+    private final StockBatchRepositoryPort stockBatchRepository;
+    private final TicketReportUseCase ticketReportUseCase;
+    private final UserRepositoryPort userRepository;
+
+    /**
+     * GET /api/reports/tickets
+     * Exporta a listagem de chamados do período em planilha Excel.
+     */
+    @GetMapping("/tickets")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TECHNICIAN')")
+    public ResponseEntity<InputStreamResource> exportTickets(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
+
+        LocalDateTime start = startDate != null ? startDate.atStartOfDay() : LocalDate.now().minusMonths(1).atStartOfDay();
+        LocalDateTime end = endDate != null ? endDate.atTime(LocalTime.MAX) : LocalDate.now().atTime(LocalTime.MAX);
+
+        List<Ticket> tickets = ticketRepository.findAllWithRelations().stream()
+                .filter(t -> t.getCreatedAt() != null 
+                        && (t.getCreatedAt().isEqual(start) || t.getCreatedAt().isAfter(start)) 
+                        && (t.getCreatedAt().isBefore(end) || t.getCreatedAt().isEqual(end)))
+                .toList();
+
+        byte[] excelBytes = reportService.exportTicketsToExcel(tickets);
+        ByteArrayInputStream excelFile = new ByteArrayInputStream(excelBytes);
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.add(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=chamados.xlsx");
+        headers.setContentType(MediaType.valueOf(EXCEL_CONTENT_TYPE));
+
+        return ResponseEntity.ok()
+                .headers(headers)
+                .body(new InputStreamResource(excelFile));
+    }
+
+    /**
+     * GET /api/reports/tickets/export
+     * Gera relatório de chamados em Excel com isolamento por perfil de usuário.
+     * Usuários comuns exportam apenas seus chamados; administradores e técnicos exportam todos.
+     */
+    @GetMapping("/tickets/export")
+    public ResponseEntity<InputStreamResource> exportTicketsReport() throws IOException {
+        log.info("GET /api/reports/tickets/export - Exportando relatório de chamados");
+
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        UUID userId;
+        try {
+            userId = UUID.fromString(auth.getPrincipal().toString());
+        } catch (Exception e) {
+            log.warn("Não foi possível identificar o usuário autenticado");
+            return ResponseEntity.badRequest().build();
+        }
+
+        var user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
+
+        byte[] bytes = ticketReportUseCase.generateTicketReport(userId, user.getRole());
+        ByteArrayInputStream stream = new ByteArrayInputStream(bytes);
+
+        String filename = "relatorio_chamados_"
+                + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"))
+                + ".xlsx";
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentDisposition(ContentDisposition.attachment().filename(filename).build());
+        headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);
+
+        return ResponseEntity.ok()
+                .headers(headers)
+                .body(new InputStreamResource(stream));
+    }
+
+    /**
+     * GET /api/reports/inventory/entries
+     * Exporta entradas de estoque no período para planilha Excel com cálculo consolidado de custos.
+     */
+    @GetMapping("/inventory/entries")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TECHNICIAN')")
+    public ResponseEntity<InputStreamResource> exportInventoryEntries(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
+
+        LocalDateTime start = startDate != null ? startDate.atStartOfDay() : LocalDate.now().minusMonths(1).atStartOfDay();
+        LocalDateTime end = endDate != null ? endDate.atTime(LocalTime.MAX) : LocalDate.now().atTime(LocalTime.MAX);
+
+        LocalDate startDateLoc = start.toLocalDate();
+        LocalDate endDateLoc = end.toLocalDate();
+
+        List<StockBatch> batches = stockBatchRepository.findAll().stream()
+                .filter(b -> {
+                    if (b.getInstallments() == null || b.getInstallments().isEmpty()) {
+                        return b.getEntryDate() != null &&
+                               (b.getEntryDate().isEqual(start) || b.getEntryDate().isAfter(start)) &&
+                               (b.getEntryDate().isBefore(end) || b.getEntryDate().isEqual(end));
+                    } else {
+                        return b.getInstallments().stream().anyMatch(inst ->
+                                inst.getDueDate() != null &&
+                                (inst.getDueDate().isEqual(startDateLoc) || inst.getDueDate().isAfter(startDateLoc)) &&
+                                (inst.getDueDate().isBefore(endDateLoc) || inst.getDueDate().isEqual(endDateLoc))
+                        );
+                    }
+                })
+                .toList();
+
+        Map<UUID, BigDecimal> periodCosts = new HashMap<>();
+        for (StockBatch b : batches) {
+            if (b.getInstallments() == null || b.getInstallments().isEmpty()) {
+                periodCosts.put(b.getId(), b.getUnitPrice().multiply(BigDecimal.valueOf(b.getOriginalQuantity())));
+            } else {
+                BigDecimal sum = b.getInstallments().stream()
+                        .filter(inst -> inst.getDueDate() != null &&
+                                        (inst.getDueDate().isEqual(startDateLoc) || inst.getDueDate().isAfter(startDateLoc)) &&
+                                        (inst.getDueDate().isBefore(endDateLoc) || inst.getDueDate().isEqual(endDateLoc)))
+                        .map(inst -> inst.getAmount())
+                        .reduce(BigDecimal.ZERO, (acc, val) -> acc.add(val));
+                periodCosts.put(b.getId(), sum);
+            }
+        }
+
+        byte[] excelBytes = reportService.exportInventoryEntriesToExcel(batches, periodCosts);
+        ByteArrayInputStream excelFile = new ByteArrayInputStream(excelBytes);
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.add(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=entradas_estoque.xlsx");
+        headers.setContentType(MediaType.valueOf(EXCEL_CONTENT_TYPE));
+
+        return ResponseEntity.ok()
+                .headers(headers)
+                .body(new InputStreamResource(excelFile));
+    }
+
+    /**
+     * GET /api/reports/inventory/exits
+     * Gera relatório de saídas de inventário em PDF ou Excel.
+     */
+    @GetMapping("/inventory/exits")
+    @PreAuthorize("hasAnyRole('ADMIN', 'TECHNICIAN')")
+    public ResponseEntity<InputStreamResource> exportInventoryExits(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+            @RequestParam(defaultValue = "xlsx") String format) {
+
+        LocalDateTime start = startDate != null ? startDate.atStartOfDay() : LocalDate.now().minusMonths(1).atStartOfDay();
+        LocalDateTime end = endDate != null ? endDate.atTime(LocalTime.MAX) : LocalDate.now().atTime(LocalTime.MAX);
+
+        if ("pdf".equalsIgnoreCase(format)) {
+            byte[] pdfBytes = reportService.exportInventoryExitsToPdf(start, end);
+            ByteArrayInputStream pdfFile = new ByteArrayInputStream(pdfBytes);
+
+            String filename = String.format("saidas_estoque_%s_to_%s.pdf", start.toLocalDate(), end.toLocalDate());
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.add(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + filename);
+            headers.setContentType(MediaType.APPLICATION_PDF);
+
+            return ResponseEntity.ok()
+                    .headers(headers)
+                    .body(new InputStreamResource(pdfFile));
+        }
+
+        byte[] excelBytes = reportService.exportInventoryExitsToExcel(start, end);
+        ByteArrayInputStream excelFile = new ByteArrayInputStream(excelBytes);
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.add(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=saidas_estoque.xlsx");
+        headers.setContentType(MediaType.valueOf(EXCEL_CONTENT_TYPE));
+
+        return ResponseEntity.ok()
+                .headers(headers)
+                .body(new InputStreamResource(excelFile));
+    }
+}
+
+

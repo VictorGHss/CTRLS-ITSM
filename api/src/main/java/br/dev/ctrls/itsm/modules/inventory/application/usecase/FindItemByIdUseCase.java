@@ -1,0 +1,34 @@
+package br.dev.ctrls.itsm.modules.inventory.application.usecase;
+
+import java.util.UUID;
+
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
+
+import br.dev.ctrls.itsm.core.shared.domain.model.exception.NotFoundException;
+import br.dev.ctrls.itsm.modules.inventory.domain.port.output.ItemRepositoryPort;
+import lombok.RequiredArgsConstructor;
+
+/**
+ * Caso de uso: busca um item de inventário por seu ID.
+ */
+@Component
+@RequiredArgsConstructor
+public class FindItemByIdUseCase {
+
+    private final ItemRepositoryPort itemRepository;
+
+    /**
+     * Busca um item pelo seu ID, com a categoria carregada.
+     *
+     * @param id identificador único do item
+     * @return DTO com os dados públicos do item
+     * @throws NotFoundException se o item não existir
+     */
+    @Transactional(readOnly = true)
+    public br.dev.ctrls.itsm.modules.inventory.application.dto.ItemResponseDTO execute(UUID id) {
+        return itemRepository.findByIdWithCategory(id)
+                .map(br.dev.ctrls.itsm.modules.inventory.application.dto.ItemResponseDTO::from)
+                .orElseThrow(() -> new NotFoundException("Item não encontrado"));
+    }
+}

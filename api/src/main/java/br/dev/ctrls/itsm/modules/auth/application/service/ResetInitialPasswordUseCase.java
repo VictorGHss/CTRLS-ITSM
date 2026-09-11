@@ -1,0 +1,51 @@
+package br.dev.ctrls.itsm.modules.auth.application.service;
+
+import io.micrometer.observation.annotation.Observed;
+
+import org.springframework.stereotype.Component;
+
+import br.dev.ctrls.itsm.core.shared.domain.model.exception.BadRequestException;
+import br.dev.ctrls.itsm.core.shared.domain.model.exception.NotFoundException;
+import br.dev.ctrls.itsm.modules.auth.application.dto.AuthResponseDTO;
+import br.dev.ctrls.itsm.modules.auth.application.dto.ResetInitialPasswordRequestDTO;
+import br.dev.ctrls.itsm.modules.auth.domain.port.output.HashPort;
+import br.dev.ctrls.itsm.modules.auth.domain.port.output.TokenPort;
+import br.dev.ctrls.itsm.modules.user.domain.port.output.UserRepositoryPort;
+import br.dev.ctrls.itsm.modules.user.application.dto.UserResponseDTO;
+import lombok.RequiredArgsConstructor;
+
+@Component
+@RequiredArgsConstructor
+@Observed
+public class ResetInitialPasswordUseCase {
+
+    private final TokenPort tokenPort;
+    private final UserRepositoryPort userRepository;
+    private final HashPort hashPort;
+
+    public AuthResponseDTO execute(ResetInitialPasswordRequestDTO request) {
+        var tokenUserId = tokenPort.validateInitialPasswordResetToken(request.tempToken());
+        if (tokenUserId == null) {
+            throw new BadRequestException("Token temporário inválido ou expirado.");
+        }
+        if (!tokenUserId.equals(request.userId())) {
+            throw new BadRequestException("Token temporário não pertence ao usuário informado.");
+        }
+
+        var user = userRepository.findById(request.userId())
+                .orElseThrow(() -> new NotFoundException("User not found with id: " + request.userId()));
+
+        if (!user.isMustChangePassword()) {
+            throw new BadRequestException("Este usuário não exige redefinição inicial de senha.");
+        }
+
+        user.setPasswordHash(hashPort.encode(request.newPassword()));
+        user.setMustChangePassword(false);
+        var savedUser = userRepository.save(user);
+
+        String finalToken = tokenPort.generateToken(savedUser);
+        return AuthResponseDTO.authenticated(finalToken, UserResponseDTO.from(savedUser));
+    }
+}
+
+

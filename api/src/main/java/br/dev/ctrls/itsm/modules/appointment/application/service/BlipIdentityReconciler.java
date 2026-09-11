@@ -1,0 +1,241 @@
+package br.dev.ctrls.itsm.modules.appointment.application.service;
+
+import io.micrometer.observation.annotation.Observed;
+
+import java.util.Map;
+import java.util.Optional;
+import org.springframework.stereotype.Component;
+import br.dev.ctrls.itsm.modules.appointment.domain.model.BlipUserIdentityReconciliation;
+import br.dev.ctrls.itsm.modules.appointment.domain.port.output.BlipClientPort;
+import br.dev.ctrls.itsm.modules.appointment.domain.port.output.BlipUserIdentityReconciliationRepositoryPort;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
+/**
+ * Serviço responsável por reconciliar identidades do Blip e purificar números telefônicos.
+ */
+@Slf4j
+@Component
+@RequiredArgsConstructor
+@Observed
+public class BlipIdentityReconciler {
+
+    private final BlipUserIdentityReconciliationRepositoryPort blipUserIdentityReconciliationRepository;
+    private final BlipClientPort blipClientPort;
+
+    /**
+     * Resolve e reconcilia a identidade recebida do Blip, buscando no banco local ou na API do Blip.
+     */
+    public String resolveAndReconcileIdentity(String originalIdentity, String metadataBsuid) {
+        if (originalIdentity == null || originalIdentity.isBlank()) {
+            return "";
+        }
+        
+        String identity = originalIdentity.trim();
+        if (identity.contains("%40") || identity.contains("%20")) {
+            try {
+                identity = java.net.URLDecoder.decode(identity, java.nio.charset.StandardCharsets.UTF_8);
+            } catch (Exception ignored) {}
+        }
+
+        // Filtra imediatamente roteadores, postmasters e instâncias de servidor LIME
+        if (identity.contains("/") || identity.contains("msging-application") || 
+            identity.startsWith("postmaster@") || identity.startsWith("roteador") || 
+            identity.startsWith("desk@") || identity.startsWith("router@")) {
+            log.debug("[RECONCILIATION] Ignorando identidade de sistema/roteador LIME: {}", identity);
+            return "";
+        }
+
+        // Resolução direta para identidades de túnel determinísticas
+        if (identity.contains("@tunnel.msging.net")) {
+            String local = identity.substring(0, identity.indexOf('@'));
+            if (local.contains(".")) {
+                String firstPart = local.substring(0, local.indexOf('.'));
+                if (firstPart.matches("^\\d+$")) {
+                    String resolved = purifyPhoneNumber(firstPart);
+                    log.debug("[RECONCILIATION] Identidade de túnel determinística resolvida via padrão: {} -> Telefone={}", 
+                        identity, resolved);
+                    return resolved;
+                }
+            }
+        }
+
+        String localPart = identity;
+        if (identity.contains("@")) {
+            localPart = identity.substring(0, identity.indexOf('@'));
+        }
+
+        // Filtro de Identidade: Se o localPart for um UUID puro (GUID de controle do Blip),
+        // encerra imediatamente, EXCETO se pertencer ao domínio de túneis do subbot (@tunnel.msging.net)
+        boolean isUuid = localPart.matches("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$");
+        if (isUuid && !identity.contains("@tunnel.msging.net")) {
+            log.debug("[RECONCILIATION] Ignorando identidade de controle do Blip (UUID puro): {}", identity);
+            return "";
+        }
+        
+        boolean isGuidOrUser = localPart.matches(".*[a-zA-Z\\-].*");
+        if (!isGuidOrUser) {
+            return purifyPhoneNumber(identity);
+        }
+        
+        String blipGuid = localPart;
+        
+        Optional<BlipUserIdentityReconciliation> existing = 
+                blipUserIdentityReconciliationRepository.findByBlipGuid(blipGuid);
+        if (existing.isPresent()) {
+            log.debug("[RECONCILIATION] Correspondência de identidade em cache local: GUID={} -> Telefone={}", 
+                blipGuid, existing.get().getPhoneNumber());
+            return existing.get().getPhoneNumber();
+        }
+        
+        String resolvedPhone = null;
+        String bsuid = metadataBsuid != null ? metadataBsuid.trim() : null;
+        
+        String bsuidLocal = bsuid;
+        if (bsuid != null && bsuid.contains("@")) {
+            bsuidLocal = bsuid.substring(0, bsuid.indexOf('@'));
+        }
+
+        if (bsuid != null && !bsuid.isBlank() && bsuidLocal != null && !bsuidLocal.matches(".*[a-zA-Z\\-].*")) {
+            resolvedPhone = purifyPhoneNumber(bsuid);
+            log.info("[RECONCILIATION] Identidade reconciliada via metadado BSUID: GUID={} -> Telefone={}", 
+                blipGuid, resolvedPhone);
+        }
+        
+        if (resolvedPhone == null || resolvedPhone.isBlank()) {
+            try {
+                Map<String, Object> profileResponse = blipClientPort.getContactProfile(identity);
+                if (profileResponse != null && profileResponse.containsKey("resource")) {
+                    Object resource = profileResponse.get("resource");
+                    if (resource instanceof Map<?, ?> resourceMap) {
+                        Object phoneObj = resourceMap.get("phoneNumber");
+                        if (phoneObj == null) {
+                            phoneObj = resourceMap.get("cellPhoneNumber");
+                        }
+                        if (phoneObj != null) {
+                            resolvedPhone = purifyPhoneNumber(phoneObj.toString());
+                            log.info("[RECONCILIATION] Perfil consultado na API do Blip: GUID={} -> Telefone={}", 
+                                blipGuid, resolvedPhone);
+                        }
+                        
+                        Object extrasObj = resourceMap.get("extras");
+                        if (extrasObj instanceof Map<?, ?> extrasMap) {
+                            Object bsuidObj = extrasMap.get("bsuid");
+                            if (bsuidObj == null) {
+                                bsuidObj = extrasMap.get("wa.bsuid");
+                            }
+                            if (bsuidObj != null) {
+                                bsuid = bsuidObj.toString().trim();
+                            }
+                        }
+
+                        if ((resolvedPhone == null || resolvedPhone.isBlank()) && bsuid != null && !bsuid.isBlank()) {
+                            String bsuidLocal2 = bsuid;
+                            if (bsuid.contains("@")) {
+                                bsuidLocal2 = bsuid.substring(0, bsuid.indexOf('@'));
+                            }
+                            if (!bsuidLocal2.matches(".*[a-zA-Z\\-].*")) {
+                                resolvedPhone = purifyPhoneNumber(bsuid);
+                                log.info("[RECONCILIATION] Perfil consultado na API do Blip (fallback extras.bsuid): GUID={} -> Telefone={}", 
+                                    blipGuid, resolvedPhone);
+                            }
+                        }
+                    }
+                }
+            } catch (Exception ex) {
+                log.error("[RECONCILIATION] Falha ao consultar o perfil do contato no Blip para {}: {}", 
+                    identity, ex.getMessage(), ex);
+            }
+        }
+        
+        if (resolvedPhone != null && !resolvedPhone.isBlank()) {
+            try {
+                BlipUserIdentityReconciliation newReconciliation = 
+                    BlipUserIdentityReconciliation.builder()
+                        .blipGuid(blipGuid)
+                        .bsuid(bsuid)
+                        .phoneNumber(resolvedPhone)
+                        .build();
+                blipUserIdentityReconciliationRepository.save(newReconciliation);
+                log.info("[RECONCILIATION] Novo mapeamento de identidade salvo: GUID={} -> Telefone={} (BSUID={})", 
+                    blipGuid, resolvedPhone, bsuid);
+            } catch (Exception ex) {
+                log.warn("[RECONCILIATION] Falha ao salvar reconciliação no banco local (pode ser inserção concorrente): {}", 
+                    ex.getMessage());
+            }
+            return resolvedPhone;
+        }
+        
+        log.debug("[RECONCILIATION] Não foi possível reconciliar o GUID do WhatsApp {} para nenhum número telefônico.", blipGuid);
+        return "";
+    }
+
+    /**
+     * Purifica o número de telefone removendo formatações desnecessárias.
+     */
+    public String purifyPhoneNumber(String originalPhone) {
+        if (originalPhone == null || originalPhone.isBlank()) {
+            return "";
+        }
+        
+        String trimmed = originalPhone.trim();
+        if (trimmed.contains("@")) {
+            trimmed = trimmed.substring(0, trimmed.indexOf('@')).trim();
+        }
+        
+        String digitsOnly = trimmed.replaceAll("\\D", "");
+        if (digitsOnly.isBlank()) {
+            return "";
+        }
+        
+        if (!digitsOnly.startsWith("55")) {
+            digitsOnly = "55" + digitsOnly;
+        }
+
+        // Sanitização estrita de tamanho (E.164 BR com DDI 55 possui no máximo 13 dígitos):
+        if (digitsOnly.length() > 13) {
+            log.warn("[RECONCILIATION] Telefone com dígitos excedentes truncado: {} -> {}", digitsOnly, digitsOnly.substring(0, 13));
+            digitsOnly = digitsOnly.substring(0, 13);
+        }
+        
+        return digitsOnly;
+    }
+
+    /**
+     * Valida se um nome fornecido é válido e não é um GUID, UUID ou identificador de túnel.
+     */
+    public boolean isValidPatientName(String name) {
+        if (name == null || name.isBlank() || "null".equalsIgnoreCase(name.trim())) {
+            return false;
+        }
+        String trimmed = name.trim();
+        if (trimmed.contains("@") || trimmed.contains("msging.net") || trimmed.contains("tunnel")) {
+            return false;
+        }
+        if (trimmed.matches("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+                || trimmed.matches("^[0-9a-fA-F-]{36}$")
+                || trimmed.matches("^[0-9a-fA-F]{32}$")) {
+            return false;
+        }
+        String lower = trimmed.toLowerCase();
+        return !lower.equals("paciente") 
+            && !lower.equals("paciente não identificado") 
+            && !lower.equals("paciente nao identificado")
+            && !lower.equals("cliente")
+            && !lower.equals("usuário")
+            && !lower.equals("usuario");
+    }
+
+    /**
+     * Sanitiza o nome do paciente, retornando null se for um GUID ou inválido,
+     * garantindo que nenhuma sobrescrita indevida ocorra no CRM do Blip.
+     */
+    public String sanitizePatientName(String name) {
+        if (!isValidPatientName(name)) {
+            return null;
+        }
+        return name.trim();
+    }
+}
+
+

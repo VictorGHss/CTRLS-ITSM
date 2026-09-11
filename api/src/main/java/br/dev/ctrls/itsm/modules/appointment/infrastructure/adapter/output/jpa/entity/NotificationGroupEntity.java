@@ -1,0 +1,77 @@
+package br.dev.ctrls.itsm.modules.appointment.infrastructure.adapter.output.jpa.entity;
+
+import java.time.LocalDateTime;
+import java.util.UUID;
+
+import org.hibernate.annotations.CreationTimestamp;
+
+import br.dev.ctrls.itsm.modules.appointment.domain.model.NotificationGroup;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+
+@Entity
+@Table(
+    name = "notification_groups",
+    indexes = {
+        @jakarta.persistence.Index(name = "idx_notification_groups_session_id", columnList = "session_id")
+    }
+)
+@Getter
+@Setter
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class NotificationGroupEntity {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
+
+    @Column(name = "group_id", nullable = false)
+    private UUID groupId;
+
+    @Column(name = "session_id", nullable = false)
+    private UUID sessionId;
+
+    @Column(name = "phone_number", length = 30)
+    private String phoneNumber;
+
+    @CreationTimestamp
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private LocalDateTime createdAt;
+
+    @Column(name = "pre_compiled_schedule_text", columnDefinition = "TEXT")
+    private String preCompiledScheduleText;
+
+    public NotificationGroup toDomain() {
+        return NotificationGroup.builder()
+                .id(this.id)
+                .groupId(this.groupId)
+                .sessionId(this.sessionId)
+                .phoneNumber(this.phoneNumber)
+                .createdAt(this.createdAt)
+                .preCompiledScheduleText(this.preCompiledScheduleText)
+                .build();
+    }
+
+    public static NotificationGroupEntity fromDomain(NotificationGroup domain) {
+        if (domain == null) return null;
+        return NotificationGroupEntity.builder()
+                .id(domain.getId())
+                .groupId(domain.getGroupId())
+                .sessionId(domain.getSessionId())
+                .phoneNumber(domain.getPhoneNumber())
+                .createdAt(domain.getCreatedAt())
+                .preCompiledScheduleText(domain.getPreCompiledScheduleText())
+                .build();
+    }
+}

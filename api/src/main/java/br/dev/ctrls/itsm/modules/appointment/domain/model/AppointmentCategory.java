@@ -1,0 +1,10 @@
+package br.dev.ctrls.itsm.modules.appointment.domain.model;
+
+public enum AppointmentCategory {
+    CONFIRMATION,
+    NUDGE_1,
+    NUDGE_FINAL,
+    GROUP_NOTIFICATION,
+    GROUP_NUDGE_1,
+    GROUP_NUDGE_FINAL
+}

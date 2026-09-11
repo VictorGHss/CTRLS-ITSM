@@ -1,0 +1,491 @@
+package br.dev.ctrls.itsm.modules.appointment.application.service;
+
+import io.micrometer.observation.annotation.Observed;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.support.TransactionTemplate;
+import br.dev.ctrls.itsm.modules.appointment.domain.model.AppointmentSession;
+import br.dev.ctrls.itsm.modules.appointment.domain.model.FeegowAppointmentStatus;
+import br.dev.ctrls.itsm.modules.appointment.domain.model.NotificationGroup;
+import br.dev.ctrls.itsm.modules.appointment.domain.port.output.AppointmentDoctorMappingRepositoryPort;
+import br.dev.ctrls.itsm.modules.appointment.domain.port.output.AppointmentExternalPort;
+import br.dev.ctrls.itsm.modules.appointment.domain.port.output.AppointmentSessionRepositoryPort;
+import br.dev.ctrls.itsm.modules.appointment.domain.port.output.BlipUserIdentityReconciliationRepositoryPort;
+import br.dev.ctrls.itsm.modules.appointment.domain.port.output.NotificationGroupRepositoryPort;
+import br.dev.ctrls.itsm.modules.appointment.infrastructure.config.AppointmentMotorProperties;
+import br.dev.ctrls.itsm.modules.appointment.infrastructure.config.BlipProperties;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
+/**
+ * Componente responsável pelo processamento de baixa e cancelamento em lote
+ * de agendamentos no banco de dados local e na API externa do Feegow ERP.
+ */
+@Slf4j
+@Component
+@RequiredArgsConstructor
+@Observed
+public class FeegowBulkIntegrationHandler {
+
+    private final NotificationGroupRepositoryPort notificationGroupRepository;
+    private final AppointmentSessionRepositoryPort appointmentSessionRepository;
+    private final AppointmentDoctorMappingRepositoryPort appointmentDoctorMappingRepository;
+    private final AppointmentExternalPort appointmentExternalPort;
+    private final ConfirmationStateMachineService confirmationStateMachineService;
+    private final AppointmentMotorProperties appointmentMotorProperties;
+    private final TransactionTemplate transactionTemplate;
+    private final BlipContextService blipContextService;
+    private final BlipProperties blipProperties;
+    // Responsável por resolver identidades de túnel, aliases e UUIDs do Blip para o telefone real do banco
+    private final BlipIdentityReconciler blipIdentityReconciler;
+    private final BlipUserIdentityReconciliationRepositoryPort blipUserIdentityReconciliationRepository;
+
+    /**
+     * Executa a confirmação em lote de todos os agendamentos pertencentes ao grupo
+     * e os sincroniza com a API do Feegow ERP.
+     *
+     * Estratégias de busca de sessões (em ordem de prioridade):
+     *   A) Por groupId na tabela notification_groups
+     *   B) Por currentGroupId diretamente na tabela de sessões (populado na ingestão)
+     *   C) Fallback por telefone purificado (caso A e B falhem)
+     *
+     * @param groupId ID do grupo de notificações
+     * @param purifiedPhone telefone purificado do paciente
+     * @return lista de sessões de agendamento afetadas
+     */
+    public List<AppointmentSession> executeConfirmBatch(UUID groupId, String purifiedPhone) {
+        log.info("[BULK-INTEGRATION] Iniciando busca robusta de grupo para confirmação em lote. groupId: {}", groupId);
+
+        java.util.Map<UUID, AppointmentSession> uniqueSessions = new java.util.LinkedHashMap<>();
+
+        // --- Estratégia A: Buscar da tabela 'notification_groups' via groupId ---
+        List<NotificationGroup> groups = notificationGroupRepository.findByGroupId(groupId);
+        log.info("[BULK-INTEGRATION] [A] Busca por groupId na tabela notification_groups: {} registros.", groups.size());
+        for (NotificationGroup group : groups) {
+            appointmentSessionRepository.findById(group.getSessionId())
+                .ifPresent(s -> {
+                    uniqueSessions.put(s.getId(), s);
+                    log.info("[BULK-INTEGRATION] [A] Sessão carregada via grupo: id={}, feegowId={}", s.getId(), s.getFeegowAppointmentId());
+                });
+        }
+
+        // --- Estratégia B: Buscar diretamente pelo campo 'currentGroupId' nas sessões ---
+        // Este campo é populado durante a ingestão (populateCurrentGroupIdOnSessions),
+        // garantindo que funcione mesmo sem o clique em "Ver Agendamentos".
+        List<AppointmentSession> sessionsByGroupField = appointmentSessionRepository.findByCurrentGroupId(groupId);
+        log.info("[BULK-INTEGRATION] [B] Busca por currentGroupId na tabela de sessões: {} registros.", sessionsByGroupField.size());
+        for (AppointmentSession s : sessionsByGroupField) {
+            if (!uniqueSessions.containsKey(s.getId())) {
+                uniqueSessions.put(s.getId(), s);
+                log.info("[BULK-INTEGRATION] [B] Sessão carregada via campo currentGroupId: id={}, feegowId={}", s.getId(), s.getFeegowAppointmentId());
+            }
+        }
+
+        // --- Estratégia C (Fallback): Se ainda vazio, buscar sessões ativas pelo telefone ---
+        if (uniqueSessions.isEmpty() && purifiedPhone != null && !purifiedPhone.isBlank()) {
+            log.warn("[BULK-INTEGRATION] [C] Estratégias A e B não encontraram sessões para groupId={}. Aplicando fallback por telefone: {}", groupId, purifiedPhone);
+            List<AppointmentSession> activeContactSessions = appointmentSessionRepository.findActiveByPhoneNumber(purifiedPhone);
+            for (AppointmentSession s : activeContactSessions) {
+                uniqueSessions.put(s.getId(), s);
+                log.info("[BULK-INTEGRATION] [C] Sessão de fallback carregada do telefone: id={}, feegowId={}", s.getId(), s.getFeegowAppointmentId());
+            }
+        }
+
+        List<AppointmentSession> sessionList = new ArrayList<>();
+        for (AppointmentSession s : uniqueSessions.values()) {
+            if (s.getStatus() == br.dev.ctrls.itsm.modules.appointment.domain.model.AppointmentSessionStatus.CONFIRMED) {
+                log.info("[BULK-STATUS-GUARD] Sessão {} (feegowId={}) já está confirmada no status local.",
+                    s.getId(), s.getFeegowAppointmentId());
+                continue;
+            }
+            sessionList.add(s);
+        }
+        log.info("[BULK-INTEGRATION] Total de sessões elegíveis unificadas para confirmação em lote: {}", sessionList.size());
+
+        // Guarda de segurança: sem sessões elegíveis, não há o que confirmar
+        if (sessionList.isEmpty()) {
+            if (!uniqueSessions.isEmpty()) {
+                log.info("[BULK-INTEGRATION] Todas as {} sessões do groupId={} já estão em estado final (CONFIRMED/CANCELED/ALTERATION_REQUESTED). Nenhuma ação necessária.",
+                    uniqueSessions.size(), groupId);
+            } else {
+                log.error("[BULK-INTEGRATION] ERRO CRÍTICO: Nenhuma sessão encontrada para groupId={}. O Feegow NÃO será chamado.", groupId);
+            }
+            return sessionList;
+        }
+
+        // Resolver o statusConfirmado antes do loop
+        int statusConfirmado = FeegowAppointmentStatus.MARCADO_CONFIRMADO.getId();
+        String configuredStatusId = appointmentMotorProperties.getFeegowConfirmedStatusId();
+        if (configuredStatusId != null && !configuredStatusId.isBlank()) {
+            String trimmed = configuredStatusId.trim();
+            if (!"2".equals(trimmed)) {
+                try {
+                    statusConfirmado = Integer.parseInt(trimmed);
+                } catch (NumberFormatException ignored) {}
+            }
+        }
+
+        // Atualizar status local para CONFIRMED e sincronizar com o Feegow para cada sessão
+        for (AppointmentSession groupSession : sessionList) {
+            // Usa findById (sem lock) em vez de findByIdLocked (SELECT FOR UPDATE).
+            // O lock pessimista (PESSIMISTIC_WRITE) causava deadlock em VirtualThreads quando
+            // outro processo (nudge, ingestão) tentava acessar a mesma sessão simultaneamente,
+            // abortando o loop inteiro e impedindo qualquer chamada ao Feegow.
+            transactionTemplate.executeWithoutResult(status -> {
+                AppointmentSession fresh = appointmentSessionRepository.findById(groupSession.getId()).orElse(null);
+                if (fresh != null) {
+                    confirmationStateMachineService.markConfirmed(fresh);
+                    appointmentSessionRepository.save(fresh);
+                    log.info("[BULK-INTEGRATION] Status local da sessão {} atualizado para CONFIRMED.", fresh.getId());
+                } else {
+                    log.warn("[BULK-INTEGRATION] Sessão {} não encontrada no banco ao tentar confirmar.", groupSession.getId());
+                }
+            });
+
+            // A chamada ao Feegow é feita FORA da transação de banco intencionalmente.
+            // Chamadas de rede externas nunca devem estar dentro de transações JPA
+            // para evitar bloqueio de conexões do pool durante a espera da resposta HTTP.
+            try {
+                log.info("[BULK-INTEGRATION] Enviando confirmação ao Feegow para agendamento ID: {}", groupSession.getFeegowAppointmentId());
+                appointmentExternalPort.updateStatus(groupSession.getFeegowAppointmentId(), statusConfirmado);
+                log.info("[BULK-INTEGRATION] Resposta do Feegow: SUCCESS para agendamento ID: {}", groupSession.getFeegowAppointmentId());
+            } catch (Exception ex) {
+                log.error("[BULK-INTEGRATION] Resposta do Feegow: ERROR para agendamento ID: {}. Erro: {}",
+                    groupSession.getFeegowAppointmentId(), ex.getMessage(), ex);
+            }
+        }
+
+        return sessionList;
+    }
+
+    /**
+     * Resolve a fila Blip de redirecionamento com base nos médicos das sessões afetadas.
+     *
+     * @param sessionList lista de sessões de agendamento afetadas
+     * @return nome da fila Blip resolvida
+     */
+    public String resolveTargetQueue(List<AppointmentSession> sessionList) {
+        String targetQueue = null;
+        for (AppointmentSession groupSession : sessionList) {
+            var mappingOpt = appointmentDoctorMappingRepository.findByProfissionalId(groupSession.getDoctorProfissionalId());
+            if (mappingOpt.isPresent()) {
+                String queue = mappingOpt.get().getBlipQueueId();
+                if (queue != null && !queue.isBlank() && !"null".equalsIgnoreCase(queue.trim())) {
+                    targetQueue = queue.trim();
+                    break;
+                }
+            }
+        }
+
+        if (targetQueue == null || targetQueue.isBlank()) {
+            targetQueue = "Recepção Central / Suporte";
+        }
+        return targetQueue;
+    }
+
+    /**
+     * Resolve a fila Blip de redirecionamento para o grupo correspondente à solicitação de alteração.
+     *
+     * @param groupId ID do grupo de notificações
+     * @return nome da fila Blip resolvida
+     */
+    public String resolveAlterGroupQueue(UUID groupId) {
+        String targetQueue = "Recepção Central / Suporte";
+        List<NotificationGroup> groups = notificationGroupRepository.findByGroupId(groupId);
+        if (groups != null && !groups.isEmpty()) {
+            UUID firstSessionId = groups.getFirst().getSessionId();
+            AppointmentSession firstSession = transactionTemplate.execute(status ->
+                appointmentSessionRepository.findById(firstSessionId).orElse(null)
+            );
+            if (firstSession != null) {
+                var mappingOpt = appointmentDoctorMappingRepository.findByProfissionalId(firstSession.getDoctorProfissionalId());
+                if (mappingOpt.isPresent()) {
+                    String queue = mappingOpt.get().getBlipQueueId();
+                    if (queue != null && !queue.isBlank() && !"null".equalsIgnoreCase(queue.trim())) {
+                        targetQueue = queue.trim();
+                    }
+                }
+            }
+        }
+        return targetQueue;
+    }
+
+    private final java.util.concurrent.ConcurrentHashMap<UUID, Long> processingGroupLocks = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
+     * Processa de forma assíncrona a confirmação em lote de todos os agendamentos pertencentes ao grupo
+     * e os sincroniza com a API do Feegow ERP, redirecionando o fluxo do paciente no Blip.
+     */
+    @org.springframework.scheduling.annotation.Async
+    public void confirmGroupAsync(UUID groupId, String fromPhone) {
+        if (groupId != null) {
+            long now = System.currentTimeMillis();
+            Long previous = processingGroupLocks.putIfAbsent(groupId, now);
+            if (previous != null) {
+                if ((now - previous) < 30000L) {
+                    log.info("[ASYNC-BATCH-SKIP] Processamento de confirmação para groupId {} já em andamento. Ignorando chamada duplicada.", groupId);
+                    return;
+                } else {
+                    processingGroupLocks.put(groupId, now);
+                }
+            }
+        }
+
+        log.info("[ASYNC-BATCH] Iniciando processamento assíncrono de confirm_group para groupId: {}", groupId);
+        try {
+            // Resolve o telefone real do paciente usando o reconciliador de identidade do Blip.
+            // Isso garante que túneis, aliases e UUIDs do Blip sejam convertidos para o número
+            // telefônico real armazenado no banco, necessário para as estratégias de fallback.
+            String dbPhone = fromPhone != null
+                ? blipIdentityReconciler.resolveAndReconcileIdentity(fromPhone, null)
+                : null;
+            log.info("[ASYNC-BATCH] Telefone resolvido para confirmação em lote: fromPhone={} -> dbPhone={}", fromPhone, dbPhone);
+
+            // 1. Executa a confirmação em lote local e na API Feegow
+            List<AppointmentSession> sessionList = executeConfirmBatch(groupId, dbPhone);
+
+            // 2. Resolve a fila de desempate para redirecionamento no Blip
+            String targetQueue = resolveTargetQueue(sessionList);
+
+            // 3. Configura o redirecionamento no Blip em background
+            if (fromPhone != null && !fromPhone.isBlank()) {
+                // Sincroniza o ID do agendamento do grupo no contexto do Blip
+                if (!sessionList.isEmpty()) {
+                    String firstFeegowId = sessionList.getFirst().getFeegowAppointmentId();
+                    blipContextService.setUserContextForUser(fromPhone.trim(), "idAgendamentoFeegow", firstFeegowId);
+                    blipContextService.setUserContextForUser(fromPhone.trim(), "appointmentId", firstFeegowId);
+                    blipContextService.setUserContext(fromPhone.trim(), "hasActiveAppointment", "true");
+                    log.info("[ASYNC-BATCH] idAgendamentoFeegow={}, appointmentId={} e hasActiveAppointment=true configurados no contexto para {}", 
+                        firstFeegowId, firstFeegowId, fromPhone);
+                    
+                    // Também atualiza no telefone real reconciliado se for diferente
+                    if (dbPhone != null && !dbPhone.isBlank() && !dbPhone.equalsIgnoreCase(fromPhone)) {
+                        String formattedDbPhone = dbPhone.trim();
+                        if (!formattedDbPhone.contains("@")) {
+                            formattedDbPhone = formattedDbPhone + "@wa.gw.msging.net";
+                        }
+                        blipContextService.setUserContextForUser(formattedDbPhone, "idAgendamentoFeegow", firstFeegowId);
+                        blipContextService.setUserContextForUser(formattedDbPhone, "appointmentId", firstFeegowId);
+                        blipContextService.setUserContext(formattedDbPhone, "hasActiveAppointment", "true");
+                        log.info("[ASYNC-BATCH] idAgendamentoFeegow e hasActiveAppointment configurados também no telefone reconciliado: {}", formattedDbPhone);
+                    }
+
+                    // Sincroniza também para as identidades de túnel das sessões do lote
+                    try {
+                        for (AppointmentSession groupSession : sessionList) {
+                            String guid = groupSession.getBlipGuid();
+                            if (guid == null || guid.isBlank()) {
+                                guid = groupSession.getBsuid();
+                            }
+                            if (guid != null && !guid.isBlank()) {
+                                if (guid.contains("@")) {
+                                    guid = guid.substring(0, guid.indexOf("@"));
+                                }
+                                guid = guid.trim();
+                                if (guid.matches("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")) {
+                                    String tunnelIdentity = guid + "@tunnel.msging.net";
+                                    if (!tunnelIdentity.equalsIgnoreCase(fromPhone)) {
+                                        blipContextService.setUserContextForUser(tunnelIdentity, "idAgendamentoFeegow", firstFeegowId);
+                                        blipContextService.setUserContextForUser(tunnelIdentity, "appointmentId", firstFeegowId);
+                                        log.info("[ASYNC-BATCH] idAgendamentoFeegow configurado também para a identidade de túnel do lote: {}", tunnelIdentity);
+                                    }
+                                }
+                            }
+                        }
+                    } catch (Exception tunnelEx) {
+                        log.warn("[ASYNC-BATCH] Falha ao atualizar contexto de ID de agendamento nas identidades de túnel: {}", tunnelEx.getMessage());
+                    }
+                }
+
+                String confirmSuccessBlockId = blipProperties.getBlocks().getConfirmSuccess();
+                if (confirmSuccessBlockId == null || confirmSuccessBlockId.isBlank()) {
+                    confirmSuccessBlockId = "b3461299-9500-46b1-b423-12ffef3e1aba";
+                }
+                redirectAllIdentities(fromPhone, dbPhone, targetQueue, confirmSuccessBlockId, sessionList);
+            }
+        } catch (Exception e) {
+            log.error("[ASYNC-BATCH] Erro crítico no processamento assíncrono de confirmação do grupo: " + groupId, e);
+        } finally {
+            if (groupId != null) {
+                processingGroupLocks.remove(groupId);
+            }
+        }
+    }
+
+    /**
+     * Processa de forma assíncrona o redirecionamento de alteração em lote do grupo de agendamentos no Blip.
+     */
+    @org.springframework.scheduling.annotation.Async
+    public void alterGroupAsync(UUID groupId, String fromPhone) {
+        log.info("[ASYNC-BATCH] Iniciando processamento assíncrono de alter_group para groupId: {}", groupId);
+        try {
+            String targetQueue = resolveAlterGroupQueue(groupId);
+
+            if (fromPhone != null && !fromPhone.isBlank()) {
+                String dbPhone = fromPhone != null
+                    ? blipIdentityReconciler.resolveAndReconcileIdentity(fromPhone, null)
+                    : null;
+
+                List<AppointmentSession> sessionList = new ArrayList<>();
+                try {
+                    List<NotificationGroup> groups = notificationGroupRepository.findByGroupId(groupId);
+                    if (groups != null) {
+                        for (NotificationGroup g : groups) {
+                            appointmentSessionRepository.findById(g.getSessionId()).ifPresent(sessionList::add);
+                        }
+                    }
+                } catch (Exception ex) {
+                    log.warn("[ASYNC-BATCH] Falha ao recuperar sessões do grupo para o redirecionamento de alteração: {}", ex.getMessage());
+                }
+
+                // Atualiza o status local de todas as sessões do grupo para ALTERATION_REQUESTED para suspender cobradores automáticos (nudges)
+                if (!sessionList.isEmpty()) {
+                    transactionTemplate.executeWithoutResult(status -> {
+                        for (AppointmentSession s : sessionList) {
+                            AppointmentSession fresh = appointmentSessionRepository.findById(s.getId()).orElse(null);
+                            if (fresh != null) {
+                                fresh.setStatus(br.dev.ctrls.itsm.modules.appointment.domain.model.AppointmentSessionStatus.ALTERATION_REQUESTED);
+                                fresh.setClosedAt(java.time.LocalDateTime.now());
+                                appointmentSessionRepository.save(fresh);
+                                log.info("[ASYNC-BATCH] Sessão {} do grupo {} atualizada para ALTERATION_REQUESTED (suspendendo nudges).", fresh.getId(), groupId);
+                            }
+                        }
+                    });
+                }
+
+                String deskBlockId = blipProperties.getBlocks().getDeskStateId();
+                redirectAllIdentities(fromPhone, dbPhone, targetQueue, deskBlockId, sessionList);
+            }
+        } catch (Exception e) {
+            log.error("[ASYNC-BATCH] Erro crítico no processamento assíncrono de alteração do grupo: " + groupId, e);
+        }
+    }
+
+    /**
+     * Redireciona de forma robusta todas as identidades conhecidas do paciente no Blip
+     * (identidade original do webhook, telefone real reconciliado, túnel determinístico e túneis salvos no banco).
+     */
+    private void redirectAllIdentities(String fromPhone, String dbPhone, String targetQueue, String deskBlockId, List<AppointmentSession> sessionList) {
+        if (fromPhone == null || fromPhone.isBlank()) {
+            return;
+        }
+
+        // Traduz a fila se for um UUID
+        String resolvedQueue = blipContextService.resolveQueueName(targetQueue);
+
+        List<String> identitiesToRedirect = new ArrayList<>();
+        identitiesToRedirect.add(fromPhone.trim());
+
+        if (dbPhone != null && !dbPhone.isBlank() && !dbPhone.equalsIgnoreCase(fromPhone)) {
+            String formattedDbPhone = dbPhone.trim();
+            if (!formattedDbPhone.contains("@")) {
+                formattedDbPhone = formattedDbPhone + "@wa.gw.msging.net";
+            }
+            if (!identitiesToRedirect.contains(formattedDbPhone)) {
+                identitiesToRedirect.add(formattedDbPhone);
+            }
+        }
+
+        // Túnel determinístico subbot
+        try {
+            String subbotId = blipProperties.getSubbotId();
+            String subbotLocalPart = null;
+            if (subbotId != null && !subbotId.isBlank() && !subbotId.toLowerCase().contains("fluxov1")) {
+                subbotLocalPart = subbotId.trim();
+                if (subbotLocalPart.contains("@")) {
+                    subbotLocalPart = subbotLocalPart.substring(0, subbotLocalPart.indexOf('@'));
+                }
+            }
+
+            String phoneDigits = dbPhone != null ? dbPhone.trim() : fromPhone.trim();
+            if (phoneDigits.contains("@")) {
+                phoneDigits = phoneDigits.substring(0, phoneDigits.indexOf('@'));
+            }
+            phoneDigits = phoneDigits.replaceAll("\\D", "");
+            if (!phoneDigits.startsWith("55") && !phoneDigits.isEmpty()) {
+                phoneDigits = "55" + phoneDigits;
+            }
+
+            if (subbotLocalPart != null && !phoneDigits.isEmpty()) {
+                String deterministicTunnel = phoneDigits + "." + subbotLocalPart + "@tunnel.msging.net";
+                if (!identitiesToRedirect.contains(deterministicTunnel)) {
+                    identitiesToRedirect.add(deterministicTunnel);
+                }
+            }
+        } catch (Exception ex) {
+            log.warn("[ASYNC-BATCH] Falha ao resolver túnel determinístico para redirecionamento: {}", ex.getMessage());
+        }
+
+        // Túneis reconciliados do banco de dados
+        try {
+            String searchPhone = dbPhone != null ? dbPhone.trim() : fromPhone.trim();
+            if (searchPhone.contains("@")) {
+                searchPhone = searchPhone.substring(0, searchPhone.indexOf('@'));
+            }
+            searchPhone = searchPhone.replaceAll("\\D", "");
+            if (!searchPhone.isEmpty()) {
+                if (!searchPhone.startsWith("55")) {
+                    searchPhone = "55" + searchPhone;
+                }
+                var reconciliations = new ArrayList<br.dev.ctrls.itsm.modules.appointment.domain.model.BlipUserIdentityReconciliation>();
+                reconciliations.addAll(blipUserIdentityReconciliationRepository.findByPhoneNumber(searchPhone));
+                String altPhone = searchPhone.startsWith("55") ? searchPhone.substring(2) : "55" + searchPhone;
+                reconciliations.addAll(blipUserIdentityReconciliationRepository.findByPhoneNumber(altPhone));
+
+                for (var rec : reconciliations) {
+                    if (rec.getBlipGuid() != null && !rec.getBlipGuid().isBlank()) {
+                        String tunnelId = rec.getBlipGuid().trim() + "@tunnel.msging.net";
+                        if (!identitiesToRedirect.contains(tunnelId)) {
+                            identitiesToRedirect.add(tunnelId);
+                        }
+                    }
+                }
+            }
+        } catch (Exception ex) {
+            log.warn("[ASYNC-BATCH] Falha ao buscar reconciliações de identidade do banco: {}", ex.getMessage());
+        }
+
+        // Túneis baseados nos GUIDs/BSUIDs das sessões do lote
+        if (sessionList != null) {
+            try {
+                for (AppointmentSession groupSession : sessionList) {
+                    String guid = groupSession.getBlipGuid();
+                    if (guid == null || guid.isBlank()) {
+                        guid = groupSession.getBsuid();
+                    }
+                    if (guid != null && !guid.isBlank()) {
+                        if (guid.contains("@")) {
+                            guid = guid.substring(0, guid.indexOf("@"));
+                        }
+                        guid = guid.trim();
+                        if (guid.matches("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")) {
+                            String tunnelIdentity = guid + "@tunnel.msging.net";
+                            if (!identitiesToRedirect.contains(tunnelIdentity)) {
+                                identitiesToRedirect.add(tunnelIdentity);
+                            }
+                        }
+                    }
+                }
+            } catch (Exception ex) {
+                log.warn("[ASYNC-BATCH] Falha ao resolver identidades de túnel das sessões do lote: {}", ex.getMessage());
+            }
+        }
+
+        String targetBot = "desk@msging.net";
+        String builderBotId = appointmentMotorProperties.getBlipBuilderBotId();
+        if (builderBotId != null && !builderBotId.isBlank()) {
+            targetBot = builderBotId;
+        }
+
+        // Aplica o redirecionamento
+        for (String identity : identitiesToRedirect) {
+            blipContextService.setQueueRedirect(identity, resolvedQueue);
+            blipContextService.setMasterState(identity, targetBot, deskBlockId);
+            log.info("[ASYNC-BATCH] Identidade {} redirecionada com sucesso para a fila '{}' (resolvida: '{}'), bot: '{}', bloco: '{}'",
+                identity, targetQueue, resolvedQueue, targetBot, deskBlockId);
+        }
+    }
+}

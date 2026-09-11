@@ -28,8 +28,8 @@
         </encoder>
     </appender>
 
-    <logger name="br.dev.ctrls.inovareti.modules.appointment" level="WARN" />
-    <logger name="br.dev.ctrls.inovareti.modules.appointment.application.usecase" level="INFO" />
+    <logger name="br.dev.ctrls.itsm.modules.appointment" level="WARN" />
+    <logger name="br.dev.ctrls.itsm.modules.appointment.application.usecase" level="INFO" />
 
     <root level="INFO">
         <appender-ref ref="CONSOLE" />
