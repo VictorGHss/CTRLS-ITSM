@@ -87,7 +87,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(increase(inovareti_appointment_dispatches_total_total[24h])) or sum(inovareti_appointment_dispatches_total_total) or vector(0)",
+          "expr": "sum(increase(itsm_appointment_dispatches_total_total[24h])) or sum(itsm_appointment_dispatches_total_total) or vector(0)",
           "instant": false,
           "range": true,
           "refId": "A"
@@ -150,7 +150,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(increase(inovareti_appointment_confirmations_total_total[24h])) or sum(inovareti_appointment_confirmations_total_total) or vector(0)",
+          "expr": "sum(increase(itsm_appointment_confirmations_total_total[24h])) or sum(itsm_appointment_confirmations_total_total) or vector(0)",
           "instant": false,
           "range": true,
           "refId": "A"
@@ -222,7 +222,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "(sum(increase(inovareti_appointment_confirmations_total_total[24h])) / (sum(increase(inovareti_appointment_dispatches_total_total[24h])) > 0)) * 100 or vector(0)",
+          "expr": "(sum(increase(itsm_appointment_confirmations_total_total[24h])) / (sum(increase(itsm_appointment_dispatches_total_total[24h])) > 0)) * 100 or vector(0)",
           "instant": false,
           "range": true,
           "refId": "A"
@@ -285,7 +285,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(increase(inovareti_appointment_phone_missing_total_total[24h])) or sum(inovareti_appointment_phone_missing_total_total) or vector(0)",
+          "expr": "sum(increase(itsm_appointment_phone_missing_total_total[24h])) or sum(itsm_appointment_phone_missing_total_total) or vector(0)",
           "instant": false,
           "range": true,
           "refId": "A"
@@ -367,7 +367,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by(doctor) (increase(inovareti_appointment_dispatches_total_total[1h]))",
+          "expr": "sum by(doctor) (increase(itsm_appointment_dispatches_total_total[1h]))",
           "legendFormat": "Disparos — {{doctor}}",
           "range": true,
           "refId": "A"
@@ -378,7 +378,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by(doctor) (increase(inovareti_appointment_confirmations_total_total[1h]))",
+          "expr": "sum by(doctor) (increase(itsm_appointment_confirmations_total_total[1h]))",
           "legendFormat": "Confirmados — {{doctor}}",
           "range": true,
           "refId": "B"
@@ -474,7 +474,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "topk(15, sum by(doctor) (inovareti_appointment_dispatches_total_total))",
+          "expr": "topk(15, sum by(doctor) (itsm_appointment_dispatches_total_total))",
           "legendFormat": "{{doctor}}",
           "range": true,
           "refId": "A"
@@ -545,7 +545,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum by(specialty) (inovareti_appointment_dispatches_total_total)",
+          "expr": "sum by(specialty) (itsm_appointment_dispatches_total_total)",
           "legendFormat": "{{specialty}}",
           "range": true,
           "refId": "A"
@@ -559,7 +559,7 @@
   "schemaVersion": 38,
   "style": "dark",
   "tags": [
-    "inovare-ti",
+    "ctrls-itsm",
     "agendamentos",
     "feegow",
     "whatsapp",
@@ -581,7 +581,7 @@
     ]
   },
   "timezone": "browser",
-  "title": "Inovare-TI — Painel Executivo de Agendamentos & Confirmações",
-  "uid": "inovare-agendamentos-executivo",
+  "title": "CTRLS ITSM — Painel Executivo de Agendamentos & Confirmações",
+  "uid": "itsm-agendamentos-executivo",
   "version": 1
 }

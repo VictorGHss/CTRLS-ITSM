@@ -1,6 +1,6 @@
-# Manual de Integrações e APIs Externas — Inovare TI
+# Manual de Integrações e APIs Externas — CTRLS ITSM
 
-Este documento apresenta os contratos de integração, diagramas de sequência, payloads JSON e fluxos de contingência entre o ecossistema Inovare TI e as plataformas externas parceiras: **Feegow ERP**, **Take Blip (WhatsApp)**, **GerAcesso (Catracas)**, **Conta Azul V2 (Financeiro)** e **Discord (Bot JDA 5)**.
+Este documento apresenta os contratos de integração, diagramas de sequência, payloads JSON e fluxos de contingência entre o ecossistema CTRLS ITSM e as plataformas externas parceiras: **Feegow ERP**, **Take Blip (WhatsApp)**, **GerAcesso (Catracas)**, **Conta Azul V2 (Financeiro)** e **Discord (Bot JDA 5)**.
 
 ---
 
@@ -10,7 +10,7 @@ O Feegow ERP é o sistema central de prontuários médicos da clínica. A comuni
 
 ### 1.1 Tabela Oficial de Status de Agendamento do Feegow
 
-| ID | Status Oficial | Classificação Inovare | Comportamento no Sistema |
+| ID | Status Oficial | Classificação no Sistema | Comportamento no Sistema |
 |:---:|:---|:---:|:---|
 | **`1`** | **Marcado - não confirmado** | `PENDING` | Elegível para disparo inicial de confirmação e lembretes (nudges). |
 | **`7`** | **Marcado - confirmado** | `CONFIRMED` | Confirmado: Preservado, nunca cancelado e sem cobrança de lembrete. |
@@ -67,7 +67,7 @@ A integração com o Take Blip utiliza a API Active Campaign (`/campaign/full`),
 sequenceDiagram
     participant P as Paciente (WhatsApp)
     participant B as Take Blip (Roteador/Túnel)
-    participant API as Inovare TI API
+    participant API as CTRLS ITSM API
     participant F as Feegow ERP
     participant D as Blip Desk (Secretária)
 
@@ -115,8 +115,8 @@ O módulo `access` orquestra a emissão de credenciais físicas e QR Codes para 
 
 ### 3.1 Contrato REST da API GerAcesso
 
-* **Endpoint:** `POST {{INOVARE_GERACESSO_URL}}` (padrão local: `http://172.25.100.106:8082/AgendamentoVisita`)
-* **Autenticação:** Header HTTP `Authorization: Bearer {{INOVARE_GERACESSO_TOKEN}}` (com prefixação defensiva automática `Bearer ` caso a variável não a contenha).
+* **Endpoint:** `POST {{GERACESSO_URL}}` (padrão local: `http://172.25.100.106:8082/AgendamentoVisita`)
+* **Autenticação:** Header HTTP `Authorization: Bearer {{GERACESSO_TOKEN}}` (com prefixação defensiva automática `Bearer ` caso a variável não a contenha).
 * **Timeouts de Rede:** 10 segundos de `connectTimeout` e 10 segundos de `readTimeout` configurados no `JdkClientHttpRequestFactory`.
 
 #### Payload de Requisição (`GerAcessoRequest`):
@@ -206,7 +206,7 @@ Automação de conciliação de faturamentos quitados (`ACQUITTED`) e emissão d
 ### 4.2 Rate Limiting e Pacing
 * **Rate Limiting Distribuído:** O endpoint `/force-refresh` é protegido pelo `RedisRateLimiter` (limite de 3 requisições por minuto por usuário/IP), com fallback síncrono em memória (`ConcurrentHashMap`).
 * **Pacing no Loop de Vendas:** Pausa controlada de **350ms** (`LockSupport.parkNanos`) entre cada venda processada.
-* **Emissão de Contingência (OpenPDF):** Se o download do recibo oficial falhar, o serviço `InternalReceiptEmissionService` gera um PDF interno padronizado com layout corporativo Inovare.
+* **Emissão de Contingência (OpenPDF):** Se o download do recibo oficial falhar, o serviço `InternalReceiptEmissionService` gera um PDF interno padronizado com layout institucional corporativo.
 
 ---
 

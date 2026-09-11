@@ -1,12 +1,12 @@
-# Catálogo de Funcionalidades e Regras de Negócio — Inovare TI
+# Catálogo de Funcionalidades e Regras de Negócio — CTRLS ITSM
 
-Este documento especifica formalmente as regras de negócio, algoritmos de automação, fluxos de contingência e diretrizes operacionais de cada módulo do ecossistema Inovare TI.
+Este documento especifica formalmente as regras de negócio, algoritmos de automação, fluxos de contingência e diretrizes operacionais de cada módulo do ecossistema CTRLS ITSM.
 
 ---
 
 ## 1. Motor de Agendamentos e WhatsApp
 
-O motor de agendamentos automatiza a confirmação, o cancelamento, a alteração e o acompanhamento pós-consulta de pacientes da Clínica Inovare integrando o Feegow ERP ao WhatsApp (via Take Blip).
+O motor de agendamentos automatiza a confirmação, o cancelamento, a alteração e o acompanhamento pós-consulta de pacientes da organização integrando o Feegow ERP ao WhatsApp (via Take Blip).
 
 ### 1.1 Ingestão e Calendário de Antecedência (D+0 a D+3)
 A rotina matinal de ingestão (`IngestAppointmentsUseCase`) é executada automaticamente e segue regras de cálculo de dias de antecedência:
@@ -81,7 +81,7 @@ O serviço `AccessWindowCalculator` calcula as janelas de liberação horária g
 
 ### 2.2 Portal Web do Paciente & PWA Mobile (`/acesso/:id`)
 * **Autenticação 2FA por Telefone:** O paciente digita os 4 últimos dígitos do seu telefone para desbloqueio seguro, com suporte a preenchimento automático por link autenticado (`?t=TOKEN` ou `?p=1234`).
-* **Multi-Clínica Dinâmica:** O portal detecta automaticamente a rota e query parameters, aplicando temas visuais personalizados para a **Clínica Inovare** ou para o centro de diagnóstico **Inovare Imagem**.
+* **Multi-Unidade & White-Label Dinâmico:** O portal detecta automaticamente a rota e query parameters, aplicando temas visuais personalizados via tokens White-Label ou parâmetros de unidade.
 * **Carrossel de Credenciais & Acompanhantes:** Apresentação em cartões individuais no padrão Wallet digital. Cada cartão exibe o nome do titular ou acompanhante, status de liberação, médico atendente (`access_credentials.doctor_name`) e botão de expansão.
 * **Modo Tela Cheia com Screen Wake Lock:** Ao abrir o QR Code em tela cheia, a Screen Wake Lock API mantém a tela do smartphone acesa com brilho ideal e contraste puro para leitura a 10–15 cm da lente ótica da catraca.
 * **Cache Offline Resiliente:** As credenciais validadas são persistidas em `localStorage`. Se o paciente perder sinal de celular na portaria ou no elevador, o app abre instantaneamente e mantém o QR Code visível.

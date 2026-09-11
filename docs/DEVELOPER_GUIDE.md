@@ -1,4 +1,4 @@
-# Guia do Desenvolvedor e Operações (SRE) — Inovare TI
+# Guia do Desenvolvedor e Operações (SRE) — CTRLS ITSM
 
 Este documento orienta a configuração do ambiente de desenvolvimento, parametrização de variáveis de ambiente, execução de testes automatizados, observabilidade e runbooks de resolução de incidentes em produção.
 
@@ -19,10 +19,10 @@ docker compose up -d db redis prometheus grafana
 ```
 
 Portas mapeadas no ambiente local:
-* **PostgreSQL (`inovareti_db`):** `localhost:5436` (porta interna `5432`).
-* **Redis (`inovareti_redis`):** `localhost:6380` (porta interna `6379`).
-* **Prometheus (`inovareti_prometheus`):** `localhost:9095` (porta interna `9090`).
-* **Grafana (`inovareti_grafana`):** `localhost:3001` (porta interna `3000`).
+* **PostgreSQL (`itsm_db`):** `localhost:5436` (porta interna `5432`).
+* **Redis (`itsm_redis`):** `localhost:6380` (porta interna `6379`).
+* **Prometheus (`itsm_prometheus`):** `localhost:9095` (porta interna `9090`).
+* **Grafana (`itsm_grafana`):** `localhost:3001` (porta interna `3000`).
 
 ---
 
@@ -38,7 +38,7 @@ cp .env.example api/.env
 
 | Variável | Descrição | Exemplo / Padrão |
 |---|---|---|
-| `POSTGRES_DB` | Nome do banco de dados | `inovareti` |
+| `POSTGRES_DB` | Nome do banco de dados | `itsm` |
 | `POSTGRES_USER` | Usuário do banco | `postgres` |
 | `POSTGRES_PASSWORD` | Senha do banco | `postgres` |
 | `JWT_SECRET` | Chave HMAC de 256 bits para tokens | *(String secreta com 32+ caracteres)* |
@@ -49,8 +49,8 @@ cp .env.example api/.env
 | `APP_APPOINTMENT_FEEGOW_API_TOKEN` | Token de acesso à API do Feegow | *(Token x-access-token)* |
 | `APP_APPOINTMENT_BLIP_BOT_KEY` | Key do Roteador Principal Take Blip | `Key cm91dGVy...` |
 | `APP_APPOINTMENT_BLIP_DESK_KEY` | Key do Túnel do Blip Desk | `Key dHVubmVs...` |
-| `INOVARE_GERACESSO_URL` | Endpoint da controladora de catracas | `http://172.25.100.106:8082/AgendamentoVisita` |
-| `INOVARE_GERACESSO_TOKEN` | Bearer token de autorização GerAcesso | *(Token JWT GerAcesso)* |
+| `GERACESSO_URL` | Endpoint da controladora de catracas | `http://172.25.100.106:8082/AgendamentoVisita` |
+| `GERACESSO_TOKEN` | Bearer token de autorização GerAcesso | *(Token JWT GerAcesso)* |
 | `CONTAAZUL_CLIENT_ID` | Client ID da aplicação Conta Azul V2 | *(UUID Conta Azul)* |
 | `CONTAAZUL_CLIENT_SECRET` | Client Secret da Conta Azul V2 | *(String secreta)* |
 | `DISCORD_BOT_TOKEN` | Token do bot Discord (JDA 5) | *(Token de Bot Discord)* |
@@ -110,7 +110,7 @@ Se a integração retornar `invalid_grant` por expiração ou revogação de tok
 Caso um atendimento não seja direcionado para a secretária correta:
 1. Verifique os logs de sincronização de contato:
    ```bash
-   docker logs inovareti_api --tail=200 | grep "BlipContact-Adapter"
+   docker logs itsm_api --tail=200 | grep "BlipContact-Adapter"
    ```
 2. Confirme se os campos `fila` e `Medico` foram sincronizados no contato do paciente no Roteador e no Túnel do Desk.
 3. Certifique-se de que o nome da fila em `appointment_doctor_mapping.blip_queue_id` corresponde exatamente ao nome cadastrado no Blip Desk (ex: `Ortopedia - Dr. Rodrigo Caldonazzo Fávaro`).
@@ -118,11 +118,11 @@ Caso um atendimento não seja direcionado para a secretária correta:
 ### 4.3 Runbook: Falha de Comunicação ou Bloqueio nas Catracas (GerAcesso)
 1. **Teste de Conectividade de Rede Local:**
    ```bash
-   curl -I -H "Authorization: Bearer $INOVARE_GERACESSO_TOKEN" http://172.25.100.106:8082/AgendamentoVisita
+   curl -I -H "Authorization: Bearer $GERACESSO_TOKEN" http://172.25.100.106:8082/AgendamentoVisita
    ```
 2. **Inspeção de Logs em Tempo Real:**
    ```bash
-   docker logs inovareti_api --tail=200 | grep -E "GerAcesso-Adapter|CATRACA-POST|ReactivateAccess"
+   docker logs itsm_api --tail=200 | grep -E "GerAcesso-Adapter|CATRACA-POST|ReactivateAccess"
    ```
 3. **Resolução de Anti-Passback / Leitor Travado:**
    * Se o paciente já apresentou o QR Code e não girou o braço da catraca a tempo, a controladora bloqueia o código anterior.
@@ -137,7 +137,7 @@ Caso um atendimento não seja direcionado para a secretária correta:
 ### 4.4 Runbook: Deploy e Atualização em Produção
 No servidor de hospedagem (`homeserver`):
 ```bash
-cd /opt/ctrls-inovare-ti/Inovare-TI
+cd /opt/ctrls-itsm/CTRLS-ITSM
 git pull
 docker compose down
 docker compose up -d --build
@@ -148,12 +148,12 @@ docker compose logs -f api
 Caso o ecossistema precise ser desativado ou transferido de infraestrutura:
 1. **Backup Completo do Banco de Dados (PostgreSQL 16):**
    ```bash
-   docker exec -t inovareti_db pg_dump -U postgres -d inovareti -F c -b -v -f /tmp/inovareti_backup_full.dump
-   docker cp inovareti_db:/tmp/inovareti_backup_full.dump ./inovareti_backup_$(date +%Y%m%d).dump
+   docker exec -t itsm_db pg_dump -U postgres -d itsm -F c -b -v -f /tmp/itsm_backup_full.dump
+   docker cp itsm_db:/tmp/itsm_backup_full.dump ./itsm_backup_$(date +%Y%m%d).dump
    ```
 2. **Backup de Configurações e Variáveis de Ambiente:**
    ```bash
-   tar -czvf inovareti_env_backup_$(date +%Y%m%d).tar.gz .env api/.env
+   tar -czvf itsm_env_backup_$(date +%Y%m%d).tar.gz .env api/.env
    ```
 3. **Parada Segura dos Serviços:**
    ```bash

@@ -1,9 +1,9 @@
 {
   "openapi": "3.0.3",
   "info": {
-    "title": "Inovare TI API",
+    "title": "CTRLS ITSM API",
     "version": "1.0.0",
-    "description": "OpenAPI specification gerada automaticamente — resumo dos endpoints do backend Inovare TI."
+    "description": "OpenAPI specification gerada automaticamente — resumo dos endpoints do backend CTRLS ITSM."
   },
   "servers": [
     {

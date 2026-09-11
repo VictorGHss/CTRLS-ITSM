@@ -1,15 +1,15 @@
 # Guia de Configuração e Uso do Dashboard Grafana
 
-Este documento descreve como configurar, importar e interpretar os dashboards de monitoramento do Inovare-TI no Grafana, com foco na arquitetura hexagonal, resilência dos Circuit Breakers e nas Virtual Threads do Java 21.
+Este documento descreve como configurar, importar e interpretar os dashboards de monitoramento do CTRLS ITSM no Grafana, com foco na arquitetura hexagonal, resiliência dos Circuit Breakers e nas Virtual Threads do Java 21.
 
 ---
 
 ## 1. Pré-requisitos
 
 Certifique-se de que os seguintes serviços estão rodando via `docker compose up -d`:
-- **API** (`inovareti_api`) — exportando métricas via `/api/actuator/prometheus`
-- **Prometheus** (`inovareti_prometheus`) — coletando as métricas e avaliando as regras de alerta
-- **Grafana** (`inovareti_grafana`) — acessível em `http://localhost:3001`
+- **API** (`itsm_api`) — exportando métricas via `/api/actuator/prometheus`
+- **Prometheus** (`itsm_prometheus`) — coletando as métricas e avaliando as regras de alerta
+- **Grafana** (`itsm_grafana`) — acessível em `http://localhost:3001`
 
 ---
 
@@ -21,8 +21,8 @@ O projeto já está configurado com **provisionamento automático** do Grafana. 
 |---|---|---|
 | Datasource Prometheus | `docs/grafana/provisioning/datasources/prometheus.yml` | `/etc/grafana/provisioning/datasources/` |
 | Provider de Dashboards | `docs/grafana/provisioning/dashboards/dashboards.yml` | `/etc/grafana/provisioning/dashboards/` |
-| Dashboard ContaAzul | `docs/grafana/dashboards/inovare_dashboard.json` | `/var/lib/grafana/dashboards/` |
-| **Dashboard Resiliência** *(novo)* | `docs/grafana/dashboards/inovare_resiliencia_dashboard.json` | `/var/lib/grafana/dashboards/` |
+| Dashboard ContaAzul | `docs/grafana/dashboards/itsm_dashboard.json` | `/var/lib/grafana/dashboards/` |
+| **Dashboard Resiliência** *(novo)* | `docs/grafana/dashboards/itsm_resiliencia_dashboard.json` | `/var/lib/grafana/dashboards/` |
 
 > **Não é necessário importar manualmente** o JSON. Basta (re)iniciar o container do Grafana.
 
@@ -34,15 +34,15 @@ Caso precise importar o dashboard em um Grafana existente ou remoto:
 
 1. Acesse o Grafana em `http://localhost:3001` (ou sua URL de produção).
 2. No menu lateral, clique em **Dashboards** → **Import**.
-3. Clique em **Upload JSON file** e selecione o arquivo `docs/grafana/dashboards/inovare_resiliencia_dashboard.json`.
+3. Clique em **Upload JSON file** e selecione o arquivo `docs/grafana/dashboards/itsm_resiliencia_dashboard.json`.
 4. Na tela seguinte, selecione o **Datasource Prometheus** no campo correspondente.
 5. Clique em **Import**. O dashboard estará disponível imediatamente.
 
 ---
 
-## 4. Painéis do Dashboard `Inovare-TI — Resiliência & Threads`
+## 4. Painéis do Dashboard `CTRLS ITSM — Resiliência & Threads`
 
-O dashboard `inovare_resiliencia_dashboard.json` contém os seguintes painéis:
+O dashboard `itsm_resiliencia_dashboard.json` contém os seguintes painéis:
 
 ### Painel 1: Estado dos Circuit Breakers
 - **Tipo**: Stat (indicador visual por cor)

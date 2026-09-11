@@ -1,7 +1,7 @@
 {
-  "uid": "inovare-token-expires",
-  "title": "Inovare - ContaAzul Token",
-  "tags": ["inovare", "contaazul"],
+  "uid": "itsm-token-expires",
+  "title": "CTRLS ITSM - ContaAzul Token",
+  "tags": ["itsm", "contaazul"],
   "timezone": "browser",
   "schemaVersion": 36,
   "version": 1,

@@ -1,16 +1,16 @@
-# Arquitetura do Sistema e Modelo de Dados — Inovare TI
+# Arquitetura do Sistema e Modelo de Dados — CTRLS ITSM
 
-Este documento descreve a arquitetura hexagonal (Ports & Adapters) adotada no backend Java 21 / Spring Boot 3, a modularização de serviços no frontend React 19 e o dicionário de dados do banco de dados relacional PostgreSQL 16 com histórico completo de 55 migrações gerenciadas pelo Flyway.
+Este documento descreve a arquitetura hexagonal (Ports & Adapters) adotada no backend Java 21 / Spring Boot 3, a modularização de serviços no frontend React 19 e o dicionário de dados do banco de dados relacional PostgreSQL 16 com histórico completo de 56 migrações gerenciadas pelo Flyway.
 
 ---
 
 ## 1. Estrutura Arquitetural do Sistema
 
-O ecossistema Inovare TI é estruturado sob contêineres Docker independentes e escaláveis:
+O ecossistema CTRLS ITSM é estruturado sob contêineres Docker independentes e escaláveis:
 
 1. **Frontend SPA (React 19 + Vite + TypeScript):** Interface moderna com `ErrorBoundary` nativo, Document Metadata declarativo, paginação totalizada dinâmica, `SearchableDropdown` com catálogo completo e particionamento inteligente de bundles (`vendor-react` com apenas 231 kB).
 2. **Backend API (Java 21 + Spring Boot 3):** Núcleo de alta performance utilizando **Virtual Threads (Project Loom)** para concorrência e I/O leve. Implementa o padrão de **Arquitetura Hexagonal (Ports & Adapters)** para isolar regras de negócio corporativas de dependências de frameworks.
-3. **Banco de Dados Relacional (PostgreSQL 16):** Armazenamento transacional com suporte a JSONB, integridade referencial com chaves estrangeiras indexadas e controle incremental de evolução de schema via **Flyway Migrations (V1 a V55)**.
+3. **Banco de Dados Relacional (PostgreSQL 16):** Armazenamento transacional com suporte a JSONB, integridade referencial com chaves estrangeiras indexadas e controle incremental de evolução de schema via **Flyway Migrations (V1 a V56)**.
 4. **Cache Distribuído & Rate Limiting (Redis):** Cache de tokens de alta frequência e limitador de taxa distribuído (`RedisRateLimiter`) com fallback síncrono em memória.
 5. **Observabilidade (Prometheus + Grafana):** Coleta de métricas Micrometer expostas no endpoint `/api/actuator/prometheus`.
 
@@ -18,11 +18,11 @@ O ecossistema Inovare TI é estruturado sob contêineres Docker independentes e 
 
 ### 1.1 Camada Backend: Arquitetura Hexagonal (Ports & Adapters)
 
-O código-fonte do backend está localizado em `api/src/main/java/br/dev/ctrls/inovareti/modules/`, dividido em 18 contextos delimitados:
+O código-fonte do backend está localizado em `api/src/main/java/br/dev/ctrls/itsm/modules/`, dividido em 18 contextos delimitados:
 
 
 ```
-br.dev.ctrls.inovareti.modules.<modulo>/
+br.dev.ctrls.itsm.modules.<modulo>/
 ├── domain/                      <-- Core do Domínio (Regras puras, sem frameworks)
 │   ├── model/                   <-- Entidades e Value Objects
 │   ├── exception/               <-- Exceções de domínio

@@ -1,8 +1,8 @@
 {
-  "uid": "inovare-resiliencia-v2",
-  "title": "Inovare-TI — Resiliência & Threads",
-  "description": "Dashboard de monitoramento operacional da arquitetura hexagonal do Inovare-TI. Exibe o estado dos Circuit Breakers, taxa de erros da Feegow, uso de Virtual Threads (Java 21) e latência dos webhooks do Blip.",
-  "tags": ["inovare", "resiliencia", "feegow", "resilience4j", "java21", "blip"],
+  "uid": "itsm-resiliencia-v2",
+  "title": "CTRLS ITSM — Resiliência & Threads",
+  "description": "Dashboard de monitoramento operacional da arquitetura hexagonal do CTRLS ITSM. Exibe o estado dos Circuit Breakers, taxa de erros da Feegow, uso de Virtual Threads (Java 21) e latência dos webhooks do Blip.",
+  "tags": ["ctrls-itsm", "resiliencia", "feegow", "resilience4j", "java21", "blip"],
   "timezone": "browser",
   "schemaVersion": 39,
   "version": 1,

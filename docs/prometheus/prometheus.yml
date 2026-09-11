@@ -9,7 +9,7 @@ rule_files:
   - '/etc/prometheus/prometheus.rules.yml'
 
 scrape_configs:
-  - job_name: 'inovare-ti'
+  - job_name: 'ctrls-itsm'
     metrics_path: /api/actuator/prometheus
     static_configs:
       - targets: ['api:8085']

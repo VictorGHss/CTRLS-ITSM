@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# INOVARE-TI: SCRIPT DE LIMPEZA E RETENÇÃO DE FICHEIROS NO HDD SECUNDÁRIO (/mnt/data)
+# CTRLS-ITSM: SCRIPT DE LIMPEZA E RETENÇÃO DE FICHEIROS NO HDD SECUNDÁRIO (/mnt/data)
 # ==============================================================================
 set -euo pipefail
 
@@ -42,9 +42,9 @@ if [ -d "$UPLOADS_DIR" ]; then
     echo "A analisar diretório de uploads: $UPLOADS_DIR"
     DB_REF_FILE="/tmp/db_references.txt"
 
-    # Executa a query de forma segura no container docker inovareti_db
+    # Executa a query de forma segura no container docker itsm_db
     # e exporta as referências para um ficheiro de texto temporário
-    docker exec -i inovareti_db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -t -A -c "
+    docker exec -i itsm_db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -t -A -c "
     SELECT COALESCE(invoice_file_path, '') FROM assets WHERE invoice_file_path IS NOT NULL
     UNION
     SELECT COALESCE(invoice_file_path, '') FROM stock_batches WHERE invoice_file_path IS NOT NULL

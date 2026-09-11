@@ -1,6 +1,6 @@
-# Inovare TI — Plataforma Integrada de Operações & Automações Clínicas
+# CTRLS ITSM — Plataforma Integrada de Operações & Automações Clínicas
 
-O ecossistema **Inovare TI** é o núcleo de integração, automação e gestão tecnológica da **Clínica Inovare**. A plataforma unifica o atendimento aos pacientes via WhatsApp (Take Blip), o prontuário eletrônico e agendamento (Feegow ERP), a conciliação financeira de recebimentos (Conta Azul V2), o controle de acesso físico por catracas (GerAcesso) e a governança de suporte de TI (ITSM, CMDB, Estoque FIFO e Alertas no Discord).
+O ecossistema **CTRLS ITSM** é uma plataforma White-Label corporativa de integração, automação e gestão tecnológica para policlínicas e centros de saúde. A solução unifica o atendimento aos pacientes via WhatsApp (Take Blip), o prontuário eletrônico e agendamento (Feegow ERP), a conciliação financeira de recebimentos (Conta Azul V2), o controle de acesso físico por catracas (GerAcesso) e a governança de suporte de TI (ITSM, CMDB, Estoque FIFO e Alertas no Discord).
 
 ---
 
@@ -115,7 +115,7 @@ npm run dev
 
 No servidor de produção (`homeserver`):
 ```bash
-cd /opt/ctrls-inovare-ti/Inovare-TI
+cd /opt/ctrls-itsm/CTRLS-ITSM
 git pull
 docker compose down
 docker compose up -d --build
