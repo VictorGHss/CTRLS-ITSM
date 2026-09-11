@@ -68,10 +68,10 @@ A API backend em **Java 21 / Spring Boot 3** é desenhada sob a **Arquitetura He
 
 | Documento | Descrição |
 | :--- | :--- |
-| 🏛️ [**Arquitetura e Modelo de Dados**](docs/ARCHITECTURE.md) | Padrão Hexagonal, divisão de camadas, histórico de 52 migrações do Flyway, dicionário completo de tabelas e diagrama ERD. |
-| ⚡ [**Catálogo de Funcionalidades e Regras**](docs/FEATURES.md) | Especificação das regras de negócio: Ingestão de consultas, confirmações em grupo com acumulador atômico, menus numéricos no WhatsApp, janela de catracas, SLA de TI, parada crítica e FIFO de estoque. |
-| 🔌 [**Manual de Integrações e APIs**](docs/INTEGRATIONS.md) | Contratos de integração: Feegow ERP (13 status oficiais), Take Blip (Dual-Scope Router + Desk + Menus Interativos), GerAcesso, Conta Azul V2 e Discord JDA 5. |
-| 🛠️ [**Guia do Desenvolvedor e Operações**](docs/DEVELOPER_GUIDE.md) | Setup do ambiente local, dicionário de variáveis de ambiente (`.env`), observabilidade (Prometheus/Grafana), linter/build do frontend e runbooks de resolução de incidentes. |
+| 🏛️ [**Arquitetura e Modelo de Dados**](docs/ARCHITECTURE.md) | Padrão Hexagonal, divisão de camadas, histórico de 55 migrações do Flyway, dicionário completo de tabelas e diagrama ERD. |
+| ⚡ [**Catálogo de Funcionalidades e Regras**](docs/FEATURES.md) | Especificação das regras de negócio: Ingestão de consultas, confirmações em grupo com acumulador atômico, menus numéricos no WhatsApp, controle de catracas com reativação dinâmica e cache offline, totem de autoatendimento, SLA de TI, parada crítica e FIFO de estoque. |
+| 🔌 [**Manual de Integrações e APIs**](docs/INTEGRATIONS.md) | Contratos de integração: Feegow ERP (13 status oficiais), Take Blip (Dual-Scope Router + Desk + Menus Interativos), GerAcesso (protocolo tipovisista: 1, auto-retry, reativação imediata e anti-passback), Conta Azul V2 e Discord JDA 5. |
+| 🛠️ [**Guia do Desenvolvedor e Operações**](docs/DEVELOPER_GUIDE.md) | Setup do ambiente local, dicionário de variáveis de ambiente (`.env`), observabilidade (Prometheus/Grafana), linter/build do frontend, runbooks de resolução de incidentes e procedimento seguro de backup e desativação (decommissioning). |
 
 ---
 
@@ -116,9 +116,9 @@ No servidor de produção (`homeserver`):
 ```bash
 cd /opt/ctrls-inovare-ti/Inovare-TI
 git pull
-docker-compose down
-docker-compose up -d --build
-docker-compose logs -f api
+docker compose down
+docker compose up -d --build
+docker compose logs -f api
 ```
 
 A documentação interativa Swagger/OpenAPI está acessível localmente em `http://localhost:8085/api/swagger-ui.html` ou pelo contrato em [openapi.yaml](docs/openapi.yaml).

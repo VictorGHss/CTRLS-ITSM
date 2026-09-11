@@ -111,30 +111,85 @@ Para garantir que os dados do paciente e o roteamento de fila estejam disponíve
 
 ## 3. Integração com Controle de Catracas Físicas (GerAcesso)
 
-O módulo `access` orquestra a emissão de credenciais físicas e QR Codes para entrada na clínica.
+O módulo `access` orquestra a emissão de credenciais físicas e QR Codes para liberação de acesso nas catracas físicas da clínica, integrando o agendamento médico ao servidor local da **GerAcesso**.
 
 ### 3.1 Contrato REST da API GerAcesso
 
-* **Endpoint:** `POST http://172.25.100.106:8082/AgendamentoVisita`
-* **Autenticação:** `Authorization: Bearer {{INOVARE_GERACESSO_TOKEN}}`
-* **Payload de Cadastro:**
-  ```json
-  {
-    "documento": "12251091831",
-    "nome": "SILVANA CRISTINA CARDOSO",
-    "tipo": 1,
-    "inicioValidade": "2026-08-24T08:00:00",
-    "fimValidade": "2026-08-24T21:00:00",
-    "observacao": "Agendamento Feegow 3366065"
-  }
-  ```
-* **Campos Retornados:**
-  * `localizador`: Código alfanumérico único (ex: `LOC-849201`).
-  * `codigoCredencial`: Código numérico lido pelo leitor da catraca ou convertido em QR Code.
+* **Endpoint:** `POST {{INOVARE_GERACESSO_URL}}` (padrão local: `http://172.25.100.106:8082/AgendamentoVisita`)
+* **Autenticação:** Header HTTP `Authorization: Bearer {{INOVARE_GERACESSO_TOKEN}}` (com prefixação defensiva automática `Bearer ` caso a variável não a contenha).
+* **Timeouts de Rede:** 10 segundos de `connectTimeout` e 10 segundos de `readTimeout` configurados no `JdkClientHttpRequestFactory`.
 
-### 3.2 Cadastro Concorrente de Acompanhantes
-* Acompanhantes enviados no payload de confirmação são disparados para o GerAcesso em **paralelo** via **Java 21 Virtual Threads**.
-* Em caso de indisponibilidade no cadastro de um acompanhante secundário, o titular e os outros acompanhantes são mantidos e liberados normalmente.
+#### Payload de Requisição (`GerAcessoRequest`):
+```json
+{
+  "cpf": "12251091831",
+  "status": 1,
+  "nome": "SILVANA CRISTINA CARDOSO",
+  "telefone": "42999998888",
+  "email": "",
+  "tipovisista": 1,
+  "matricula_visitado": "0045",
+  "cpf_visitado": "12345678901",
+  "inicio_visita": "24/08/2026 07:55",
+  "fim_visita": "24/08/2026 23:59"
+}
+```
+
+> [!IMPORTANT]
+> **Campo Mandatório `tipovisista: 1`:** A controladora da GerAcesso exige rigorosamente o campo com a grafia exata `"tipovisista"` preenchido com o valor inteiro `1`. Se esse parâmetro for omitido ou enviado com grafia corrigida (`tipoVisita`), a catraca não libera o acesso. O record `GerAcessoRequest` força internamente `visitType = 1` no seu construtor canônico.
+
+* **Detalhamento dos Campos:**
+  * `cpf`: CPF limpo (somente dígitos). Mascarado nos logs da aplicação (`***.510.***-31`) para conformidade LGPD.
+  * `status`: Inteiro `1` (agendamento ativo).
+  * `nome`: Nome completo do paciente ou acompanhante.
+  * `telefone`: Telefone/WhatsApp com DDD (apenas dígitos).
+  * `email`: E-mail de contato (opcional/vazio).
+  * `matricula_visitado`: Matrícula do médico cadastrada em `doctor_configurations.ger_acesso_matricula`.
+  * `cpf_visitado`: CPF do profissional atendente cadastrado em `doctor_configurations.ger_acesso_cpf`.
+  * `inicio_visita` e `fim_visita`: Janela física no formato `dd/MM/yyyy HH:mm` (`AccessWindowCalculator.GERACESSO_DATE_FORMATTER`).
+
+#### Payload de Resposta (`GerAcessoResponse`):
+```json
+{
+  "status": "1",
+  "mensagem": "Visita agendada com sucesso.",
+  "agendamento": 104592,
+  "tipo": "Visitante",
+  "pessoa": 8520,
+  "localizador": "LOC-849201",
+  "credencial": "9283741"
+}
+```
+
+* **Mapeamento:**
+  * `credencial`: Código numérico gerado pela controladora da catraca física. Este valor é codificado no QR Code apresentado no leitor ótico.
+  * `localizador`: Código alfanumérico para auditoria visual na tela da recepção.
+
+### 3.2 Resiliência de Rede e Mecanismo de Auto-Retry
+
+Para absorver micro-instabilidades na rede local do servidor GerAcesso ou pequenos delays da controladora:
+* O `GerAcessoRestClientAdapter` executa até **2 tentativas** de envio HTTP POST.
+* Se a primeira tentativa falhar (ex: `SocketTimeout`, `ConnectException` ou status HTTP não-2xx), o adapter aguarda um backoff de **800ms** antes do retry imediato.
+* Falhas e respostas anômalas registram o payload mascarado e o corpo retornado em nível `ERROR`/`WARN` nos logs de auditoria.
+
+### 3.3 Motor de Reativação Dinâmica de Acesso (`ReactivateAccessUseCase`)
+
+* **Endpoint:** `POST /api/v1/access/reactivate/{appointmentId}` (aceita ID Feegow, prefixo de totem `INOV-...` / `IMG-...` ou fallback por CPF).
+* **Solução para Anti-Passback e Travamento de Catraca:** Se o leitor ótico da catraca fizer a leitura do QR Code mas o paciente hesitar ou não girar o braço dentro do tempo de timeout do hardware (disparando a proteção anti-passback da controladora), a credencial anterior é rejeitada pela catraca.
+* **Janela Imediata:** O use case calcula `startVisit = now.minusMinutes(5)` e `endVisit = 23:59` do dia corrente. A margem de 5 minutos retroativos compensa eventuais descompassos de relógio (clock skew) entre a VM do backend e a controladora física.
+* **Resolução Médica:** Identifica o profissional atendente por ID Feegow ou pelo nome salvo na credencial (`access_credentials.doctor_name` via migração V54), emitindo um novo registro de visita no GerAcesso com novo código de credencial.
+* **Atualização Atômica:** O banco de dados é atualizado com a nova credencial mantendo a rastreabilidade original.
+
+### 3.4 Cadastro Concorrente de Acompanhantes (Java 21 Virtual Threads)
+
+* Pacientes com acompanhantes (idosos, crianças, PCDs) têm seus acompanhantes cadastrados em **paralelo** via **Java 21 Virtual Threads** (`Executors.newVirtualThreadPerTaskExecutor()`).
+* **Isolamento de Falhas:** O cadastro de cada acompanhante opera em bloco `try-catch` isolado. Se a controladora recusar um acompanhante secundário, o titular e demais acompanhantes são liberados sem interrupção.
+
+### 3.5 Arquitetura de Cache Offline PWA no Frontend
+
+* **Armazenamento Local Escopado:** O frontend grava as credenciais validadas no `localStorage` sob a chave `patient_access_{clinicId}_last_credentials`.
+* **Disponibilidade na Recepção/Elevador:** Se o paciente perder sinal de rede móvel (4G/5G) ou Wi-Fi ao entrar na clínica, o aplicativo PWA carrega instantaneamente as credenciais do cache local, exibindo o QR Code em tela cheia com alta legibilidade.
+* **Prevenção de Congelamento de Canvas:** Os componentes `CredentialCard` e `FullscreenQrModal` utilizam chaves dinâmicas (`key={cred.credentialCode}`) para forçar a re-renderização imediata do `<QRCodeCanvas>` do React, eliminando travamentos de renderização no motor WebKit/Blink mobile após atualizações de credenciais.
 
 ---
 

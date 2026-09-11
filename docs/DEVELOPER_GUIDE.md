@@ -115,19 +115,52 @@ Caso um atendimento não seja direcionado para a secretária correta:
 2. Confirme se os campos `fila` e `Medico` foram sincronizados no contato do paciente no Roteador e no Túnel do Desk.
 3. Certifique-se de que o nome da fila em `appointment_doctor_mapping.blip_queue_id` corresponde exatamente ao nome cadastrado no Blip Desk (ex: `Ortopedia - Dr. Rodrigo Caldonazzo Fávaro`).
 
-### 4.3 Runbook: Falha de Comunicação com as Catracas (GerAcesso)
-1. Teste a conectividade com o servidor GerAcesso no IP local:
+### 4.3 Runbook: Falha de Comunicação ou Bloqueio nas Catracas (GerAcesso)
+1. **Teste de Conectividade de Rede Local:**
    ```bash
-   curl -I -H "Authorization: Bearer $TOKEN" http://172.25.100.106:8082/AgendamentoVisita
+   curl -I -H "Authorization: Bearer $INOVARE_GERACESSO_TOKEN" http://172.25.100.106:8082/AgendamentoVisita
    ```
-2. Verifique se o agendamento possui CPF cadastrado. Se o prontuário estiver sem CPF, o sistema responderá com `"requiresCpfFallback": true` para coleta via WhatsApp.
+2. **Inspeção de Logs em Tempo Real:**
+   ```bash
+   docker logs inovareti_api --tail=200 | grep -E "GerAcesso-Adapter|CATRACA-POST|ReactivateAccess"
+   ```
+3. **Resolução de Anti-Passback / Leitor Travado:**
+   * Se o paciente já apresentou o QR Code e não girou o braço da catraca a tempo, a controladora bloqueia o código anterior.
+   * Acione a reativação dinâmica via REST ou solicite ao paciente clicar em *"Atualizar QR Code"* no celular:
+     ```bash
+     curl -X POST http://localhost:8085/api/v1/access/reactivate/{appointmentId}
+     ```
+   * O motor gera uma nova visita com janela retroativa de 5 minutos (`now.minusMinutes(5)`) e substitui a credencial no banco e na tela instantaneamente.
+4. **Verificação de CPF:** Se o agendamento no Feegow estiver sem CPF cadastrado, o sistema responderá com `"requiresCpfFallback": true` para coleta via WhatsApp ou totem.
+5. **Parâmetro Mandatório:** Certifique-se de que o payload contém o campo `"tipovisista": 1`. Sem este campo exato, o hardware GerAcesso rejeita a liberação.
 
 ### 4.4 Runbook: Deploy e Atualização em Produção
 No servidor de hospedagem (`homeserver`):
 ```bash
 cd /opt/ctrls-inovare-ti/Inovare-TI
 git pull
-docker-compose down
-docker-compose up -d --build
-docker-compose logs -f api
+docker compose down
+docker compose up -d --build
+docker compose logs -f api
 ```
+
+### 4.5 Runbook: Procedimento de Desativação Segura e Backup (Decommissioning)
+Caso o ecossistema precise ser desativado ou transferido de infraestrutura:
+1. **Backup Completo do Banco de Dados (PostgreSQL 16):**
+   ```bash
+   docker exec -t inovareti_db pg_dump -U postgres -d inovareti -F c -b -v -f /tmp/inovareti_backup_full.dump
+   docker cp inovareti_db:/tmp/inovareti_backup_full.dump ./inovareti_backup_$(date +%Y%m%d).dump
+   ```
+2. **Backup de Configurações e Variáveis de Ambiente:**
+   ```bash
+   tar -czvf inovareti_env_backup_$(date +%Y%m%d).tar.gz .env api/.env
+   ```
+3. **Parada Segura dos Serviços:**
+   ```bash
+   docker compose down -v  # ou docker compose stop caso deseje manter volumes locais
+   ```
+4. **Desconexão de Webhooks Externos:**
+   * **Take Blip:** Remover a URL de webhook configurada nas ações de entrada/saída do fluxo do bot.
+   * **Conta Azul:** Revogar a aplicação nas configurações de desenvolvedor do portal Conta Azul.
+5. **Preservação de Propriedade Intelectual:**
+   * O código-fonte, histórico Git e esquemas de migração Flyway constituem propriedade integral do autor, prontos para empacotamento em modelo SaaS white-label para novas clínicas ou instituições de saúde.

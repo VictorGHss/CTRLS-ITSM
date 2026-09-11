@@ -71,27 +71,40 @@ stateDiagram-v2
 
 ## 2. Controle de Acesso Físico e Catracas (Módulo Access)
 
-O módulo `access` integra a confirmação de consultas do Feegow ao sistema de controle de catracas físicas **GerAcesso**.
+O módulo `access` integra a confirmação de consultas do Feegow ao sistema de controle de catracas físicas **GerAcesso**, orquestrando a emissão, reativação, auto-cadastro em totem e apresentação mobile de credenciais.
 
-### 2.1 Janela Dinâmica de Acesso Físico
-Para garantir a segurança predial e a comodidade dos pacientes:
-* **Horário de Abertura:** A credencial/QR Code é liberado exatamente **2 horas antes** do horário agendado da consulta.
-* **Horário de Encerramento:** A validade estende-se até as **21:00 do mesmo dia**, cobrindo possíveis atrasos em consultas do período da tarde/noite.
-* **Agrupamento Familiar:** Pacientes com múltiplos agendamentos no mesmo dia têm sua janela calculada a partir da primeira consulta do dia.
+### 2.1 Janelas Dinâmicas de Liberação Física
+O serviço `AccessWindowCalculator` calcula as janelas de liberação horária garantindo segurança predial e comodidade:
+* **Janela Padrão de Consultas:** Abertura a partir das **06:00** e encerramento às **23:00** do dia da consulta, cobrindo com folga eventuais atrasos ou atendimentos estendidos.
+* **Janela de Auto-Cadastro / Totem:** Abertura às **06:00** com encerramento às **23:59** para pacientes que realizam check-in avulso na recepção.
+* **Ajuste de Data Efetiva (`resolveAppointmentDate`):** Se a data de agendamento estiver retroativa ou for processada no próprio dia, o cálculo ancora no dia corrente da clínica (`America/Sao_Paulo`).
 
-### 2.2 Portal Web do Paciente (`/acesso/:id`)
-* **Autenticação 2FA por Telefone:** O paciente digita os últimos 4 dígitos do seu telefone com foco automático no mobile para visualizar suas credenciais.
-* **Carrossel de Credenciais & Acompanhantes:** Apresentação em cartões estilo carteira digital (Wallet) com QR Codes gerados em alta tolerância a falhas (`level="H"`).
-* **Modo Tela Cheia de Alta Legibilidade:** Visualização ampliada do QR Code em fundo branco puro com instrução de leitura a 10–15 cm da câmera da catraca e trava de brilho de tela.
-* **Suporte Offline com Cache Local:** Credenciais validadas são salvas em `localStorage`, permitindo acesso instantâneo na recepção mesmo em caso de oscilação do sinal de internet no smartphone do paciente.
+### 2.2 Portal Web do Paciente & PWA Mobile (`/acesso/:id`)
+* **Autenticação 2FA por Telefone:** O paciente digita os 4 últimos dígitos do seu telefone para desbloqueio seguro, com suporte a preenchimento automático por link autenticado (`?t=TOKEN` ou `?p=1234`).
+* **Multi-Clínica Dinâmica:** O portal detecta automaticamente a rota e query parameters, aplicando temas visuais personalizados para a **Clínica Inovare** ou para o centro de diagnóstico **Inovare Imagem**.
+* **Carrossel de Credenciais & Acompanhantes:** Apresentação em cartões individuais no padrão Wallet digital. Cada cartão exibe o nome do titular ou acompanhante, status de liberação, médico atendente (`access_credentials.doctor_name`) e botão de expansão.
+* **Modo Tela Cheia com Screen Wake Lock:** Ao abrir o QR Code em tela cheia, a Screen Wake Lock API mantém a tela do smartphone acesa com brilho ideal e contraste puro para leitura a 10–15 cm da lente ótica da catraca.
+* **Cache Offline Resiliente:** As credenciais validadas são persistidas em `localStorage`. Se o paciente perder sinal de celular na portaria ou no elevador, o app abre instantaneamente e mantém o QR Code visível.
+* **Re-renderização Reativa do QR Code:** Chaves exclusivas (`key={cred.credentialCode}`) forçam a renderização instantânea do `<QRCodeCanvas>`, prevenindo que navegadores mobile (Safari iOS / Chrome Android) congelem o canvas visual após trocas de credencial.
 
-### 2.3 Cadastro Concorrente de Acompanhantes (Java 21 Virtual Threads)
-* O paciente titular pode informar múltiplos acompanhantes pelo chatbot do Blip ou pelo Portal Web.
-* O backend dispara as requisições de cadastro de cada acompanhante para a API do GerAcesso em **paralelo** utilizando **Virtual Threads** (`Executors.newVirtualThreadPerTaskExecutor()`).
-* **Resiliência Fail-Safe:** Cada acompanhante é processado em bloco isolado com `try-catch`. A eventual falha no cadastro de um acompanhante não interrompe nem invalida a liberação do titular e dos demais acompanhantes.
+### 2.3 Reativação Imediata & Resolução de Anti-Passback (`ReactivateAccessUseCase`)
+* **Problema Resolvido:** Se o paciente apresentar o QR Code no leitor da catraca mas hesitar e não empurrar os braços mecânicos a tempo, a controladora aciona a proteção anti-passback ou expira a leitura, bloqueando nova tentativa com a mesma credencial.
+* **Ação do Paciente / Recepção:** O paciente simplesmente clica em *"Atualizar QR Code"* no cartão ou modal de tela cheia.
+* **Emissão em Tempo Real:** O backend despacha uma nova requisição para a GerAcesso com `inicio_visita` retroativo em 5 minutos (`now.minusMinutes(5)`) para compensar desvios de relógio da máquina física e estendendo até as 23:59.
+* **Substituição Transparente:** O GerAcesso retorna um novo código de credencial numérica, que é persistido no banco e atualizado na tela do paciente sem exigir recarregamento da página.
 
-### 2.4 Fallback Síncrono de CPF no WhatsApp
-* Se o CPF do paciente não estiver registrado no prontuário do Feegow nem for enviado pelo payload, o endpoint `/api/v1/access/blip/confirmation` retorna imediatamente `"requiresCpfFallback": true`. O bot do Blip direciona o usuário para o bloco de digitação do CPF antes de liberar a credencial da catraca.
+### 2.4 Auto-Cadastro e Totem de Autoatendimento (`SelfRegistrationUseCase`)
+* **Fluxo em Totem Touchscreen:** Pacientes que chegam à clínica sem agendamento prévio ou que necessitam de credencial física imediata digitam seu CPF no totem (`/acesso/totem`).
+* **Busca Integrada no Feegow:** O `LookupCredentialsByCpfUseCase` localiza as consultas ativas do paciente para o dia.
+* **Auto-registro Imediato:** Se o paciente não tiver consulta marcada, o sistema permite o auto-cadastro rápido coletando nome, telefone e médico, emitindo na hora a liberação na catraca física e gravando as colunas `phone` (V53) e `doctor_name` (V54).
+
+### 2.5 Cadastro Concorrente de Acompanhantes (Java 21 Virtual Threads)
+* O paciente titular pode cadastrar acompanhantes pelo chatbot do WhatsApp ou diretamente pelo botão *"Adicionar Acompanhante"* no portal web.
+* O backend despacha as requisições em **paralelo** utilizando **Java 21 Virtual Threads**, processando cada visitante de forma independente sem gargalo de thread pool.
+* **Falha Isolada:** A rejeição de um acompanhante pela catraca não afeta nem bloqueia a liberação do titular e dos demais acompanhantes.
+
+### 2.6 Fallback Síncrono de CPF no WhatsApp
+* Se o agendamento no Feegow não possuir o CPF cadastrado, a API notifica o chatbot com a flag `"requiresCpfFallback": true`. O robô do Blip solicita a digitação do CPF antes de gerar o link da catraca física, garantindo a integridade dos registros prediais.
 
 ---
 

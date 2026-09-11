@@ -1,6 +1,6 @@
 # Arquitetura do Sistema e Modelo de Dados — Inovare TI
 
-Este documento descreve a arquitetura hexagonal (Ports & Adapters) adotada no backend Java 21 / Spring Boot 3, a modularização de serviços no frontend React 19 e o dicionário de dados do banco de dados relacional PostgreSQL 16 com histórico completo de 52 migrações gerenciadas pelo Flyway.
+Este documento descreve a arquitetura hexagonal (Ports & Adapters) adotada no backend Java 21 / Spring Boot 3, a modularização de serviços no frontend React 19 e o dicionário de dados do banco de dados relacional PostgreSQL 16 com histórico completo de 55 migrações gerenciadas pelo Flyway.
 
 ---
 
@@ -10,7 +10,7 @@ O ecossistema Inovare TI é estruturado sob contêineres Docker independentes e 
 
 1. **Frontend SPA (React 19 + Vite + TypeScript):** Interface moderna com `ErrorBoundary` nativo, Document Metadata declarativo, paginação totalizada dinâmica, `SearchableDropdown` com catálogo completo e particionamento inteligente de bundles (`vendor-react` com apenas 231 kB).
 2. **Backend API (Java 21 + Spring Boot 3):** Núcleo de alta performance utilizando **Virtual Threads (Project Loom)** para concorrência e I/O leve. Implementa o padrão de **Arquitetura Hexagonal (Ports & Adapters)** para isolar regras de negócio corporativas de dependências de frameworks.
-3. **Banco de Dados Relacional (PostgreSQL 16):** Armazenamento transacional com suporte a JSONB, integridade referencial com chaves estrangeiras indexadas e controle incremental de evolução de schema via **Flyway Migrations (V1 a V52)**.
+3. **Banco de Dados Relacional (PostgreSQL 16):** Armazenamento transacional com suporte a JSONB, integridade referencial com chaves estrangeiras indexadas e controle incremental de evolução de schema via **Flyway Migrations (V1 a V55)**.
 4. **Cache Distribuído & Rate Limiting (Redis):** Cache de tokens de alta frequência e limitador de taxa distribuído (`RedisRateLimiter`) com fallback síncrono em memória.
 5. **Observabilidade (Prometheus + Grafana):** Coleta de métricas Micrometer expostas no endpoint `/api/actuator/prometheus`.
 
@@ -118,8 +118,11 @@ O controle do schema do PostgreSQL 16 é efetuado de forma cronológica e imutá
 * **V48 (Google Review URL):** Coluna `google_review_url` na tabela `doctor_configurations`.
 * **V49 (Higienização e Índices Finais):** Índices de alta performance em `appointment_sessions`, `notification_groups` e `doctor_configurations`.
 * **V50 (Canal do Discord por Médico):** Coluna `discord_channel_id` na tabela `doctor_configurations` para roteamento segmentado de alertas clínicos.
-* **V51 (Normalização de Médicos e Limpeza Legada):** Remoção de tabelas legadas e consolidação definitiva do catálogo em `doctor_configurations`.
+* **V51 (Normalização de Médicos e Limpeza Legada):** Remoção de tabelas legadas e consolidação definitiva do catálogo em `doctor_configurations` com suporte financeiro Conta Azul.
 * **V52 (Restauração de Retry e Índices de FKs):** Restauração da tabela `processing_attempts` para controle de retries de notas fiscais Conta Azul, adição de 8 índices em Foreign Keys e índices de busca em `audit_logs` e `notification_groups`.
+* **V53 (Telefone em Credenciais de Acesso):** Coluna `phone` na tabela `access_credentials` para persistir o telefone/WhatsApp do paciente ou acompanhante durante o auto-cadastro ou check-in no totem.
+* **V54 (Médico Associado em Credenciais de Acesso):** Coluna `doctor_name` na tabela `access_credentials` para armazenar o médico ou especialidade atendente diretamente na credencial, permitindo exibição contextual na carteira digital e totem.
+* **V55 (Sincronização de Médicos e Agendas):** Sincronização em massa do catálogo clínico: ativação com defaults de 51 médicos clínicos aprovados, desativação de 6 profissionais com atendimento suspenso/exclusivo e bloqueio preventivo de 8 agendas de testes e procedimentos administrativos.
 
 ---
 
@@ -164,7 +167,10 @@ O controle do schema do PostgreSQL 16 é efetuado de forma cronológica e imutá
 | `time_shift_minutes` | `integer` | NOT NULL, default `0` | Deslocamento de instrução de chegada |
 | `google_review_url` | `varchar(500)` | NULLABLE | Link direto para avaliação no Google Meu Negócio |
 | `discord_channel_id`| `varchar(50)` | NULLABLE | ID do canal no Discord exclusivo para alertas deste médico (V50) |
-| `is_active` | `boolean` | NOT NULL, default `true` | Habilita/desabilita o motor para este médico |
+| `contaazul_customer_uuid`| `varchar(64)` | NULLABLE, UNIQUE | UUID do cliente correspondente no Conta Azul V2 (V51) |
+| `doctor_email` | `varchar(255)` | NULLABLE | E-mail do médico para envio de relatórios e faturamento (V51) |
+| `doctor_cpf_cnpj` | `varchar(20)` | NULLABLE | CPF ou CNPJ do médico para emissão fiscal (V51) |
+| `is_active` | `boolean` | NOT NULL, default `true` | Habilita/desabilita o motor de agendamentos e catracas para este médico |
 | `created_at` | `timestamp` | NOT NULL | Data de cadastro |
 
 ---
@@ -175,15 +181,17 @@ O controle do schema do PostgreSQL 16 é efetuado de forma cronológica e imutá
 | Coluna | Tipo | Restrições | Descrição |
 |---|---|---|---|
 | `id` | `uuid` | PK, default `gen_random_uuid()` | Identificador da credencial |
-| `feegow_appointment_id` | `varchar(50)` | NOT NULL, INDEX | ID da consulta associada |
+| `feegow_appointment_id` | `varchar(50)` | NOT NULL, INDEX | ID da consulta associada (ou prefixo de totem ex: `INOV-20260910-...`) |
 | `name` | `varchar(150)` | NOT NULL | Nome do titular ou acompanhante |
 | `cpf` | `varchar(20)` | NOT NULL | CPF cadastrado |
+| `phone` | `varchar(50)` | NULLABLE | Telefone informado no totem/portal (V53) |
+| `doctor_name` | `varchar(255)` | NULLABLE | Nome do médico ou especialidade associada (V54) |
 | `user_type` | `varchar(20)` | NOT NULL | `PATIENT` (titular) ou `COMPANION` (acompanhante) |
-| `locator` | `varchar(50)` | NOT NULL | Localizador alfanumérico do GerAcesso |
-| `credential_code` | `varchar(50)` | NOT NULL | Código da credencial para liberação no leitor |
-| `start_validity` | `timestamp` | NOT NULL | Início da janela física de acesso (2h antes) |
-| `end_validity` | `timestamp` | NOT NULL | Fim da janela física de acesso (21:00 do dia) |
-| `created_at` | `timestamp` | NOT NULL | Data da geração da credencial |
+| `locator` | `varchar(50)` | NOT NULL | Localizador alfanumérico retornado pelo GerAcesso |
+| `credential_code` | `varchar(50)` | NOT NULL | Código numérico da credencial para liberação no leitor de QR Code |
+| `start_validity` | `timestamp` | NOT NULL | Início da janela física de acesso (tolerância antecipada) |
+| `end_validity` | `timestamp` | NOT NULL | Fim da janela física de acesso (23:59 do dia da visita) |
+| `created_at` | `timestamp` | NOT NULL | Data e hora da geração/reativação da credencial |
 
 ---
 
