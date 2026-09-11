@@ -14,7 +14,7 @@ A rotina matinal de ingestão (`IngestAppointmentsUseCase`) é executada automat
 * **Segunda a Quinta-Feira:** Consulta os agendamentos de **Hoje (D+0)** e **Amanhã (D+1)**.
 * **Sexta-Feira:** Consulta os agendamentos de **Sexta (D+0)**, **Sábado (D+1)** e antecipa as consultas de **Segunda-Feira (D+3)**.
 * **Regra D+2 para Médicos com Antecedência Configurada:**
-  * Médicos configurados com `advance_notice_days = 2` na tabela `doctor_configurations` (ex: Dr. Giuliano) recebem buscas dedicadas para D+2.
+  * Médicos configurados com `advance_notice_days = 2` na tabela `doctor_configurations` (ex: Dermatologia e Biópsias) recebem buscas dedicadas para D+2.
   * **Trava D+2:** As buscas D+2 são executadas exclusivamente às **quartas-feiras** (para pautas de sexta D+2) e às **quintas-feiras** (para pautas de sábado D+2).
 
 ### 1.2 Filtro Estrito de Procedimentos (Cirurgias vs Consultas)

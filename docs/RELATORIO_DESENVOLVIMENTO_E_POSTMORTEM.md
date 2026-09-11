@@ -105,7 +105,7 @@ Diferente da solução genérica orçada no mercado, passei **meses conversando 
 1. **Adiantamento Preventivo de Horário (10 Minutos):**
    * Determinados médicos enfrentavam atrasos sistemáticos porque pacientes chegavam exatamente no horário agendado (ou com pequenos atrasos), postergando toda a triagem e desregulando a pauta.
    * Desenvolvi uma lógica que adiantava em **10 minutos** o horário informado na mensagem de confirmação em relação ao horário registrado no Feegow (ex: consulta marcada às 14h00 no ERP era comunicada ao paciente como 13h50). Essa adequação fez com que o paciente estivesse presente e triado no minuto exato da consulta médica.
-2. **Regra D+2 para Dermatologia e Procedimentos Especiais (Dr. Giuliano):**
+2. **Regra D+2 para Dermatologia e Procedimentos Especiais:**
    * Exames dermatológicos e biópsias exigiam preparo prévio e compra de medicações específicas, demandando confirmação com **2 dias de antecedência (D+2)**.
    * Implementei uma trava de calendário: as confirmações D+2 eram disparadas exclusivamente às **quartas-feiras** (para pautas de sexta) e às **quintas-feiras** (para pautas de sábado).
 3. **Esteira Ativa de Nudges a Cada 2 Horas:**
