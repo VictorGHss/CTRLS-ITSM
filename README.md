@@ -2,6 +2,10 @@
 
 O ecossistema **CTRLS ITSM** é uma plataforma White-Label corporativa de integração, automação e gestão tecnológica para policlínicas e centros de saúde. A solução unifica o atendimento aos pacientes via WhatsApp (Take Blip), o prontuário eletrônico e agendamento (Feegow ERP), a conciliação financeira de recebimentos (Conta Azul V2), o controle de acesso físico por catracas (GerAcesso) e a governança de suporte de TI (ITSM, CMDB, Estoque FIFO e Alertas no Discord).
 
+> [!NOTE]
+> 📄 **Memorial Técnico, Relatório de Engenharia e Post-Mortem de Projeto:**  
+> Para uma análise aprofundada da trajetória de desenvolvimento, desafios de campo em ambiente hospitalar (Java 21 Virtual Threads, integração IoT de catracas físicas Control iD/GerAcesso, automação de WhatsApp com +11 mil mensagens e vazão de ~500 msgs/min), métricas de negócio e o post-mortem executivo, consulte o [**Memorial Técnico e Post-Mortem de Desenvolvimento**](docs/RELATORIO_DESENVOLVIMENTO_E_POSTMORTEM.md).
+
 ---
 
 ## 🏛️ Visão Geral dos 4 Pilares do Ecossistema
@@ -123,3 +127,10 @@ docker compose logs -f api
 ```
 
 A documentação interativa Swagger/OpenAPI está acessível localmente em `http://localhost:8085/api/swagger-ui.html` ou pelo contrato em [openapi.yaml](docs/openapi.yaml).
+
+---
+
+## ⚖️ Licença & Propriedade Intelectual
+
+Este ecossistema é protegido por direitos autorais sob licença proprietária de **Victor Gabriel Hass**. Visualização, estudo técnico e avaliação de engenharia são permitidos para fins acadêmicos (TCC) e de recrutamento profissional (portfólio). Uso comercial, redistribuição ou implantação em produção sem autorização prévia por escrito são expressamente proibidos. Consulte o arquivo [LICENSE](LICENSE) para mais detalhes.
+
