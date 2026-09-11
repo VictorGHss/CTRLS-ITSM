@@ -14,8 +14,8 @@
 Este memorial técnico documenta a concepção, o desenvolvimento em nível de produção e a conclusão do ecossistema hospitalar integrado **CTRLS-ITSM**, idealizado e desenvolvido por minha iniciativa direta como uma solução sob medida para automatizar de ponta a ponta os fluxos operacionais de uma policlínica médica de grande porte e de seu centro parceiro de diagnóstico por imagem (**Clínica da Imagem**).
 
 A solução unificou 5 frentes críticas de operação médica e predial:
-1. **Comunicação Omnichannel e Automação de Agendamentos:** Esteira inteligente conectando o WhatsApp (via Take Blip e Meta WhatsApp Cloud API) à grade médica do **Feegow ERP**, eliminando o trabalho braçal das secretárias, tratando as particularidades de cada agenda médica e reduzindo comprovadamente o absenteísmo (*no-show*).
-2. **Controle de Acesso Físico IoT:** Integração direta com catracas eletrônicas **Control iD iDBlock Mini** e software de portaria **GerAcesso** na rede local, emitindo QR Codes dinâmicos em Progressive Web App (PWA) e eliminando as filas e cadastros manuais na recepção do térreo.
+1. **Comunicação Omnichannel e Automação de Agendamentos:** Esteira inteligente conectando o WhatsApp (via Take Blip e Meta WhatsApp Cloud API) à grade médica do **Feegow ERP**, eliminando o trabalho braçal das secretárias, tratando as particularidades de cada agenda médica e reduzindo comprovadamente o absenteísmo (*no-show*), com **mais de 11 mil mensagens enviadas em 2 meses** e vazão de pico de **quase 500 mensagens diárias em menos de 1 minuto**.
+2. **Controle de Acesso Físico IoT:** Integração direta com catracas eletrônicas **Control iD iDBlock Mini** e software de portaria **GerAcesso** na rede local, emitindo QR Codes dinâmicos em Progressive Web App (PWA) e eliminando as filas e cadastros manuais na recepção do térreo, com **mais de 1.800 credenciais de acesso geradas automaticamente em apenas 2 semanas** de operação nas catracas físicas.
 3. **Marketing de Reputação:** Algoritmo automatizado de escuta pós-consulta que identifica pacientes atendidos no Feegow e despacha links de avaliação 5 estrelas no Google Meu Negócio, direcionando para a página individual do médico ou para a página institucional da clínica.
 4. **Conciliação Financeira:** Automação de baixas de honorários e emissão de recibos médicos via **Conta Azul V2 API**.
 5. **ITSM e Governança de TI:** Gestão de incidentes com cálculo de SLA em horas úteis, inventário patrimonial com baixa FIFO e bot operacional no Discord (JDA 5).
@@ -112,7 +112,10 @@ Diferente da solução genérica orçada no mercado, passei **meses conversando 
    * Caso o paciente visualizasse a notificação e não respondesse, o motor (`MonitorAppointmentNudgesUseCase`) despachava lembretes automáticos de reforço (nudges) espaçados em **2 horas**, evitando que o agendamento ficasse esquecido.
 4. **Mensagem Preventiva de Proximidade (2 Horas Antes da Consulta):**
    * Exatamente duas horas antes do horário do agendamento, o sistema enviava uma checagem amigável: *"Você já está a caminho da clínica?"*. Essa mensagem reduziu drasticamente as desistências de última hora e permitiu à recepção remanejar encaixes com antecedência.
-5. **Resultado Concreto:** O sistema **comprovadamente reduziu o número de faltas** na instituição, otimizando o aproveitamento dos consultórios e liberando as secretárias para o acolhimento presencial.
+5. **Resultado Concreto e Volumetria de Produção:**
+   * O sistema **comprovadamente reduziu o número de faltas** na instituição, otimizando o aproveitamento dos consultórios e liberando as secretárias para o acolhimento presencial humanizado.
+   * **Mais de 11.000 Mensagens em 2 Meses:** Durante os 2 meses de operação em produção, o sistema disparou com sucesso mais de 11 mil mensagens ativas de confirmação e acompanhamento aos pacientes.
+   * **Vazão Extrema (< 1 Minuto para ~500 Mensagens):** Nas últimas semanas de operação, com a esteira totalmente madura, o sistema atingiu uma taxa de disparo de **quase 500 mensagens diárias despachadas em menos de 1 minuto**. Esse throughput expressivo foi viabilizado pela arquitetura assíncrona em **Java 21 com Virtual Threads (Project Loom)**, que eliminou qualquer bloqueio de thread de SO durante a comunicação I/O intensiva com as APIs do Take Blip e Feegow.
 
 ```mermaid
 stateDiagram-v2
@@ -150,7 +153,7 @@ Após estabilizar as confirmações no WhatsApp, voltei minha atenção para o s
 * Dezenas de mensagens chegavam simultaneamente no canal geral de atendimento;
 * Formavam-se **filas expressivas de pacientes e acompanhantes** que precisavam aguardar no balcão apenas para apresentar um documento com foto, aguardar o cadastro manual no sistema de portaria e retirar um cartão/crachá plástico RFID para liberar a catraca física de entrada e saída.
 
-Diante desse cenário, concebi a integração completa: se o paciente já confirmou a consulta no WhatsApp ou se realiza um auto-cadastro rápido no celular, a credencial predial é gerada automaticamente em formato de **QR Code digital**, permitindo a liberação autônoma e imediata na catraca física.
+Diante desse cenário, concebi a integração completa: se o paciente já confirmou a consulta no WhatsApp ou se realiza um auto-cadastro rápido no celular, a credencial predial é gerada automaticamente em formato de **QR Code digital**, permitindo a liberação autônoma e imediata na catraca física. Durante as **duas semanas de operação contínua nas catracas físicas**, o sistema gerou **mais de 1.800 credenciais de acesso automaticamente** para que pacientes e acompanhantes transitassem com agilidade pelo edifício, eliminando o tempo de espera no balcão da portaria.
 
 #### Reuniões de Engenharia com a GerAcesso e Desenvolvimento de Campo:
 * Participei diretamente de **reuniões técnicas de alinhamento com a equipe de engenharia e desenvolvimento da GerAcesso** (empresa responsável pelo software intermediário que gerenciava as catracas eletrônicas *Control iD iDBlock Mini* no condomínio).
@@ -195,6 +198,9 @@ Essa vivência direta de campo me permitiu detectar pequenos atritos e implement
    * Preveni o auto-zoom indesejado do Safari no iPhone (`2da5307e`) e adicionei a funcionalidade de salvar o cartão diretamente como foto na galeria do celular (`332390fc`).
 4. **Organização Visual em Abas para Acompanhantes:**
    * Para idosos ou crianças com múltiplos acompanhantes, criei abas claras na interface separando o titular de cada acompanhante (`dc428d99`, `4fe1eaed`), impedindo duplicidade de cadastros e permitindo o compartilhamento do QR Code de cada pessoa via WhatsApp.
+5. **Impacto e Volumetria de Produção (1.800+ Credenciais Automáticas):**
+   * Durante as **duas semanas de operação contínua nas catracas**, o sistema gerou **mais de 1.800 credenciais de acesso automaticamente** para que os pacientes e acompanhantes pudessem acessar o edifício de forma autônoma.
+   * Essa automação eliminou a sobrecarga de triagem do térreo: a apresentação do QR Code direto na catraca reduziu o tempo de acesso ao prédio a meros segundos, sem necessidade de filas para conferência de documentos nem entrega de crachás físicos.
 
 ---
 
@@ -251,8 +257,8 @@ A tabela abaixo resume as entregas técnicas consolidadas no código-fonte:
 
 | Módulo | Componentes de Engenharia | Stack Tecnológica | Impacto Mensurado no Negócio |
 |---|---|---|---|
-| **Mensageria WhatsApp** | Ingestão Feegow D+0 a D+3, Dual-Scope Sync no Desk, Nudges a cada 2h, Mensagem preventiva de proximidade ("A caminho?"), Horários Adiantados (10 min), D+2 Dermatologia | Take Blip, LIME Protocol, Meta Cloud API, Feegow REST, Java 21 Loom | **Redução comprovada do absenteísmo (no-show)** e liberação das secretárias da rotina de confirmações manuais. |
-| **Controle de Acesso IoT** | Catracas Control iD iDBlock Mini, GerAcesso REST, Reativação Imediata, Portais `/imagem` e `/acesso`, WakeLock | Java 21, Virtual Threads, React 19, LocalStorage, Screen Wake Lock | **Fim das filas no saguão do térreo**, liberação autônoma de pacientes e acompanhantes sem necessidade de crachá físico. |
+| **Mensageria WhatsApp** | Ingestão Feegow D+0 a D+3, Dual-Scope Sync no Desk, Nudges a cada 2h, Mensagem preventiva de proximidade ("A caminho?"), Horários Adiantados (10 min), D+2 Dermatologia | Take Blip, LIME Protocol, Meta Cloud API, Feegow REST, Java 21 Loom | **Redução comprovada do absenteísmo (no-show)** e liberação das secretárias. **+11.000 mensagens enviadas em 2 meses**; vazão de pico de **quase 500 mensagens diárias em < 1 minuto**. |
+| **Controle de Acesso IoT** | Catracas Control iD iDBlock Mini, GerAcesso REST, Reativação Imediata, Portais `/imagem` e `/acesso`, WakeLock | Java 21, Virtual Threads, React 19, LocalStorage, Screen Wake Lock | **Fim das filas no saguão do térreo**, liberação autônoma de pacientes e acompanhantes sem necessidade de crachá físico. **+1.800 credenciais prediais geradas automaticamente em 2 semanas**. |
 | **Reputação Google** | Motor de pós-atendimento (Status 3), fallback Médico/Clínica, encurtador com telemetria | Spring Boot, Feegow API, Google My Business | **Elevação da nota do Google de 3.3 para 3.8 estrelas em menos de 1 mês**, resolvendo a inércia da comunicação tradicional. |
 | **Identidade Clínica da Imagem** | Portal `/imagem`, tema rosa/magenta (`#B8004B`), cache offline de pré-cadastro | React 19, LocalStorage, CSS Variables | Atendimento autônomo aos pacientes de diagnóstico por imagem sem dependência do Feegow. |
 | **Conciliação Financeira** | Sincronização Conta Azul V2, gerador de recibos OpenPDF, lock de concorrência OAuth2 | Conta Azul REST, OpenPDF, Redis Rate Limiter | Automação no despacho de recibos de quitação para e-mails dos médicos e rastreabilidade contábil. |
@@ -273,7 +279,7 @@ O ciclo de implantação evidenciou um expressivo contraste de custo-benefício:
 * Desenvolvi e homologuei em produção uma **plataforma hospitalar completa de 18 módulos** por um investimento inicial de desenvolvimento de apenas **R$ 2.800,00**;
 * Para a sustentação técnica contínua e evolução das integrações, propus o valor de **R$ 80,00 mensais por médico atendido**, dimensionado de forma muito acessível frente ao ganho financeiro obtido com a recuperação de consultas que seriam perdidas por *no-show*.
 
-Apesar dos ganhos operacionais mensurados — expressiva redução de faltas, fluidez no acesso predial e recuperação da nota pública para 3.8 estrelas —, a instituição de saúde optou por não dar continuidade ao contrato nos moldes de licenciamento e suporte propostos, manifestando o desejo de absorver a tecnologia sem os custos recorrentes de manutenção técnica especializada.
+Apesar dos expressivos ganhos operacionais mensurados — **mais de 11.000 mensagens de confirmação enviadas em 2 meses** (com picos de quase 500 mensagens diárias em menos de 1 minuto), **mais de 1.800 credenciais prediais geradas automaticamente em apenas 2 semanas de catracas**, redução comprovada de faltas e recuperação da nota pública no Google para 3.8 estrelas —, a instituição de saúde optou por não dar continuidade ao contrato nos moldes de licenciamento e suporte propostos, manifestando o desejo de absorver a tecnologia sem os custos recorrentes de manutenção técnica especializada.
 
 Em consonância com as boas práticas de governança corporativa e diante do término da relação comercial, conduzi a desativação programada dos serviços nos servidores locais, realizando o arquivamento seguro e a expurgação de dados em conformidade com as diretrizes de privacidade.
 
