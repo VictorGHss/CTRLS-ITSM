@@ -32,13 +32,16 @@ timeline
     2024-08 : Chesiquímica : Concepção inicial do ITSM em JavaScript e integração com Google Sheets via SheetMonkey
     2024-10 : Protótipos C e PHP : Testes de arquitetura em C (descontinuados) e modelagem em PHP
     2025-01 : Entrada na Clínica Inovare : Atuação como técnico de informática; diagnóstico da sobrecarga de secretárias e recepção
-    2025-03 : Primeiro Protótipo : Criação de sistema simples de chamados para organizar os atendimentos de TI
+    2025-06 a 2025-07 : Primeira Etapa Spring & Java 21 : Início da programação do ITSM em repositório preliminar privado
     2025-08 : Incidente Digisac e Mudança para o Blip : Banimento do número de WhatsApp por uso de API não oficial; contratação da Take Blip
     2025-11 : Concepção da Automação : Diálogos com secretárias e iniciativa própria de desenhar confirmações integradas ao Feegow
-    2026-03 : Repositório Definitivo : Início da arquitetura Java 21 Hexagonal e React 19; primeiras entregas da esteira de WhatsApp
-    2026-06 : Gargalo da Portaria e Catracas : Observação do fluxo no térreo; reuniões de engenharia com time da GerAcesso
-    2026-08 : Homologação IoT e Trabalho de Campo : Testes em bancada, lançamento do QR Code nas catracas e acompanhamento presencial no saguão
-    2026-09 : Conclusão e Entrega : 56 migrações Flyway, 18 módulos operacionais, White-Label e descontinuação programada
+    2026-03 : Repositório Definitivo e Fundação : Arquitetura Hexagonal, Spring Boot 3, Java 21 Loom, Core ITSM e Conta Azul V2
+    2026-04 : Observabilidade e Confirmações : Docker com Prometheus/Grafana, motor Feegow/Blip e normalização telefônica
+    2026-05 : Discord Bot JDA 5 e Nudges : Canais dinâmicos por ticket, SLA inteligente, avisos em grupo e esteira de 2h
+    2026-06 : Padronização RFC 9457 : Traceability ponta a ponta, conciliação do 9º dígito (DDD 42) e auditoria Blip
+    2026-07 : Catracas Físicas IoT : Integração Control iD / GerAcesso, Screen Wake Lock, portais /acesso e /imagem
+    2026-08 : Validação de Campo e NLP : Magic Token HMAC, acompanhamento no saguão, listas WhatsApp e reputação Google
+    2026-09 : Arquitetura White-Label : 56 migrações Flyway, Gestão DS, consolidação de documentação e encerramento
 ```
 
 ### 2.1 Fase Embrionária (Agosto de 2024 a Dezembro de 2024 — Chesiquímica)
@@ -46,23 +49,73 @@ O embrião do módulo de suporte técnico iniciou em agosto de 2024 na indústri
 
 Buscando maior performance e controle de memória, realizei experimentos em linguagem C e posteriormente em PHP. Essa fase me permitiu mapear os requisitos essenciais de governança, ciclo de vida de chamados e controle de insumos.
 
-### 2.2 Diagnóstico, Incidente Digisac e Concepção na Clínica Inovare (Janeiro de 2025 a Novembro de 2025)
-Em janeiro de 2025, ingressei como técnico de informática na Clínica Inovare (e sua operação integrada com a Clínica da Imagem). Minha função primordial na instituição era o suporte de TI do dia a dia: manutenção de computadores, impressoras, periféricos e redes. O desenvolvimento de softwares complexos não fazia parte das minhas obrigações contratuais; no entanto, ao vivenciar o cotidiano operacional da instituição, percebi gargalos que sobrecarregavam severamente as equipes:
+### 2.2 Diagnóstico, Primeira Etapa do ITSM e Incidente Digisac (Janeiro de 2025 a Novembro de 2025)
+Em janeiro de 2025, ingressei como técnico de informática na Clínica Inovare (e sua operação integrada com a Clínica da Imagem). Minha função primordial na instituição era o suporte de TI do dia a dia: manutenção de computadores, impressoras, periféricos e redes. O desenvolvimento de softwares complexos não fazia parte das minhas atribuições funcionais; no entanto, ao vivenciar o cotidiano operacional da instituição, percebi gargalos que sobrecarregavam severamente as equipes:
 
 1. **A Rotina Exaustiva das Secretárias:** Passavam horas diárias ligando individualmente para dezenas de pacientes e enviando mensagens manuais no WhatsApp para confirmar presenças do dia seguinte, sufocando o atendimento presencial nos consultórios;
 2. **O Estrangulamento da Portaria do Térreo:** As recepcionistas precisavam atender telefone, responder mensagens no WhatsApp geral da clínica e realizar cadastros manuais de crachás físicos para as catracas, gerando filas contínuas no saguão;
 3. **Falta de Gestão no Suporte de TI:** Ordens de serviço e insumos de informática não possuíam controle centralizado de prazos ou inventário.
 
-Em março de 2025, desenvolvi uma versão preliminar para organizar os chamados de informática da clínica.
+Movido pela vontade de estruturar o suporte de informática e auxiliar a instituição, entre **junho e julho de 2025** dei início à programação da **primeira etapa do ITSM** utilizando **Spring Boot e Java 21**. Essa etapa inicial foi desenvolvida em um repositório preliminar privado, servindo como laboratório e prova de conceito para a modelagem básica de chamados e controle de insumos. Mais tarde, esse primeiro repositório foi arquivado e mantido privado, servindo de base teórica para o recomeço do zero da arquitetura definitiva.
 
 Em **agosto de 2025**, a instituição sofreu um incidente grave na sua comunicação: o sistema de atendimento até então utilizado (Digisac) teve o número oficial de WhatsApp da clínica **banido pela Meta**, por operar através de conexões não oficiais. Diante do bloqueio emergencial, a clínica contratou a plataforma da **Take Blip** (provedora oficial da Meta Cloud API) para restabelecer as mensagens.
 
 Ao acompanhar esse processo, em **novembro de 2025**, tive a **iniciativa própria** de desenhar uma solução definitiva: integrar a nova API oficial da Take Blip diretamente ao Feegow ERP para que os lembretes e confirmações fossem enviados de forma 100% automática. Passei a conversar de perto com as secretárias médicas para entender suas rotinas diárias e comecei a projetar o motor no Feegow para libertá-las do trabalho repetitivo.
 
 ### 2.3 Desenvolvimento e Implantação do Ecossistema Final (Março de 2026 a Setembro de 2026)
-Em março de 2026 iniciei o repositório definitivo. Optei pela **Arquitetura Hexagonal (Ports & Adapters)** em **Java 21**, aproveitando o suporte nativo a **Virtual Threads (Project Loom)** para suportar centenas de requisições I/O concorrentes sem gargalos de thread pool. O frontend foi construído em **React 19 / TypeScript** com empacotamento otimizado via Vite.
+Em março de 2026, reiniciei o desenvolvimento do zero no repositório definitivo (`CTRLS-ITSM`). A experiência acumulada nos protótipos anteriores me permitiu adotar desde o primeiro dia uma **Arquitetura Hexagonal (Ports & Adapters)** em **Java 21**, aproveitando o suporte nativo a **Virtual Threads (Project Loom)** para suportar centenas de requisições I/O concorrentes sem gargalos de thread pool de sistema operacional. O frontend foi construído em **React 19 / TypeScript** com empacotamento otimizado via Vite.
 
-Ao longo de 7 meses ininterruptos de trabalho, implementei **56 migrações Flyway**, 18 contextos delimitados desacoplados, a integração de hardware físico IoT com reuniões com a fabricante GerAcesso, trabalho presencial de UX no saguão da clínica e o algoritmo proprietário de reputação no Google.
+A análise aprofundada dos **1.674 commits** registrados no repositório revela uma esteira de engenharia contínua e disciplinada ao longo de 7 meses, dividida em ciclos mensais de evolução:
+
+#### Março de 2026 — Fundação da Arquitetura Hexagonal, Core ITSM e Conciliação Financeira (457 commits)
+* **Estrutura Hexagonal e Domínio Rígido:** Isolamento dos contextos delimitados de chamados (`ticket`), ativos (`asset`), insumos (`inventory`) e conciliação financeira (`finance`), desacoplando as regras de negócio de frameworks e adaptadores externos.
+* **Motor de SLA Hospitalar:** Implementação do cálculo de SLA em horas úteis comerciais da clínica, introduzindo a regra de `#🚨ParadaCrítica` para priorização automática de incidentes em consultórios.
+* **Inventário com Consumo FIFO:** Modelagem transacional do estoque de suprimentos com baixa estrita pelo método FIFO (`Propagation.MANDATORY`).
+* **Mecanismo de Ticket Deflection:** Criação de FAQ interativo e base de conhecimento para autoatendimento e deflexão de chamados repetitivos.
+* **Integração Financeira Conta Azul V2:** Implementação do handshake OAuth2 com renovação preventiva de tokens a cada 50 minutos protegida por `ReentrantLock`, barreira de segurança com autenticação em dois fatores (2FA/TOTP), motor de geração de recibos médicos em OpenPDF para contingência de API e rate limiting distribuído com Redis (pacing de 350ms).
+* **Agendamento Multicanal:** Rotinas assíncronas para despacho automatizado de relatórios gerenciais por E-mail e Discord.
+
+#### Abril de 2026 — Observabilidade Docker, Motor de Confirmações e Recibos Médicos (184 commits)
+* **Stack de Observabilidade:** Orquestração completa de contêineres Docker com Prometheus, Grafana e Alertmanager para monitoramento de latência e consumo de threads da JVM.
+* **Expansão Financeira:** Módulo de busca dinâmica de prestadores por CPF/CNPJ para geração e download de recibos fiscais com assinatura digitalizada.
+* **Gênese do Motor de Confirmações:** Início da integração com o Feegow ERP (`FeegowClient`) e com a Take Blip via protocolo LIME.
+* **Normalização Telefônica Rigorosa:** Tratamento de inconsistências de números brasileiros (validação de DDI 55, DDDs e inserção programática do nono dígito no formato E.164).
+* **Máquina de Estados de Agendamento:** Criação da tabela `appointment_sessions` e controle transacional de estados (`PENDING`, `CONFIRMED`, `CANCELED`).
+
+#### Maio de 2026 — Discord Bot Reativo (JDA 5), Avisos em Grupo e Esteira de Nudges (192 commits)
+* **Central Operacional Discord:** Desenvolvimento do bot reativo em Java Discord API (JDA 5) com Slash Commands nativos (`/chamado`, `/solicitar`, `/ti status`, `/meuschamados`, `/vincular`, `/ajuda`).
+* **Canais Dinâmicos e Ações Interativas:** Geração automática de um canal de texto dedicado para cada novo ticket (`#nome-hexId`), com botões interativos (`Assumir Chamado`, `Resolver Chamado`) e alerta antecipado de estouro de SLA (< 30 minutos).
+* **Superação do Erro Meta #132000:** Tratamento de validação da Meta para o template de avisos de múltiplos agendamentos no mesmo dia (`aviso_agendamento_grupo`), omitindo nós de parâmetros vazios.
+* **Esteira Ativa de Nudges e Checagem 2h:** Implementação do `MonitorAppointmentNudgesUseCase` (reforço automático a cada 2 horas para pacientes não responsivos) e do disparo preventivo *"Você já está a caminho da clínica?"* exatamente 2 horas antes da consulta.
+
+#### Junho de 2026 — Padronização RFC 9457, Resiliência Telefônica e Auditoria Blip (254 commits)
+* **Tratamento de Erros RFC 9457:** Adoção universal de `ProblemDetail` com injeção de `traceId` único correlacionando logs do Spring Boot aos interceptores do Axios no React 19.
+* **Reconciliação de 9º Dígito do Paraná:** Algoritmo de resolução para divergências nas bases de dados de operadoras do DDD 42, evitando perda de mensagens em números locais.
+* **Auditoria de Falhas de Entrega:** Criação da entidade `BlipDeliveryFailureEntity`, registrando códigos de erro da Meta, motivos de falha de entrega e acionando tentativas de reenvio.
+* **Estabilidade de Banco:** Eliminação de vazamento de conexões no HikariCP através do desligamento definitivo do *Open Session In View* (`spring.jpa.open-in-view=false`).
+
+#### Julho de 2026 — Hardware IoT, Catracas Físicas e Portais Responsivos (197 commits)
+* **Integração Física com Catracas Control iD:** Conexão com o servidor middleware GerAcesso (`172.25.100.106:8082`) responsável pelas catracas *iDBlock Mini*.
+* **Alinhamento Técnico com a GerAcesso:** Reuniões com a engenharia da fabricante, análise de tráfego de rede TCP/IP e mapeamento do endpoint `/AgendamentoVisita`.
+* **Descoberta do Bug de Firmware do Fabricante:** Identificação via análise de pacotes de que a controladora exigia rigorosamente a grafia tipográfica errada `"tipovisista": 1` para registrar visitas.
+* **Compensação de Clock Skew:** Implementação de janela temporal retroativa de 5 minutos (`now.minusMinutes(5)`) para absorver diferenças de horário entre servidores e catracas.
+* **Portais Web Dedicados:** Desenvolvimento do `/acesso/:id` (identidade laranja para consultas) e do `/imagem` (identidade rosa/magenta `#B8004B` com cache offline no `localStorage` para a Clínica da Imagem).
+* **Screen Wake Lock API:** Implementação da API nativa nos navegadores mobile para impedir o desligamento da tela enquanto o paciente aguarda na fila da catraca.
+
+#### Agosto de 2026 — Validação Presencial no Saguão, Magic Token e NLP Refinado (263 commits)
+* **Engenharia de Campo no Térreo:** Acompanhamento presencial no saguão e portaria, identificando atritos no fluxo físico de entrada e saída.
+* **Magic Token HMAC:** Autenticação criptográfica sem atrito, permitindo ao paciente abrir seu QR Code a partir do link recebido no WhatsApp sem tela de login ou digitação de senha.
+* **Solução Instantânea para Anti-Passback:** Criação do botão *"Atualizar / Reativar QR Code"* com chamada atômica ao `ReactivateAccessUseCase`, gerando nova credencial em milissegundos para pacientes que hesitassem ao passar pelo braço da catraca.
+* **Abas para Acompanhantes:** Interface segmentada para titulares e acompanhantes, com opção de salvar na galeria de fotos e compartilhar o passe via WhatsApp.
+* **Blip Flow V2 e Listas Nativas:** Transição para menus interativos do WhatsApp (`application/json`) e NLP ponderado priorizando nomes de profissionais e especialidades.
+* **Otimização de Índices no PostgreSQL:** Aplicação da migração Flyway V49 adicionando índices B-Tree em todas as chaves estrangeiras de alto volume de busca.
+* **Motor de Reputação no Google:** Disparo pós-consulta (Status 3 Feegow) com encurtador interno e telemetria, elevando a nota da clínica de 3.3 para 3.8 estrelas em menos de 1 mês.
+
+#### Setembro de 2026 — Arquitetura White-Label, Gestão DS e Encerramento Programado (127 commits)
+* **Módulo de Integração Gestão DS:** Adaptação da ingestão de agendamentos para compatibilidade com o software médico Gestão DS.
+* **Arquitetura White-Label Single-Tenant (Flyway V56):** Desacoplamento total de identidades visuais através da tabela `system_settings`, permitindo reconfigurar cores primárias, logos, nomes e regras de negócio em tempo de execução.
+* **Memorial Técnico e Documentação:** Elaboração do acervo completo de engenharia (arquitetura, implantação, integrações, guia do desenvolvedor e memorial post-mortem).
+* **Desativação Programada e Expurgação:** Encerramento seguro das instâncias locais e expurgação de dados em conformidade com as boas práticas de governança corporativa após a recusa comercial da instituição.
 
 ---
 
