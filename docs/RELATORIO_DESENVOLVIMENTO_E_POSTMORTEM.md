@@ -282,6 +282,24 @@ Concebi e implementei uma esteira de escuta e captação ativa:
 ![Agendamento Automatizado de Relatórios](images/agendamento_relatorios.png)
 *Figura 11: Módulo de agendamento automático de relatórios periódicos de estoque e chamados com despacho multicanal via E-mail e Discord.*
 
+#### O Ciclo Completo de Atendimento via Discord Bot (JDA 5):
+O bot do Discord foi desenvolvido não apenas como um canal de notificações passivas, mas como uma **central operacional completa e reativa para o atendimento técnico de campo**:
+1. **Slash Commands Registrados:** O bot implementa comandos com auto-complete nativo (`/chamado`, `/solicitar`, `/ti status`, `/meuschamados`, `/vincular`, `/ajuda`), permitindo que colaboradores e técnicos realizem operações de TI pelo smartphone sem abrir o navegador.
+2. **Despacho e Canal Dedicado por Chamado:** No momento em que um chamado é aberto, o bot cria automaticamente um canal de texto exclusivo para o ticket (ex: `#desativacao-do-sistema-ctrls-na-clinica-29e31f76`), calcula o prazo de SLA em horas úteis e despacha botões interativos (`Assumir Chamado`, `Resolver Chamado`).
+3. **Atribuição, Solução e Reabertura:** Ao acionar *"Assumir Chamado"*, a mensagem é fixada, o técnico é atribuído no PostgreSQL e, na conclusão, o parecer técnico é registrado publicamente no Discord com confirmação auditável e botão para eventual reabertura.
+
+![Catálogo de Slash Commands no Discord](images/comandos_discord.jpeg)
+*Figura 12: Automação ITSM via Discord (JDA 5): catálogo de Slash Commands registrados (`/chamado`, `/solicitar`, `/ti status`, `/meuschamados`, `/vincular`, `/ajuda`) com auto-complete nativo.*
+
+![Abertura de Chamado via Discord](images/chamado_criado_discord.jpeg)
+*Figura 13: Notificação imediata de abertura de chamado via comando `/chamado`: geração de identificador hexadecimal (`#29E31F76`), metadados de solicitante e nível de prioridade.*
+
+![Ciclo de Atendimento com Canal Dedicado e Botões](images/chamado_assumido_discord.jpeg)
+*Figura 14: Orquestração reativa do Discord Bot: criação automática de canal exclusivo para o chamado, cálculo de prazo de SLA em horas úteis e botões interativos (`Assumir Chamado`, `Resolver Chamado`).*
+
+![Encerramento e Solução do Chamado](images/chamado_finalizado_discord.jpeg)
+*Figura 15: Parecer técnico e resolução do chamado registrados no Discord e sincronizados instantaneamente com o banco relacional PostgreSQL, incluindo botão para eventual reabertura.*
+
 ---
 
 ## 5. Matriz de Entregas e Inventário Técnico do Sistema

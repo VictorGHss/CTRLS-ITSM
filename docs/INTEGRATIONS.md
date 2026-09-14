@@ -212,14 +212,34 @@ Automação de conciliação de faturamentos quitados (`ACQUITTED`) e emissão d
 
 ## 5. Integração com Discord (Bot JDA 5)
 
-Roteamento de incidentes e operações de suporte em tempo real.
+Roteamento de incidentes e operações de suporte em tempo real com orquestração de canais dinâmicos e botões reativos.
 
-### 5.1 Slash Commands Administrativos
+### 5.1 Slash Commands Administrativos e Operacionais
 * `/ti status`: Exibe embed rico com status da JVM, memória, banco de dados, filas e conexões de rede. Restrito aos IDs de administradores configurados em `discord.bot.admin-ids`.
 * `/solicitar`: Interface para colaboradores solicitarem insumos de hardware com autocomplete em tempo real.
+* `/chamado`: Abertura ágil de incidentes e solicitações de TI diretamente pelo Discord.
+* `/meuschamados`: Consulta rápida de chamados em andamento atribuídos ao solicitante logado.
+* `/vincular`: Associação de segurança entre a conta Discord e o usuário institucional.
+* `/ajuda`: Consulta instantânea de artigos da Base de Conhecimento e FAQ da TI.
 
-### 5.2 Botões Interativos de Ação em Chamados
-* As mensagens de novos chamados enviadas aos técnicos incluem botões interativos:
-  * `ticket_accept:{ticketId}`: Atribui o chamado ao técnico no banco de dados e atualiza a mensagem no Discord com rodapé confirmatório.
-  * `ticket_reject:{ticketId}`: Libera o chamado para os demais técnicos.
+![Menu de Slash Commands no Discord](images/comandos_discord.jpeg)
+*Menu interativo de Slash Commands com autocomplete suportado pelo bot institucional.*
+
+### 5.2 Botões Interativos de Ação e Ciclo de Vida do Chamado
+* **Abertura de Chamado:** Notificação em embed rico no canal de alertas da equipe técnica (`#alertas-ti`), informando identificador único, solicitante, setor e nível de prioridade.
+* **Criação Automática de Canal Exclusivo:** Para cada chamado aberto, o bot cria dinamicamente um canal dedicado de atendimento (`#nome-do-chamado-{id}`) garantindo comunicação isolada e sem ruídos entre solicitante e time de TI.
+* **Ações por Botões Interativos:**
+  * `ticket_accept:{ticketId}` (*Assumir Chamado*): Vincula o técnico responsável no banco relacional PostgreSQL, fixa a mensagem no canal e notifica a equipe.
+  * `ticket_resolve:{ticketId}` (*Resolver Chamado*): Permite registrar o parecer técnico de solução diretamente pelo Discord, encerrando o ciclo de SLA.
+  * `ticket_reopen:{ticketId}` (*Reabrir Chamado*): Disponível após o encerramento caso o solicitante necessite de suporte complementar.
 * **Virtual Threads:** Todas as interações do bot são executadas sob o `discordExecutor` para não bloquear a thread de heartbeat do WebSocket do Discord.
+
+![Abertura de Chamado no Discord](images/chamado_criado_discord.jpeg)
+*Embed rico despachado no momento da abertura do chamado pelo comando `/chamado`.*
+
+![Canal Dedicado e Atribuição](images/chamado_assumido_discord.jpeg)
+*Canal criado dinamicamente para o chamado com botões para assumir e resolver o atendimento.*
+
+![Resolução e Parecer Técnico](images/chamado_finalizado_discord.jpeg)
+*Encerramento do chamado com parecer técnico registrado e opção de reabertura.*
+
