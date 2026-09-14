@@ -31,10 +31,10 @@ timeline
     title Linha do Tempo Evolutiva do Projeto (2024 - 2026)
     2024-08 : Chesiquímica : Concepção inicial do ITSM em JavaScript e integração com Google Sheets via SheetMonkey
     2024-10 : Protótipos C e PHP : Testes de arquitetura em C (descontinuados) e modelagem em PHP
-    2025-01 : Entrada na Clínica Inovare : Diagnóstico de processos manuais exaustivos e sobrecarga de secretárias e recepção
-    2025-03 : Primeiro Protótipo : Implantação preliminar do suporte; identificação de gargalos de escalabilidade
-    2025-08 : Diálogos de Campo com Secretárias : Mapeamento das dores diárias de confirmação; novo design de banco
-    2025-11 : Planejamento da Mensageria : Especificação do motor Blip + Feegow e testes de APIs conversacionais
+    2025-01 : Entrada na Clínica Inovare : Atuação como técnico de informática; diagnóstico da sobrecarga de secretárias e recepção
+    2025-03 : Primeiro Protótipo : Criação de sistema simples de chamados para organizar os atendimentos de TI
+    2025-08 : Incidente Digisac e Mudança para o Blip : Banimento do número de WhatsApp por uso de API não oficial; contratação da Take Blip
+    2025-11 : Concepção da Automação : Diálogos com secretárias e iniciativa própria de desenhar confirmações integradas ao Feegow
     2026-03 : Repositório Definitivo : Início da arquitetura Java 21 Hexagonal e React 19; primeiras entregas da esteira de WhatsApp
     2026-06 : Gargalo da Portaria e Catracas : Observação do fluxo no térreo; reuniões de engenharia com time da GerAcesso
     2026-08 : Homologação IoT e Trabalho de Campo : Testes em bancada, lançamento do QR Code nas catracas e acompanhamento presencial no saguão
@@ -46,14 +46,18 @@ O embrião do módulo de suporte técnico iniciou em agosto de 2024 na indústri
 
 Buscando maior performance e controle de memória, realizei experimentos em linguagem C e posteriormente em PHP. Essa fase me permitiu mapear os requisitos essenciais de governança, ciclo de vida de chamados e controle de insumos.
 
-### 2.2 Diagnóstico e Concepção na Clínica Inovare e Clínica da Imagem (Janeiro de 2025 a Novembro de 2025)
-Ao assumir a liderança e infraestrutura tecnológica da Clínica Inovare (e sua operação integrada com a Clínica da Imagem) em janeiro de 2025, constatei a ausência de sistemas integrados de TI: computadores de consultório operavam sem inventário formal, filas de espera na recepção do térreo acumulavam dezenas de pacientes sem credencial predial e o índice de faltas em consultas médicas era alarmante.
+### 2.2 Diagnóstico, Incidente Digisac e Concepção na Clínica Inovare (Janeiro de 2025 a Novembro de 2025)
+Em janeiro de 2025, ingressei como técnico de informática na Clínica Inovare (e sua operação integrada com a Clínica da Imagem). Minha função primordial na instituição era o suporte de TI do dia a dia: manutenção de computadores, impressoras, periféricos e redes. O desenvolvimento de softwares complexos não fazia parte das minhas obrigações contratuais; no entanto, ao vivenciar o cotidiano operacional da instituição, percebi gargalos que sobrecarregavam severamente as equipes:
 
-Em março de 2025 desenvolvi um protótipo inicial para atendimento de chamados de TI. Paralelamente, através da observação atenta do cotidiano da clínica, identifiquei duas grandes fontes de ineficiência operacional humana:
-1. As secretárias médicas passavam horas diárias ao telefone e trocando mensagens manuais individuais no WhatsApp para confirmar presenças;
-2. As recepcionistas do térreo sofriam com sobrecarga severa, precisando atender ligações, responder mensagens no WhatsApp geral e realizar cadastros manuais de crachás físicos para as catracas.
+1. **A Rotina Exaustiva das Secretárias:** Passavam horas diárias ligando individualmente para dezenas de pacientes e enviando mensagens manuais no WhatsApp para confirmar presenças do dia seguinte, sufocando o atendimento presencial nos consultórios;
+2. **O Estrangulamento da Portaria do Térreo:** As recepcionistas precisavam atender telefone, responder mensagens no WhatsApp geral da clínica e realizar cadastros manuais de crachás físicos para as catracas, gerando filas contínuas no saguão;
+3. **Falta de Gestão no Suporte de TI:** Ordens de serviço e insumos de informática não possuíam controle centralizado de prazos ou inventário.
 
-Reestruturei o projeto a partir de agosto de 2025 com modelagem relacional rigorosa e planejamento da orquestração de mensagens via Take Blip e Feegow ERP.
+Em março de 2025, desenvolvi uma versão preliminar para organizar os chamados de informática da clínica.
+
+Em **agosto de 2025**, a instituição sofreu um incidente grave na sua comunicação: o sistema de atendimento até então utilizado (Digisac) teve o número oficial de WhatsApp da clínica **banido pela Meta**, por operar através de conexões não oficiais. Diante do bloqueio emergencial, a clínica contratou a plataforma da **Take Blip** (provedora oficial da Meta Cloud API) para restabelecer as mensagens.
+
+Ao acompanhar esse processo, em **novembro de 2025**, tive a **iniciativa própria** de desenhar uma solução definitiva: integrar a nova API oficial da Take Blip diretamente ao Feegow ERP para que os lembretes e confirmações fossem enviados de forma 100% automática. Passei a conversar de perto com as secretárias médicas para entender suas rotinas diárias e comecei a projetar o motor no Feegow para libertá-las do trabalho repetitivo.
 
 ### 2.3 Desenvolvimento e Implantação do Ecossistema Final (Março de 2026 a Setembro de 2026)
 Em março de 2026 iniciei o repositório definitivo. Optei pela **Arquitetura Hexagonal (Ports & Adapters)** em **Java 21**, aproveitando o suporte nativo a **Virtual Threads (Project Loom)** para suportar centenas de requisições I/O concorrentes sem gargalos de thread pool. O frontend foi construído em **React 19 / TypeScript** com empacotamento otimizado via Vite.
@@ -89,15 +93,15 @@ br.dev.ctrls.itsm.modules/
 ### 4.1 Automação Omnichannel e Mensageria (Take Blip & Feegow ERP)
 
 #### A Gênese do Sistema de Confirmações e o Contraste Comercial do Mercado:
-O sistema de confirmações automáticas nasceu de uma iniciativa pessoal e proativa minha. Ao acompanhar a rotina dos consultórios, percebi claramente o desgaste das secretárias médicas: passavam a maior parte do expediente ligando individualmente para dezenas de pacientes e enviando mensagens manuais repetitivas para confirmar pautas do dia seguinte. Se uma secretária atendia dois ou três médicos de alta rotatividade, sua capacidade de prestar atendimento humanizado presencial aos pacientes nos consultórios era completamente sufocada.
+O sistema de confirmações automáticas nasceu de uma iniciativa estritamente voluntária e pessoal minha. Como técnico de informática da clínica, minha obrigação diária era o suporte técnico de TI; porém, ao acompanhar a rotina dos consultórios, via o desgaste diário das secretárias médicas: passavam a maior parte do expediente ligando para dezenas de pacientes e enviando mensagens manuais para confirmar agendas. Se uma secretária atendia dois ou três médicos de alta rotatividade, sua capacidade de prestar atendimento humanizado presencial aos pacientes nos consultórios era completamente sufocada.
 
-Anteriormente, a clínica havia consultado a própria Take Blip para orçar um bot de confirmações. A cotação oficial apresentada pela empresa previa valores consideráveis para entregar um fluxo básico e padronizado:
+Após a migração emergencial para a Take Blip (decorrente do banimento do número corporativo no Digisac), a administração da clínica chegou a consultar a própria Take Blip para orçar a criação de um bot de confirmações. A cotação comercial oficial apresentada pela empresa previa valores consideráveis para entregar um fluxo básico e padronizado:
 * **R$ 18.000,00** de taxa inicial de implementação;
 * **R$ 2.000,00 mensais** de manutenção e suporte;
 * **R$ 15.000,00** adicionais cobrados ao término do desenvolvimento;
 * **Totalizando R$ 33.000,00 a R$ 35.000,00 de investimento inicial**, mais mensalidade recorrente, para um robô que faria apenas confirmações genéricas, sem qualquer suporte a particularidades das agendas médicas.
 
-Assumi o desafio e desenvolvi o ecossistema completo por um investimento inicial de apenas **R$ 2.800,00**, propondo posteriormente um modelo de sustentação técnica continuada por **R$ 80,00 mensais por médico ativo** — proposta que a governança da instituição, por contingenciamento orçamentário, optou por não acolher.
+Percebendo que a instituição não absorveria aquele custo de mercado e que as secretárias continuariam sobrecarregadas, assumi o desafio por conta própria e desenvolvi o ecossistema completo por um investimento inicial de apenas **R$ 2.800,00**, propondo posteriormente um modelo de sustentação técnica continuada por **R$ 80,00 mensais por médico ativo** — proposta que a governança da instituição, por contingenciamento orçamentário, optou por não acolher.
 
 #### Mapeamento Detalhado de Peculiaridades Médicas:
 Diferente da solução genérica orçada no mercado, passei **meses conversando diretamente com as secretárias**, mapeando as exceções de cada especialidade, ouvindo suas necessidades e compreendendo a estrutura de dados do Feegow. Programei regras de negócio altamente especializadas:
@@ -339,5 +343,5 @@ Todo o código-fonte, arquitetura de software, esquemas de banco de dados e migr
 
 O ecossistema encontra-se consolidado e pronto para:
 1. **Trabalho de Conclusão de Curso (TCC):** Apresentação como memorial de engenharia de software e arquitetura hospitalar de alta disponibilidade.
-2. **Portfólio Profissional:** Demonstração prática de liderança técnica, resolução de problemas complexos de hardware/software e geração de valor de negócio.
+2. **Portfólio Profissional:** Demonstração prática de iniciativa própria e engenharia aplicada, resolução autônoma de problemas complexos de hardware/software e geração de valor real para a operação.
 3. **Plataforma White-Label (CTRLS-ITSM):** Licenciamento e distribuição comercial independente como produto SaaS para outras redes, hospitais e clínicas médicas.
