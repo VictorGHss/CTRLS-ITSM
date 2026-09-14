@@ -31,7 +31,7 @@ timeline
     title Linha do Tempo Evolutiva do Projeto (2024 - 2026)
     2024-08 : Chesiquímica : Concepção inicial do ITSM em JavaScript e integração com Google Sheets via SheetMonkey
     2024-10 : Protótipos C e PHP : Testes de arquitetura em C (descontinuados) e modelagem em PHP
-    2025-01 : Entrada na Clínica : Diagnóstico de processos manuais exaustivos e sobrecarga de secretárias e recepção
+    2025-01 : Entrada na Clínica Inovare : Diagnóstico de processos manuais exaustivos e sobrecarga de secretárias e recepção
     2025-03 : Primeiro Protótipo : Implantação preliminar do suporte; identificação de gargalos de escalabilidade
     2025-08 : Diálogos de Campo com Secretárias : Mapeamento das dores diárias de confirmação; novo design de banco
     2025-11 : Planejamento da Mensageria : Especificação do motor Blip + Feegow e testes de APIs conversacionais
@@ -46,8 +46,8 @@ O embrião do módulo de suporte técnico iniciou em agosto de 2024 na indústri
 
 Buscando maior performance e controle de memória, realizei experimentos em linguagem C e posteriormente em PHP. Essa fase me permitiu mapear os requisitos essenciais de governança, ciclo de vida de chamados e controle de insumos.
 
-### 2.2 Diagnóstico e Concepção na Clínica (Janeiro de 2025 a Novembro de 2025)
-Ao assumir a infraestrutura tecnológica da instituição médica em janeiro de 2025, constatei a ausência de sistemas integrados de TI: computadores de consultório operavam sem inventário formal, filas de espera na recepção do térreo acumulavam dezenas de pacientes sem credencial predial e o índice de faltas em consultas era alarmante.
+### 2.2 Diagnóstico e Concepção na Clínica Inovare e Clínica da Imagem (Janeiro de 2025 a Novembro de 2025)
+Ao assumir a liderança e infraestrutura tecnológica da Clínica Inovare (e sua operação integrada com a Clínica da Imagem) em janeiro de 2025, constatei a ausência de sistemas integrados de TI: computadores de consultório operavam sem inventário formal, filas de espera na recepção do térreo acumulavam dezenas de pacientes sem credencial predial e o índice de faltas em consultas médicas era alarmante.
 
 Em março de 2025 desenvolvi um protótipo inicial para atendimento de chamados de TI. Paralelamente, através da observação atenta do cotidiano da clínica, identifiquei duas grandes fontes de ineficiência operacional humana:
 1. As secretárias médicas passavam horas diárias ao telefone e trocando mensagens manuais individuais no WhatsApp para confirmar presenças;
@@ -133,6 +133,12 @@ stateDiagram-v2
     PENDING --> CANCELED: Cancelado no Feegow (Status 6, 11, 16)
 ```
 
+![Painel de Gestão do Motor de Confirmações](images/painel_motor_feegow_blip.png)
+*Figura 1: Painel administrativo do motor de confirmações em produção: 68 médicos mapeados no Feegow ERP, 46 ativos recebendo automações, status do motor em tempo real e opção de disparo manual com data alvo.*
+
+![Auditoria no Banco de Dados - 10.280 Sessões de Confirmação](images/evidencia_banco_confirmacoes_10280.png)
+*Figura 2: Registro de auditoria no PostgreSQL: consulta à tabela `appointment_sessions` comprovando 10.280 sessões de confirmação processadas pelo motor.*
+
 #### Desafios Críticos Superados no WhatsApp:
 1. **Transbordo Dinâmico e Dual-Scope Sync no Blip Desk:**
    * *Problema:* Inicialmente, quando o paciente pedia para alterar a consulta ou falar com atendente, o bot enviava todas as mensagens para a fila geral do Desk, sobrecarregando uma única telefonista.
@@ -202,6 +208,9 @@ Essa vivência direta de campo me permitiu detectar pequenos atritos e implement
    * Durante as **duas semanas de operação contínua nas catracas**, o sistema gerou **mais de 1.800 credenciais de acesso automaticamente** para que os pacientes e acompanhantes pudessem acessar o edifício de forma autônoma.
    * Essa automação eliminou a sobrecarga de triagem do térreo: a apresentação do QR Code direto na catraca reduziu o tempo de acesso ao prédio a meros segundos, sem necessidade de filas para conferência de documentos nem entrega de crachás físicos.
 
+![Auditoria no Banco de Dados - 1.797 Credenciais Emitidas](images/evidencia_banco_catracas_1797.png)
+*Figura 3: Registro de auditoria no PostgreSQL: consulta à tabela `access_credentials` comprovando 1.797 credenciais digitais de acesso geradas e liberadas fisicamente nas catracas.*
+
 ---
 
 ### 4.3 Portais Autônomos de Acesso e Identidade Visual
@@ -217,6 +226,15 @@ Para atender à assimetria operacional do complexo de saúde, estruturei no mód
 * A **Clínica da Imagem** (centro autônomo de diagnóstico por tomografia, ressonância, raio-X e ultrassonografia anexo ao prédio) não utilizava a grade do Feegow ERP nem o fluxo do robô de WhatsApp. Seus pacientes precisavam acessar o mesmo conjunto de catracas prediais.
 * Construí o portal `/imagem` com a identidade visual autêntica da Clínica da Imagem: **paleta em tons de rosa / magenta / framboesa** (primária `#B8004B`, tom escuro `#7A002E`, fundos suaves `bg-rose-50` e badges `text-rose-800`).
 * **Cache Offline Resiliente:** A função `saveCredentialsWithOfflineCache` gravava a credencial no `localStorage` do celular no momento do pré-cadastro feito em casa. No dia do exame, mesmo que o paciente estivesse sem internet na entrada do prédio, o QR Code abria instantaneamente sem efetuar requisições de rede.
+
+![Portal de Pré-Cadastro e Emissão de Acesso](images/totem_pre_cadastro_paciente.png)
+*Figura 4: Interface web responsiva do totem de autoatendimento (Clínica da Imagem - Unidade Inovare), permitindo consulta de agendamento por CPF, seleção de datas e inclusão de acompanhantes.*
+
+![Modal de Cadastro de Acompanhante](images/modal_cadastrar_acompanhante.png)
+*Figura 5: Modal de cadastro rápido de acompanhante, gerando credenciais autorizadas vinculadas no mesmo fluxo.*
+
+![Cartão Digital com QR Code Dinâmico](images/cartao_digital_qrcode_catraca.png)
+*Figura 6: Cartão digital de acesso gerado no smartphone do paciente com QR Code dinâmico, código de backup, orientações ergonômicas de leitura (15 cm), sala/consultório e botão para adicionar à agenda.*
 
 ---
 
@@ -248,6 +266,21 @@ Concebi e implementei uma esteira de escuta e captação ativa:
 * **Regra de Parada Crítica (`#🚨ParadaCrítica`):** Falhas em consultórios médicos ou equipamentos críticos no CMDB (`assets.is_critical = true`) recebiam automaticamente prioridade máxima com meta de resolução em menos de **1 hora útil**.
 * **Operação Integrada no Discord:** Bot interativo (JDA 5) com Slash Commands (`/ti status`, `/solicitar`) e botões nas mensagens para a equipe técnica aceitar ou encerrar chamados pelo smartphone sem precisar abrir o navegador.
 * **Eliminação de Vazamentos HikariCP:** Desativação de *Open Session In View* (`spring.jpa.open-in-view=false`) para blindar o pool de conexões do PostgreSQL contra requisições lentas de APIs de terceiros.
+
+![Visão Geral do Painel de Chamados ITSM](images/dashboard_chamados.png)
+*Figura 7: Dashboard executivo da Central de Chamados: 244 tickets totais atendidos, 235 resolvidos (taxa de resolução de 96,3%), controle de SLA e métricas por categorias.*
+
+![Inventário de Suprimentos de TI](images/inventario_suprimentos.png)
+*Figura 8: Módulo de suprimentos e almoxarifado de TI com controle de saldo atual, alertas visuais de reposição e registro de novas entradas por lote.*
+
+![CMDB de Gestão Patrimonial de Ativos](images/cmdb_ativos.png)
+*Figura 9: Rastreabilidade patrimonial do CMDB: equipamentos de hardware vinculados a consultórios, setores e usuários responsáveis.*
+
+![Validação em Dois Fatores (2FA/TOTP) do Módulo Financeiro](images/modal_2fa_financeiro.png)
+*Figura 10: Camada de segurança e autenticação em dois fatores (TOTP de 6 dígitos) exigida para acesso ao módulo financeiro e relatórios confidenciais.*
+
+![Agendamento Automatizado de Relatórios](images/agendamento_relatorios.png)
+*Figura 11: Módulo de agendamento automático de relatórios periódicos de estoque e chamados com despacho multicanal via E-mail e Discord.*
 
 ---
 
