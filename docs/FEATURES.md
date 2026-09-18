@@ -47,9 +47,9 @@ stateDiagram-v2
 ### 1.4 Esteira de Lembretes Recorrentes (Nudges) e Tratamento de Respostas
 * **Nudges Individuais e de Grupo:** Gerenciados pelo `MonitorAppointmentNudgesUseCase`. Se o paciente não responder ao primeiro template de aviso, o sistema agenda disparos de reforço a cada ciclo (janela configurável de 2 horas).
 * **Templates Estáticos de 0 Parâmetros:** Para templates de grupo sem placeholders (ex: `aviso_agendamento_grupo`), o `BlipNotificationService` detecta o formato estático e omite 100% o campo `messageParams` no payload para a API Active Campaign da Take Blip, evitando o erro de validação da Meta (#132000).
-* **Cancelamento Seguro sem Exclusão no ERP Feegow:** Quando o paciente solicita cancelamento respondendo ao WhatsApp, o robô encerra a sessão local (para cessar novos lembretes automáticos) e transborda o atendimento para a fila das secretárias no Desk com ticket aberto. **O agendamento permanece intacto na grade do Feegow**, permitindo que a recepção faça contato ativo e remanejamento manual sem risco de perder o histórico.
+* **Cancelamento Seguro sem Exclusão no ERP Feegow:** Quando o paciente solicita cancelamento respondendo ao WhatsApp, o robô encerra a sessão local (para cessar novos lembretes automáticos) e transborda o atendimento para a fila de atendimento humano no Desk com ticket aberto. **O agendamento permanece intacto na grade do Feegow**, permitindo que a recepção faça contato ativo e remanejamento manual sem risco de perder o histórico.
 * **Re-validação Preventiva:** Antes de enviar cada nudge, o sistema consulta a API do Feegow. Se a consulta tiver sido cancelada, remarcada ou confirmada na recepção, o envio é abortado imediatamente.
-* **Attendance Guard:** Se houver um ticket de atendimento humano ativo no Blip Desk para o paciente (`hasActiveTicket`), o envio de nudges é pausado para não interromper a conversa com a secretária.
+* **Attendance Guard:** Se houver um ticket de atendimento humano ativo no Blip Desk para o paciente (`hasActiveTicket`), o envio de nudges é pausado para não interromper a conversa com o atendente.
 
 ### 1.5 Avaliação Pós-Consulta (Google Review)
 * O serviço `SendPostAppointmentReviewUseCase` roda periodicamente consultando agendamentos do dia no Feegow com status `StatusID = 3` (*Atendido*).
@@ -77,7 +77,7 @@ O módulo `access` integra a confirmação de consultas do Feegow ao sistema de 
 O serviço `AccessWindowCalculator` calcula as janelas de liberação horária garantindo segurança predial e comodidade:
 * **Janela Padrão de Consultas:** Abertura a partir das **06:00** e encerramento às **23:00** do dia da consulta, cobrindo com folga eventuais atrasos ou atendimentos estendidos.
 * **Janela de Auto-Cadastro / Totem:** Abertura às **06:00** com encerramento às **23:59** para pacientes que realizam check-in avulso na recepção.
-* **Ajuste de Data Efetiva (`resolveAppointmentDate`):** Se a data de agendamento estiver retroativa ou for processada no próprio dia, o cálculo ancora no dia corrente da clínica (`America/Sao_Paulo`).
+* **Ajuste de Data Efetiva (`resolveAppointmentDate`):** Se a data de agendamento estiver retroativa ou for processada no próprio dia, o cálculo ancora no dia corrente da **Empresa 2** (`America/Sao_Paulo`).
 
 ### 2.2 Portal Web do Paciente & PWA Mobile (`/acesso/:id`)
 * **Autenticação 2FA por Telefone:** O paciente digita os 4 últimos dígitos do seu telefone para desbloqueio seguro, com suporte a preenchimento automático por link autenticado (`?t=TOKEN` ou `?p=1234`).
@@ -94,7 +94,7 @@ O serviço `AccessWindowCalculator` calcula as janelas de liberação horária g
 * **Substituição Transparente:** O GerAcesso retorna um novo código de credencial numérica, que é persistido no banco e atualizado na tela do paciente sem exigir recarregamento da página.
 
 ### 2.4 Auto-Cadastro e Totem de Autoatendimento (`SelfRegistrationUseCase`)
-* **Fluxo em Totem Touchscreen:** Pacientes que chegam à clínica sem agendamento prévio ou que necessitam de credencial física imediata digitam seu CPF no totem (`/acesso/totem`).
+* **Fluxo em Totem Touchscreen:** Pacientes que chegam à **Empresa 2** sem agendamento prévio ou que necessitam de credencial física imediata digitam seu CPF no totem (`/acesso/totem`).
 * **Busca Integrada no Feegow:** O `LookupCredentialsByCpfUseCase` localiza as consultas ativas do paciente para o dia.
 * **Auto-registro Imediato:** Se o paciente não tiver consulta marcada, o sistema permite o auto-cadastro rápido coletando nome, telefone e médico, emitindo na hora a liberação na catraca física e gravando as colunas `phone` (V53) e `doctor_name` (V54).
 
@@ -111,12 +111,12 @@ O serviço `AccessWindowCalculator` calcula as janelas de liberação horária g
 ## 3. Central de Chamados de Suporte (ITSM)
 
 ### 3.1 Cálculo de SLA Útil e Priorização Dinâmica
-* O prazo limite de resolução (`sla_deadline`) é calculado somando a quantidade de horas da categoria (`itsm_categories.sla_hours`) considerando **apenas o horário comercial útil** da clínica.
+* O prazo limite de resolução (`sla_deadline`) é calculado somando a quantidade de horas da categoria (`itsm_categories.sla_hours`) considerando **apenas o horário comercial útil** da **Empresa 2**.
 * Finais de semana e noites não consomem o tempo de SLA.
 
 ### 3.2 Regra de Parada Crítica (#🚨ParadaCrítica)
 Quando um incidente impede o funcionamento de consultórios, exames ou sistemas centrais:
-* **Disparo:** Chamado vinculado a ativo crítico (`assets.is_critical = true`) ou com código patrimonial (`INV-\d{4}-\d+`) na descrição.
+* **Disparo:** Chamado vinculado a ativo crítico (`assets.is_critical = true`) ou com código patrimonial (`PAT-\d{4}-\d+`) na descrição.
 * **Ações Automáticas:**
   1. A prioridade é promovida para `URGENT`.
   2. O SLA é recalculado para o prazo estrito de **1 hora**.

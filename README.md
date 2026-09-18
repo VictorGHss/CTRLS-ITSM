@@ -1,10 +1,10 @@
-# CTRLS ITSM — Plataforma Integrada de Operações & Automações Clínicas
+# CTRLS ITSM — Plataforma Integrada de Operações & Automações
 
-O ecossistema **CTRLS ITSM** é uma plataforma White-Label corporativa de integração, automação e gestão tecnológica para policlínicas e centros de saúde. A solução unifica o atendimento aos pacientes via WhatsApp (Take Blip), o prontuário eletrônico e agendamento (Feegow ERP), a conciliação financeira de recebimentos (Conta Azul V2), o controle de acesso físico por catracas (GerAcesso) e a governança de suporte de TI (ITSM, CMDB, Estoque FIFO e Alertas no Discord).
+O ecossistema **CTRLS ITSM** é uma plataforma White-Label corporativa de integração, automação e gestão tecnológica. A solução unifica o atendimento aos usuários via WhatsApp (Take Blip), o prontuário eletrônico e agendamento (Feegow ERP), a conciliação financeira de recebimentos (Conta Azul V2), o controle de acesso físico por catracas (GerAcesso) e a governança de suporte de TI (ITSM, CMDB, Estoque FIFO e Alertas no Discord).
 
 > [!NOTE]
-> 📄 **Memorial Técnico, Relatório de Engenharia e Post-Mortem de Projeto:**  
-> Para uma análise aprofundada da trajetória de desenvolvimento, desafios de campo em ambiente hospitalar (Java 21 Virtual Threads, integração IoT de catracas físicas Control iD/GerAcesso, automação de WhatsApp com +11 mil mensagens e vazão de ~500 msgs/min), métricas de negócio e o post-mortem executivo, consulte o [**Memorial Técnico e Post-Mortem de Desenvolvimento**](docs/RELATORIO_DESENVOLVIMENTO_E_POSTMORTEM.md).
+> 📄 **Relatório Técnico e Post-Mortem do Projeto:**  
+> Para ver os detalhes de desenvolvimento, os testes práticos de campo (Java 21 com Virtual Threads, integração com catracas Control iD/GerAcesso, automação de WhatsApp com +11 mil mensagens e vazão de ~500 msgs/min) e o histórico completo do projeto, consulte o [**Relatório Técnico e Post-Mortem**](docs/RELATORIO_DESENVOLVIMENTO_E_POSTMORTEM.md).
 
 ---
 
@@ -117,7 +117,7 @@ npm run dev
 
 ## 🔄 Deploy em Produção
 
-No servidor de produção (`homeserver`):
+No servidor de produção:
 ```bash
 cd /opt/ctrls-itsm/CTRLS-ITSM
 git pull

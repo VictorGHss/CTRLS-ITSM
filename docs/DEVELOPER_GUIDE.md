@@ -49,7 +49,7 @@ cp .env.example api/.env
 | `APP_APPOINTMENT_FEEGOW_API_TOKEN` | Token de acesso à API do Feegow | *(Token x-access-token)* |
 | `APP_APPOINTMENT_BLIP_BOT_KEY` | Key do Roteador Principal Take Blip | `Key cm91dGVy...` |
 | `APP_APPOINTMENT_BLIP_DESK_KEY` | Key do Túnel do Blip Desk | `Key dHVubmVs...` |
-| `GERACESSO_URL` | Endpoint da controladora de catracas | `http://172.25.100.106:8082/AgendamentoVisita` |
+| `GERACESSO_URL` | Endpoint da controladora de catracas | `http://192.168.1.100:8082/AgendamentoVisita` |
 | `GERACESSO_TOKEN` | Bearer token de autorização GerAcesso | *(Token JWT GerAcesso)* |
 | `CONTAAZUL_CLIENT_ID` | Client ID da aplicação Conta Azul V2 | *(UUID Conta Azul)* |
 | `CONTAAZUL_CLIENT_SECRET` | Client Secret da Conta Azul V2 | *(String secreta)* |
@@ -107,18 +107,18 @@ Se a integração retornar `invalid_grant` por expiração ou revogação de tok
    ```
 
 ### 4.2 Runbook: Diagnóstico de Transbordo no Blip Desk
-Caso um atendimento não seja direcionado para a secretária correta:
+Caso um atendimento não seja direcionado para a fila correta:
 1. Verifique os logs de sincronização de contato:
    ```bash
    docker logs itsm_api --tail=200 | grep "BlipContact-Adapter"
    ```
 2. Confirme se os campos `fila` e `Medico` foram sincronizados no contato do paciente no Roteador e no Túnel do Desk.
-3. Certifique-se de que o nome da fila em `appointment_doctor_mapping.blip_queue_id` corresponde exatamente ao nome cadastrado no Blip Desk (ex: `Ortopedia - Dr. Rodrigo Caldonazzo Fávaro`).
+3. Certifique-se de que o nome da fila em `appointment_doctor_mapping.blip_queue_id` corresponde exatamente ao nome cadastrado no Blip Desk (ex: `Ortopedia - Consultorio 01`).
 
 ### 4.3 Runbook: Falha de Comunicação ou Bloqueio nas Catracas (GerAcesso)
 1. **Teste de Conectividade de Rede Local:**
    ```bash
-   curl -I -H "Authorization: Bearer $GERACESSO_TOKEN" http://172.25.100.106:8082/AgendamentoVisita
+   curl -I -H "Authorization: Bearer $GERACESSO_TOKEN" http://192.168.1.100:8082/AgendamentoVisita
    ```
 2. **Inspeção de Logs em Tempo Real:**
    ```bash
@@ -135,7 +135,7 @@ Caso um atendimento não seja direcionado para a secretária correta:
 5. **Parâmetro Mandatório:** Certifique-se de que o payload contém o campo `"tipovisista": 1`. Sem este campo exato, o hardware GerAcesso rejeita a liberação.
 
 ### 4.4 Runbook: Deploy e Atualização em Produção
-No servidor de hospedagem (`homeserver`):
+No servidor de produção:
 ```bash
 cd /opt/ctrls-itsm/CTRLS-ITSM
 git pull
@@ -163,4 +163,4 @@ Caso o ecossistema precise ser desativado ou transferido de infraestrutura:
    * **Take Blip:** Remover a URL de webhook configurada nas ações de entrada/saída do fluxo do bot.
    * **Conta Azul:** Revogar a aplicação nas configurações de desenvolvedor do portal Conta Azul.
 5. **Preservação de Propriedade Intelectual:**
-   * O código-fonte, histórico Git e esquemas de migração Flyway constituem propriedade integral do autor, prontos para empacotamento em modelo SaaS white-label para novas clínicas ou instituições de saúde.
+   * O código-fonte, histórico Git e esquemas de migração Flyway constituem propriedade integral do autor, prontos para empacotamento em modelo SaaS white-label para novas organizações.

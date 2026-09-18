@@ -6,7 +6,7 @@ Este documento apresenta os contratos de integração, diagramas de sequência, 
 
 ## 1. Integração com Feegow ERP (Prontuário & Pautas)
 
-O Feegow ERP é o sistema central de prontuários médicos da clínica. A comunicação é realizada via chamadas HTTPS autenticadas pelo header `x-access-token`.
+O Feegow ERP é o sistema central de prontuários médicos da **Empresa 2**. A comunicação é realizada via chamadas HTTPS autenticadas pelo header `x-access-token`.
 
 ### 1.1 Tabela Oficial de Status de Agendamento do Feegow
 
@@ -51,13 +51,13 @@ O Feegow ERP é o sistema central de prontuários médicos da clínica. A comuni
   }
   ```
 * **FEEGOW-STATUS-GUARD:** O adaptador impede regressão indevida para status 7 caso o paciente já esteja em estado avançado (`2, 3, 4, 5, 6, 7, 11, 16, 101, 103, 105`).
-* **Preservação de Agenda em Cancelamentos:** Ao receber intenção de cancelamento pelo WhatsApp, a API **não chama `/appointment/cancel`**. A consulta permanece intacta na grade da clínica e a conversa é roteada para a recepção no Blip Desk para remanejamento manual seguro.
+* **Preservação de Agenda em Cancelamentos:** Ao receber intenção de cancelamento pelo WhatsApp, a API **não chama `/appointment/cancel`**. A consulta permanece intacta na grade da **Empresa 2** e a conversa é roteada para a recepção no Blip Desk para remanejamento manual seguro.
 
 ---
 
 ## 2. Integração com Take Blip (WhatsApp Cloud & Blip Desk)
 
-A integração com o Take Blip utiliza a API Active Campaign (`/campaign/full`), comandos LIME e webhooks para automação e transbordo para secretárias.
+A integração com o Take Blip utiliza a API Active Campaign (`/campaign/full`), comandos LIME e webhooks para automação e transbordo para atendimento humano.
 
 ### 2.0 Suporte a Templates Estáticos (0 Parâmetros - WhatsApp Meta)
 * Templates sem variáveis no corpo (ex: `aviso_agendamento_grupo`) são identificados por `isStaticZeroParamTemplate`.
@@ -69,7 +69,7 @@ sequenceDiagram
     participant B as Take Blip (Roteador/Túnel)
     participant API as CTRLS ITSM API
     participant F as Feegow ERP
-    participant D as Blip Desk (Secretária)
+    participant D as Blip Desk (Atendente)
 
     Note over API: Ingestão Matinal
     API->>B: Envia Template Interativo de Confirmação
@@ -81,7 +81,7 @@ sequenceDiagram
     API->>F: Atualiza StatusID=7 no Feegow
     API->>B: Dual-Scope Contact Sync (Grava fila, médico e CPF)
     API->>B: setMasterState (Redireciona para bloco Sucesso_Confirmacao)
-    API->>B: setQueueRedirect (Define fila da secretária)
+    API->>B: setQueueRedirect (Define fila de atendimento)
     
     opt Se o paciente solicitar alteração ou falar com atendente
         B->>D: Transbordo para a fila específica do médico (ex: Ortopedia)
@@ -95,13 +95,13 @@ Para garantir que os dados do paciente e o roteamento de fila estejam disponíve
   2. **Túnel do Blip Desk:** Utilizando a chave `APP_APPOINTMENT_BLIP_DESK_KEY`.
 * **Metadados Gravados em `extras`:**
   * `Medico`: Nome do profissional atendente.
-  * `fila`: Nome textual sanitizado da fila de destino (ex: `Ortopedia Pediátrica - Dr. Eduardo Mattos`, `Cirurgia Vascular - Dr. Bruno Figueiredo Pançan`).
+  * `fila`: Nome textual sanitizado da fila de destino (ex: `Ortopedia Pediátrica - Consultório 01`, `Cirurgia Vascular - Consultório 02`).
   * `taxDocument`: CPF formatado do titular.
   * `birthDate`: Data de nascimento do prontuário.
 
 ### 2.2 Transbordo Dinâmico por Fila no Blip Desk
 * O resolvedor de filas (`BlipContextService.resolveQueueName`) traduz o UUID ou ID do médico para o nome exato da fila cadastrada no Blip Desk.
-* O comando `setQueueRedirect` injeta a variável de contexto `attendanceQueueToRedirect` no contato. No fluxo do Blip, o bloco de transbordo humano lê `{{contact.extras.fila}}` para direcionar a conversa à secretária responsável.
+* O comando `setQueueRedirect` injeta a variável de contexto `attendanceQueueToRedirect` no contato. No fluxo do Blip, o bloco de transbordo humano lê `{{contact.extras.fila}}` para direcionar a conversa à equipe responsável.
 
 ### 2.3 Menus Interativos de Avaliação e CSAT (WhatsApp Meta)
 * As etapas de avaliação pós-consulta e pesquisa de satisfação utilizam mensagens estruturadas (`select+json` / menus interativos) com opções puramente numéricas (`1` a `5`).
@@ -111,11 +111,11 @@ Para garantir que os dados do paciente e o roteamento de fila estejam disponíve
 
 ## 3. Integração com Controle de Catracas Físicas (GerAcesso)
 
-O módulo `access` orquestra a emissão de credenciais físicas e QR Codes para liberação de acesso nas catracas físicas da clínica, integrando o agendamento médico ao servidor local da **GerAcesso**.
+O módulo `access` orquestra a emissão de credenciais físicas e QR Codes para liberação de acesso nas catracas físicas da **Empresa 2**, integrando o agendamento médico ao servidor local da **GerAcesso**.
 
 ### 3.1 Contrato REST da API GerAcesso
 
-* **Endpoint:** `POST {{GERACESSO_URL}}` (padrão local: `http://172.25.100.106:8082/AgendamentoVisita`)
+* **Endpoint:** `POST {{GERACESSO_URL}}` (padrão local: `http://192.168.1.100:8082/AgendamentoVisita`)
 * **Autenticação:** Header HTTP `Authorization: Bearer {{GERACESSO_TOKEN}}` (com prefixação defensiva automática `Bearer ` caso a variável não a contenha).
 * **Timeouts de Rede:** 10 segundos de `connectTimeout` e 10 segundos de `readTimeout` configurados no `JdkClientHttpRequestFactory`.
 
@@ -124,7 +124,7 @@ O módulo `access` orquestra a emissão de credenciais físicas e QR Codes para 
 {
   "cpf": "12251091831",
   "status": 1,
-  "nome": "SILVANA CRISTINA CARDOSO",
+  "nome": "PACIENTE EXEMPLO SILVA",
   "telefone": "42999998888",
   "email": "",
   "tipovisista": 1,
@@ -174,7 +174,7 @@ Para absorver micro-instabilidades na rede local do servidor GerAcesso ou pequen
 
 ### 3.3 Motor de Reativação Dinâmica de Acesso (`ReactivateAccessUseCase`)
 
-* **Endpoint:** `POST /api/v1/access/reactivate/{appointmentId}` (aceita ID Feegow, prefixo de totem `INOV-...` / `IMG-...` ou fallback por CPF).
+* **Endpoint:** `POST /api/v1/access/reactivate/{appointmentId}` (aceita ID Feegow, prefixo de totem `TOTEM-...` / `IMG-...` ou fallback por CPF).
 * **Solução para Anti-Passback e Travamento de Catraca:** Se o leitor ótico da catraca fizer a leitura do QR Code mas o paciente hesitar ou não girar o braço dentro do tempo de timeout do hardware (disparando a proteção anti-passback da controladora), a credencial anterior é rejeitada pela catraca.
 * **Janela Imediata:** O use case calcula `startVisit = now.minusMinutes(5)` e `endVisit = 23:59` do dia corrente. A margem de 5 minutos retroativos compensa eventuais descompassos de relógio (clock skew) entre a VM do backend e a controladora física.
 * **Resolução Médica:** Identifica o profissional atendente por ID Feegow ou pelo nome salvo na credencial (`access_credentials.doctor_name` via migração V54), emitindo um novo registro de visita no GerAcesso com novo código de credencial.
@@ -188,7 +188,7 @@ Para absorver micro-instabilidades na rede local do servidor GerAcesso ou pequen
 ### 3.5 Arquitetura de Cache Offline PWA no Frontend
 
 * **Armazenamento Local Escopado:** O frontend grava as credenciais validadas no `localStorage` sob a chave `patient_access_{clinicId}_last_credentials`.
-* **Disponibilidade na Recepção/Elevador:** Se o paciente perder sinal de rede móvel (4G/5G) ou Wi-Fi ao entrar na clínica, o aplicativo PWA carrega instantaneamente as credenciais do cache local, exibindo o QR Code em tela cheia com alta legibilidade.
+* **Disponibilidade na Recepção/Elevador:** Se o paciente perder sinal de rede móvel (4G/5G) ou Wi-Fi ao entrar na **Empresa 2**, o aplicativo PWA carrega instantaneamente as credenciais do cache local, exibindo o QR Code em tela cheia com alta legibilidade.
 * **Prevenção de Congelamento de Canvas:** Os componentes `CredentialCard` e `FullscreenQrModal` utilizam chaves dinâmicas (`key={cred.credentialCode}`) para forçar a re-renderização imediata do `<QRCodeCanvas>` do React, eliminando travamentos de renderização no motor WebKit/Blink mobile após atualizações de credenciais.
 
 ---
@@ -212,14 +212,34 @@ Automação de conciliação de faturamentos quitados (`ACQUITTED`) e emissão d
 
 ## 5. Integração com Discord (Bot JDA 5)
 
-Roteamento de incidentes e operações de suporte em tempo real.
+Roteamento de incidentes e operações de suporte em tempo real com orquestração de canais dinâmicos e botões reativos.
 
-### 5.1 Slash Commands Administrativos
+### 5.1 Slash Commands Administrativos e Operacionais
 * `/ti status`: Exibe embed rico com status da JVM, memória, banco de dados, filas e conexões de rede. Restrito aos IDs de administradores configurados em `discord.bot.admin-ids`.
 * `/solicitar`: Interface para colaboradores solicitarem insumos de hardware com autocomplete em tempo real.
+* `/chamado`: Abertura ágil de incidentes e solicitações de TI diretamente pelo Discord.
+* `/meuschamados`: Consulta rápida de chamados em andamento atribuídos ao solicitante logado.
+* `/vincular`: Associação de segurança entre a conta Discord e o usuário institucional.
+* `/ajuda`: Consulta instantânea de artigos da Base de Conhecimento e FAQ da TI.
 
-### 5.2 Botões Interativos de Ação em Chamados
-* As mensagens de novos chamados enviadas aos técnicos incluem botões interativos:
-  * `ticket_accept:{ticketId}`: Atribui o chamado ao técnico no banco de dados e atualiza a mensagem no Discord com rodapé confirmatório.
-  * `ticket_reject:{ticketId}`: Libera o chamado para os demais técnicos.
+![Menu de Slash Commands no Discord](images/comandos_discord.jpeg)
+*Menu interativo de Slash Commands com autocomplete suportado pelo bot institucional.*
+
+### 5.2 Botões Interativos de Ação e Ciclo de Vida do Chamado
+* **Abertura de Chamado:** Notificação em embed rico no canal de alertas da equipe técnica (`#alertas-ti`), informando identificador único, solicitante, setor e nível de prioridade.
+* **Criação Automática de Canal Exclusivo:** Para cada chamado aberto, o bot cria dinamicamente um canal dedicado de atendimento (`#nome-do-chamado-{id}`) garantindo comunicação isolada e sem ruídos entre solicitante e time de TI.
+* **Ações por Botões Interativos:**
+  * `ticket_accept:{ticketId}` (*Assumir Chamado*): Vincula o técnico responsável no banco relacional PostgreSQL, fixa a mensagem no canal e notifica a equipe.
+  * `ticket_resolve:{ticketId}` (*Resolver Chamado*): Permite registrar o parecer técnico de solução diretamente pelo Discord, encerrando o ciclo de SLA.
+  * `ticket_reopen:{ticketId}` (*Reabrir Chamado*): Disponível após o encerramento caso o solicitante necessite de suporte complementar.
 * **Virtual Threads:** Todas as interações do bot são executadas sob o `discordExecutor` para não bloquear a thread de heartbeat do WebSocket do Discord.
+
+![Abertura de Chamado no Discord](images/chamado_criado_discord.jpeg)
+*Embed rico despachado no momento da abertura do chamado pelo comando `/chamado`.*
+
+![Canal Dedicado e Atribuição](images/chamado_assumido_discord.jpeg)
+*Canal criado dinamicamente para o chamado com botões para assumir e resolver o atendimento.*
+
+![Resolução e Parecer Técnico](images/chamado_finalizado_discord.jpeg)
+*Encerramento do chamado com parecer técnico registrado e opção de reabertura.*
+

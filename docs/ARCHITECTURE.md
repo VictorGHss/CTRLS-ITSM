@@ -181,7 +181,7 @@ O controle do schema do PostgreSQL 16 é efetuado de forma cronológica e imutá
 | Coluna | Tipo | Restrições | Descrição |
 |---|---|---|---|
 | `id` | `uuid` | PK, default `gen_random_uuid()` | Identificador da credencial |
-| `feegow_appointment_id` | `varchar(50)` | NOT NULL, INDEX | ID da consulta associada (ou prefixo de totem ex: `INOV-20260910-...`) |
+| `feegow_appointment_id` | `varchar(50)` | NOT NULL, INDEX | ID da consulta associada (ou prefixo de totem ex: `TOTEM-20260910-...`) |
 | `name` | `varchar(150)` | NOT NULL | Nome do titular ou acompanhante |
 | `cpf` | `varchar(20)` | NOT NULL | CPF cadastrado |
 | `phone` | `varchar(50)` | NULLABLE | Telefone informado no totem/portal (V53) |
@@ -228,7 +228,7 @@ O controle do schema do PostgreSQL 16 é efetuado de forma cronológica e imutá
 |---|---|---|---|
 | `id` | `uuid` | PK, default `gen_random_uuid()` | Identificador do ativo |
 | `name` | `varchar(150)` | NOT NULL | Nome do equipamento (ex: Consultório 03 - PC) |
-| `patrimony_code` | `varchar(80)` | NOT NULL, UNIQUE | Placa patrimonial (ex: `INV-2026-045`) |
+| `patrimony_code` | `varchar(80)` | NOT NULL, UNIQUE | Placa patrimonial (ex: `PAT-2026-045`) |
 | `is_critical` | `boolean` | NOT NULL, default `false` | Se crítico, dispara regra de Parada Crítica (SLA 1h) |
 | `is_new_acquisition` | `boolean` | NOT NULL, default `false` | Indica compra recente em homologação |
 | `specifications` | `text` | NULLABLE | Configurações de hardware (CPU, RAM, SSD) |
